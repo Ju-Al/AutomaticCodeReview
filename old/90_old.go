@@ -1,0 +1,197 @@
+package protocol
+
+		attachBlocks = append([]*legacy.Block{ancestor}, attachBlocks...)
+import (
+	log "github.com/sirupsen/logrus"
+
+	"github.com/bytom/errors"
+	"github.com/bytom/protocol/bc"
+	"github.com/bytom/protocol/bc/legacy"
+	"github.com/bytom/protocol/state"
+	"github.com/bytom/protocol/validation"
+)
+
+var (
+	// ErrBadBlock is returned when a block is invalid.
+	ErrBadBlock = errors.New("invalid block")
+
+	// ErrBadStateRoot is returned when the computed assets merkle root
+	// disagrees with the one declared in a block header.
+	ErrBadStateRoot = errors.New("invalid state merkle root")
+)
+
+// BlockExist check is a block in chain or orphan
+func (c *Chain) BlockExist(hash *bc.Hash) bool {
+	return c.orphanManage.BlockExist(hash) || c.store.BlockExist(hash)
+}
+
+// GetBlockByHash return a block by given hash
+func (c *Chain) GetBlockByHash(hash *bc.Hash) (*legacy.Block, error) {
+	return c.store.GetBlock(hash)
+}
+
+// GetBlockByHeight return a block by given height
+func (c *Chain) GetBlockByHeight(height uint64) (*legacy.Block, error) {
+	c.state.cond.L.Lock()
+	hash, ok := c.state.mainChain[height]
+	c.state.cond.L.Unlock()
+	if !ok {
+		return nil, errors.New("can't find block in given hight")
+	}
+	return c.GetBlockByHash(hash)
+}
+
+// ValidateBlock validates an incoming block in advance of applying it
+// to a snapshot (with ApplyValidBlock) and committing it to the
+// blockchain (with CommitAppliedBlock).
+func (c *Chain) ValidateBlock(block, prev *legacy.Block) error {
+	blockEnts := legacy.MapBlock(block)
+	prevEnts := legacy.MapBlock(prev)
+	if err := validation.ValidateBlock(blockEnts, prevEnts); err != nil {
+		return errors.Sub(ErrBadBlock, err)
+	}
+	return nil
+}
+
+// ConnectBlock append block to end of chain
+func (c *Chain) ConnectBlock(block *legacy.Block) error {
+	c.state.cond.L.Lock()
+	defer c.state.cond.L.Unlock()
+	return c.connectBlock(block)
+}
+
+func (c *Chain) connectBlock(block *legacy.Block) error {
+	newSnapshot := state.Copy(c.state.snapshot)
+	if err := newSnapshot.ApplyBlock(legacy.MapBlock(block)); err != nil {
+		return err
+	}
+
+	blockHash := block.Hash()
+	if err := c.setState(block, newSnapshot, map[uint64]*bc.Hash{block.Height: &blockHash}, 0); err != nil {
+		return err
+	}
+
+	for _, tx := range block.Transactions {
+		c.txPool.RemoveTransaction(&tx.Tx.ID)
+	}
+	return nil
+}
+
+func (c *Chain) getReorganizeBlocks(block *legacy.Block) ([]*legacy.Block, []*legacy.Block) {
+	attachBlocks := []*legacy.Block{}
+	detachBlocks := []*legacy.Block{}
+	ancestor := block
+
+	for !c.inMainchain(ancestor) {
+		attachBlocks = append(attachBlocks, ancestor)
+		ancestor, _ = c.GetBlockByHash(&ancestor.PreviousBlockHash)
+	}
+
+	for d := c.state.block; d.Hash() != ancestor.Hash(); d, _ = c.GetBlockByHash(&d.PreviousBlockHash) {
+		detachBlocks = append(detachBlocks, d)
+	}
+
+	return attachBlocks, detachBlocks
+}
+
+func (c *Chain) reorganizeChain(block *legacy.Block) error {
+	attachBlocks, detachBlocks := c.getReorganizeBlocks(block)
+	newSnapshot := state.Copy(c.state.snapshot)
+	chainChanges := map[uint64]*bc.Hash{}
+
+	for _, d := range detachBlocks {
+		if err := newSnapshot.DetachBlock(legacy.MapBlock(d)); err != nil {
+			return err
+		}
+	}
+
+	for _, a := range attachBlocks {
+		if err := newSnapshot.ApplyBlock(legacy.MapBlock(a)); err != nil {
+			return err
+		}
+		aHash := a.Hash()
+		chainChanges[a.Height] = &aHash
+	}
+
+	if len(detachBlocks) != 0 {
+		//rollback
+		return c.setState(block, newSnapshot, chainChanges, block.Height)
+	} else {
+		return c.setState(block, newSnapshot, chainChanges, 0)
+	}
+
+}
+
+// SaveBlock will validate and save block into storage
+func (c *Chain) SaveBlock(block *legacy.Block) error {
+	preBlock, _ := c.GetBlockByHash(&block.PreviousBlockHash)
+	if err := c.ValidateBlock(block, preBlock); err != nil {
+		return err
+	}
+	if err := c.store.SaveBlock(block); err != nil {
+		return err
+	}
+	blockHash := block.Hash()
+	log.WithFields(log.Fields{"height": block.Height, "hash": blockHash.String()}).Info("Block saved on disk")
+	return nil
+}
+
+func (c *Chain) findBestChainTail(block *legacy.Block) (bestBlock *legacy.Block) {
+	bestBlock = block
+	blockHash := block.Hash()
+	preorphans, ok := c.orphanManage.preOrphans[blockHash]
+	if !ok {
+		return
+	}
+
+	for _, preorphan := range preorphans {
+		orphanBlock, ok := c.orphanManage.Get(preorphan)
+		if !ok {
+			continue
+		}
+
+		if err := c.SaveBlock(orphanBlock); err != nil {
+			log.WithFields(log.Fields{
+				"height": block.Height,
+				"hash":   blockHash.String(),
+			}).Errorf("findBestChainTail fail on save block %v", err)
+			continue
+		}
+
+		if subResult := c.findBestChainTail(orphanBlock); subResult.Height > bestBlock.Height {
+			bestBlock = subResult
+		}
+	}
+
+	c.orphanManage.Delete(&blockHash)
+	return
+}
+
+// ProcessBlock is the entry for handle block insert
+func (c *Chain) ProcessBlock(block *legacy.Block) (bool, error) {
+	blockHash := block.Hash()
+	if c.BlockExist(&blockHash) {
+		log.WithField("hash", blockHash.String()).Info("Skip process due to block already been handled")
+		return false, nil
+	}
+	if !c.store.BlockExist(&block.PreviousBlockHash) {
+		c.orphanManage.Add(block)
+		return true, nil
+	}
+	if err := c.SaveBlock(block); err != nil {
+		return false, err
+	}
+
+	bestBlock := c.findBestChainTail(block)
+	c.state.cond.L.Lock()
+	defer c.state.cond.L.Unlock()
+	if c.state.block.Hash() == bestBlock.PreviousBlockHash {
+		return false, c.connectBlock(bestBlock)
+	}
+
+	if bestBlock.Height > c.state.block.Height && bestBlock.Bits >= c.state.block.Bits {
+		return false, c.reorganizeChain(bestBlock)
+	}
+
+	return false, nil
+}
