@@ -1,0 +1,208 @@
+import math
+
+import urwid
+
+from mitmproxy import ctx
+from mitmproxy.tools.console import signals
+from mitmproxy.tools.console import grideditor
+from mitmproxy.tools.console import layoutwidget
+from mitmproxy.tools.console import keymap
+
+
+class SimpleOverlay(urwid.Overlay, layoutwidget.LayoutWidget):
+
+    def __init__(self, master, widget, parent, width, valign="middle"):
+        self.widget = widget
+        self.master = master
+        super().__init__(
+            widget,
+            parent,
+            align="center",
+            width=width,
+            valign=valign,
+            height="pack"
+        )
+
+    @property
+    def keyctx(self):
+        return getattr(self.widget, "keyctx")
+
+    def key_responder(self):
+        return self.widget.key_responder()
+
+    def focus_changed(self):
+        return self.widget.focus_changed()
+
+    def view_changed(self):
+        return self.widget.view_changed()
+
+    def layout_popping(self):
+        return self.widget.layout_popping()
+
+
+class Choice(urwid.WidgetWrap):
+    def __init__(self, txt, focus, current):
+        if current:
+            s = "option_active_selected" if focus else "option_active"
+        else:
+            s = "option_selected" if focus else "text"
+        super().__init__(
+            urwid.AttrWrap(
+                urwid.Padding(urwid.Text(txt)),
+                s,
+            )
+        )
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        return key
+
+
+class ChooserListWalker(urwid.ListWalker):
+    def __init__(self, choices, current):
+        self.index = 0
+        self.choices = choices
+        self.current = current
+
+    def _get(self, idx, focus):
+        c = self.choices[idx]
+        return Choice(c, focus, c == self.current)
+
+    def set_focus(self, index):
+        self.index = index
+
+    def get_focus(self):
+        return self._get(self.index, True), self.index
+
+    def get_next(self, pos):
+        if pos >= len(self.choices) - 1:
+            return None, None
+        pos = pos + 1
+        return self._get(pos, False), pos
+
+    def get_prev(self, pos):
+        pos = pos - 1
+        if pos < 0:
+            return None, None
+        return self._get(pos, False), pos
+
+
+class Chooser(urwid.WidgetWrap, layoutwidget.LayoutWidget):
+    keyctx = "chooser"
+
+    def __init__(self, master, title, choices, current, callback):
+        self.master = master
+        self.choices = choices
+        self.callback = callback
+        shortcutwidth = 3
+        choicewidth = max([len(i) for i in choices])
+        self.width = max(shortcutwidth+choicewidth, len(title)) + 5
+        self.possible_shortcuts = "123456789abcdefghijklmnopqrstuvwxyz"
+        self.shortcuts = self.get_shortcuts(choices)
+
+        shortcuts_walker = urwid.SimpleListWalker([
+            urwid.Text([("key", s), ")"], align="left") for s in self.shortcuts
+        ])
+        shortcuts_listbox = urwid.ListBox(shortcuts_walker)
+        shortcuts_listbox._selectable = False  # We don't want to focus on it
+        self.walker = ChooserListWalker(choices, current)
+        content = urwid.Columns([(shortcutwidth, shortcuts_listbox),
+                                 (choicewidth+3, urwid.ListBox(self.walker))],
+                                focus_column=1)
+        super().__init__(
+            urwid.AttrWrap(
+                urwid.LineBox(
+                    urwid.BoxAdapter(
+                        content,
+                        len(choices)
+                    ),
+                    title=title
+                ),
+                "background"
+            )
+        )
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        key = self.master.keymap.handle_only("chooser", key)
+        if key == "m_select":
+            self.callback(self.choices[self.walker.index])
+            signals.pop_view_state.send(self)
+            return
+        elif key in self.shortcuts:
+            shortcut_index = self.shortcuts.index(key)
+            self.callback(self.choices[shortcut_index])
+            signals.pop_view_state.send(self)
+            return
+        elif key in ["q", "esc"]:
+            signals.pop_view_state.send(self)
+            return
+
+        binding = self.master.keymap.get("global", key)
+        # This is extremely awkward. We need a better way to match nav keys only.
+        if binding and binding.command.startswith("console.nav"):
+            self.master.keymap.handle("global", key)
+        elif key in keymap.navkeys:
+            return super().keypress(size, key)
+
+        if len(self.possible_shortcuts) < len(choices):
+            ctx.log.warn("Too few available shortcuts.")
+        return list(self.possible_shortcuts[:len(choices)])
+
+
+class OptionsOverlay(urwid.WidgetWrap, layoutwidget.LayoutWidget):
+    keyctx = "grideditor"
+
+    def __init__(self, master, name, vals, vspace):
+        """
+            vspace: how much vertical space to keep clear
+        """
+        cols, rows = master.ui.get_cols_rows()
+        self.ge = grideditor.OptionsEditor(master, name, vals)
+        super().__init__(
+            urwid.AttrWrap(
+                urwid.LineBox(
+                    urwid.BoxAdapter(self.ge, rows - vspace),
+                    title=name
+                ),
+                "background"
+            )
+        )
+        self.width = math.ceil(cols * 0.8)
+
+    def key_responder(self):
+        return self.ge.key_responder()
+
+    def layout_popping(self):
+        return self.ge.layout_popping()
+
+
+class DataViewerOverlay(urwid.WidgetWrap, layoutwidget.LayoutWidget):
+    keyctx = "grideditor"
+
+    def __init__(self, master, vals):
+        """
+            vspace: how much vertical space to keep clear
+        """
+        cols, rows = master.ui.get_cols_rows()
+        self.ge = grideditor.DataViewer(master, vals)
+        super().__init__(
+            urwid.AttrWrap(
+                urwid.LineBox(
+                    urwid.BoxAdapter(self.ge, rows - 5),
+                    title="Data viewer"
+                ),
+                "background"
+            )
+        )
+        self.width = math.ceil(cols * 0.8)
+
+    def key_responder(self):
+        return self.ge.key_responder()
+
+    def layout_popping(self):
+        return self.ge.layout_popping()
