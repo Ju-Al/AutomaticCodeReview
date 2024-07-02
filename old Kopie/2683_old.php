@@ -1,8 +1,5 @@
 <?php
-        $twoFactorFirewallConfig = new Definition(TwoFactorFirewallConfig::class, [$config, $id, null]);
 
-            ->setDefinition($twoFactorFirewallConfigId, $twoFactorFirewallConfig)
-            ->replaceArgument(2, new Reference('security.http_utils'))
 declare(strict_types=1);
 
 /*
@@ -55,9 +52,11 @@ class ContaoLoginFactory extends AbstractFactory
     {
         $twoFactorProviderId = TwoFactorFactory::PROVIDER_ID_PREFIX.$id;
         $twoFactorFirewallConfigId = 'contao.security.two_factor_firewall_config.'.$id;
+        $twoFactorFirewallConfig = new Definition(TwoFactorFirewallConfig::class, [$config, $id, null]);
 
         $container
-            ->setDefinition($twoFactorFirewallConfigId, new ChildDefinition(TwoFactorFirewallConfig::class))
+            ->setDefinition($twoFactorFirewallConfigId, $twoFactorFirewallConfig)
+            ->replaceArgument(2, new Reference('security.http_utils'))
         ;
 
         $container

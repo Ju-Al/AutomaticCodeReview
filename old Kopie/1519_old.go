@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"github.com/kubeedge/kubeedge/pkg/util"
 	"os"
 
 	"github.com/spf13/cobra"

@@ -133,7 +133,6 @@ type ecrService interface {
 	GetECRAuth() (ecr.Auth, error)
 }
 
-type vpcService interface {
 	GetSubnetIDs(app string, env string) ([]string, error)
 	GetSecurityGroups(app string, env string) ([]string, error)
 }

@@ -288,7 +288,6 @@ static void show_help( const char *cmd )
 	printf( " %-30s Disable the given service.\n", "--disable-service");
 	printf( " %-30s Make flock a no-op.\n", "--no-flock");
 	printf("\n");
-	printf("Filesystem Options:\n");
 	printf( " %-30s Mount an ext[234] disk image read-only at /ext_n.\n", "--ext-image=<image>");
 	printf("FTP / GridFTP options:\n");
 	printf( " %-30s Enable data channel authentication in GridFTP.\n", "-C,--channel-auth");

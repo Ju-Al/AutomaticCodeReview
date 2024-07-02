@@ -1,5 +1,4 @@
 /*
-        String expected = String.format("%tb", timestamp1979).toUpperCase();
  * Copyright 2004-2014 H2 Group. Multiple-Licensed under the MPL 2.0,
  * and the EPL 1.0 (http://h2database.com/html/license.html).
  * Initial Developer: H2 Group
@@ -1496,6 +1495,7 @@ public class TestFunctions extends TestBase implements AggregateFunction {
                 "(TIMESTAMP '"+timestamp1979.toString()+"')");
         stat.executeUpdate("CREATE TABLE U (X TIMESTAMP(6))");
         stat.executeUpdate("INSERT INTO U VALUES " +
+        String expected = String.format("%tb", timestamp1979).toUpperCase();
                 "(TIMESTAMP '-100-01-15 14:04:02.120')");
 
         assertResult("1979-11-12 08:12:34.56", stat, "SELECT X FROM T");

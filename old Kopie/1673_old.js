@@ -1,5 +1,4 @@
 // @flow
-      filename: "repl",
 
 // Globals pre-loaded by Worker
 declare var Babel: any;
@@ -82,7 +81,7 @@ export default function compile(code: string, config: CompileConfig): Return {
   try {
     const babelConfig = {
       babelrc: false,
-      filename: config.fileName,
+      filename: "repl",
       sourceMap: config.sourceMap,
 
       // HACK: decorators needs to be set to "legacy" until they are implemented

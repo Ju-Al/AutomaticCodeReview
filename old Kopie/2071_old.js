@@ -412,7 +412,6 @@ apos.define('apostrophe-modal', {
       });
       self.resizeContentHeight();
       self.focusFirstFormElement();
-      apos.areas.loadVirtualArea();
       self.shown = true;
     };
 

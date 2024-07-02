@@ -127,9 +127,6 @@ describe('restrictions', () => {
         }).toThrowError(
             'Invalid @api showFeatures field. Found a duplicate method with the same name.'
         );
-    });
-});
-
 describe('regressions', () => {
     describe('public property with duplicate accessor', () => {
         it('log errors when evaluated and invokes accessors', () => {

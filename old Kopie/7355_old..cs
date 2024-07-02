@@ -1,8 +1,4 @@
 using System;
-                CQ dom = response.Content;
-                var rows = dom[".torrents tr.torrent, .torrents tr.torrent_alt"];
-                    var qRow = row.Cq();
-                    var qTitleLink = qRow.Find("a.title, a.alt_title").First();
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -104,7 +100,10 @@ namespace Jackett.Common.Indexers
 
             try
             {
-                var parser = new HtmlParser();
+                CQ dom = response.Content;
+                    var qRow = row.Cq();
+                    var qTitleLink = qRow.Find("a.title, a.alt_title").First();
+                var rows = dom[".torrents tr.torrent, .torrents tr.torrent_alt"];
                 var dom = parser.ParseDocument(response.Content);
                 var rows = dom.QuerySelectorAll(".torrents tr.torrent, .torrents tr.torrent_alt");
 

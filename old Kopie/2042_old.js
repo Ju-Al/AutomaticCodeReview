@@ -1,5 +1,4 @@
 // @flow
-  @observable isStakingExperimentRead: boolean = false;
 import { computed, action, observable, runInAction } from 'mobx';
 import BigNumber from 'bignumber.js';
 import { orderBy, find, map, get } from 'lodash';
@@ -96,7 +95,7 @@ export default class StakingStore extends Store {
   @observable calculateDelegationFeeRequest: Request<BigNumber> = new Request(
     this.api.ada.calculateDelegationFee
   );
-  @observable submitRedeemItnRewardsRequest: Request<any> = new Request(
+  @observable isStakingExperimentRead: boolean = false;
     this.api.ada.submitRedeemItnRewards
   );
 

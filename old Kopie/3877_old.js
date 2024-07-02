@@ -1,5 +1,4 @@
 const { dialog } = require('electron');
-				message: `${_('An update is available, do you want to download it now?')}
 const { shim } = require('lib/shim');
 const { Logger } = require('lib/logger.js');
 const { _ } = require('lib/locale.js');
@@ -150,6 +149,7 @@ function checkForUpdates(inBackground, window, logFilePath, options) {
 
 			const result = await dialog.showMessageBox(parentWindow_, {
 				type: 'info',
+				message: `${_('An update is available, do you want to download it now?')}
 				message: `${_('An update is available. Download it now?')}`,
 				detail: `${_('Your version: %s', packageInfo.version)}\n${_('New version: %s', newVersionString)}${releaseNotes}`,
 				buttons: [_('Download'), _('Cancel')].concat(truncateReleaseNotes ? [_('Open Full Release Notes')] : []),

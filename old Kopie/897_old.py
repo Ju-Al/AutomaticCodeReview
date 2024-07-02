@@ -1,5 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-            raise HistoryEmptyError
 
 # Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
@@ -91,7 +90,7 @@ class History(QObject):
         else:
             items = self.history
         if not items:
-            raise HistoryEmptyError("History is empty.")
+            raise HistoryEmptyError
         self._tmphist = usertypes.NeighborList(items)
         return self._tmphist.lastitem()
 

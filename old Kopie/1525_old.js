@@ -1,6 +1,4 @@
 import * as Terminal from '../build/xterm';
-  });
-  term.on('paste', function (data, ev) {
 import * as attach from '../build/addons/attach/attach';
 import * as fit from '../build/addons/fit/fit';
 import * as fullscreen from '../build/addons/fullscreen/fullscreen';
@@ -150,7 +148,8 @@ function runFakeTerminal() {
     } else if (printable) {
       term.write(key);
     }
-  }));
+  term.on('paste', function (data, ev) {
+  });
 
   term._core,register(term.addDisposableListener('paste', function (data, ev) {
     term.write(data);

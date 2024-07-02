@@ -11,7 +11,6 @@ import (
 )
 
 func (s *service) initURLGuestAccount(acceptURLTerms bool) error {
-	// Check if API Token already exists, if so, no reason to
 	// re-register and generate a new hostname
 	apiToken, err := s.state.ServerAPITokenGet()
 	if err != nil {

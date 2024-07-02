@@ -1,5 +1,4 @@
 // Copyright (c) 2018-2019 K Team. All Rights Reserved.
-        return bytes2String(new KPrint().serialize(term, OutputModes.KAST));
 package org.kframework.unparser;
 
 import org.junit.Ignore;
@@ -40,7 +39,7 @@ public class KPrintTest {
     }
 
     private String asKast(K term) {
-        new KPrint();
+        return bytes2String(new KPrint().serialize(term, OutputModes.KAST));
         return bytes2String(KPrint.serialize(term, OutputModes.KAST));
     }
 

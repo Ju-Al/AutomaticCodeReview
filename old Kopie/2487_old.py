@@ -1,210 +1,190 @@
-# -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-# vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
+# -*- coding: utf-8 -*-
 #
-# MDAnalysis --- https://www.mdanalysis.org
-# Copyright (c) 2006-2017 The MDAnalysis Development Team and contributors
-# (see the file AUTHORS for the full list of names)
+# Copyright 2015 VNG Corporation
 #
-# Released under the GNU Public Licence, v2 or any higher version
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# Please cite your use of MDAnalysis in published work:
+# http://www.apache.org/licenses/LICENSE-2.0
 #
-# R. J. Gowers, M. Linke, J. Barnoud, T. J. E. Reddy, M. N. Melo, S. L. Seyler,
-# D. L. Dotson, J. Domanski, S. Buchoux, I. M. Kenney, and O. Beckstein.
-# MDAnalysis: A Python package for the rapid analysis of molecular dynamics
-# simulations. In S. Benthall and S. Rostrup editors, Proceedings of the 15th
-# Python in Science Conference, pages 102-109, Austin, TX, 2016. SciPy.
-# doi: 10.25080/majora-629e541a-00e
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
-# N. Michaud-Agrawal, E. J. Denning, T. B. Woolf, and O. Beckstein.
-# MDAnalysis: A Toolkit for the Analysis of Molecular Dynamics Simulations.
-# J. Comput. Chem. 32 (2011), 2319--2327, doi:10.1002/jcc.21787
-#
+
 """
-Linear Density --- :mod:`MDAnalysis.analysis.lineardensity`
-===========================================================
+A luigi file system client that wraps around the hdfs-library (a webhdfs
+client)
 
-A tool to compute mass and charge density profiles along the three
-cartesian axes of the simulation cell. Works only for orthorombic,
-fixed volume cells (thus for simulations in canonical NVT ensemble).
+This is a sensible fast alternative to snakebite. In particular for python3
+users, where snakebite is not supported at the time of writing (dec 2015).
+
+Note. This wrapper client is not feature complete yet. As with most software
+the authors only implement the features they need.  If you need to wrap more of
+the file system operations, please do and contribute back.
 """
-from __future__ import division, absolute_import
-
-import os.path as path
-
-import numpy as np
-
-from MDAnalysis.analysis.base import AnalysisBase
-
-class LinearDensity(AnalysisBase):
-    """Linear density profile
-
-    Parameters
-    ----------
-    selection : AtomGroup
-          any atomgroup
-    grouping : str {'atoms', 'residues', 'segments', 'fragments'}
-          Density profiles will be computed on the center of geometry
-          of a selected group of atoms ['atoms']
-    binsize : float
-          Bin width in Angstrom used to build linear density
-          histograms. Defines the resolution of the resulting density
-          profile (smaller --> higher resolution) [0.25]
-    start : int
-          The frame to start at [0]
-    stop : int
-          The frame to end at [-1]
-    step : int
-          The step size through the trajectory in frames [0]
-    verbose : bool (optional)
-          Show detailed progress of the calculation if set to ``True``; the
-          default is ``False``.
-
-    Attributes
-    ----------
-    results : dict
-          Keys 'x', 'y', and 'z' for the three directions. Under these
-          keys, find 'pos', 'pos_std' (mass-weighted density and
-          standard deviation), 'char', 'char_std' (charge density and
-          its standard deviation), 'slice_volume' (volume of bin).
-
-    Example
-    -------
-    First create a LinearDensity object by supplying a selection,
-    then use the :meth:`run` method::
-
-      ldens = LinearDensity(selection)
-      ldens.run()
 
 
-    .. versionadded:: 0.14.0
+from luigi.contrib.hdfs import config as hdfs_config
+from luigi.contrib.hdfs import abstract_client as hdfs_abstract_client
+import luigi.contrib.target
+import logging
+import os
+import warnings
 
-    .. versionchanged:: 1.0.0
-       ``save()`` method was removed, you can use ``np.savetxt`` or ``np.save``
-       on the :attr:`results` dictionary contents instead.
+logger = logging.getLogger('luigi-interface')
 
+
+class webhdfs(luigi.Config):
+    port = luigi.IntParameter(default=50070,
+                              description='Port for webhdfs')
+    user = luigi.Parameter(default='', description='Defaults to $USER envvar',
+                           config_path=dict(section='hdfs', name='user'))
+                                  description='Type of client to use. One of insecure, kerberos or token')
+    token = luigi.Parameter(default='', description='Hadoop delegation token, only used when client_type="token"')
+
+
+class WebHdfsClient(hdfs_abstract_client.HdfsFileSystem):
+    """
+    A webhdfs that tries to confirm to luigis interface for file existence.
+
+    The library is using `this api
+    <https://hdfscli.readthedocs.io/en/latest/api.html>`__.
     """
 
-    def __init__(self, selection, grouping='atoms', binsize=0.25, **kwargs):
-        super(LinearDensity, self).__init__(selection.universe.trajectory,
-                                            **kwargs)
-        # allows use of run(parallel=True)
-        self._ags = [selection]
-        self._universe = selection.universe
+    def __init__(self, host=None, port=None, user=None, client_type=None, token=None):
+        self.host = host or hdfs_config.hdfs().namenode_host
+        self.port = port or webhdfs().port
+        self.user = user or webhdfs().user or os.environ['USER']
+        self.client_type = client_type or webhdfs().client_type
+        self.token = token or webhdfs().token
 
-        self.binsize = binsize
+    @property
+    def url(self):
+        # the hdfs package allows it to specify multiple namenodes by passing a string containing
+        # multiple namenodes separated by ';'
+        hosts = self.host.split(";")
+        urls = ['http://' + host + ':' + str(self.port) for host in hosts]
+        return ";".join(urls)
 
-        # group of atoms on which to compute the COM (same as used in
-        # AtomGroup.wrap())
-        self.grouping = grouping
-
-        # Dictionary containing results
-        self.results = {'x': {'dim': 0}, 'y': {'dim': 1}, 'z': {'dim': 2}}
-        # Box sides
-        self.dimensions = self._universe.dimensions[:3]
-        self.volume = np.prod(self.dimensions)
-        # number of bins
-        bins = (self.dimensions // self.binsize).astype(int)
-
-        # Here we choose a number of bins of the largest cell side so that
-        # x, y and z values can use the same "coord" column in the output file
-        self.nbins = bins.max()
-        slices_vol = self.volume / bins
-
-        self.keys = ['pos', 'pos_std', 'char', 'char_std']
-
-        # Initialize results array with zeros
-        for dim in self.results:
-            idx = self.results[dim]['dim']
-            self.results[dim].update({'slice volume': slices_vol[idx]})
-            for key in self.keys:
-                self.results[dim].update({key: np.zeros(self.nbins)})
-
-        # Variables later defined in _prepare() method
-        self.masses = None
-        self.charges = None
-        self.totalmass = None
-
-    def _prepare(self):
-        # group must be a local variable, otherwise there will be
-        # issues with parallelization
-        group = getattr(self._ags[0], self.grouping)
-
-        # Get masses and charges for the selection
-        try:  # in case it's not an atom
-            self.masses = np.array([elem.total_mass() for elem in group])
-            self.charges = np.array([elem.total_charge() for elem in group])
-        except AttributeError:  # much much faster for atoms
-            self.masses = self._ags[0].masses
-            self.charges = self._ags[0].charges
-
-        self.totalmass = np.sum(self.masses)
-
-    def _single_frame(self):
-        self.group = getattr(self._ags[0], self.grouping)
-        self._ags[0].wrap(compound=self.grouping)
-
-        # Find position of atom/group of atoms
-        if self.grouping == 'atoms':
-            positions = self._ags[0].positions  # faster for atoms
+    @property
+    def client(self):
+        # A naive benchmark showed that 1000 existence checks took 2.5 secs
+        # when not recreating the client, and 4.0 secs when recreating it. So
+        # not urgent to memoize it. Note that it *might* be issues with process
+        # forking and whatnot (as the one in the snakebite client) if we
+        # memoize it too trivially.
+        if self.client_type == 'insecure':
+            import hdfs
+            return hdfs.InsecureClient(url=self.url, user=self.user)
+        elif self.client_type == 'kerberos':
+            from hdfs.ext.kerberos import KerberosClient
+            return KerberosClient(url=self.url)
+        elif self.client_type == 'token':
+            import hdfs
+            return hdfs.TokenClient(url=self.url, token=self.token)
         else:
-            # COM for res/frag/etc
-            positions = np.array([elem.centroid() for elem in self.group])
+            raise ValueError("Error: Unknown client type specified in webhdfs client_type"
+                             "configuration parameter")
 
-        for dim in ['x', 'y', 'z']:
-            idx = self.results[dim]['dim']
+    def walk(self, path, depth=1):
+        return self.client.walk(path, depth=depth)
 
-            key = 'pos'
-            key_std = 'pos_std'
-            # histogram for positions weighted on masses
-            hist, _ = np.histogram(positions[:, idx],
-                                   weights=self.masses,
-                                   bins=self.nbins,
-                                   range=(0.0, max(self.dimensions)))
+    def exists(self, path):
+        """
+        Returns true if the path exists and false otherwise.
+        """
+        import hdfs
+        try:
+            self.client.status(path)
+            return True
+        except hdfs.util.HdfsError as e:
+            if str(e).startswith('File does not exist: '):
+                return False
+            else:
+                raise e
 
-            self.results[dim][key] += hist
-            self.results[dim][key_std] += np.square(hist)
+    def upload(self, hdfs_path, local_path, overwrite=False):
+        return self.client.upload(hdfs_path, local_path, overwrite=overwrite)
 
-            key = 'char'
-            key_std = 'char_std'
-            # histogram for positions weighted on charges
-            hist, _ = np.histogram(positions[:, idx],
-                                   weights=self.charges,
-                                   bins=self.nbins,
-                                   range=(0.0, max(self.dimensions)))
+    def download(self, hdfs_path, local_path, overwrite=False, n_threads=-1):
+        return self.client.download(hdfs_path, local_path, overwrite=overwrite,
+                                    n_threads=n_threads)
 
-            self.results[dim][key] += hist
-            self.results[dim][key_std] += np.square(hist)
+    def remove(self, hdfs_path, recursive=True, skip_trash=False):
+        assert skip_trash  # Yes, you need to explicitly say skip_trash=True
+        return self.client.delete(hdfs_path, recursive=recursive)
 
-    def _conclude(self):
-        k = 6.022e-1  # divide by avodagro and convert from A3 to cm3
+    def read(self, hdfs_path, offset=0, length=None, buffer_size=None,
+             chunk_size=1024, buffer_char=None):
+        return self.client.read(hdfs_path, offset=offset, length=length,
+                                buffer_size=buffer_size, chunk_size=chunk_size,
+                                buffer_char=buffer_char)
 
-        # Average results over the  number of configurations
-        for dim in ['x', 'y', 'z']:
-            for key in ['pos', 'pos_std', 'char', 'char_std']:
-                self.results[dim][key] /= self.n_frames
-            # Compute standard deviation for the error
-            self.results[dim]['pos_std'] = np.sqrt(self.results[dim][
-                'pos_std'] - np.square(self.results[dim]['pos']))
-            self.results[dim]['char_std'] = np.sqrt(self.results[dim][
-                'char_std'] - np.square(self.results[dim]['char']))
+    def move(self, path, dest):
+        parts = dest.rstrip('/').split('/')
+        if len(parts) > 1:
+            dir_path = '/'.join(parts[0:-1])
+            if not self.exists(dir_path):
+                self.mkdir(dir_path, parents=True)
+        self.client.rename(path, dest)
 
-        for dim in ['x', 'y', 'z']:
-            self.results[dim]['pos'] /= self.results[dim]['slice volume'] * k
-            self.results[dim]['char'] /= self.results[dim]['slice volume'] * k
-            self.results[dim]['pos_std'] /= self.results[dim]['slice volume'] * k
-            self.results[dim]['char_std'] /= self.results[dim]['slice volume'] * k
+    def mkdir(self, path, parents=True, mode=0o755, raise_if_exists=False):
+        """
+        Has no returnvalue (just like WebHDFS)
+        """
+        if not parents or raise_if_exists:
+            warnings.warn('webhdfs mkdir: parents/raise_if_exists not implemented')
+        permission = int(oct(mode)[2:])  # Convert from int(decimal) to int(octal)
+        self.client.makedirs(path, permission=permission)
 
-    def _add_other_results(self, other):
-        # For parallel analysis
-        results = self.results
-        for dim in ['x', 'y', 'z']:
-            key = 'pos'
-            key_std = 'pos_std'
-            results[dim][key] += other[dim][key]
-            results[dim][key_std] += other[dim][key_std]
+    def chmod(self, path, permissions, recursive=False):
+        """
+        Raise a NotImplementedError exception.
+        """
+        raise NotImplementedError("Webhdfs in luigi doesn't implement chmod")
 
-            key = 'char'
-            key_std = 'char_std'
-            results[dim][key] += other[dim][key]
-            results[dim][key_std] += other[dim][key_std]
+    def chown(self, path, owner, group, recursive=False):
+        """
+        Raise a NotImplementedError exception.
+        """
+        raise NotImplementedError("Webhdfs in luigi doesn't implement chown")
+
+    def count(self, path):
+        """
+        Raise a NotImplementedError exception.
+        """
+        raise NotImplementedError("Webhdfs in luigi doesn't implement count")
+
+    def copy(self, path, destination):
+        """
+        Raise a NotImplementedError exception.
+        """
+        raise NotImplementedError("Webhdfs in luigi doesn't implement copy")
+
+    def put(self, local_path, destination):
+        """
+        Restricted version of upload
+        """
+        self.upload(local_path, destination)
+
+    def get(self, path, local_destination):
+        """
+        Restricted version of download
+        """
+        self.download(path, local_destination)
+
+    def listdir(self, path, ignore_directories=False, ignore_files=False,
+                include_size=False, include_type=False, include_time=False,
+                recursive=False):
+        assert not recursive
+        return self.client.list(path, status=False)
+
+    def touchz(self, path):
+        """
+        To touchz using the web hdfs "write" cmd.
+        """
+        self.client.write(path, data='', overwrite=False)

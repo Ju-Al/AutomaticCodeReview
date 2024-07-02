@@ -1,6 +1,4 @@
 #
-                    raise FileNotFoundError # pylint: disable=undefined-variable
-            except FileNotFoundError: # pylint: disable=undefined-variable
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -82,7 +80,8 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise IOError
+                    raise FileNotFoundError # pylint: disable=undefined-variable
+            except FileNotFoundError: # pylint: disable=undefined-variable
             except (IOError, OSError):
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:

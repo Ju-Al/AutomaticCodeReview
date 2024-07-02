@@ -1,5 +1,4 @@
 from django import forms
-class SimpleAddToBasketForm(AddToBasketForm):
 from django.conf import settings
 from django.db.models import Sum
 from django.forms.utils import ErrorDict
@@ -300,7 +299,7 @@ class AddToBasketForm(forms.Form):
         return options
 
 
-class SimpleAddToBasketMixin:
+class SimpleAddToBasketForm(AddToBasketForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if 'quantity' in self.fields:

@@ -1,6 +1,5 @@
 // Implementation of the four RandHound phases.
 
-			for i, _ := range rh.Leader.r4 {
 package randhound
 
 import (
@@ -462,7 +461,7 @@ func (rh *RandHound) handleR4(r4 WR4) error {
 			// Continue, once all replies have arrived
 
 			// Process shares of i-th peer
-			for i := range rh.Leader.r4 {
+			for i, _ := range rh.Leader.r4 {
 				for _, r4share := range rh.Leader.r4[i].Shares {
 					dIdx := r4share.DealerIdx
 					sIdx := r4share.ShareIdx

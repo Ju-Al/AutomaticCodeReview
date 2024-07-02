@@ -69,7 +69,6 @@ class Option extends Component {
                     items={values}
                     onSelectionChange={handleSelectionChange}
                 />
-                <p className={classes.selection}>
                     {selectedValue?`Selected ${label} : ${this.valuesMap.get(Array.from(selectedValue).pop())}`:''}
                 </p>
             </div>

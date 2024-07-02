@@ -1,5 +1,5 @@
 import inspect
-        mean (sequence): Mean values of 3 channels.
+
 import mmcv
 import numpy as np
 from numpy import random
@@ -1239,7 +1239,7 @@ class RandomCenterCropPad(object):
             Only available in train mode.
         border (int): max distance from center select area to image border.
             Only available in train mode.
-        std (sequence): Std values of 3 channels.
+        mean (sequence): Mean values of 3 channels.        std (sequence): Std values of 3 channels.
         to_rgb (bool): Whether to convert the image from BGR to RGB.
         test_mode (bool): whether involve random variables in transform.
             In train mode, crop_size is fixed, center coords and ratio is

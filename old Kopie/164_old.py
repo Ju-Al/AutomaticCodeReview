@@ -1,5 +1,4 @@
 #  Copyright (c) 2015 Cisco Systems
-            '{} ansible_ssh_host={} ansible_ssh_port={} ansible_ssh_private_key_file={} ansible_ssh_user={}\n'
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -216,7 +215,7 @@ class Molecule(object):
         inventory = ''
         # TODO: for Ansiblev2, the following line must have s/ssh_//
         host_template = \
-            '{} ansible_ssh_host={} ansible_ssh_port={} ansible_ssh_private_key_file={} ansible_ssh_user={} ansible_ssh_extra_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"\n'
+            '{} ansible_ssh_host={} ansible_ssh_port={} ansible_ssh_private_key_file={} ansible_ssh_user={}\n'
         for instance in self._provisioner.instances:
             ssh = self._provisioner.conf(
                 vm_name=utilities.format_instance_name(

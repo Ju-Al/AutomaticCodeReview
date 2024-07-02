@@ -184,8 +184,6 @@ class Violation(BASE):
                   'rule_name={})>')
         return string.format(
             self.violation_type, self.resource_type, self.rule_name)
-
-    def schema_update(table):
         """Maintain all the schema changes for this table.
 
         Args:

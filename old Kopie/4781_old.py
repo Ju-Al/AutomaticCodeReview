@@ -216,7 +216,6 @@ def test_yolov3_head_get_bboxes():
         np.testing.assert_allclose(
             torch_outputs[i], onnx_outputs[i], rtol=1e-03, atol=1e-05)
 
-
 def fcos_config():
     """FCOS Head Config."""
     test_cfg = mmcv.Config(

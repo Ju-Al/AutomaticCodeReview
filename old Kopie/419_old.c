@@ -17,7 +17,6 @@ static inline int64_t timespec_to_msec(const struct timespec *a) {
 	return (int64_t)a->tv_sec * 1000 + a->tv_nsec / 1000000;
 }
 
-/**
  * Computes the surface size homogeneous to the global compositor coordinates.
  */
 static void get_surface_size(struct wlr_surface *surface, double *width,

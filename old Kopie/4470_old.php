@@ -64,7 +64,6 @@ class Course_Theme extends Sensei_Blocks_Initializer {
 	public function initialize_blocks() {
 		new Course_Title();
 		new Site_Logo();
-		new Focus_Mode();
 		if ( 'lesson' === get_post_type() ) {
 			new Prev_Lesson();
 			new Next_Lesson();

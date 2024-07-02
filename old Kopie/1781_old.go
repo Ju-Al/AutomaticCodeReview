@@ -1,546 +1,542 @@
-// Copyright 2019 Antrea Authors
-		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-package cniserver
+package cli
 
 import (
-	"encoding/json"
+	"bytes"
+	"errors"
 	"fmt"
-	"net"
+	"regexp"
 	"strings"
 
-	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/containernetworking/cni/pkg/version"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog"
+	"github.com/aws/copilot-cli/internal/pkg/term/selector"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-)
-
-type vethPair struct {
-	name      string
-	ifIndex   int
-	peerIndex int
-}
-
-type k8sArgs struct {
-	cnitypes.CommonArgs
-	K8S_POD_NAME               cnitypes.UnmarshallableString
-	K8S_POD_NAMESPACE          cnitypes.UnmarshallableString
-	K8S_POD_INFRA_CONTAINER_ID cnitypes.UnmarshallableString
-}
-
-const (
-	ovsExternalIDMAC          = "attached-mac"
-	ovsExternalIDIP           = "ip-address"
-	ovsExternalIDContainerID  = "container-id"
-	ovsExternalIDPodName      = "pod-name"
-	ovsExternalIDPodNamespace = "pod-namespace"
+	"github.com/aws/copilot-cli/internal/pkg/aws/secretsmanager"
+	"github.com/aws/copilot-cli/internal/pkg/aws/sessions"
+	"github.com/aws/copilot-cli/internal/pkg/config"
+	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation"
+	"github.com/aws/copilot-cli/internal/pkg/manifest"
+	"github.com/aws/copilot-cli/internal/pkg/template"
+	"github.com/aws/copilot-cli/internal/pkg/term/color"
+	"github.com/aws/copilot-cli/internal/pkg/term/command"
+	"github.com/aws/copilot-cli/internal/pkg/term/log"
+	"github.com/aws/copilot-cli/internal/pkg/term/prompt"
+	"github.com/aws/copilot-cli/internal/pkg/version"
+	"github.com/aws/copilot-cli/internal/pkg/workspace"
+	"github.com/spf13/afero"
+	"github.com/spf13/cobra"
 )
 
 const (
-	defaultOVSInterfaceType int = iota //nolint suppress deadcode check for windows
-	internalOVSInterfaceType
+	pipelineSelectEnvPrompt     = "Which environment would you like to add to your pipeline?"
+	pipelineSelectEnvHelpPrompt = "Adds an environment that corresponds to a deployment stage in your pipeline. Environments are added sequentially."
+
+	pipelineSelectGitHubURLPrompt     = "Which GitHub repository would you like to use for your service?"
+	pipelineSelectGitHubURLHelpPrompt = `The GitHub repository linked to your workspace.
+Pushing to this repository will trigger your pipeline build stage.
+Please enter full repository URL, e.g. "https://github.com/myCompany/myRepo", or the owner/rep, e.g. "myCompany/myRepo"`
 )
 
-type podConfigurator struct {
-	ovsBridgeClient ovsconfig.OVSBridgeClient
-	ofClient        openflow.Client
-	routeClient     route.Interface
-	ifaceStore      interfacestore.InterfaceStore
-	gatewayMAC      net.HardwareAddr
-	ifConfigurator  *ifConfigurator
+const (
+	buildspecTemplatePath = "cicd/buildspec.yml"
+	githubURL             = "github.com"
+	defaultBranch         = "main"
+)
+
+const (
+	fmtSecretName       = "github-token-%s-%s"
+	fmtPipelineName     = "pipeline-%s-%s-%s"
+	fmtPipelineProvider = "https://%s/%s/%s"
+)
+
+var (
+	// Filled in via the -ldflags flag at compile time to support pipeline buildspec CLI pulling.
+	binaryS3BucketPath string
+)
+
+type initPipelineVars struct {
+	appName           string
+	environments      []string
+	repoURL           string
+	githubOwner       string
+	githubRepo        string
+	githubAccessToken string
+	gitBranch         string
 }
 
-func newPodConfigurator(
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	ofClient openflow.Client,
-	routeClient route.Interface,
-	ifaceStore interfacestore.InterfaceStore,
-	gatewayMAC net.HardwareAddr,
-	ovsDatapathType string,
-	isOvsHardwareOffloadEnabled bool,
-) (*podConfigurator, error) {
-	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
+type initPipelineOpts struct {
+	initPipelineVars
+	// Interfaces to interact with dependencies.
+	workspace      wsPipelineWriter
+	secretsmanager secretsManager
+	parser         template.Parser
+	runner         runner
+	cfnClient      appResourcesGetter
+	store          store
+	prompt         prompter
+	sel            pipelineSelector
+
+	// Outputs stored on successful actions.
+	secret string
+
+	// Caches variables
+	fs     *afero.Afero
+	buffer bytes.Buffer
+}
+
+type artifactBucket struct {
+	BucketName   string
+	Region       string
+	Environments []string
+}
+
+func newInitPipelineOpts(vars initPipelineVars) (*initPipelineOpts, error) {
+	ws, err := workspace.New()
+	if err != nil {
+		return nil, fmt.Errorf("new workspace client: %w", err)
+	}
+
+	secretsmanager, err := secretsmanager.New()
+	if err != nil {
+		return nil, fmt.Errorf("new secretsmanager client: %w", err)
+	}
+
+	p := sessions.NewProvider()
+	defaultSession, err := p.Default()
 	if err != nil {
 		return nil, err
 	}
-	return &podConfigurator{
-		ovsBridgeClient: ovsBridgeClient,
-		ofClient:        ofClient,
-		routeClient:     routeClient,
-		ifaceStore:      ifaceStore,
-		gatewayMAC:      gatewayMAC,
-		ifConfigurator:  ifConfigurator,
+
+	ssmStore, err := config.NewStore()
+	if err != nil {
+		return nil, fmt.Errorf("new config store client: %w", err)
+	}
+
+	prompter := prompt.New()
+
+	return &initPipelineOpts{
+		initPipelineVars: vars,
+		workspace:        ws,
+		secretsmanager:   secretsmanager,
+		parser:           template.New(),
+		cfnClient:        cloudformation.New(defaultSession),
+		store:            ssmStore,
+		prompt:           prompter,
+		sel:              selector.NewSelect(prompter, ssmStore),
+		runner:           command.New(),
+		fs:               &afero.Afero{Fs: afero.NewOsFs()},
 	}, nil
 }
 
-func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
-	var ips []net.IP
-	for _, ipc := range ipcs {
-		ips = append(ips, ipc.Address.IP)
+// Validate returns an error if the flag values passed by the user are invalid.
+func (o *initPipelineOpts) Validate() error {
+	if o.appName == "" {
+		return errNoAppInWorkspace
 	}
-	if len(ips) > 0 {
-		return ips, nil
-	} else {
-		return nil, fmt.Errorf("failed to find a valid IP address")
-	}
-}
-
-func buildContainerConfig(
-	interfaceName, containerID, podName, podNamespace string,
-	containerIface *current.Interface,
-	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
-	containerIPs, err := parseContainerIPs(ips)
-	if err != nil {
-		klog.Errorf("Failed to find container %s IP", containerID)
-	}
-	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
-	containerMAC, _ := net.ParseMAC(containerIface.Mac)
-	return interfacestore.NewContainerInterface(
-		interfaceName,
-		containerID,
-		podName,
-		podNamespace,
-		containerMAC,
-		containerIPs)
-}
-
-// BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
-// external_ids are used to compare and sync container interface configuration.
-func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) map[string]interface{} {
-	externalIDs := make(map[string]interface{})
-	externalIDs[ovsExternalIDMAC] = containerConfig.MAC.String()
-	externalIDs[ovsExternalIDContainerID] = containerConfig.ContainerID
-	externalIDs[ovsExternalIDIP] = getContainerIPsString(containerConfig.IPs)
-	externalIDs[ovsExternalIDPodName] = containerConfig.PodName
-	externalIDs[ovsExternalIDPodNamespace] = containerConfig.PodNamespace
-	return externalIDs
-}
-
-func getContainerIPsString(ips []net.IP) string {
-	var containerIPs []string
-	for _, ip := range ips {
-		containerIPs = append(containerIPs, ip.String())
-	}
-	return strings.Join(containerIPs, ",")
-}
-
-// ParseOVSPortInterfaceConfig reads the Pod properties saved in the OVS port
-// external_ids, initializes and returns an InterfaceConfig struct.
-// nill will be returned, if the OVS port does not have external IDs or it is
-// not created for a Pod interface.
-func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
-	if portData.ExternalIDs == nil {
-		klog.V(2).Infof("OVS port %s has no external_ids", portData.Name)
-		return nil
-	}
-
-	containerID, found := portData.ExternalIDs[ovsExternalIDContainerID]
-	if !found {
-		klog.V(2).Infof("OVS port %s has no %s in external_ids", portData.Name, ovsExternalIDContainerID)
-		return nil
-	}
-	containerIPStrs := strings.Split(portData.ExternalIDs[ovsExternalIDIP], ",")
-	var containerIPs []net.IP
-	for _, ipStr := range containerIPStrs {
-		containerIPs = append(containerIPs, net.ParseIP(ipStr))
-	}
-
-	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
-	if err != nil {
-		klog.Warningf("Failed to parse MAC address from OVS external config %s: %v",
-			portData.ExternalIDs[ovsExternalIDMAC], err)
-	}
-	podName, _ := portData.ExternalIDs[ovsExternalIDPodName]
-	podNamespace, _ := portData.ExternalIDs[ovsExternalIDPodNamespace]
-
-	interfaceConfig := interfacestore.NewContainerInterface(
-		portData.Name,
-		containerID,
-		podName,
-		podNamespace,
-		containerMAC,
-		containerIPs)
-	interfaceConfig.OVSPortConfig = portConfig
-	return interfaceConfig
-}
-
-func (pc *podConfigurator) configureInterfaces(
-	podName string,
-	podNameSpace string,
-	containerID string,
-	containerNetNS string,
-	containerIFDev string,
-	mtu int,
-	sriovVFDeviceID string,
-	result *current.Result,
-	createOVSPort bool,
-	containerAccess *containerAccessArbitrator,
-) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, result)
-	if err != nil {
-		return err
-	}
-	hostIface := result.Interfaces[0]
-	containerIface := result.Interfaces[1]
-
-	if !createOVSPort {
-		return nil
-	}
-
-	// Delete veth pair if any failure occurs in later manipulation.
-	success := false
-	defer func() {
-		if !success {
-			_ = pc.ifConfigurator.removeContainerLink(containerID, hostIface.Name)
+	if o.appName != "" {
+		if _, err := o.store.GetApplication(o.appName); err != nil {
+			return err
 		}
-	}()
-
-	// Check if the OVS configurations for the container exists or not. If yes, return immediately. This check is
-	// used on Windows, as kubelet on Windows will call CNI Add for infrastructure container for multiple times
-	// to query IP of Pod. But there should be only one OVS port created for the same Pod (identified by its sandbox
-	// container ID). And if the OVS port is added more than once, OVS will return an error.
-	// See https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
-	_, found := pc.ifaceStore.GetContainerInterface(containerID)
-	if found {
-		klog.V(2).Infof("Found an existing OVS port for container %s, returning", containerID)
-		// Mark the operation as successful, otherwise the container link might be removed by mistake.
-		success = true
-		return nil
 	}
 
-	var containerConfig *interfacestore.InterfaceConfig
-	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, containerAccess); err != nil {
-		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
-	} else {
-		success = true
-	}
-	defer func() {
-		if !success {
-			_ = pc.disconnectInterfaceFromOVS(containerConfig)
+	if o.repoURL != "" {
+		if err := validateDomainName(o.repoURL); err != nil {
+			return err
 		}
-	}()
-
-	// Note that the IP address should be advertised after Pod OpenFlow entries are installed, otherwise the packet might
-	// be dropped by OVS.
-	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
-		klog.Errorf("Failed to advertise IP address for container %s: %v", containerID, err)
-	}
-	// Mark the manipulation as success to cancel deferred operations.
-	success = true
-	klog.Infof("Configured interfaces for container %s", containerID)
-	return nil
-}
-
-func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}) (string, error) {
-	var portUUID string
-	var err error
-	switch pc.ifConfigurator.getOVSInterfaceType() {
-	case internalOVSInterfaceType:
-		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, ovsAttachInfo)
-	default:
-		portUUID, err = pc.ovsBridgeClient.CreatePort(ovsPortName, ovsPortName, ovsAttachInfo)
-	}
-	if err != nil {
-		klog.Errorf("Failed to add OVS port %s, remove from local cache: %v", ovsPortName, err)
-		return "", err
-	} else {
-		return portUUID, nil
-	}
-}
-
-func (pc *podConfigurator) removeInterfaces(containerID string) error {
-	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
-	if !found {
-		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
-		return nil
-	}
-
-	// Deleting veth devices and OVS port must be called after Openflows are uninstalled.
-	// Otherwise there could be a race condition:
-	// 1. Pod A's ofport was released
-	// 2. Pod B got the ofport released above
-	// 3. Flows for Pod B were installed
-	// 4. Flows for Pod A were uninstalled
-	// Because Pod A and Pod B had same ofport, they had overlapping flows, e.g. the
-	// classifier flow in table 0 which has only in_port as the match condition, then
-	// step 4 can remove flows owned by Pod B by mistake.
-	// Note that deleting the interface attached to an OVS port can release the ofport.
-	if err := pc.disconnectInterfaceFromOVS(containerConfig); err != nil {
-		return err
-	}
-
-	if err := pc.ifConfigurator.removeContainerLink(containerID, containerConfig.InterfaceName); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (pc *podConfigurator) checkInterfaces(
-	containerID, containerNetNS string,
-	containerIface *current.Interface,
-	prevResult *current.Result, sriovVFDeviceID string) error {
-	if link, err := pc.ifConfigurator.checkContainerInterface(
-		containerNetNS,
-		containerID,
-		containerIface,
-		prevResult.IPs,
-		prevResult.Routes,
-		sriovVFDeviceID); err != nil {
-		return err
-	} else if err := pc.checkHostInterface(
-		containerID,
-		containerIface,
-		link,
-		prevResult.IPs,
-		prevResult.Interfaces,
-		sriovVFDeviceID); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (pc *podConfigurator) checkHostInterface(
-	containerID string,
-	containerIntf *current.Interface,
-	containerIfKind interface{},
-	containerIPs []*current.IPConfig,
-	interfaces []*current.Interface,
-	sriovVFDeviceID string,
-) error {
-	var ifname string
-	if sriovVFDeviceID != "" {
-		vfRep, errlink := pc.ifConfigurator.validateVFRepInterface(sriovVFDeviceID)
-		if errlink != nil {
-			klog.Errorf("Failed to check container %s interface on the host: %v",
-				containerID, errlink)
-			return errlink
+		// TODO: add "&& !strings.Contains(o.repoURL, ccURL)" to 'if' and "and CodeCommit" to error
+		if !strings.Contains(o.repoURL, githubURL) {
+			return errors.New("Copilot currently accepts only URLs to GitHub repository sources")
 		}
-		ifname = vfRep
-	} else {
-		containerVeth := containerIfKind.(*vethPair)
-		hostVeth, errlink := pc.ifConfigurator.validateContainerPeerInterface(interfaces, containerVeth)
-		if errlink != nil {
-			klog.Errorf("Failed to check container %s interface on the host: %v",
-				containerID, errlink)
-			return errlink
-		}
-		ifname = hostVeth.name
 	}
-	if err := pc.validateOVSInterfaceConfig(containerID, containerIntf.Mac, containerIPs); err != nil {
-		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
-			ifname, containerID, err)
-		return err
-	}
-	return nil
-}
 
-func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, containerMAC string, ips []*current.IPConfig) error {
-	if containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID); found {
-		if containerConfig.MAC.String() != containerMAC {
-			return fmt.Errorf("interface MAC %s does not match container %s MAC",
-				containerConfig.MAC.String(), containerID)
-		}
-
-		for _, ipc := range ips {
-			if ipc.Version == "4" {
-				ipv4Addr := util.GetIPv4Addr(containerConfig.IPs)
-				if ipv4Addr != nil && ipv4Addr.Equal(ipc.Address.IP) {
-					return nil
-				}
+	if o.environments != nil {
+		for _, env := range o.environments {
+			_, err := o.store.GetEnvironment(o.appName, env)
+			if err != nil {
+				return err
 			}
 		}
-		return fmt.Errorf("interface IP %s does not match container %s IP",
-			getContainerIPsString(containerConfig.IPs), containerID)
-	} else {
-		return fmt.Errorf("container %s interface not found from local cache", containerID)
-	}
-}
-
-func parsePrevResult(conf *NetworkConfig) error {
-	if conf.RawPrevResult == nil {
 		return nil
-	}
-
-	resultBytes, err := json.Marshal(conf.RawPrevResult)
-	if err != nil {
-		return fmt.Errorf("could not serialize prevResult: %v", err)
-	}
-	conf.RawPrevResult = nil
-	conf.PrevResult, err = version.NewResult(conf.CNIVersion, resultBytes)
-	if err != nil {
-		return fmt.Errorf("could not parse prevResult: %v", err)
 	}
 	return nil
 }
 
-func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator) error {
-	// desiredPods is the set of Pods that should be present, based on the
-	// current list of Pods got from the Kubernetes API.
-	desiredPods := sets.NewString()
-	// actualPods is the set of Pods that are present, based on the container
-	// interfaces got from the OVSDB.
-	actualPods := sets.NewString()
-	// knownInterfaces is the list of interfaces currently in the local cache.
-	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+// Ask prompts for fields that are required but not passed in.
+func (o *initPipelineOpts) Ask() error {
+	if err := o.askEnvs(); err != nil {
+		return err
+	}
+	// TODO: Do a switch/case here after adding more repo providers.
+	if err := o.askRepository(); err != nil {
+		return err
+	}
+	return nil
+}
 
-	for _, pod := range pods {
-		// Skip Pods for which we are not in charge of the networking.
-		if pod.Spec.HostNetwork {
+// Execute writes the pipeline manifest file.
+func (o *initPipelineOpts) Execute() error {
+	secretName := o.secretName()
+	_, err := o.secretsmanager.CreateSecret(secretName, o.githubAccessToken)
+
+	if err != nil {
+		var existsErr *secretsmanager.ErrSecretAlreadyExists
+		if !errors.As(err, &existsErr) {
+			return err
+		}
+		log.Successf("Secret already exists for %s! Do nothing.\n", color.HighlightUserInput(o.githubRepo))
+	} else {
+		log.Successf("Created the secret %s for pipeline source stage!\n", color.HighlightUserInput(secretName))
+	}
+	o.secret = secretName
+
+	// write pipeline.yml file, populate with:
+	//   - github repo as source
+	//   - stage names (environments)
+	//   - enable/disable transition to prod envs
+
+	err = o.createPipelineManifest()
+	if err != nil {
+		return err
+	}
+
+	err = o.createBuildspec()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RecommendedActions returns follow-up actions the user can take after successfully executing the command.
+func (o *initPipelineOpts) RecommendedActions() []string {
+	return []string{
+		"Commit and push the generated buildspec and manifest file.",
+		fmt.Sprintf("Update the %s phase of your buildspec to unit test your services before pushing the images.", color.HighlightResource("build")),
+		"Update your pipeline manifest to add additional stages.",
+		fmt.Sprintf("Run %s to deploy your pipeline for the repository.", color.HighlightCode("copilot pipeline update")),
+	}
+}
+
+func (o *initPipelineOpts) askEnvs() error {
+	if len(o.environments) != 0 {
+		return nil
+	}
+	err := o.getEnvs()
+	if err != nil {
+		return err
+	}
+	if err = o.selectEnvironments(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *initPipelineOpts) getEnvs() error {
+	envs, err := o.store.ListEnvironments(o.appName)
+	if err != nil {
+		return fmt.Errorf("list environments for application %s: %w", o.appName, err)
+	}
+	if len(envs) == 0 {
+		return errNoEnvsInApp
+	}
+	o.envs = envs
+	return nil
+}
+
+func (o *initPipelineOpts) selectEnvironments() error {
+	for {
+		promptMsg := pipelineInitAddEnvPrompt
+		promptHelpMsg := pipelineInitAddEnvHelpPrompt
+		if len(o.environments) > 0 {
+			promptMsg = pipelineInitAddMoreEnvPrompt
+			promptHelpMsg = pipelineInitAddMoreEnvHelpPrompt
+		}
+		addEnv, err := o.prompt.Confirm(promptMsg, promptHelpMsg)
+		envs, err := o.sel.Environments(pipelineSelectEnvPrompt, pipelineSelectEnvHelpPrompt, o.appName, prompt.WithFinalMessage("Environment pipeline will deploy to, in order:"), "[No additional environments]")
+		if err != nil {
+			return fmt.Errorf("select environments: %w", err)
+		}
+		o.environments = envs
+	}
+	return nil
+}
+
+func (o *initPipelineOpts) askRepository() error {
+	var err error
+	if o.repoURL == "" {
+		if err = o.selectGitHubURL(); err != nil {
+			return err
+		}
+	}
+	if o.githubOwner, o.githubRepo, err = o.parseOwnerRepoName(o.repoURL); err != nil {
+		return err
+	}
+	if o.githubAccessToken == "" {
+		if err = o.getGitHubAccessToken(); err != nil {
+			return err
+		}
+	}
+	if o.gitBranch == "" {
+		o.gitBranch = defaultBranch
+	}
+	return nil
+}
+
+func (o *initPipelineOpts) selectGitHubURL() error {
+	// Fetches and parses all remote repositories.
+	err := o.runner.Run("git", []string{"remote", "-v"}, command.Stdout(&o.buffer))
+	if err != nil {
+		return fmt.Errorf("get remote repository info: %w; make sure you have installed Git and are in a Git repository", err)
+	}
+	urls, err := o.parseGitRemoteResult(strings.TrimSpace(o.buffer.String()))
+	if err != nil {
+		return err
+	}
+	o.buffer.Reset()
+
+	// Prompts user to select a repo URL.
+	url, err := o.prompt.SelectOne(
+		pipelineSelectGitHubURLPrompt,
+		pipelineSelectGitHubURLHelpPrompt,
+		urls,
+	)
+	if err != nil {
+		return fmt.Errorf("select GitHub URL: %w", err)
+	}
+	o.repoURL = url
+
+	return nil
+}
+
+func (o *initPipelineOpts) parseOwnerRepoName(url string) (string, string, error) {
+	regexPattern := regexp.MustCompile(`.*(github.com)(:|\/)`)
+	parsedURL := strings.TrimPrefix(url, regexPattern.FindString(url))
+	parsedURL = strings.TrimSuffix(parsedURL, ".git")
+	ownerRepo := strings.Split(parsedURL, "/")
+	if len(ownerRepo) != 2 {
+		return "", "", fmt.Errorf("unable to parse the GitHub repository owner and name from %s: please pass the repository URL with the format `--github-url https://github.com/{owner}/{repositoryName}`", url)
+	}
+	return ownerRepo[0], ownerRepo[1], nil
+}
+
+// examples:
+// efekarakus	git@github.com:efekarakus/grit.git (fetch)
+// efekarakus	https://github.com/karakuse/grit.git (fetch)
+// origin	    https://github.com/koke/grit (fetch)
+// koke         git://github.com/koke/grit.git (push)
+func (o *initPipelineOpts) parseGitRemoteResult(s string) ([]string, error) {
+	var urls []string
+	urlSet := make(map[string]bool)
+	items := strings.Split(s, "\n")
+	for _, item := range items {
+		if !strings.Contains(item, githubURL) {
 			continue
 		}
-		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
+		cols := strings.Split(item, "\t")
+		url := strings.TrimSpace(strings.TrimSuffix(strings.Split(cols[1], " ")[0], ".git"))
+		urlSet[url] = true
 	}
-
-	for _, containerConfig := range knownInterfaces {
-		namespacedName := k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName)
-		actualPods.Insert(namespacedName)
-		if desiredPods.Has(namespacedName) {
-			// This interface matches an existing Pod.
-			// We rely on the interface cache / store - which is initialized from the persistent
-			// OVSDB - to map the Pod to its interface configuration. The interface
-			// configuration includes the parameters we need to replay the flows.
-			klog.V(4).Infof("Syncing interface %s for Pod %s", containerConfig.InterfaceName, namespacedName)
-			if err := pc.ofClient.InstallPodFlows(
-				containerConfig.InterfaceName,
-				containerConfig.IPs,
-				containerConfig.MAC,
-				uint32(containerConfig.OFPort),
-			); err != nil {
-				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
-			}
-		} else {
-			// clean-up and delete interface
-			klog.V(4).Infof("Deleting interface %s", containerConfig.InterfaceName)
-			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
-				klog.Errorf("Failed to delete interface %s: %v", containerConfig.InterfaceName, err)
-			}
-			// interface should no longer be in store after the call to removeInterfaces
-		}
+	for url := range urlSet {
+		urls = append(urls, url)
 	}
+	return urls, nil
+}
 
-	missedPods := desiredPods.Difference(actualPods)
-	pc.reconcileMissedPods(missedPods, containerAccess)
+func (o *initPipelineOpts) getGitHubAccessToken() error {
+	token, err := o.prompt.GetSecret(
+		fmt.Sprintf("Please enter your GitHub Personal Access Token for your repository %s:", color.HighlightUserInput(o.githubRepo)),
+		`The personal access token for the GitHub repository linked to your workspace. 
+For more information, please refer to: https://git.io/JfDFD.`,
+	)
+
+	if err != nil {
+		return fmt.Errorf("get GitHub access token: %w", err)
+	}
+	o.githubAccessToken = token
 	return nil
 }
 
-func (pc *podConfigurator) connectInterfaceToOVSInternal(ovsPortName string, containerConfig *interfacestore.InterfaceConfig) error {
-	// create OVS Port and add attach container configuration into external_ids
-	containerID := containerConfig.ContainerID
-	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
-	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
-	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo)
+func (o *initPipelineOpts) createPipelineManifest() error {
+	pipelineName := o.pipelineName()
+	provider, err := o.pipelineProvider()
 	if err != nil {
-		return fmt.Errorf("failed to add OVS port for container %s: %v", containerID, err)
+		return fmt.Errorf("create pipeline provider: %w", err)
 	}
-	// Remove OVS port if any failure occurs in later manipulation.
-	defer func() {
+
+	var stages []manifest.PipelineStage
+	for _, environmentName := range o.environments {
+		env, err := o.store.GetEnvironment(o.appName, environmentName)
 		if err != nil {
-			_ = pc.ovsBridgeClient.DeletePort(portUUID)
+			return err
 		}
-	}()
+		stage := manifest.PipelineStage{
+			Name:             env.Name,
+			RequiresApproval: env.Prod,
+		}
+		stages = append(stages, stage)
+	}
 
-	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-	ofPort, err := pc.ovsBridgeClient.GetOFPort(ovsPortName)
+	manifest, err := manifest.NewPipelineManifest(pipelineName, provider, stages)
 	if err != nil {
-		return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
+		return fmt.Errorf("generate a pipeline manifest: %w", err)
 	}
 
-	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort))
+	var manifestExists bool
+	manifestPath, err := o.workspace.WritePipelineManifest(manifest)
 	if err != nil {
-		return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
-	}
-	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
-	// Add containerConfig into local cache
-	pc.ifaceStore.AddInterface(containerConfig)
-	return nil
-}
-
-// disconnectInterfaceFromOVS disconnects an existing interface from ovs br-int.
-func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interfacestore.InterfaceConfig) error {
-	containerID := containerConfig.ContainerID
-	klog.V(2).Infof("Deleting Openflow entries for container %s", containerID)
-	if err := pc.ofClient.UninstallPodFlows(containerConfig.InterfaceName); err != nil {
-		return fmt.Errorf("failed to delete Openflow entries for container %s: %v", containerID, err)
-		// We should not delete OVS port if Pod flows deletion fails, otherwise
-		// it is possible a new Pod will reuse the reclaimed ofport number, and
-		// the OVS flows added for the new Pod can conflict with the stale
-		// flows of the deleted Pod.
+		e, ok := err.(*workspace.ErrFileExists)
+		if !ok {
+			return fmt.Errorf("write pipeline manifest to workspace: %w", err)
+		}
+		manifestExists = true
+		manifestPath = e.FileName
 	}
 
-	klog.V(2).Infof("Deleting OVS port %s for container %s", containerConfig.PortUUID, containerID)
-	// TODO: handle error and introduce garbage collection for failure on deletion
-	if err := pc.ovsBridgeClient.DeletePort(containerConfig.PortUUID); err != nil {
-		return fmt.Errorf("failed to delete OVS port for container %s: %v", containerID, err)
-	}
-	// Remove container configuration from cache.
-	pc.ifaceStore.DeleteInterface(containerConfig)
-	klog.Infof("Removed interfaces for container %s", containerID)
-	return nil
-}
-
-// connectInterceptedInterface connects intercepted interface to ovs br-int.
-func (pc *podConfigurator) connectInterceptedInterface(
-	podName string,
-	podNameSpace string,
-	containerID string,
-	containerNetNS string,
-	containerIFDev string,
-	containerIPs []*current.IPConfig,
-	containerAccess *containerAccessArbitrator,
-) error {
-	sandbox, err := util.GetNSPath(containerNetNS)
+	manifestPath, err = relPath(manifestPath)
 	if err != nil {
 		return err
 	}
-	containerIface, hostIface, err := pc.ifConfigurator.getInterceptedInterfaces(sandbox, containerNetNS, containerIFDev)
+
+	manifestMsgFmt := "Wrote the pipeline manifest for %s at '%s'\n"
+	if manifestExists {
+		manifestMsgFmt = "Pipeline manifest file for %s already exists at %s, skipping writing it.\n"
+	}
+	log.Successf(manifestMsgFmt, color.HighlightUserInput(o.githubRepo), color.HighlightResource(manifestPath))
+	log.Infoln("The manifest contains configurations for your CodePipeline resources, such as your pipeline stages and build steps.")
+	return nil
+}
+
+func (o *initPipelineOpts) createBuildspec() error {
+	artifactBuckets, err := o.artifactBuckets()
 	if err != nil {
 		return err
 	}
-	if err = pc.routeClient.MigrateRoutesToGw(hostIface.Name); err != nil {
-		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
+	content, err := o.parser.Parse(buildspecTemplatePath, struct {
+		BinaryS3BucketPath string
+		Version            string
+		ArtifactBuckets    []artifactBucket
+	}{
+		BinaryS3BucketPath: binaryS3BucketPath,
+		Version:            version.Version,
+		ArtifactBuckets:    artifactBuckets,
+	})
+	if err != nil {
+		return err
 	}
-	_, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface,
-		containerIface, containerIPs, containerAccess)
-	return err
+	buildspecPath, err := o.workspace.WritePipelineBuildspec(content)
+	var buildspecExists bool
+	if err != nil {
+		e, ok := err.(*workspace.ErrFileExists)
+		if !ok {
+			return fmt.Errorf("write buildspec to workspace: %w", err)
+		}
+		buildspecExists = true
+		buildspecPath = e.FileName
+	}
+	buildspecMsgFmt := "Wrote the buildspec for the pipeline's build stage at '%s'\n"
+	if buildspecExists {
+		buildspecMsgFmt = "Buildspec file for pipeline already exists at %s, skipping writing it.\n"
+	}
+	buildspecPath, err = relPath(buildspecPath)
+	if err != nil {
+		return err
+	}
+	log.Successf(buildspecMsgFmt, color.HighlightResource(buildspecPath))
+	log.Infoln("The buildspec contains the commands to build and push your container images to your ECR repositories.")
+
+	return nil
 }
 
-// disconnectInterceptedInterface disconnects intercepted interface from ovs br-int.
-func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace, containerID string) error {
-	containerConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
-	if !found {
-		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
-		return nil
+func (o *initPipelineOpts) secretName() string {
+	return fmt.Sprintf(fmtSecretName, o.appName, o.githubRepo)
+}
+
+func (o *initPipelineOpts) pipelineName() string {
+	return fmt.Sprintf(fmtPipelineName, o.appName, o.githubOwner, o.githubRepo)
+}
+
+func (o *initPipelineOpts) pipelineProvider() (manifest.Provider, error) {
+	config := &manifest.GitHubProperties{
+		OwnerAndRepository:    fmt.Sprintf(fmtPipelineProvider, githubURL, o.githubOwner, o.githubRepo),
+		Branch:                o.gitBranch,
+		GithubSecretIdKeyName: o.secret,
 	}
-	for _, ip := range containerConfig.IPs {
-		if err := pc.routeClient.UnMigrateRoutesFromGw(&net.IPNet{
-			IP:   ip,
-			Mask: net.CIDRMask(32, 32),
-		}, ""); err != nil {
-			return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
+	return manifest.NewProvider(config)
+}
+
+func (o *initPipelineOpts) artifactBuckets() ([]artifactBucket, error) {
+	app, err := o.store.GetApplication(o.appName)
+	if err != nil {
+		return nil, fmt.Errorf("get application %s: %w", o.appName, err)
+	}
+	regionalResources, err := o.cfnClient.GetRegionalAppResources(app)
+	if err != nil {
+		return nil, fmt.Errorf("get regional application resources: %w", err)
+	}
+
+	var buckets []artifactBucket
+	for _, resource := range regionalResources {
+		var envNames []string
+		for _, environment := range o.environments {
+			env, err := o.store.GetEnvironment(o.appName, environment)
+			if err != nil {
+				return nil, err
+			}
+			if env.Region == resource.Region {
+				envNames = append(envNames, env.Name)
+			}
 		}
+		bucket := artifactBucket{
+			BucketName:   resource.S3Bucket,
+			Region:       resource.Region,
+			Environments: envNames,
+		}
+		buckets = append(buckets, bucket)
 	}
-	return pc.disconnectInterfaceFromOVS(containerConfig)
-	// TODO recover pre-connect state? repatch vethpair to original bridge etc ?? to make first CNI happy??
+	return buckets, nil
+}
+
+// buildPipelineInitCmd build the command for creating a new pipeline.
+func buildPipelineInitCmd() *cobra.Command {
+	vars := initPipelineVars{}
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Creates a pipeline for the services in your workspace.",
+		Long:  `Creates a pipeline for the services in your workspace, using the environments associated with the application.`,
+		Example: `
+  Create a pipeline for the services in your workspace.
+  /code $ copilot pipeline init \
+  /code  --github-url https://github.com/gitHubUserName/myFrontendApp.git \
+  /code  --github-access-token file://myGitHubToken \
+  /code  --environments "stage,prod"`,
+		RunE: runCmdE(func(cmd *cobra.Command, args []string) error {
+			opts, err := newInitPipelineOpts(vars)
+			if err != nil {
+				return err
+			}
+			if err := opts.Validate(); err != nil {
+				return err
+			}
+			if err := opts.Ask(); err != nil {
+				return err
+			}
+			if err := opts.Execute(); err != nil {
+				return err
+			}
+			log.Infoln()
+			log.Infoln("Recommended follow-up actions:")
+			for _, followup := range opts.RecommendedActions() {
+				log.Infof("- %s\n", followup)
+			}
+			return nil
+		}),
+	}
+	cmd.Flags().StringVarP(&vars.appName, appFlag, appFlagShort, tryReadingAppName(), appFlagDescription)
+	cmd.Flags().StringVarP(&vars.repoURL, githubURLFlag, githubURLFlagShort, "", githubURLFlagDescription)
+	cmd.Flags().StringVarP(&vars.githubAccessToken, githubAccessTokenFlag, githubAccessTokenFlagShort, "", githubAccessTokenFlagDescription)
+	cmd.Flags().StringVarP(&vars.gitBranch, gitBranchFlag, gitBranchFlagShort, "", gitBranchFlagDescription)
+	cmd.Flags().StringSliceVarP(&vars.environments, envsFlag, envsFlagShort, []string{}, pipelineEnvsFlagDescription)
+
+	return cmd
 }

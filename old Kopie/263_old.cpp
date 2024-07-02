@@ -1,11 +1,4 @@
 /******************************************************************************
-caf::behavior node(node_ptr self, std::string id, path dir) {
-  self->state.dir = std::move(dir);
-  self->state.name = std::move(id);
-  auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
-  auto acc = self->spawn<monitored>(accountant, std::move(acc_log));
-  auto ptr = actor_cast<strong_actor_ptr>(acc);
-  self->system().registry().put(accountant_atom::value, ptr);
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -261,7 +254,13 @@ void send(node_ptr self, message args) {
 
 } // namespace <anonymous>
 
-node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
+caf::behavior node(node_ptr self, std::string id, path dir) {
+  self->state.dir = std::move(dir);
+  auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
+  auto acc = self->spawn<monitored>(accountant, std::move(acc_log));
+  auto ptr = actor_cast<strong_actor_ptr>(acc);
+  self->system().registry().put(accountant_atom::value, ptr);
+  self->state.name = std::move(id);
   // nop
 }
 

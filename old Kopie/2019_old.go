@@ -1,7 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	case ghProviderName:
-		source = &deploy.GitHubSource{
-			ProviderName:                ghProviderName,
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -244,7 +241,9 @@ func (o *updatePipelineOpts) Execute() error {
 
 	var source interface{}
 	switch pipeline.Source.ProviderName {
-	case ghV1ProviderName:
+	case ghProviderName:
+		source = &deploy.GitHubSource{
+			ProviderName:                ghProviderName,
 		source = &deploy.GitHubV1Source{
 			ProviderName:                ghV1ProviderName,
 			Branch:                      (pipeline.Source.Properties["branch"]).(string),

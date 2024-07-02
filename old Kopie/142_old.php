@@ -1,6 +1,5 @@
 <?php
 
-        return $template->render($twigContext);
 namespace Kunstmaan\PagePartBundle\Twig\Extension;
 
 use Doctrine\ORM\EntityManager;
@@ -73,7 +72,7 @@ class PageTemplateTwigExtension extends \Twig_Extension
 
         $template = $this->environment->loadTemplate($pageTemplate->getTemplate());
 
-        return $template->render(array_merge($twigContext, $parameters));
+        return $template->render($twigContext);
     }
 
     /**

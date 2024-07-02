@@ -1,7 +1,4 @@
 /*----------------------------------------------------------------------
-        fprintf( stderr, "step%d-bondchk failed: i=%d end(i)=%d str(i+1)=%d\n",
-                 step, i, End_Index(i,bonds), comp );
-        MPI_Abort( comm, INSUFFICIENT_MEMORY );
   PuReMD - Purdue ReaxFF Molecular Dynamics Program
   Website: https://www.cs.purdue.edu/puremd
 
@@ -292,7 +289,9 @@ void Validate_ListsOMP( reax_system *system, storage * /*workspace */, reax_list
       else comp = bonds->num_intrs;
 
       if (End_Index(i, bonds) > comp) {
-        char errmsg[256];
+        fprintf( stderr, "step%d-bondchk failed: i=%d end(i)=%d str(i+1)=%d\n",
+                 step, i, End_Index(i,bonds), comp );
+        MPI_Abort( comm, INSUFFICIENT_MEMORY );
         snprintf(errmsg, 256, "step%d-bondchk failed: i=%d end(i)=%d str(i+1)=%d\n",
                   step, i, End_Index(i,bonds), comp );
         system->error_ptr->all(FLERR,errmsg);

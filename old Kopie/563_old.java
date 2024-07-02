@@ -20,7 +20,6 @@ public class ASTExpression extends AbstractJavaTypeNode {
     public Object jjtAccept(JavaParserVisitor visitor, Object data) {
         return visitor.visit(this, data);
     }
-
     public boolean isStandAlonePrimitive() {
         if (jjtGetNumChildren() != 1) {
             return false;

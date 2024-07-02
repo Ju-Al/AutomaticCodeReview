@@ -1,6 +1,5 @@
 package deploy
 
-type StatsEntry struct {
 import (
 	"encoding/json"
 	"errors"
@@ -16,7 +15,7 @@ import (
 	"time"
 )
 
-////////////////////// HELPERS FUNCTIONS / STRUCT /////////////////
+type StatsEntry struct {
 // StreamStats is used to compute the statistics
 // it reprensent the time to an action (setup, shamir round, coll round etc)
 // use it to compute streaming mean + dev

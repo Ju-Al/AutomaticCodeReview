@@ -1,68 +1,4 @@
 /*
-        ExecutionInvocationCallback callback = new ExecutionInvocationCallback(executionId);
-
-        cancellationToken.whenCompleted(callback::cancelInvocations);
-
-        CompletionToken executionRestartToken = new CompletionToken(logger);
-        executionRestartToken.whenCompleted(callback::cancelInvocations);
-        Consumer<Map<MemberInfo, Object>> completionCallback = results -> {
-            this.executionRestartToken = null;
-            onExecuteStepCompleted(results, executionRestartToken.isCompleted());
-        };
-
-        // We must set executionRestartToken before we call invoke() method because once all invocations
-        // are done, executionRestartToken will be reset. Therefore, setting it after the invoke() call is racy.
-        this.executionRestartToken = executionRestartToken;
-        invoke(operationCtor, completionCallback, callback);
-    private void cancelExecutionInvocations(long jobId, long executionId) {
-        nodeEngine.getExecutionService().execute(ExecutionService.ASYNC_EXECUTOR, () -> {
-            Function<ExecutionPlan, Operation> operationCtor = plan -> new CancelExecutionOperation(jobId, executionId);
-            invoke(operationCtor, responses -> { }, null);
-        });
-    }
-
-    /**
-     * Cancels the job execution invocations in order to restart it afterwards if the job is currently being executed
-     */
-    boolean restartExecution() {
-        CompletionToken restartToken = this.executionRestartToken;
-        if (restartToken != null) {
-            restartToken.complete();
-            return true;
-        return false;
-        if (this.executionId != executionId) {
-            // current execution is completed and probably a new execution has started
-            logger.warning("Not beginning snapshot since unexpected execution ID received for " + jobIdString()
-                    + ". Received execution ID: " + idToString(executionId));
-            return;
-        }
-        List<String> vertexNames = vertices.stream().map(Vertex::getName).collect(Collectors.toList());
-        long newSnapshotId = snapshotRepository.registerSnapshot(jobId, vertexNames);
-        logger.info(String.format("Starting snapshot %s for %s", newSnapshotId, jobIdString()));
-        Function<ExecutionPlan, Operation> factory =
-                plan -> new SnapshotOperation(jobId, executionId, newSnapshotId);
-        invoke(factory, responses -> onSnapshotCompleted(responses, executionId, newSnapshotId), null);
-    }
-    private void onSnapshotCompleted(Map<MemberInfo, Object> responses, long executionId, long snapshotId) {
-        SnapshotOperationResult mergedResult = new SnapshotOperationResult();
-        for (Object response : responses.values()) {
-            mergedResult.merge((SnapshotOperationResult) response);
-        boolean isSuccess = mergedResult.getError() == null;
-        if (!isSuccess) {
-            logger.warning(jobIdString() + " snapshot " + snapshotId + " has failure, " +
-                    "first failure: " + mergedResult.getError());
-        coordinationService.completeSnapshot(jobId, executionId, snapshotId, isSuccess,
-                mergedResult.getNumBytes(), mergedResult.getNumKeys(), mergedResult.getNumChunks());
-    private void onExecuteStepCompleted(Map<MemberInfo, Object> responses, boolean isRestartRequested) {
-        invokeCompleteExecution(getExecuteResult(responses, isRestartRequested));
-     * <li>Returns CancellationException if the job is cancelled.
-     * <li>Returns JobRestartRequestedException if the current execution is cancelled
-    private Throwable getExecuteResult(Map<MemberInfo, Object> responses, boolean isRestartRequested) {
-        if (cancellationToken.isCompleted()) {
-            logger.fine(jobIdString() + " to be cancelled after execute");
-        } else if (isRestartRequested) {
-            return new JobRestartRequestedException();
-            logger.fine("Execute of " + jobIdString() + " is successful.");
  * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -513,7 +449,70 @@ public class MasterContext {
 
         long executionId = this.executionId;
 
-        executionInvocationCallback = new ExecutionInvocationCallback(executionId);
+        ExecutionInvocationCallback callback = new ExecutionInvocationCallback(executionId);
+
+        cancellationToken.whenCompleted(callback::cancelInvocations);
+
+        CompletionToken executionRestartToken = new CompletionToken(logger);
+        Consumer<Map<MemberInfo, Object>> completionCallback = results -> {
+            this.executionRestartToken = null;
+            onExecuteStepCompleted(results, executionRestartToken.isCompleted());
+        };
+
+        // We must set executionRestartToken before we call invoke() method because once all invocations
+        // are done, executionRestartToken will be reset. Therefore, setting it after the invoke() call is racy.
+        this.executionRestartToken = executionRestartToken;
+        invoke(operationCtor, completionCallback, callback);
+    private void cancelExecutionInvocations(long jobId, long executionId) {
+        nodeEngine.getExecutionService().execute(ExecutionService.ASYNC_EXECUTOR, () -> {
+            Function<ExecutionPlan, Operation> operationCtor = plan -> new CancelExecutionOperation(jobId, executionId);
+            invoke(operationCtor, responses -> { }, null);
+        });
+    }
+
+    /**
+     * Cancels the job execution invocations in order to restart it afterwards if the job is currently being executed
+     */
+    boolean restartExecution() {
+        CompletionToken restartToken = this.executionRestartToken;
+        if (restartToken != null) {
+            restartToken.complete();
+            return true;
+        return false;
+        if (this.executionId != executionId) {
+            // current execution is completed and probably a new execution has started
+            logger.warning("Not beginning snapshot since unexpected execution ID received for " + jobIdString()
+                    + ". Received execution ID: " + idToString(executionId));
+            return;
+        }
+        List<String> vertexNames = vertices.stream().map(Vertex::getName).collect(Collectors.toList());
+        long newSnapshotId = snapshotRepository.registerSnapshot(jobId, vertexNames);
+        logger.info(String.format("Starting snapshot %s for %s", newSnapshotId, jobIdString()));
+        Function<ExecutionPlan, Operation> factory =
+                plan -> new SnapshotOperation(jobId, executionId, newSnapshotId);
+        invoke(factory, responses -> onSnapshotCompleted(responses, executionId, newSnapshotId), null);
+    }
+    private void onSnapshotCompleted(Map<MemberInfo, Object> responses, long executionId, long snapshotId) {
+        SnapshotOperationResult mergedResult = new SnapshotOperationResult();
+        for (Object response : responses.values()) {
+            mergedResult.merge((SnapshotOperationResult) response);
+        boolean isSuccess = mergedResult.getError() == null;
+        if (!isSuccess) {
+            logger.warning(jobIdString() + " snapshot " + snapshotId + " has failure, " +
+                    "first failure: " + mergedResult.getError());
+        coordinationService.completeSnapshot(jobId, executionId, snapshotId, isSuccess,
+                mergedResult.getNumBytes(), mergedResult.getNumKeys(), mergedResult.getNumChunks());
+    private void onExecuteStepCompleted(Map<MemberInfo, Object> responses, boolean isRestartRequested) {
+        invokeCompleteExecution(getExecuteResult(responses, isRestartRequested));
+     * <li>Returns CancellationException if the job is cancelled.
+     * <li>Returns JobRestartRequestedException if the current execution is cancelled
+    private Throwable getExecuteResult(Map<MemberInfo, Object> responses, boolean isRestartRequested) {
+        if (cancellationToken.isCompleted()) {
+            logger.fine(jobIdString() + " to be cancelled after execute");
+        } else if (isRestartRequested) {
+            return new JobRestartRequestedException();
+            logger.fine("Execute of " + jobIdString() + " is successful.");
+        executionRestartToken.whenCompleted(callback::cancelInvocations);
         if (requestedTerminationMode.get() != null) {
             handleTermination(requestedTerminationMode.get());
         }

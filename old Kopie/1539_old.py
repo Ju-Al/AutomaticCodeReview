@@ -417,8 +417,6 @@ class _Downloader:
         if self.pending_downloads:
             return
         self._finish_file()
-
-    def _cancelled(self, url, item):
         """Callback when a download is cancelled by the user.
 
         Args:

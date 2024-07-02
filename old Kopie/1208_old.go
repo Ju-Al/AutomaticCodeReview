@@ -1,7 +1,5 @@
 package version
 
-	gittag = ""
-		return fmt.Sprintf("%s-dev", Base)
 import "fmt"
 
 const (
@@ -9,7 +7,8 @@ const (
 )
 
 var (
-	gittag  = ""
+		return fmt.Sprintf("%s-dev", Base)
+	gittag = ""
 	githash = ""
 )
 

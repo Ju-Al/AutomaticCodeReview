@@ -1,5 +1,4 @@
 // Copyright 2015 Light Code Labs, LLC
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,352 +11,234 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package caddymain
+package telemetry
 
 import (
-	"errors"
-	"flag"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
-	"github.com/klauspost/cpuid"
-	"github.com/mholt/caddy"
-	"github.com/mholt/caddy/caddytls"
-	"github.com/mholt/caddy/telemetry"
-	"github.com/xenolf/lego/acme"
-	"gopkg.in/natefinch/lumberjack.v2"
-
-	_ "github.com/mholt/caddy/caddyhttp" // plug in the HTTP server type
-	// This is where other plugins get plugged in (imported)
 )
 
-func init() {
-	caddy.TrapSignals()
-	setVersion()
-
-	flag.BoolVar(&caddytls.Agreed, "agree", false, "Agree to the CA's Subscriber Agreement")
-	flag.StringVar(&caddytls.DefaultCAUrl, "ca", "https://acme-v01.api.letsencrypt.org/directory", "URL to certificate authority's ACME server directory")
-	flag.BoolVar(&caddytls.DisableHTTPChallenge, "disable-http-challenge", caddytls.DisableHTTPChallenge, "Disable the ACME HTTP challenge")
-	flag.BoolVar(&caddytls.DisableTLSSNIChallenge, "disable-tls-sni-challenge", caddytls.DisableTLSSNIChallenge, "Disable the ACME TLS-SNI challenge")
-	flag.StringVar(&disabledMetrics, "disabled-metrics", "", "Comma-separated list of telemetry metrics to disable")
-	flag.StringVar(&conf, "conf", "", "Caddyfile to load (default \""+caddy.DefaultConfigFile+"\")")
-	flag.StringVar(&cpu, "cpu", "100%", "CPU cap")
-	flag.BoolVar(&plugins, "plugins", false, "List installed plugins")
-	flag.StringVar(&caddytls.DefaultEmail, "email", "", "Default ACME CA account email address")
-	flag.DurationVar(&acme.HTTPClient.Timeout, "catimeout", acme.HTTPClient.Timeout, "Default ACME CA HTTP timeout")
-	flag.StringVar(&logfile, "log", "", "Process log file")
-	flag.StringVar(&caddy.PidFile, "pidfile", "", "Path to write pid file")
-	flag.BoolVar(&caddy.Quiet, "quiet", false, "Quiet mode (no initialization output)")
-	flag.StringVar(&revoke, "revoke", "", "Hostname for which to revoke the certificate")
-	flag.StringVar(&serverType, "type", "http", "Type of server to run")
-	flag.BoolVar(&version, "version", false, "Show version")
-	flag.BoolVar(&validate, "validate", false, "Parse the Caddyfile but do not start the server")
-
-	caddy.RegisterCaddyfileLoader("flag", caddy.LoaderFunc(confLoader))
-	caddy.SetDefaultCaddyfileLoader("default", caddy.LoaderFunc(defaultLoader))
+// Init initializes this package so that it may
+// be used. Do not call this function more than
+// once. Init panics if it is called more than
+// once or if the UUID value is empty. Once this
+// function is called, the rest of the package
+// may safely be used. If this function is not
+// called, the collector functions may still be
+// invoked, but they will be no-ops.
+//
+// Any metrics keys that are passed in the second
+// argument will be permanently disabled for the
+// lifetime of the process.
+func Init(instanceID uuid.UUID, disabledMetricsKeys []string) {
+	if enabled {
+		panic("already initialized")
+	}
+	if str := instanceID.String(); str == "" ||
+		str == "00000000-0000-0000-0000-000000000000" {
+		panic("empty UUID")
+	}
+	instanceUUID = instanceID
+	disabledMetricsMu.Lock()
+	for _, key := range disabledMetricsKeys {
+		disabledMetrics[key] = false
+	}
+	disabledMetricsMu.Unlock()
+	enabled = true
 }
 
-// Run is Caddy's main() function.
-func Run() {
-	flag.Parse()
-
-	caddy.AppName = appName
-	caddy.AppVersion = appVersion
-	acme.UserAgent = appName + "/" + appVersion
-
-	// Set up process log before anything bad happens
-	switch logfile {
-	case "stdout":
-		log.SetOutput(os.Stdout)
-	case "stderr":
-		log.SetOutput(os.Stderr)
-	case "":
-		log.SetOutput(ioutil.Discard)
-	default:
-		log.SetOutput(&lumberjack.Logger{
-			Filename:   logfile,
-			MaxSize:    100,
-			MaxAge:     14,
-			MaxBackups: 10,
-		})
+// StartEmitting sends the current payload and begins the
+// transmission cycle for updates. This is the first
+// update sent, and future ones will be sent until
+// StopEmitting is called.
+//
+// This function is non-blocking (it spawns a new goroutine).
+//
+// This function panics if it was called more than once.
+// It is a no-op if this package was not initialized.
+func StartEmitting() {
+	if !enabled {
+		return
 	}
-
-	// initialize telemetry client
-	if enableTelemetry {
-		initTelemetry()
-	} else if disabledMetrics != "" {
-		mustLogFatalf("[ERROR] Cannot disable specific metrics because telemetry is disabled")
+	updateTimerMu.Lock()
+	if updateTimer != nil {
+		updateTimerMu.Unlock()
+		panic("updates already started")
 	}
-
-	// Check for one-time actions
-	if revoke != "" {
-		err := caddytls.Revoke(revoke)
-		if err != nil {
-			mustLogFatalf("%v", err)
-		}
-		fmt.Printf("Revoked certificate for %s\n", revoke)
-		os.Exit(0)
+	updateTimerMu.Unlock()
+	updateMu.Lock()
+	if updating {
+		updateMu.Unlock()
+		panic("update already in progress")
 	}
-	if version {
-		fmt.Printf("%s %s (unofficial)\n", appName, appVersion)
-		if devBuild && gitShortStat != "" {
-			fmt.Printf("%s\n%s\n", gitShortStat, gitFilesModified)
-		}
-		os.Exit(0)
-	}
-	if plugins {
-		fmt.Println(caddy.DescribePlugins())
-		os.Exit(0)
-	}
-
-	// Set CPU cap
-	err := setCPU(cpu)
-	if err != nil {
-		mustLogFatalf("%v", err)
-	}
-
-	// Executes Startup events
-	caddy.EmitEvent(caddy.StartupEvent, nil)
-
-	// Get Caddyfile input
-	caddyfileinput, err := caddy.LoadCaddyfile(serverType)
-	if err != nil {
-		mustLogFatalf("%v", err)
-	}
-
-	if validate {
-		err := caddy.ValidateAndExecuteDirectives(caddyfileinput, nil, true)
-		if err != nil {
-			mustLogFatalf("%v", err)
-		}
-		msg := "Caddyfile is valid"
-		fmt.Println(msg)
-		log.Printf("[INFO] %s", msg)
-		os.Exit(0)
-	}
-
-	// Start your engines
-	instance, err := caddy.Start(caddyfileinput)
-	if err != nil {
-		mustLogFatalf("%v", err)
-	}
-
-	// Execute instantiation events
-	caddy.EmitEvent(caddy.InstanceStartupEvent, instance)
-
-	// Begin telemetry (these are no-ops if telemetry disabled)
-	telemetry.Set("caddy_version", appVersion)
-	telemetry.Set("num_listeners", len(instance.Servers()))
-	telemetry.Set("server_type", serverType)
-	telemetry.Set("os", runtime.GOOS)
-	telemetry.Set("arch", runtime.GOARCH)
-	telemetry.Set("cpu", struct {
-		BrandName  string `json:"brand_name,omitempty"`
-		NumLogical int    `json:"num_logical,omitempty"`
-		AESNI      bool   `json:"aes_ni,omitempty"`
-	}{
-		BrandName:  cpuid.CPU.BrandName,
-		NumLogical: runtime.NumCPU(),
-		AESNI:      cpuid.CPU.AesNi(),
-	})
-	telemetry.StartEmitting()
-
-	// Twiddle your thumbs
-	instance.Wait()
+	updateMu.Unlock()
+	go logEmit(false)
 }
 
-// mustLogFatalf wraps log.Fatalf() in a way that ensures the
-// output is always printed to stderr so the user can see it
-// if the user is still there, even if the process log was not
-// enabled. If this process is an upgrade, however, and the user
-// might not be there anymore, this just logs to the process
-// log and exits.
-func mustLogFatalf(format string, args ...interface{}) {
-	if !caddy.IsUpgrade() {
-		log.SetOutput(os.Stderr)
+// StopEmitting sends the current payload and terminates
+// the update cycle. No more updates will be sent.
+//
+// It is a no-op if the package was never initialized
+// or if emitting was never started.
+//
+// NOTE: This function is blocking. Run in a goroutine if
+// you want to guarantee no blocking at critical times
+// like exiting the program.
+func StopEmitting() {
+	if !enabled {
+		return
 	}
-	log.Fatalf(format, args...)
+	updateTimerMu.Lock()
+	if updateTimer == nil {
+		updateTimerMu.Unlock()
+		return
+	}
+	updateTimerMu.Unlock()
+	logEmit(true) // likely too early; may take minutes to return
 }
 
-// confLoader loads the Caddyfile using the -conf flag.
-func confLoader(serverType string) (caddy.Input, error) {
-	if conf == "" {
-		return nil, nil
-	}
-
-	if conf == "stdin" {
-		return caddy.CaddyfileFromPipe(os.Stdin, serverType)
-	}
-
-	var contents []byte
-	if strings.Contains(conf, "*") {
-		// Let caddyfile.doImport logic handle the globbed path
-		contents = []byte("import " + conf)
-	} else {
-		var err error
-		contents, err = ioutil.ReadFile(conf)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return caddy.CaddyfileInput{
-		Contents:       contents,
-		Filepath:       conf,
-		ServerTypeName: serverType,
-	}, nil
+// Reset empties the current payload buffer.
+func Reset() {
+	resetBuffer()
 }
 
-// defaultLoader loads the Caddyfile from the current working directory.
-func defaultLoader(serverType string) (caddy.Input, error) {
-	contents, err := ioutil.ReadFile(caddy.DefaultConfigFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+// Set puts a value in the buffer to be included
+// in the next emission. It overwrites any
+// previous value.
+//
+// This function is safe for multiple goroutines,
+// and it is recommended to call this using the
+// go keyword after the call to SendHello so it
+// doesn't block crucial code.
+func Set(key string, val interface{}) {
+	if !enabled || isDisabled(key) {
+		return
 	}
-	return caddy.CaddyfileInput{
-		Contents:       contents,
-		Filepath:       caddy.DefaultConfigFile,
-		ServerTypeName: serverType,
-	}, nil
+	bufferMu.Lock()
+	if bufferItemCount >= maxBufferItems {
+		bufferMu.Unlock()
+		return
+	}
+	if _, ok := buffer[key]; !ok {
+		bufferItemCount++
+	}
+	buffer[key] = val
+	bufferMu.Unlock()
 }
 
-// setVersion figures out the version information
-// based on variables set by -ldflags.
-func setVersion() {
-	// A development build is one that's not at a tag or has uncommitted changes
-	devBuild = gitTag == "" || gitShortStat != ""
-
-	if buildDate != "" {
-		buildDate = " " + buildDate
+// Append appends value to a list named key.
+// If key is new, a new list will be created.
+// If key maps to a type that is not a list,
+// a panic is logged, and this is a no-op.
+func Append(key string, value interface{}) {
+	if !enabled || isDisabled(key) {
+		return
 	}
-
-	// Only set the appVersion if -ldflags was used
-	if gitNearestTag != "" || gitTag != "" {
-		if devBuild && gitNearestTag != "" {
-			appVersion = fmt.Sprintf("%s (+%s%s)",
-				strings.TrimPrefix(gitNearestTag, "v"), gitCommit, buildDate)
-		} else if gitTag != "" {
-			appVersion = strings.TrimPrefix(gitTag, "v")
-		}
+	bufferMu.Lock()
+	if bufferItemCount >= maxBufferItems {
+		bufferMu.Unlock()
+		return
 	}
+	// TODO: Test this...
+	bufVal, inBuffer := buffer[key]
+	sliceVal, sliceOk := bufVal.([]interface{})
+	if inBuffer && !sliceOk {
+		bufferMu.Unlock()
+		log.Printf("[PANIC] Telemetry: key %s already used for non-slice value", key)
+		return
+	}
+	if sliceVal == nil {
+		buffer[key] = []interface{}{value}
+	} else if sliceOk {
+		buffer[key] = append(sliceVal, value)
+	}
+	bufferItemCount++
+	bufferMu.Unlock()
 }
 
-// setCPU parses string cpu and sets GOMAXPROCS
-// according to its value. It accepts either
-// a number (e.g. 3) or a percent (e.g. 50%).
-// If the percent resolves to less than a single
-// GOMAXPROCS, it rounds it up to GOMAXPROCS=1.
-func setCPU(cpu string) error {
-	var numCPU int
-
-	availCPU := runtime.NumCPU()
-
-	if strings.HasSuffix(cpu, "%") {
-		// Percent
-		var percent float32
-		pctStr := cpu[:len(cpu)-1]
-		pctInt, err := strconv.Atoi(pctStr)
-		if err != nil || pctInt < 1 || pctInt > 100 {
-			return errors.New("invalid CPU value: percentage must be between 1-100")
-		}
-		percent = float32(pctInt) / 100
-		numCPU = int(float32(availCPU) * percent)
-		if numCPU < 1 {
-			numCPU = 1
-		}
-	} else {
-		// Number
-		num, err := strconv.Atoi(cpu)
-		if err != nil || num < 1 {
-			return errors.New("invalid CPU value: provide a number or percent greater than 0")
-		}
-		numCPU = num
+// AppendUnique adds value to a set named key.
+// Set items are unordered. Values in the set
+// are unique, but how many times they are
+// appended is counted.
+//
+// If key is new, a new set will be created for
+// values with that key. If key maps to a type
+// that is not a counting set, a panic is logged,
+// and this is a no-op.
+func AppendUnique(key string, value interface{}) {
+	if !enabled || isDisabled(key) {
+		return
 	}
-
-	if numCPU > availCPU {
-		numCPU = availCPU
+	bufferMu.Lock()
+	bufVal, inBuffer := buffer[key]
+	setVal, setOk := bufVal.(countingSet)
+	if inBuffer && !setOk {
+		bufferMu.Unlock()
+		log.Printf("[PANIC] Telemetry: key %s already used for non-counting-set value", key)
+		return
 	}
-
-	runtime.GOMAXPROCS(numCPU)
-	return nil
+	if setVal == nil {
+		// ensure the buffer is not too full, then add new unique value
+		if bufferItemCount >= maxBufferItems {
+			bufferMu.Unlock()
+			return
+		}
+		buffer[key] = countingSet{value: 1}
+		bufferItemCount++
+	} else if setOk {
+		// unique value already exists, so just increment counter
+		setVal[value]++
+	}
+	bufferMu.Unlock()
 }
 
-// initTelemetry initializes the telemetry engine.
-func initTelemetry() {
-	uuidFilename := filepath.Join(caddy.AssetsPath(), "uuid")
-
-	newUUID := func() uuid.UUID {
-		id := uuid.New()
-		err := ioutil.WriteFile(uuidFilename, []byte(id.String()), 0644) // human-readable this way
-		if err != nil {
-			log.Printf("[ERROR] Persisting instance UUID: %v", err)
-		}
-		return id
-	}
-
-	var id uuid.UUID
-
-	// load UUID from storage, or create one if we don't have one
-	if uuidFile, err := os.Open(uuidFilename); os.IsNotExist(err) {
-		// no UUID exists yet; create a new one and persist it
-		id = newUUID()
-	} else if err != nil {
-		log.Printf("[ERROR] Loading persistent UUID: %v", err)
-		id = newUUID()
-	} else {
-		defer uuidFile.Close()
-		uuidBytes, err := ioutil.ReadAll(uuidFile)
-		if err != nil {
-			log.Printf("[ERROR] Reading persistent UUID: %v", err)
-			id = newUUID()
-		} else {
-			id, err = uuid.ParseBytes(uuidBytes)
-			if err != nil {
-				log.Printf("[ERROR] Parsing UUID: %v", err)
-				id = newUUID()
-			}
-		}
-	}
-
-	telemetry.Init(id, strings.Split(disabledMetrics, ","))
+// Add adds amount to a value named key.
+// If it does not exist, it is created with
+// a value of 1. If key maps to a type that
+// is not an integer, a panic is logged,
+// and this is a no-op.
+func Add(key string, amount int) {
+	atomicAdd(key, amount)
 }
 
-const appName = "Caddy"
+// Increment is a shortcut for Add(key, 1)
+func Increment(key string) {
+	atomicAdd(key, 1)
+}
 
-// Flags that control program flow or startup
-var (
-	serverType      string
-	conf            string
-	cpu             string
-	logfile         string
-	revoke          string
-	version         bool
-	plugins         bool
-	validate        bool
-	disabledMetrics string
-)
+// atomicAdd adds amount (negative to subtract)
+// to key.
+func atomicAdd(key string, amount int) {
+	if !enabled || isDisabled(key) {
+		return
+	}
+	bufferMu.Lock()
+	bufVal, inBuffer := buffer[key]
+	intVal, intOk := bufVal.(int)
+	if inBuffer && !intOk {
+		bufferMu.Unlock()
+		log.Printf("[PANIC] Telemetry: key %s already used for non-integer value", key)
+		return
+	}
+	if !inBuffer {
+		if bufferItemCount >= maxBufferItems {
+			bufferMu.Unlock()
+			return
+		}
+		bufferItemCount++
+	}
+	buffer[key] = intVal + amount
+	bufferMu.Unlock()
+}
 
-// Build information obtained with the help of -ldflags
-var (
-	appVersion = "(untracked dev build)" // inferred at startup
-	devBuild   = true                    // inferred at startup
-
-	buildDate        string // date -u
-	gitTag           string // git describe --exact-match HEAD 2> /dev/null
-	gitNearestTag    string // git describe --abbrev=0 --tags HEAD
-	gitCommit        string // git rev-parse HEAD
-	gitShortStat     string // git diff-index --shortstat
-	gitFilesModified string // git diff-index --name-only HEAD
-
-	enableTelemetry = true
-)
+// isDisabled returns whether key is
+// a disabled metric key. ALL collection
+// functions should call this and not
+// save the value if this returns true.
+func isDisabled(key string) bool {
+	disabledMetricsMu.RLock()
+	_, ok := disabledMetrics[key]
+	disabledMetricsMu.RUnlock()
+	return ok
+}

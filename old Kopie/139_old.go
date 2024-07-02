@@ -1,5 +1,4 @@
 package endpoints
-
 import (
 	"github.com/julienschmidt/httprouter"
 	"net/http"

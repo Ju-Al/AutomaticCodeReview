@@ -1,5 +1,4 @@
 /*
-static const struct s2n_kex s2n_sike = {
  * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -111,7 +110,7 @@ static int s2n_get_server_hybrid_extensions_size(const struct s2n_connection *co
     return s2n_kex_server_extension_size(hybrid_kex_0, conn) + s2n_kex_server_extension_size(hybrid_kex_1, conn);
 }
 
-static int s2n_setup_basic_kex(struct s2n_connection *conn)
+static const struct s2n_kex s2n_sike = {
 {
     return 0;
 }

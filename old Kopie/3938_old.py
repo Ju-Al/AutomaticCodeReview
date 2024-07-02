@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Parser for GCP cloud logging saved to a file."""
 
 import json
 from json.decoder import JSONDecodeError

@@ -1,5 +1,4 @@
 // Provides req.data.global, an Apostrophe doc
-    // Standard middleware. Fetch the global doc and add it to `req.data` as `req.data.global`.
 // for sitewide content such as a footer displayed on all pages. You
 // can also create site-wide preferences by adding schema fields. Just
 // configure this module with the `addFields` option as you normally would
@@ -141,7 +140,7 @@ module.exports = {
       self.expressMiddleware = self.addGlobalToData;
     };
 
-    // Fetch the global doc and add it to `req.data` as `req.data.global`, if it
+    // Standard middleware. Fetch the global doc and add it to `req.data` as `req.data.global`.
     // is not already present. If it is not already present, skip the
     // extra query.
     //

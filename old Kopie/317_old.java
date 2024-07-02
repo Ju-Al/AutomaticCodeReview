@@ -1,6 +1,5 @@
 package com.actiontech.dble.meta;
 
-    public List<String> getViewColumn() {
 import com.actiontech.dble.DbleServer;
 
 import java.util.ArrayList;
@@ -114,7 +113,7 @@ public class ViewMetaParser {
     }
 
 
-    public List<String> getViewColumn(boolean isLowerCaseTableNames) {
+    public List<String> getViewColumn() {
         int start = 0;
         String columnList = "";
         while (true) {

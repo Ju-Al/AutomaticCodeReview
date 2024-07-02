@@ -1,5 +1,4 @@
 define(["dom", "browser", "layoutManager"], function (dom, browser, layoutManager) {
-        if (browser.tizen) {
     "use strict";
 
     /**
@@ -373,7 +372,7 @@ define(["dom", "browser", "layoutManager"], function (dom, browser, layoutManage
      */
     function useSmoothScroll() {
 
-        if (browser.tizen || browser.web0s || browser.firefox || browser.chrome) {
+        if (browser.tizen) {
             return true;
         }
 

@@ -1,22 +1,5 @@
 from __future__ import unicode_literals
 
-    def _is_cached(self, uniqueid):
-        if uniqueid in self.bot.sniper_cache:
-            return True
-        return False
-    def _cache(self, uniqueid):
-        if not self._is_cached(uniqueid):
-            # Free space if full and store it
-                self.bot.sniper_cache.pop(0)
-            self.bot.sniper_cache.append(uniqueid)
-
-    def _build_unique_id(self, pokemon):
-        # Build unique id for this pokemon from id, latitude, longitude and expiration
-        uniqueid = str(pokemon.get('pokemon_id','')) + str(pokemon.get('latitude','')) + str(pokemon.get('longitude','')) + str(pokemon.get('expiration',''))
-        md5str = hashlib.md5()
-        md5str.update(uniqueid)
-        uniqueid = str(md5str.hexdigest())
-        return uniqueid
 import time
 import json
 import requests
@@ -465,7 +448,21 @@ class Sniper(BaseTask):
     def _equals(self, pokemon_1, pokemon_2):
         return self._hash(pokemon_1) == self._hash(pokemon_2)
 
-    def _validate_sources(self):
+    def _is_cached(self, uniqueid):
+    def _cache(self, uniqueid):
+        if not self._is_cached(uniqueid):
+            # Free space if full and store it
+                self.bot.sniper_cache.pop(0)
+            self.bot.sniper_cache.append(uniqueid)
+
+    def _build_unique_id(self, pokemon):
+        # Build unique id for this pokemon from id, latitude, longitude and expiration
+        uniqueid = str(pokemon.get('pokemon_id','')) + str(pokemon.get('latitude','')) + str(pokemon.get('longitude','')) + str(pokemon.get('expiration',''))
+        md5str = hashlib.md5()
+        md5str.update(uniqueid)
+        uniqueid = str(md5str.hexdigest())
+        return uniqueid
+        if uniqueid in self.bot.sniper_cache:
         # Create a copy of the list so we can iterate and remove elements at the same time
         for source in list(self.sources_pending_validation):
             try:

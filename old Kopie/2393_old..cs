@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Microsoft.Recognizers.Text

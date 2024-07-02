@@ -1,5 +1,4 @@
 <?php
-		$data = array_intersect_key( $data, $default );
 namespace WP_Rocket\CDN\RocketCDN;
 
 use WP_Error;
@@ -79,7 +78,7 @@ class APIClient {
 		}
 
 		$data = json_decode( $data, true );
-		$data = array_intersect_key( (array) $data, $default );
+		$data = array_intersect_key( $data, $default );
 
 		$this->set_status_transient( $data, WEEK_IN_SECONDS );
 

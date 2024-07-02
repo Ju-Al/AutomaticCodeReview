@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-        shutil.copyfile(test_file, test_file_out)
 from __future__ import print_function
 
 import os
@@ -26,7 +25,6 @@ def check_assignment(name, test_file):
     example_name = modname_heuristic(test_file)
     try:
         test_file_out = os.path.join(workdir, os.path.basename(test_file))
-        if name in ALLOW_SKIP:
             shutil.copyfile(test_file, test_file_out)
         else:
             with open(test_file, 'r') as src_file:

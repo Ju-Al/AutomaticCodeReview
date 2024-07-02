@@ -3280,9 +3280,6 @@ public class ZMSImpl implements Authorizer, KeyStore, ZMSHandler {
 
         List<Notification> notifications = new PutMembershipNotificationTask(domain, org, role, details, dbService, userDomainPrefix).getNotifications();
         notificationManager.sendNotifications(notifications);
-    }
-
-    public void deletePendingMembership(ResourceContext ctx, String domainName, String roleName,
             String memberName, String auditRef) {
 
         final String caller = "deletependingmembership";

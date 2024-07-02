@@ -1,5 +1,5 @@
 /*
-			fixedClock.SetTime(nowTime)Copyright 2019 The Jetstack cert-manager contributors.
+Copyright 2019 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -509,7 +509,7 @@ func TestSync(t *testing.T) {
 
 	for n, test := range tests {
 		t.Run(n, func(t *testing.T) {
-			runTest(t, test)
+			fixedClock.SetTime(nowTime)			runTest(t, test)
 		})
 	}
 }

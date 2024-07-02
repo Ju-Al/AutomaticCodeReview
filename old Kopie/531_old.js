@@ -231,7 +231,6 @@ export default class NetworkStatusStore extends Store {
     }
   };
 
-  _redirectToSyncingWhenLocalTimeDifferent = () => {
     if (
       this.localTimeDifference > this.ALLOWED_TIME_DIFFERENCE &&
       !this.isSynced &&

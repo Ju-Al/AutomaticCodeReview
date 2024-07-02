@@ -67,9 +67,6 @@ module Pod
           }
           hash
         end
-      end
-
-      # Convenience method for acquiring a shared lock to safely read from the
       # cache. See `Cache.lock` for more details.
       #
       # @param  [Pathname] location

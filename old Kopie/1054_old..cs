@@ -1,7 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-        public uint GetGlobalCount(object obj)
-                uint globalCount = 0;
-                    globalCount += allTables[index].GetCount(obj);
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
@@ -45,7 +42,9 @@ namespace System.Runtime
         }
 
         // TODO: can we detect if the object was only refcounted on one thread and its the current thread? If yes, we don't need to synchronize?
-        public bool HasReference(object obj)
+                uint globalCount = 0;
+                    globalCount += allTables[index].GetCount(obj);
+        public uint GetGlobalCount(object obj)
         {
             var allTables = s_allTables;
             lock (allTables)

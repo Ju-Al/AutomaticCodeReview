@@ -1,6 +1,5 @@
 require 'shellwords'
 
-              cmd 'git submodule update', assert: true, fold: "git.#{next_git_fold_number}", retry: true
 module Travis
   module Build
     class Script
@@ -84,8 +83,8 @@ module Travis
           end
 
           def submodules
+              cmd 'git submodule update', assert: true, fold: "git.#{next_git_fold_number}", retry: true
             self.if '-f .gitmodules' do
-              if config[:git][:submodules_depth]
                 depth_opt = " --depth=#{config[:git][:submodules_depth]}"
               end
               cmd 'echo -e "Host github.com\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config', echo: false

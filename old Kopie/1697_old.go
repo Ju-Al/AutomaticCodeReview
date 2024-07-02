@@ -1,5 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-		panic(fmt.Sprintf("Ack() called twice on message: %+v", m))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,7 +134,7 @@ func (m *Message) Ack() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.isAcked {
-		panic(fmt.Sprintf("Ack/Nack called twice on message: %+v", m))
+		panic(fmt.Sprintf("Ack() called twice on message: %+v", m))
 	}
 	m.ack(driver.ActionAck)
 	m.isAcked = true

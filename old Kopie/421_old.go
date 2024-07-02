@@ -1,5 +1,4 @@
 package cmd
-
 import (
 	"fmt"
 	"os"

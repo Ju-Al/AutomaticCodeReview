@@ -1107,7 +1107,6 @@ public class LexicalPreservingPrinterTest extends AbstractLexicalPreservingTest 
                           "}" + EOL +
                           "}", LexicalPreservingPrinter.print(cu));
     }
-
     @Test
     public void issue1321() {
         CompilationUnit compilationUnit = JavaParser.parse("class X { X() {} private void testme() {} }");

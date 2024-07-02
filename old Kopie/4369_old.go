@@ -1,5 +1,4 @@
 // Copyright 2015 Matthew Holt and The Caddy Authors
-
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +85,7 @@ func Main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", subcommand.Name, err)
 	}
-	if err := cleanup(); err != nil {
+
 		fmt.Fprintf(os.Stderr, "error restoring console to functional state: %v\n", err)
 	}
 	os.Exit(exitCode)

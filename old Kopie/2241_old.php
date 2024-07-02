@@ -72,7 +72,6 @@ class SearchTabsHelper extends \Laminas\View\Helper\AbstractHelper
      */
     protected $permissionConfig;
 
-    /**
      * Tab detailed configuration
      *
      * @var array

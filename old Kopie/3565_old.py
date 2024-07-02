@@ -54,7 +54,6 @@ class ElasticsearchTest(unittest.TestCase):
         status = es_client.describe_elasticsearch_domain(DomainName=domain_name)['DomainStatus']
         self.assertEqual(status['ElasticsearchVersion'], '6.8')
 
-    def test_create_indexes_and_domains(self):
         indexes = ['index1', 'index2']
         for index_name in indexes:
             index_path = '{}/{}'.format(self.es_url, index_name)

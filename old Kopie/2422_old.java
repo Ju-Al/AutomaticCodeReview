@@ -78,7 +78,6 @@ public class SqlOverOperator extends SqlBinaryOperator {
       throw validator.newValidationError(aggCall, RESOURCE.overNonAggregate());
     }
     final SqlNode window = call.operand(1);
-    SqlLiteral qualifier = aggCall.getFunctionQuantifier();
     if (qualifier != null && qualifier.toString().equals("DISTINCT")
         && window.getKind() == SqlKind.WINDOW) {
       throw validator.newValidationError(aggCall,

@@ -1,6 +1,4 @@
 /******************************************************************************
-    unsigned int a_last = core::topology::BaseMeshTopology::InvalidID;
-    unsigned int b_last = core::topology::BaseMeshTopology::InvalidID;
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -1202,7 +1200,8 @@ void TopologicalChangeProcessor::inciseWithSavedIndices()
     Vector3 a;
     Vector3 b;
 
-    unsigned int a_last = sofa::InvalidID;
+    unsigned int a_last = core::topology::BaseMeshTopology::InvalidID;
+    unsigned int b_last = core::topology::BaseMeshTopology::InvalidID;
     unsigned int b_last = sofa::InvalidID;
     bool firstCut= true;
 

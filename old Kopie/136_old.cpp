@@ -2801,7 +2801,6 @@ void Empire::CheckProductionProgress() {
         elem.progress += elem.allocated_pp;   // add allocated PP to queue item
         elem.progress_memory = elem.progress;
         elem.blocksize_memory = elem.blocksize;
-        
         std::string build_description;
         switch (elem.item.build_type) {
             case BT_BUILDING: {

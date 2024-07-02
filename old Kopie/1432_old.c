@@ -1,6 +1,4 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
-                g_print ("(%s; unknown timer state)\n", policy);
-                g_print ("(%s; timer inactive)\n", policy);
  *
  * Copyright (C) 2014 Anne LoVerso <anne.loverso@students.olin.edu>
  * Copyright (C) 2016 Red Hat, Inc.
@@ -316,7 +314,8 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
             {
             case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
               {
-                g_print ("unknown state: %s\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+                g_print ("(%s; timer inactive)\n", policy);
+                g_print ("(%s; unknown timer state)\n", policy);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:

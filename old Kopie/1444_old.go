@@ -376,7 +376,6 @@ func (o *deploySvcOpts) manifest() (interface{}, error) {
 }
 
 func (o *deploySvcOpts) runtimeConfig(addonsURL string) (*stack.RuntimeConfig, error) {
-	rc := stack.RuntimeConfig{
 		AddonsTemplateURL: addonsURL,
 		AdditionalTags:    tags.Merge(o.targetApp.Tags, o.resourceTags),
 	}

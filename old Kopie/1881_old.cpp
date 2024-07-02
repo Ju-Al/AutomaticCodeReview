@@ -7455,7 +7455,6 @@ void Client::ProcessXTargetAutoHaters()
 
 		if (XTargets[i].ID != 0 && !GetXTargetAutoMgr()->contains_mob(XTargets[i].ID)) {
 			XTargets[i].ID = 0;
-			XTargets[i].Name[0] = 0;
 			XTargets[i].dirty = true;
 		}
 

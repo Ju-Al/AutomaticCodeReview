@@ -1,6 +1,5 @@
 package handlers
 
-	business.IstioConfig.CreateIstioConfigDetail(api, namespace, objectType, objectSubtype, object, string(body))
 import (
 	"io/ioutil"
 	"net/http"
@@ -304,7 +303,7 @@ func IstioConfigCreate(w http.ResponseWriter, r *http.Request) {
 		RespondWithError(w, http.StatusBadRequest, "Create request could not be read: "+err.Error())
 	}
 
-	json, err := business.IstioConfig.ParseJsonForCreate(objectType, objectSubtype, body)
+	business.IstioConfig.CreateIstioConfigDetail(api, namespace, objectType, objectSubtype, object, string(body))
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest, "Create request could not be read: "+err.Error())
 	}

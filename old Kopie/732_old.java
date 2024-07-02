@@ -2094,9 +2094,6 @@ public class ZMSClient implements Closeable {
             throw new ZMSClientException(ex.getCode(), ex.getData());
         } catch (Exception ex) {
             throw new ZMSClientException(ZMSClientException.BAD_REQUEST, ex.getMessage());
-        }
-    }
-
     /**
      * Set the role meta parameters
      * @param domainName domain name containing the role to be modified

@@ -1,8 +1,4 @@
 /**
-        ASTResultType resultType = node.getResultType();
-        if (hasPrefix(nameOfMethod, "set") && !resultType.isVoid()) {
-            addViolationWithMessage(data, node, "Linguistics Antipattern - The setter ''{0}'' should not return any type except void linguistically",
-                    new Object[] { nameOfMethod });
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -144,7 +140,10 @@ public class LinguisticNamingRule extends AbstractIgnoredAnnotationRule {
     }
 
     private void checkSetters(ASTMethodDeclaration node, Object data, String nameOfMethod) {
-        if (!hasIgnoredAnnotation(node)) {
+        ASTResultType resultType = node.getResultType();
+        if (hasPrefix(nameOfMethod, "set") && !resultType.isVoid()) {
+            addViolationWithMessage(data, node, "Linguistics Antipattern - The setter ''{0}'' should not return any type except void linguistically",
+                    new Object[] { nameOfMethod });
             ASTResultType resultType = node.getResultType();
             if (hasPrefix(nameOfMethod, "set") && !resultType.isVoid()) {
                 addViolationWithMessage(data, node, "Linguistics Antipattern - The setter ''{0}'' should not return any type except void linguistically",

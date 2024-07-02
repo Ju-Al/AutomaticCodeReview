@@ -1,5 +1,4 @@
 /*
-    return ttype->annotations_.find("python.immutable") != ttype->annotations_.end();
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
@@ -276,7 +275,7 @@ public:
   }
 
   static bool is_immutable(t_type* ttype) {
-    std::map<std::string, std::string>::iterator it = ttype->annotations_.find("python.immutable");
+    return ttype->annotations_.find("python.immutable") != ttype->annotations_.end();
 
     if (it == ttype->annotations_.end()) {
       // Exceptions are immutable by default.

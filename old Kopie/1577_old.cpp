@@ -2269,9 +2269,6 @@ int Database::GetIPExemption(std::string account_ip) {
 	}
 
 	return RuleI(World, MaxClientsPerIP);
-}
-
-void Database::SetIPExemption(std::string account_ip, int exemption_amount) {
 	std::string query = fmt::format(
 		"SELECT `exemption_id` FROM `ip_exemptions` WHERE `exemption_ip` = '{}'",
 		account_ip

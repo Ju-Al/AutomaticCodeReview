@@ -560,8 +560,6 @@ func UnmarshalWorkload(in []byte) (WorkloadManifest, error) {
 		m := newDefaultLoadBalancedWebService()
 		if err := yaml.Unmarshal(in, m); err != nil {
 			return nil, fmt.Errorf("unmarshal to load balanced web service: %w", err)
-		}
-		if err := m.WindowsCompatibility(); err != nil {
 			return nil, err
 		}
 		return m, nil

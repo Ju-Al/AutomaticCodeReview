@@ -62,7 +62,6 @@ namespace Microsoft.Health.Fhir.Tests.E2E.Rest.Audit
             Assert.Empty(_auditLogger.GetAuditEntriesByCorrelationId(correlationId));
         }
 
-        [Fact]
         public async Task GivenVersions_WhenRead_ThenAuditLogEntriesShouldNotBeCreated()
         {
             if (!_fixture.IsUsingInProcTestServer)

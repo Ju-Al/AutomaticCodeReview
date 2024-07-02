@@ -1,5 +1,4 @@
 /***************************************************************************
-        Music::SetExtCommand( sval );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -668,7 +667,7 @@ bool Settings::Read( const std::string & filename )
     // playmus command
     sval = config.StrParams( "playmus command" );
     if ( !sval.empty() )
-        _externalMusicCommand = sval;
+        Music::SetExtCommand( sval );
 
     // videodriver
     sval = config.StrParams( "videodriver" );

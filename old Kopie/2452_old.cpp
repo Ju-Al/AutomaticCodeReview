@@ -1,6 +1,4 @@
 #include <QLabel>
-        hostLabel->setDisabled(true);
-        hostEdit->setDisabled(true);
 #include <QCheckBox>
 #include <QComboBox>
 #include <QRadioButton>
@@ -133,8 +131,9 @@ DlgConnect::DlgConnect(QWidget *parent)
     if (settingsCache->servers().getPreviousHostLogin())
         previousHostButton->setChecked(true);
     else
+        hostLabel->setDisabled(true);
+        hostEdit->setDisabled(true);
         newHostButton->setChecked(true);
-    
     connect(previousHosts, SIGNAL(currentIndexChanged(const QString &)), this, SLOT(updateDisplayInfo(const QString &)));
 
     playernameEdit->setFocus();

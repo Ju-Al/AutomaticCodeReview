@@ -1,5 +1,4 @@
 module Pod
-        self.arguments = '[NAME]'
   class Command
     class Lib < Command
       self.abstract_command = true
@@ -11,8 +10,8 @@ module Pod
         self.summary = 'Creates a new Pod'
 
         self.description = <<-DESC
+        self.arguments = '[NAME]'
           Creates a new Pod with the given name from the template in the working directory.
-
           A template URL is optional. If no URL is specified it will use the default template provided by CocoaPods.
         DESC
 

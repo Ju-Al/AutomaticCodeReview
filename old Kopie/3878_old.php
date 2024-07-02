@@ -141,9 +141,6 @@ class WPRocketUninstall {
 			$this->rucss_resources_table->uninstall();
 		}
 		if ( $this->rucss_usedcss_table->exists() ) {
-			$this->rucss_usedcss_table->uninstall();
-		}
-
 		if ( ! is_multisite() ) {
 			return;
 		}

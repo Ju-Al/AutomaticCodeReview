@@ -1,6 +1,6 @@
 <?php
 
-        $menu->getChild('Maintenance')->addChild('Fixtures', [declare(strict_types=1);
+declare(strict_types=1);
 
 namespace Bolt\Menu;
 
@@ -199,7 +199,7 @@ class BackendMenuBuilder implements BackendMenuBuilderInterface
             ],
         ]);
 
-        $menu->getChild('Maintenance')->addChild('Clear the cache', [
+        $menu->getChild('Maintenance')->addChild('Fixtures', [        $menu->getChild('Maintenance')->addChild('Clear the cache', [
             'uri' => $this->urlGenerator->generate('bolt_clear_cache'),
             'extras' => [
                 'name' => $t->trans('caption.clear_cache'),

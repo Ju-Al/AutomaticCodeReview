@@ -1,6 +1,5 @@
 using BTCPayServer.Services.Apps;
 
-        public bool EnableShoppingCart { get; set; }
 namespace BTCPayServer.Models.AppViewModels
 {
     public class ViewPointOfSaleViewModel
@@ -34,7 +33,7 @@ namespace BTCPayServer.Models.AppViewModels
 
         public CurrencyInfoData CurrencyInfo { get; set; }
 
-        public PosViewType ViewType { get; set; }
+        public bool EnableShoppingCart { get; set; }
 
         public bool IsCartView { get { return ViewType == PosViewType.Cart; } }
         public bool ShowCustomAmount { get; set; }

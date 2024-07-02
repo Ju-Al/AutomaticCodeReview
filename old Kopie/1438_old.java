@@ -1,9 +1,4 @@
 /*
-     *         otherwise.
-     * Stores its snapshotted state by adding items to the outbox's {@linkplain
-     * Outbox#offerToSnapshot(Object, Object) snapshot bucket}. If this method
-     * returns {@code false}, it will be called again before proceeding to call
-     * any other method.
  * Copyright (c) 2008-2019, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -209,7 +204,11 @@ public interface Processor {
      * the latency of snapshots and job cancellations.
      *
      * @return {@code true} if the completing step is now done, {@code false}
-     *         to call this method again
+     * Stores its snapshotted state by adding items to the outbox's {@linkplain
+     * Outbox#offerToSnapshot(Object, Object) snapshot bucket}. If this method
+     * returns {@code false}, it will be called again before proceeding to call
+     * any other method.
+     *         otherwise.
      */
     default boolean complete() {
         return true;

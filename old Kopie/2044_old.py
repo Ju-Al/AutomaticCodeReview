@@ -455,7 +455,6 @@ def test_cmn_crop_sequence_length():
                         yield check_cmn_crop_sequence_length, device, batch_size, dtype, \
                             input_layout, input_shape, output_layout, mirror_probability, \
                             mean, std, should_pad
-
 def check_cmn_with_out_of_bounds_policy_support(device, batch_size, dtype, input_layout, input_shape, output_layout, 
                                                 mirror_probability, mean, std, should_pad,
                                                 out_of_bounds_policy=None, fill_values=(0x76, 0xb9, 0x00)):

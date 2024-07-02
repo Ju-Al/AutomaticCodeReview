@@ -1,6 +1,4 @@
 #include <vector>
-      Dtype* col_data = col_buffer_.mutable_cpu_data();
-      Dtype* col_diff = col_buffer_.mutable_cpu_diff();
 
 #include "caffe/filler.hpp"
 #include "caffe/layer.hpp"
@@ -212,7 +210,8 @@ void ConvolutionLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       if (!top_diff) {
         top_diff = top[i]->cpu_diff();
       }
-      Dtype* col_data = NULL;
+      Dtype* col_data = col_buffer_.mutable_cpu_data();
+      Dtype* col_diff = col_buffer_.mutable_cpu_diff();
       Dtype* col_diff = NULL;
       if (!is_1x1_) {
         col_data = col_buffer_.mutable_cpu_data();

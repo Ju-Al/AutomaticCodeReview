@@ -1,6 +1,5 @@
 package openfoodfacts.github.scrachx.openfood.fragments;
 
-        apiClient.getTotalProductCount()
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
@@ -154,7 +153,7 @@ public class HomeFragment extends NavigationBaseFragment implements CustomTabAct
         super.onResume();
 
         int productCount = sp.getInt("productCount", 0);
-        apiClient.getTotalProductCount(getString(R.string.app_name) + " " + Utils.getUserAgent("OTHERS"))
+        apiClient.getTotalProductCount()
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(new SingleObserver<Search>() {

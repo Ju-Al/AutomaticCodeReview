@@ -1,5 +1,4 @@
 // Copyright 2020 Google LLC
-	c := exec.Command("bash", "-c", "git status --short")
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,7 +157,7 @@ func hasChanges(dir string) (bool, error) {
 	inmem := &bytes.Buffer{}
 	w := io.MultiWriter(os.Stderr, inmem)
 
-	c := command.Create("bash", "-c", "git status --short")
+	c := exec.Command("bash", "-c", "git status --short")
 	c.Dir = dir
 	c.Stdout = w
 	err := c.Run()

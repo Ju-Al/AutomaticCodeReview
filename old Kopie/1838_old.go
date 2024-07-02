@@ -1,11 +1,4 @@
 // Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
-		rules = []iptables.Rule{
-			{
-				Action: iptables.MasqAction{},
-				Match: iptables.Match().
-					SourceIPSet(masqIPsSetName).
-					NotDestIPSet(allIPsSetName),
-			},
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +27,12 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 		ipConf := r.ipSetConfig(ipVersion)
 		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
-		if r.Config.NATPortRange.MaxPort > 0 {
+		rules = []iptables.Rule{
+			{
+				Action: iptables.MasqAction{},
+				Match: iptables.Match().
+					SourceIPSet(masqIPsSetName).
+					NotDestIPSet(allIPsSetName),
 			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
 			rules = []iptables.Rule{
 				{

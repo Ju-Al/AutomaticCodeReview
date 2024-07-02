@@ -1,18 +1,5 @@
 #include "FleetWnd.h"
 
-        if (!dropped_fleets.empty()) {
-            //DebugLogger() << " ... processing dropped " << dropped_fleets.size() << " fleets";
-            // dropping fleets.  get each ships of all source fleets and transfer to the target fleet
-
-            for (auto& dropped_fleet : dropped_fleets) {
-                if (!dropped_fleet) {
-                    ErrorLogger() << "FleetsListBox::AcceptDrops  unable to get dropped fleet?";
-                    continue;
-                }
-
-                // get fleet's ships in a vector, as this is what FleetTransferOrder takes
-                const std::set<int>& ship_ids_set = dropped_fleet->ShipIDs();
-                const std::vector<int> ship_ids_vec(ship_ids_set.begin(), ship_ids_set.end());
 #include "CUIControls.h"
 #include "SidePanel.h"
 #include "IconTextBrowseWnd.h"
@@ -1850,7 +1837,19 @@ public:
         if (ClientPlayerIsModerator())
             return; // todo: handle moderator actions for this...
 
-        // Collected ship ids for the transfer.
+        if (!dropped_fleets.empty()) {
+            //DebugLogger() << " ... processing dropped " << dropped_fleets.size() << " fleets";
+            // dropping fleets.  get each ships of all source fleets and transfer to the target fleet
+
+            for (auto& dropped_fleet : dropped_fleets) {
+                if (!dropped_fleet) {
+                    ErrorLogger() << "FleetsListBox::AcceptDrops  unable to get dropped fleet?";
+                    continue;
+                }
+
+                // get fleet's ships in a vector, as this is what FleetTransferOrder takes
+                const std::set<int>& ship_ids_set = dropped_fleet->ShipIDs();
+                const std::vector<int> ship_ids_vec(ship_ids_set.begin(), ship_ids_set.end());
         std::vector<int> ship_ids;
 
         // Need ship ids in a vector for fleet transfer order

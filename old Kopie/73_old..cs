@@ -1,4 +1,10 @@
 using System;
+using UnityEngine;
+
+namespace Mirror
+{
+    public static class LogFilter
+    {
         // this only exists for inspector UI?!
         public enum FilterLevel
         {
@@ -17,12 +23,5 @@ using System;
         public static bool logInfo  { get { return currentLogLevel <= FilterLevel.Info; } }
         public static bool logWarn  { get { return currentLogLevel <= FilterLevel.Warn; } }
         public static bool logError  { get { return currentLogLevel <= FilterLevel.Error; } }
-using UnityEngine;
-
-namespace Mirror
-{
-    public static class LogFilter
-    {
-        public static bool logDebug = false;
     }
 }

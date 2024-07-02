@@ -118,8 +118,6 @@ func (ce *ConnectionEndpoint) GetIP(writer http.ResponseWriter, request *http.Re
 	}
 	utils.WriteAsJSON(response, writer)
 }
-
-// GetLocation responds with original and current countries
 func (ce *ConnectionEndpoint) GetLocation(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
 	currentLocation, err := ce.locationDetector.DetectLocation()
 	if err != nil {

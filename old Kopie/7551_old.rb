@@ -1,5 +1,4 @@
 # This file auto-generates code for the IE driver. To make different language
-  generated_file = "#{args[:out]}"
 # bindings easier to maintain, it generates code for mapping numeric return
 # type identifiers (returned from wdGetScriptResultType) to a meaningful
 # string identifier.
@@ -75,7 +74,7 @@ end
 
 def ie_generate_type_mapping(args)
   types_mapping_file = args[:src]
-  generated_file = (args[:out]).to_s
+  generated_file = "#{args[:out]}"
 
   file generated_file => args[:src] do
     generator = TypeDefinitionsGenerator.new types_mapping_file

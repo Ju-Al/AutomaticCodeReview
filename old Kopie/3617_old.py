@@ -228,7 +228,6 @@ class IterationTransform(Visitor.EnvTransform):
             return self._transform_bytes_iteration(node, iterable, reversed=reversed)
         if iterable.type is Builtin.unicode_type:
             return self._transform_unicode_iteration(node, iterable, reversed=reversed)
-        if iterable.type in (Builtin.list_type, Builtin.tuple_type):
             return self._transform_indexable_iteration(node, iterable, reversed=reversed)
         if isinstance(iterable, ExprNodes.CoerceToPyTypeNode) and iterable.arg.type.is_memoryviewslice:
             # TODO would it make sense to prevent the coercion? Or does it need to be there since

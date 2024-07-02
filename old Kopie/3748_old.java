@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.activity;
-        if (intent.hasExtra(EXTRA_FEED_ID) ||
 
 import android.annotation.TargetApi;
 import android.app.ProgressDialog;
@@ -828,7 +827,7 @@ public class MainActivity extends CastEnabledActivity implements NavDrawerActivi
     private void handleNavIntent() {
         Log.d(TAG, "handleNavIntent()");
         Intent intent = getIntent();
-        if (intent.hasExtra(EXTRA_FEED_ID) || intent.hasExtra(EXTRA_REFRESH_ON_START) ||
+        if (intent.hasExtra(EXTRA_FEED_ID) ||
                 (intent.hasExtra(EXTRA_NAV_TYPE) &&
                         (intent.hasExtra(EXTRA_NAV_INDEX) || intent.hasExtra(EXTRA_FRAGMENT_TAG)))) {
             int index = intent.getIntExtra(EXTRA_NAV_INDEX, -1);

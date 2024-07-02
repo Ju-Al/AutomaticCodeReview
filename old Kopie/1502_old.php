@@ -1,8 +1,4 @@
 <?php
-				$title    = $disabled ? ' title="' . sprintf( __( 'Activate first the %s option.', 'rocket' ), esc_attr( $label ) ) . '"' : '';
-				$class    = $disabled ? ' class="rkt-disabled"' : '';
-				$checked   = ! $disabled ? checked( ! get_post_meta( $post->ID, '_rocket_exclude_' . $field, true ), true, false ) : '';
-					?>
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 
 /**
@@ -87,7 +83,10 @@ function rocket_display_cache_options_meta_boxes() {
 			foreach ( $fields as $field => $label ) {
 				$disabled = disabled( ! get_rocket_option( $field ), true, false );
 				// translators: %s is the name of the option.
-				$title   = $disabled ? ' title="' . sprintf( __( 'Activate first the %s option.', 'rocket' ), esc_attr( $label ) ) . '"' : '';
+				$title    = $disabled ? ' title="' . sprintf( __( 'Activate first the %s option.', 'rocket' ), esc_attr( $label ) ) . '"' : '';
+				$class    = $disabled ? ' class="rkt-disabled"' : '';
+				$checked   = ! $disabled ? checked( ! get_post_meta( $post->ID, '_rocket_exclude_' . $field, true ), true, false ) : '';
+					?>
 				$class   = $disabled ? ' class="rkt-disabled"' : '';
 				$checked = ! $disabled ? checked( ! get_post_meta( $post->ID, '_rocket_exclude_' . $field, true ), true, false ) : '';
 				?>

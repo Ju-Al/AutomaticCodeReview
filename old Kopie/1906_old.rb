@@ -351,8 +351,6 @@ module Mongoid #:nodoc:
       doc = IdentityMap.get(klass, extract_id || selector)
       doc && doc.matches?(selector) ? doc : first
     end
-
-    # Get the documents from the identity map, and if not found hit the
     # database.
     #
     # @example Get the documents from the map or criteria.

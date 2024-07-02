@@ -216,7 +216,6 @@ public class TableConfiguration extends AccumuloConfiguration {
         conf.getAllPropertiesWithPrefixStripped(Property.TABLE_SCAN_DISPATCHER_OPTS);
 
     newDispatcher.init(new ScanDispatcher.InitParameters() {
-
       // scan dispatcher are in the critical path for scans, so only create ServiceEnv if needed.
       private final Supplier<ServiceEnvironment> senvSupplier =
           Suppliers.memoize(() -> new ServiceEnvironmentImpl(context));

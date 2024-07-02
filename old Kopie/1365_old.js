@@ -437,7 +437,6 @@ export default class Loading extends Component<Props, State> {
 
     const buttonClasses = classNames(['primary', styles.reportIssueButton]);
 
-    let isNodeTimeCorrectAndNotChecking;
     if (!isCheckingSystemTime)
       isNodeTimeCorrectAndNotChecking = isNodeTimeCorrect;
 

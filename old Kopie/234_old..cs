@@ -1,18 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-            private void AppendSystemDataFilter(string keyword = null)
-                // Ensure that we exclude system metadata
-
-                if (!string.IsNullOrEmpty(keyword))
-                {
-                    _queryBuilder.Append(keyword).Append(" ");
-                }
-
-                    .Append("(")
-                    .Append("IS_DEFINED(").Append(SearchValueConstants.RootAliasName).Append(".isSystem)")
-                    .Append(" = ").Append(_queryParameterManager.AddOrGetParameterMapping(false))
-                    .Append(" OR ")
-                    .Append(" = ").Append(_queryParameterManager.AddOrGetParameterMapping(false))
-                    .AppendLine(")");
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -148,7 +134,20 @@ namespace Microsoft.Health.Fhir.CosmosDb.Features.Search.Queries
                         .AppendLine(_queryParameterManager.AddOrGetParameterMapping(value));
             }
 
-            private void AppendSystemDataFilter()
+                // Ensure that we exclude system metadata
+
+                if (!string.IsNullOrEmpty(keyword))
+                {
+                    _queryBuilder.Append(keyword).Append(" ");
+                }
+
+                    .Append("(")
+                    .Append("IS_DEFINED(").Append(SearchValueConstants.RootAliasName).Append(".isSystem)")
+                    .Append(" = ").Append(_queryParameterManager.AddOrGetParameterMapping(false))
+                    .Append(" OR ")
+                    .Append(" = ").Append(_queryParameterManager.AddOrGetParameterMapping(false))
+                    .AppendLine(")");
+            private void AppendSystemDataFilter(string keyword = null)
             {
                 _queryBuilder
                     .Append(" WHERE ")

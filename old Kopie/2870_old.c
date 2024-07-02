@@ -1,5 +1,4 @@
 /*
-        POSIX_GUARD_OSSL(X509_STORE_add_cert(store->trust_store, ca_cert), S2N_ERR_DECODE_CERTIFICATE);
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -98,7 +97,7 @@ int s2n_x509_trust_store_add_pem(struct s2n_x509_trust_store *store, const char 
         DEFER_CLEANUP(X509 *ca_cert = d2i_X509(NULL, &data, next_cert.size), X509_free_pointer);
         S2N_ERROR_IF(ca_cert == NULL, S2N_ERR_DECODE_CERTIFICATE);
 
-        int err_code = X509_STORE_add_cert(store->trust_store, ca_cert);
+        POSIX_GUARD_OSSL(X509_STORE_add_cert(store->trust_store, ca_cert), S2N_ERR_DECODE_CERTIFICATE);
         POSIX_ENSURE(
                 err_code == X509_R_CERT_ALREADY_IN_HASH_TABLE || err_code == _OSSL_SUCCESS,
                 S2N_ERR_DECODE_CERTIFICATE);

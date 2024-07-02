@@ -19,7 +19,6 @@ apos.define('apostrophe-admin-bar', {
 
     self.enhance = function() {
       var $bar = $('[data-apos-admin-bar]');
-      var isHomepage = $('[data-apos-home]');
       if ((options.openOnHomepage && isHomepage.length > 0) || options.openOnLoad) {
         $bar.css('overflow', 'visible');
         $bar.addClass('apos-active');

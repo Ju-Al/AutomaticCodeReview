@@ -1,312 +1,482 @@
-import json
-from copy import deepcopy
-from hashlib import sha256
+import logging
 
-from plenum.common.constants import TARGET_NYM, NONCE, RAW, ENC, HASH, NAME, \
-    VERSION, ORIGIN, FORCE
-from plenum.common.messages.node_message_factory import node_message_factory
+import torch.nn as nn
+import torch.utils.checkpoint as cp
 
-from plenum.common.messages.message_base import MessageValidator
-from plenum.common.request import Request as PRequest
-from plenum.common.types import OPERATION
-from plenum.common.messages.node_messages import NonNegativeNumberField
-from plenum.common.messages.fields import ConstantField, IdentifierField, LimitedLengthStringField, TxnSeqNoField, \
-    Sha256HexField, JsonField, MapField, BooleanField, VersionField, ChooseField, IntegerField, IterableField, \
-    AnyMapField, NonEmptyStringField
-from plenum.common.messages.client_request import ClientOperationField as PClientOperationField
-from plenum.common.messages.client_request import ClientMessageValidator as PClientMessageValidator
-from plenum.common.util import is_network_ip_address_valid, is_network_port_valid
-from plenum.config import JSON_FIELD_LIMIT, NAME_FIELD_LIMIT, DATA_FIELD_LIMIT, \
-    NONCE_FIELD_LIMIT, ORIGIN_FIELD_LIMIT, \
-    ENC_FIELD_LIMIT, RAW_FIELD_LIMIT, SIGNATURE_TYPE_FIELD_LIMIT, \
-    HASH_FIELD_LIMIT, VERSION_FIELD_LIMIT
+from mmcv.cnn import constant_init, kaiming_init
+from mmcv.runner import load_checkpoint
 
-from indy_common.constants import TXN_TYPE, allOpKeys, ATTRIB, GET_ATTR, \
-    DATA, GET_NYM, reqOpKeys, GET_TXNS, GET_SCHEMA, GET_CLAIM_DEF, ACTION, \
-    NODE_UPGRADE, COMPLETE, FAIL, CONFIG_LEDGER_ID, POOL_UPGRADE, POOL_CONFIG, \
-    DISCLO, ATTR_NAMES, REVOCATION, SCHEMA, ENDPOINT, CLAIM_DEF, REF, SIGNATURE_TYPE, SCHEDULE, SHA256, \
-    TIMEOUT, JUSTIFICATION, JUSTIFICATION_MAX_SIZE, REINSTALL, WRITES, PRIMARY, START, CANCEL, \
-    REVOC_REG_DEF, ISSUANCE_TYPE, MAX_CRED_NUM, PUBLIC_KEYS, \
-    TAILS_HASH, TAILS_LOCATION, ID, TYPE, TAG, CRED_DEF_ID, VALUE, \
-    REVOC_REG_ENTRY, ISSUED, REVOC_REG_DEF_ID, REVOKED, ACCUM, PREV_ACCUM
+from mmdet.ops import DeformConv, ModulatedDeformConv
+from ..registry import BACKBONES
+from ..utils import build_conv_layer, build_norm_layer
 
 
-class Request(PRequest):
-    def signingState(self, identifier=None):
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self,
+                 inplanes,
+                 planes,
+                 stride=1,
+                 dilation=1,
+                 downsample=None,
+                 style='pytorch',
+                 with_cp=False,
+                 conv_cfg=None,
+                 normalize=dict(type='BN'),
+                 dcn=None):
+        super(BasicBlock, self).__init__()
+        assert dcn is None, "Not implemented yet."
+
+        self.norm1_name, norm1 = build_norm_layer(normalize, planes, postfix=1)
+        self.norm2_name, norm2 = build_norm_layer(normalize, planes, postfix=2)
+
+        self.conv1 = build_conv_layer(
+            conv_cfg,
+            inplanes,
+            planes,
+            3,
+            stride=stride,
+            padding=dilation,
+            dilation=dilation,
+            bias=False)
+        self.add_module(self.norm1_name, norm1)
+        self.conv2 = build_conv_layer(
+            conv_cfg,
+            planes,
+            planes,
+            3,
+            stride=stride,
+            padding=dilation,
+            dilation=dilation,
+            padding=1,
+            dilation=1,
+            bias=False)
+        self.add_module(self.norm2_name, norm2)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+        self.dilation = dilation
+        assert not with_cp
+
+    @property
+    def norm1(self):
+        return getattr(self, self.norm1_name)
+
+    @property
+    def norm2(self):
+        return getattr(self, self.norm2_name)
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.norm1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.norm2(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
+
+
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self,
+                 inplanes,
+                 planes,
+                 stride=1,
+                 dilation=1,
+                 downsample=None,
+                 style='pytorch',
+                 with_cp=False,
+                 conv_cfg=None,
+                 normalize=dict(type='BN'),
+                 dcn=None):
+        """Bottleneck block for ResNet.
+        If style is "pytorch", the stride-two layer is the 3x3 conv layer,
+        if it is "caffe", the stride-two layer is the first 1x1 conv layer.
         """
-        Special signing state where the the data for an attribute is hashed
-        before signing
-        :return: state to be used when signing
-        """
-        if self.operation.get(TXN_TYPE) == ATTRIB:
-            d = deepcopy(super().signingState(identifier=identifier))
-            op = d[OPERATION]
-            keyName = {RAW, ENC, HASH}.intersection(set(op.keys())).pop()
-            op[keyName] = sha256(op[keyName].encode()).hexdigest()
-            return d
-        return super().signingState(identifier=identifier)
+        super(Bottleneck, self).__init__()
+        assert style in ['pytorch', 'caffe']
+        assert dcn is None or isinstance(dcn, dict)
+        self.inplanes = inplanes
+        self.planes = planes
+        self.conv_cfg = conv_cfg
+        self.normalize = normalize
+        self.dcn = dcn
+        self.with_dcn = dcn is not None
+        if style == 'pytorch':
+            self.conv1_stride = 1
+            self.conv2_stride = stride
+        else:
+            self.conv1_stride = stride
+            self.conv2_stride = 1
+
+        self.norm1_name, norm1 = build_norm_layer(normalize, planes, postfix=1)
+        self.norm2_name, norm2 = build_norm_layer(normalize, planes, postfix=2)
+        self.norm3_name, norm3 = build_norm_layer(
+            normalize, planes * self.expansion, postfix=3)
+
+        self.conv1 = build_conv_layer(
+            conv_cfg,
+            inplanes,
+            planes,
+            kernel_size=1,
+            stride=self.conv1_stride,
+            bias=False)
+        self.add_module(self.norm1_name, norm1)
+        fallback_on_stride = False
+        self.with_modulated_dcn = False
+        if self.with_dcn:
+            fallback_on_stride = dcn.get('fallback_on_stride', False)
+            self.with_modulated_dcn = dcn.get('modulated', False)
+        if not self.with_dcn or fallback_on_stride:
+            self.conv2 = build_conv_layer(
+                conv_cfg,
+                planes,
+                planes,
+                kernel_size=3,
+                stride=self.conv2_stride,
+                padding=dilation,
+                dilation=dilation,
+                bias=False)
+        else:
+            assert conv_cfg is None, 'conv_cfg must be None for DCN'
+            deformable_groups = dcn.get('deformable_groups', 1)
+            if not self.with_modulated_dcn:
+                conv_op = DeformConv
+                offset_channels = 18
+            else:
+                conv_op = ModulatedDeformConv
+                offset_channels = 27
+            self.conv2_offset = nn.Conv2d(
+                planes,
+                deformable_groups * offset_channels,
+                kernel_size=3,
+                stride=self.conv2_stride,
+                padding=dilation,
+                dilation=dilation)
+            self.conv2 = conv_op(
+                planes,
+                planes,
+                kernel_size=3,
+                stride=self.conv2_stride,
+                padding=dilation,
+                dilation=dilation,
+                deformable_groups=deformable_groups,
+                bias=False)
+        self.add_module(self.norm2_name, norm2)
+        self.conv3 = build_conv_layer(
+            conv_cfg,
+            planes,
+            planes * self.expansion,
+            kernel_size=1,
+            bias=False)
+        self.add_module(self.norm3_name, norm3)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+        self.dilation = dilation
+        self.with_cp = with_cp
+        self.normalize = normalize
+
+    @property
+    def norm1(self):
+        return getattr(self, self.norm1_name)
+
+    @property
+    def norm2(self):
+        return getattr(self, self.norm2_name)
+
+    @property
+    def norm3(self):
+        return getattr(self, self.norm3_name)
+
+    def forward(self, x):
+
+        def _inner_forward(x):
+            identity = x
+
+            out = self.conv1(x)
+            out = self.norm1(out)
+            out = self.relu(out)
+
+            if not self.with_dcn:
+                out = self.conv2(out)
+            elif self.with_modulated_dcn:
+                offset_mask = self.conv2_offset(out)
+                offset = offset_mask[:, :18, :, :]
+                mask = offset_mask[:, -9:, :, :].sigmoid()
+                out = self.conv2(out, offset, mask)
+            else:
+                offset = self.conv2_offset(out)
+                out = self.conv2(out, offset)
+            out = self.norm2(out)
+            out = self.relu(out)
+
+            out = self.conv3(out)
+            out = self.norm3(out)
+
+            if self.downsample is not None:
+                identity = self.downsample(x)
+
+            out += identity
+
+            return out
+
+        if self.with_cp and x.requires_grad:
+            out = cp.checkpoint(_inner_forward, x)
+        else:
+            out = _inner_forward(x)
+
+        out = self.relu(out)
+
+        return out
 
 
-class ClientGetNymOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(GET_NYM)),
-        (TARGET_NYM, IdentifierField()),
-    )
+def make_res_layer(block,
+                   inplanes,
+                   planes,
+                   blocks,
+                   stride=1,
+                   dilation=1,
+                   style='pytorch',
+                   with_cp=False,
+                   conv_cfg=None,
+                   normalize=dict(type='BN'),
+                   dcn=None):
+    downsample = None
+    if stride != 1 or inplanes != planes * block.expansion:
+        downsample = nn.Sequential(
+            build_conv_layer(
+                conv_cfg,
+                inplanes,
+                planes * block.expansion,
+                kernel_size=1,
+                stride=stride,
+                bias=False),
+            build_norm_layer(normalize, planes * block.expansion)[1],
+        )
+
+    layers = []
+    layers.append(
+        block(
+            inplanes,
+            planes,
+            stride,
+            dilation,
+            downsample,
+            style=style,
+            with_cp=with_cp,
+            conv_cfg=conv_cfg,
+            normalize=normalize,
+            dcn=dcn))
+    inplanes = planes * block.expansion
+    for i in range(1, blocks):
+        layers.append(
+            block(
+                inplanes,
+                planes,
+                1,
+                dilation,
+                style=style,
+                with_cp=with_cp,
+                conv_cfg=conv_cfg,
+                normalize=normalize,
+                dcn=dcn))
+
+    return nn.Sequential(*layers)
 
 
-class ClientDiscloOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(DISCLO)),
-        (DATA, LimitedLengthStringField(max_length=DATA_FIELD_LIMIT)),
-        (NONCE, LimitedLengthStringField(max_length=NONCE_FIELD_LIMIT)),
-        (TARGET_NYM, IdentifierField(optional=True)),
-    )
+@BACKBONES.register_module
+class ResNet(nn.Module):
+    """ResNet backbone.
 
+    Args:
+        depth (int): Depth of resnet, from {18, 34, 50, 101, 152}.
+        num_stages (int): Resnet stages, normally 4.
+        strides (Sequence[int]): Strides of the first block of each stage.
+        dilations (Sequence[int]): Dilation of each stage.
+        out_indices (Sequence[int]): Output from which stages.
+        style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
+            layer is the 3x3 conv layer, otherwise the stride-two layer is
+            the first 1x1 conv layer.
+        frozen_stages (int): Stages to be frozen (all param fixed). -1 means
+            not freezing any parameters.
+        normalize (dict): dictionary to construct and config norm layer.
+        norm_eval (bool): Whether to set norm layers to eval mode, namely,
+            freeze running stats (mean and var). Note: Effect on Batch Norm
+            and its variants only.
+        with_cp (bool): Use checkpoint or not. Using checkpoint will save some
+            memory while slowing down the training speed.
+        zero_init_residual (bool): whether to use zero init for last norm layer
+            in resblocks to let them behave as identity.
+    """
 
-class GetSchemaField(MessageValidator):
-    schema = (
-        (NAME, LimitedLengthStringField(max_length=NAME_FIELD_LIMIT)),
-        (VERSION, VersionField(components_number=(2, 3,), max_length=VERSION_FIELD_LIMIT)),
-        (ORIGIN, LimitedLengthStringField(max_length=ORIGIN_FIELD_LIMIT, optional=True)),
-    )
-
-
-class SchemaField(MessageValidator):
-    schema = (
-        (NAME, LimitedLengthStringField(max_length=NAME_FIELD_LIMIT)),
-        (VERSION, VersionField(components_number=(2, 3,), max_length=VERSION_FIELD_LIMIT)),
-        (ATTR_NAMES, IterableField(LimitedLengthStringField(max_length=NAME_FIELD_LIMIT))),
-    )
-
-
-class ClaimDefField(MessageValidator):
-    schema = (
-        (PRIMARY, AnyMapField()),
-        (REVOCATION, AnyMapField(optional=True)),
-    )
-
-
-class RevocDefValueField(MessageValidator):
-    schema = (
-        (ISSUANCE_TYPE, NonEmptyStringField()),
-        (MAX_CRED_NUM, IntegerField()),
-        (PUBLIC_KEYS, AnyMapField()),
-        (TAILS_HASH, NonEmptyStringField()),
-        (TAILS_LOCATION, NonEmptyStringField()),
-    )
-
-
-class ClientRevocDefSubmitField(MessageValidator):
-    schema = (
-        (ID, NonEmptyStringField()),
-        (TYPE, NonEmptyStringField()),
-        (TAG, NonEmptyStringField()),
-        (CRED_DEF_ID, NonEmptyStringField()),
-        (VALUE, RevocDefValueField())
-    )
-
-
-class RevocRegEntryValueField(MessageValidator):
-    schema = (
-        (PREV_ACCUM, NonEmptyStringField()),
-        (ACCUM, NonEmptyStringField()),
-        (ISSUED, IterableField(inner_field_type=IntegerField())),
-        (REVOKED, IterableField(inner_field_type=NonEmptyStringField()))
-    )
-
-
-class ClientRevocRegEntrySubmitField(MessageValidator):
-    schema = (
-        (REVOC_REG_DEF_ID, NonEmptyStringField()),
-        (TYPE, NonEmptyStringField()),
-        (VALUE, RevocRegEntryValueField())
-    )
-
-
-class ClientSchemaOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(SCHEMA)),
-        (DATA, SchemaField()),
-    )
-
-
-class ClientGetSchemaOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(GET_SCHEMA)),
-        (TARGET_NYM, IdentifierField()),
-        (DATA, GetSchemaField()),
-    )
-
-
-class ClientAttribOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(ATTRIB)),
-        (TARGET_NYM, IdentifierField(optional=True)),
-        (RAW, JsonField(max_length=JSON_FIELD_LIMIT, optional=True)),
-        (ENC, LimitedLengthStringField(max_length=ENC_FIELD_LIMIT, optional=True)),
-        (HASH, Sha256HexField(optional=True)),
-    )
-
-    def _validate_message(self, msg):
-        self._validate_field_set(msg)
-        if RAW in msg:
-            self.__validate_raw_field(msg[RAW])
-
-    def _validate_field_set(self, msg):
-        fields_n = sum(1 for f in (RAW, ENC, HASH) if f in msg)
-        if fields_n == 0:
-            self._raise_missed_fields(RAW, ENC, HASH)
-        if fields_n > 1:
-            self._raise_invalid_message(
-                "only one field from {}, {}, {} is expected".format(
-                    RAW, ENC, HASH)
-            )
-
-    def __validate_raw_field(self, raw_field):
-        raw = self.__decode_raw_field(raw_field)
-        if not isinstance(raw, dict):
-            self._raise_invalid_fields(RAW, type(raw),
-                                       'should be a dict')
-        if len(raw) != 1:
-            self._raise_invalid_fields(RAW, raw,
-                                       'should contain one attribute')
-        if ENDPOINT in raw:
-            self.__validate_endpoint_ha_field(raw[ENDPOINT])
-
-    def __decode_raw_field(self, raw_field):
-        return json.loads(raw_field)
-
-    def __validate_endpoint_ha_field(self, endpoint):
-        if endpoint is None:
-            return  # remove the attribute, valid case
-        HA_NAME = 'ha'
-        ha = endpoint.get(HA_NAME)
-        if ha is None:
-            return  # remove ha attribute, valid case
-        if ':' not in ha:
-            self._raise_invalid_fields(ENDPOINT, endpoint,
-                                       "invalid endpoint format "
-                                       "ip_address:port")
-        ip, port = ha.split(':')
-        if not is_network_ip_address_valid(ip):
-            self._raise_invalid_fields('ha', ha,
-                                       'invalid endpoint address')
-        if not is_network_port_valid(port):
-            self._raise_invalid_fields('ha', ha,
-                                       'invalid endpoint port')
-
-
-class ClientGetAttribOperation(ClientAttribOperation):
-    schema = (
-        (TXN_TYPE, ConstantField(GET_ATTR)),
-        (TARGET_NYM, IdentifierField(optional=True)),
-        (RAW, LimitedLengthStringField(max_length=RAW_FIELD_LIMIT, optional=True)),
-        (ENC, LimitedLengthStringField(max_length=ENC_FIELD_LIMIT, optional=True)),
-        (HASH, Sha256HexField(optional=True)),
-    )
-
-    def _validate_message(self, msg):
-        self._validate_field_set(msg)
-
-
-class ClientClaimDefSubmitOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(CLAIM_DEF)),
-        (REF, TxnSeqNoField()),
-        (DATA, ClaimDefField()),
-        (SIGNATURE_TYPE, LimitedLengthStringField(max_length=SIGNATURE_TYPE_FIELD_LIMIT)),
-    )
-
-
-class ClientClaimDefGetOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(GET_CLAIM_DEF)),
-        (REF, TxnSeqNoField()),
-        (ORIGIN, IdentifierField()),
-        (SIGNATURE_TYPE, LimitedLengthStringField(max_length=SIGNATURE_TYPE_FIELD_LIMIT)),
-    )
-
-
-class ClientPoolUpgradeOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(POOL_UPGRADE)),
-        (ACTION, ChooseField(values=(START, CANCEL,))),
-        (VERSION, VersionField(components_number=(2, 3,), max_length=VERSION_FIELD_LIMIT)),
-        # TODO replace actual checks (idr, datetime)
-        (SCHEDULE, MapField(IdentifierField(),
-                            NonEmptyStringField(), optional=True)),
-        (SHA256, Sha256HexField()),
-        (TIMEOUT, NonNegativeNumberField(optional=True)),
-        (JUSTIFICATION, LimitedLengthStringField(max_length=JUSTIFICATION_MAX_SIZE, optional=True, nullable=True)),
-        (NAME, LimitedLengthStringField(max_length=NAME_FIELD_LIMIT)),
-        (FORCE, BooleanField(optional=True)),
-        (REINSTALL, BooleanField(optional=True)),
-    )
-
-
-class ClientPoolConfigOperation(MessageValidator):
-    schema = (
-        (TXN_TYPE, ConstantField(POOL_CONFIG)),
-        (WRITES, BooleanField()),
-        (FORCE, BooleanField(optional=True)),
-    )
-
-
-class ClientOperationField(PClientOperationField):
-
-    _specific_operations = {
-        SCHEMA: ClientSchemaOperation(),
-        ATTRIB: ClientAttribOperation(),
-        GET_ATTR: ClientGetAttribOperation(),
-        CLAIM_DEF: ClientClaimDefSubmitOperation(),
-        GET_CLAIM_DEF: ClientClaimDefGetOperation(),
-        DISCLO: ClientDiscloOperation(),
-        GET_NYM: ClientGetNymOperation(),
-        GET_SCHEMA: ClientGetSchemaOperation(),
-        POOL_UPGRADE: ClientPoolUpgradeOperation(),
-        POOL_CONFIG: ClientPoolConfigOperation(),
-        REVOC_REG_DEF: ClientRevocDefSubmitField(),
-        REVOC_REG_ENTRY: ClientRevocRegEntrySubmitField(),
+    arch_settings = {
+        18: (BasicBlock, (2, 2, 2, 2)),
+        34: (BasicBlock, (3, 4, 6, 3)),
+        50: (Bottleneck, (3, 4, 6, 3)),
+        101: (Bottleneck, (3, 4, 23, 3)),
+        152: (Bottleneck, (3, 8, 36, 3))
     }
 
-    # TODO: it is a workaround because INDY-338, `operations` must be a class
-    # constant
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.operations.update(self._specific_operations)
+    def __init__(self,
+                 depth,
+                 num_stages=4,
+                 strides=(1, 2, 2, 2),
+                 dilations=(1, 1, 1, 1),
+                 out_indices=(0, 1, 2, 3),
+                 style='pytorch',
+                 frozen_stages=-1,
+                 conv_cfg=None,
+                 normalize=dict(type='BN', frozen=False),
+                 norm_eval=True,
+                 dcn=None,
+                 stage_with_dcn=(False, False, False, False),
+                 with_cp=False,
+                 zero_init_residual=True):
+        super(ResNet, self).__init__()
+        if depth not in self.arch_settings:
+            raise KeyError('invalid depth {} for resnet'.format(depth))
+        self.depth = depth
+        self.num_stages = num_stages
+        assert num_stages >= 1 and num_stages <= 4
+        self.strides = strides
+        self.dilations = dilations
+        assert len(strides) == len(dilations) == num_stages
+        self.out_indices = out_indices
+        assert max(out_indices) < num_stages
+        self.style = style
+        self.frozen_stages = frozen_stages
+        self.conv_cfg = conv_cfg
+        self.normalize = normalize
+        self.with_cp = with_cp
+        self.norm_eval = norm_eval
+        self.dcn = dcn
+        self.stage_with_dcn = stage_with_dcn
+        if dcn is not None:
+            assert len(stage_with_dcn) == num_stages
+        self.zero_init_residual = zero_init_residual
+        self.block, stage_blocks = self.arch_settings[depth]
+        self.stage_blocks = stage_blocks[:num_stages]
+        self.inplanes = 64
 
+        self._make_stem_layer()
 
-class ClientMessageValidator(PClientMessageValidator):
+        self.res_layers = []
+        for i, num_blocks in enumerate(self.stage_blocks):
+            stride = strides[i]
+            dilation = dilations[i]
+            dcn = self.dcn if self.stage_with_dcn[i] else None
+            planes = 64 * 2**i
+            res_layer = make_res_layer(
+                self.block,
+                self.inplanes,
+                planes,
+                num_blocks,
+                stride=stride,
+                dilation=dilation,
+                style=self.style,
+                with_cp=with_cp,
+                conv_cfg=conv_cfg,
+                normalize=normalize,
+                dcn=dcn)
+            self.inplanes = planes * self.block.expansion
+            layer_name = 'layer{}'.format(i + 1)
+            self.add_module(layer_name, res_layer)
+            self.res_layers.append(layer_name)
 
-    # extend operation field
-    schema = tuple(
-        map(lambda x: (x[0], ClientOperationField()) if x[0] == OPERATION else x,
-            PClientMessageValidator.schema)
-    )
+        self._freeze_stages()
 
+        self.feat_dim = self.block.expansion * 64 * 2**(
+            len(self.stage_blocks) - 1)
 
-# THE CODE BELOW MIGHT BE NEEDED IN THE FUTURE, THEREFORE KEEPING IT
-# class LedgerIdField(PLedgerIdField):
-#     ledger_ids = PLedgerIdField.ledger_ids + (CONFIG_LEDGER_ID,)
-#
-#
-# class LedgerInfoField(PLedgerInfoField):
-#     _ledger_id_class = LedgerIdField
+    @property
+    def norm1(self):
+        return getattr(self, self.norm1_name)
 
+    def _make_stem_layer(self):
+        self.conv1 = build_conv_layer(
+            self.conv_cfg,
+            3,
+            64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False)
+        self.norm1_name, norm1 = build_norm_layer(
+            self.normalize, 64, postfix=1)
+        self.add_module(self.norm1_name, norm1)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-# TODO: it is a workaround which helps extend some fields from
-# downstream projects, should be removed after we find a better way
-# to do this
-# node_message_factory.update_schemas_by_field_type(
-#     PLedgerIdField, LedgerIdField)
-# node_message_factory.update_schemas_by_field_type(
-#     PLedgerInfoField, LedgerInfoField)
+    def _freeze_stages(self):
+        if self.frozen_stages >= 0:
+            self.norm1.eval()
+            for m in [self.conv1, self.norm1]:
+                for param in m.parameters():
+                    param.requires_grad = False
 
+        for i in range(1, self.frozen_stages + 1):
+            m = getattr(self, 'layer{}'.format(i))
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
 
-class SafeRequest(Request, ClientMessageValidator):
+    def init_weights(self, pretrained=None):
+        if isinstance(pretrained, str):
+            logger = logging.getLogger()
+            load_checkpoint(self, pretrained, strict=False, logger=logger)
+        elif pretrained is None:
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    kaiming_init(m)
+                elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                    constant_init(m, 1)
 
-    def __init__(self, **kwargs):
-        ClientMessageValidator.__init__(self, operation_schema_is_strict=True,
-                                        schema_is_strict=False)
-        self.validate(kwargs)
-        Request.__init__(self, **kwargs)
+            if self.dcn is not None:
+                for m in self.modules():
+                    if isinstance(m, Bottleneck) and hasattr(
+                            m, 'conv2_offset'):
+                        constant_init(m.conv2_offset, 0)
+
+            if self.zero_init_residual:
+                for m in self.modules():
+                    if isinstance(m, Bottleneck):
+                        constant_init(m.norm3, 0)
+                    elif isinstance(m, BasicBlock):
+                        constant_init(m.norm2, 0)
+        else:
+            raise TypeError('pretrained must be a str or None')
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.norm1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        outs = []
+        for i, layer_name in enumerate(self.res_layers):
+            res_layer = getattr(self, layer_name)
+            x = res_layer(x)
+            if i in self.out_indices:
+                outs.append(x)
+        return tuple(outs)
+
+    def train(self, mode=True):
+        super(ResNet, self).train(mode)
+        if mode and self.norm_eval:
+            for m in self.modules():
+                # trick: eval have effect on BatchNorm only
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()

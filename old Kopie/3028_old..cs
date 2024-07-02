@@ -122,7 +122,6 @@ namespace Mirror
         //    during FinishLoadScene.
         public NetworkManagerMode mode { get; private set; }
 
-        [RuntimeInitializeOnLoadMethod]
         static void Init()
         {
             clientReadyConnection = null;

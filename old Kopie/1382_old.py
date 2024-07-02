@@ -1,9 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
-        with tf.compat.v1.Session() as sess:
-            sess.run([tf.compat.v1.global_variables_initializer(), iterator.initializer])
-            for _ in range(epochs):
-                dataset_results.append(sess.run(next_element))
-    standalone_pipeline = TestPipeline(batch_size, num_threads, device, device_id)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -149,7 +144,10 @@ def _test_tf_dataset(device, device_id = 0):
         iterator = tf.compat.v1.data.make_initializable_iterator(daliset)
         next_element = iterator.get_next()
 
-    with tf.compat.v1.Session() as sess:
+        with tf.compat.v1.Session() as sess:
+            sess.run([tf.compat.v1.global_variables_initializer(), iterator.initializer])
+    standalone_pipeline = TestPipeline(batch_size, num_threads, device, device_id)
+            for _ in range(epochs):
         sess.run([tf.compat.v1.global_variables_initializer(), iterator.initializer])
         for _ in range(iterations):
             dataset_results.append(sess.run(next_element))

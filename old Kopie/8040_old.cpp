@@ -1,16 +1,5 @@
 /* Icinga 2 | (c) 2012 Icinga GmbH | GPLv2+ */
-			CheckResult::Ptr cr = new CheckResult();
-			cr->SetState(ServiceUnknown);
 
-			cr->SetOutput(output);
-
-			cr->SetScheduleStart(now);
-			cr->SetScheduleEnd(now);
-			cr->SetExecutionStart(now);
-			cr->SetExecutionEnd(now);
-			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
-			listener->SyncSendMessage(sourceEndpoint, message);
-		host->ExecuteEventHandler(macros, true);
 #include "icinga/clusterevents.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "remote/apilistener.hpp"
@@ -283,9 +272,19 @@ void ClusterEvents::ExecuteCheckFromQueue(const MessageOrigin::Ptr& origin, cons
 		try {
 			host->ExecuteRemoteCheck(macros);
 		} catch (const std::exception& ex) {
+			CheckResult::Ptr cr = new CheckResult();
+			cr->SetState(ServiceUnknown);
+
 			String output = "Exception occurred while checking '" + host->GetName() + "': " + DiagnosticInformation(ex);
-			ServiceState state = ServiceUnknown;
-			double now = Utility::GetTime();
+			cr->SetOutput(output);
+			cr->SetScheduleStart(now);
+			cr->SetScheduleEnd(now);
+			cr->SetExecutionStart(now);
+			cr->SetExecutionEnd(now);
+
+			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
+			listener->SyncSendMessage(sourceEndpoint, message);
+		host->ExecuteEventHandler(macros, true);
 
 			if (params->Contains("source")) {
 				SendEventExecuteCommand(params, state, output, now, now, listener, origin, sourceEndpoint);

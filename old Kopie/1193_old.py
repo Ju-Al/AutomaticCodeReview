@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-        for target in Fuzzer.filter(host.fuzzers, '', sanitizer)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -740,7 +739,7 @@ class FuchsiaBuild(RegularBuild):
         environment.get_value('JOB_NAME')).lower()
     return [
         str(target[0] + '/' + target[1])
-        for target in Fuzzer.filter(host.fuzzers, '', sanitizer, False)
+        for target in Fuzzer.filter(host.fuzzers, '', sanitizer)
     ]
 
   def setup(self):

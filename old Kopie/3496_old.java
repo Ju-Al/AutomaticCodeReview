@@ -1,7 +1,5 @@
 package fr.free.nrw.commons.upload.mediaDetails;
-                () -> {
 
-                },
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Bundle;
@@ -357,9 +355,11 @@ public class UploadMediaDetailFragment extends UploadBaseFragment implements
                         uploadTitleFormat,
                         uploadItem.getFileName()),
                 () -> {
+
+                },
+                () -> {
                     uploadItem.setImageQuality(ImageUtils.IMAGE_KEEP);
                     onNextButtonClicked();
-                },
                 () -> {
 
                 });

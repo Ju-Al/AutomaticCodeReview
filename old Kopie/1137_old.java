@@ -5,245 +5,104 @@
 package net.sourceforge.pmd.util.fxdesigner;
 
 import java.net.URL;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.Date;
 import java.util.ResourceBundle;
-import java.util.Set;
 
-import org.apache.commons.lang3.StringUtils;
-import org.fxmisc.richtext.LineNumberFactory;
+import org.reactfx.EventStream;
 import org.reactfx.EventStreams;
-import org.reactfx.value.Val;
-import org.reactfx.value.Var;
 
-import net.sourceforge.pmd.lang.Language;
-import net.sourceforge.pmd.lang.LanguageVersion;
-import net.sourceforge.pmd.lang.ast.Node;
-import net.sourceforge.pmd.util.fxdesigner.model.ASTManager;
-import net.sourceforge.pmd.util.fxdesigner.model.ParseAbortedException;
-import net.sourceforge.pmd.util.fxdesigner.util.beans.SettingsOwner;
-import net.sourceforge.pmd.util.fxdesigner.util.beans.SettingsPersistenceUtil.PersistentProperty;
-import net.sourceforge.pmd.util.fxdesigner.util.codearea.AvailableSyntaxHighlighters;
-import net.sourceforge.pmd.util.fxdesigner.util.codearea.CustomCodeArea;
-import net.sourceforge.pmd.util.fxdesigner.util.codearea.SyntaxHighlighter;
-import net.sourceforge.pmd.util.fxdesigner.util.controls.ASTTreeCell;
-import net.sourceforge.pmd.util.fxdesigner.util.controls.ASTTreeItem;
-import net.sourceforge.pmd.util.fxdesigner.util.controls.TreeViewWrapper;
+import net.sourceforge.pmd.util.fxdesigner.model.LogEntry;
+import net.sourceforge.pmd.util.fxdesigner.model.LogEntry.Category;
 
+
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.Label;
-import javafx.scene.control.SelectionModel;
-import javafx.scene.control.TreeItem;
-import javafx.scene.control.TreeView;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableColumn.SortType;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.cell.PropertyValueFactory;
 
 
 /**
- * One editor, i.e. source editor and ast tree view.
- *
  * @author Clément Fournier
  * @since 6.0.0
  */
-public class SourceEditorController implements Initializable, SettingsOwner {
-    private final MainDesignerController parent;
+public class EventLogController implements Initializable {
+
+    private final DesignerRoot designerRoot;
+
+    private static final Duration PARSEEXCEPTION_DELAY = Duration.ofMillis(100);
 
     @FXML
-    private Label astTitleLabel;
+    private TableView<LogEntry> eventLogTableView;
     @FXML
-    private TreeView<Node> astTreeView;
+    private TableColumn<LogEntry, Date> logDateColumn;
     @FXML
-    private CustomCodeArea codeEditorArea;
+    private TableColumn<LogEntry, Category> logCategoryColumn;
+    @FXML
+    private TableColumn<LogEntry, String> logMessageColumn;
+    @FXML
+    private TextArea logDetailsTextArea;
 
-    private ASTManager astManager;
-    private TreeViewWrapper<Node> treeViewWrapper;
-    private ASTTreeItem selectedTreeItem;
-    private Duration timeDuration = Duration.ofMillis(100);
 
-    public SourceEditorController(DesignerRoot owner, MainDesignerController mainController) {
-        parent = mainController;
-        astManager = new ASTManager(owner);
-
+    public EventLogController(DesignerRoot owner) {
+        this.designerRoot = owner;
     }
-
 
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-
-        treeViewWrapper = new TreeViewWrapper<>(astTreeView);
-
-        astTreeView.setCellFactory(treeView -> new ASTTreeCell(parent));
-
-        languageVersionProperty().values()
-                                 .filterMap(Objects::nonNull, LanguageVersion::getLanguage)
-                                 .distinct()
-                                 .subscribe(this::updateSyntaxHighlighter);
-
-        EventStreams.valuesOf(astTreeView.getSelectionModel().selectedItemProperty())
-                    .filterMap(Objects::nonNull, TreeItem::getValue)
-                    .subscribe(parent::onNodeItemSelected);
-
-        codeEditorArea.richChanges()
-                .filter(t -> !t.getInserted().equals(t.getRemoved()))
-                .successionEnds(timeDuration)
-                .subscribe(richChange -> parent.onRefreshASTClicked());
-
-        codeEditorArea.setParagraphGraphicFactory(LineNumberFactory.get(codeEditorArea));
-    }
-
-
-    /**
-     * Refreshes the AST.
-     */
-    public void refreshAST() {
-        String source = getText();
-        Node previous = getCompilationUnit();
-        Node current;
-
-        if (StringUtils.isBlank(source)) {
-            astTreeView.setRoot(null);
-            return;
-        }
-
-        try {
-            current = astManager.updateCompilationUnit(source);
-        } catch (ParseAbortedException e) {
-            invalidateAST(true);
-            return;
-        }
-        if (!Objects.equals(previous, current)) {
-            parent.invalidateAst();
-            setUpToDateCompilationUnit(current);
-        }
-    }
-
-
-    private void setUpToDateCompilationUnit(Node node) {
-        astTitleLabel.setText("Abstract Syntax Tree");
-        ASTTreeItem root = ASTTreeItem.getRoot(node);
-        astTreeView.setRoot(root);
-    }
-
-
-    public void shutdown() {
-        codeEditorArea.disableSyntaxHighlighting();
-    }
-
-
-    private void updateSyntaxHighlighter(Language language) {
-        Optional<SyntaxHighlighter> highlighter = AvailableSyntaxHighlighters.getHighlighterForLanguage(language);
-
-        if (highlighter.isPresent()) {
-            codeEditorArea.setSyntaxHighlightingEnabled(highlighter.get());
-        } else {
-            codeEditorArea.disableSyntaxHighlighting();
-        }
-    }
-
-
-    public void clearNodeHighlight() {
-        codeEditorArea.clearPrimaryStyleLayer();
-    }
-
-
-    public void highlightNodePrimary(Node node) {
-        highlightNodes(Collections.singleton(node), Collections.singleton("primary-highlight"));
-    }
-
-
-    private void highlightNodes(Collection<? extends Node> nodes, Set<String> cssClasses) {
-        for (Node node : nodes) {
-            if (codeEditorArea.isInRange(node)) {
-                codeEditorArea.styleCss(node, cssClasses);
-                codeEditorArea.paintCss();
-                codeEditorArea.moveTo(node.getBeginLine() - 1, 0);
-                codeEditorArea.requestFollowCaret();
-            } else {
-                codeEditorArea.clearPrimaryStyleLayer();
+        logCategoryColumn.setCellValueFactory(new PropertyValueFactory<>("category"));
+        logMessageColumn.setCellValueFactory(new PropertyValueFactory<>("message"));
+        final DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
+        logDateColumn.setCellValueFactory(
+            entry -> new SimpleObjectProperty<>(entry.getValue().getTimestamp()));
+        logDateColumn.setCellFactory(column -> new TableCell<LogEntry, Date>() {
+            @Override
+            protected void updateItem(Date item, boolean empty) {
+                super.updateItem(item, empty);
+                if (item == null || empty) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    setText(dateFormat.format(item));
+                }
             }
-        }
+        });
+
+        EventStream<LogEntry> e1 = designerRoot.getLogger().getLog()
+                .filter(x -> x.getCategory().equals(Category.PARSE_EXCEPTION))
+                .successionEnds(PARSEEXCEPTION_DELAY);
+
+        EventStream<LogEntry> e2 = designerRoot.getLogger().getLog()
+                .filter(x -> !x.getCategory().equals(Category.PARSE_EXCEPTION));
+
+
+        EventStreams.merge(e1, e2)
+                .subscribe(t -> eventLogTableView.getItems().add(t));
+
+
+        eventLogTableView
+            .getSelectionModel()
+            .selectedItemProperty()
+            .addListener((obs, oldVal, newVal) -> logDetailsTextArea.setText(
+                newVal == null ? "" : newVal.getStackTrace()));
+
+        eventLogTableView.resizeColumn(logMessageColumn, -1);
+
+
+        logMessageColumn.prefWidthProperty()
+                        .bind(eventLogTableView.widthProperty()
+                                               .subtract(logCategoryColumn.getPrefWidth())
+                                               .subtract(logDateColumn.getPrefWidth())
+                                               .subtract(2)); // makes it work
+        logDateColumn.setSortType(SortType.DESCENDING);
+
     }
-
-
-    public void highlightNodesSecondary(Collection<? extends Node> nodes) {
-        highlightNodes(nodes, Collections.singleton("secondary-highlight"));
-    }
-
-    public void focusNodeInTreeView(Node node) {
-        SelectionModel<TreeItem<Node>> selectionModel = astTreeView.getSelectionModel();
-
-        // node is different from the old one
-        if (selectedTreeItem == null && node != null
-                || selectedTreeItem != null && !Objects.equals(node, selectedTreeItem.getValue())) {
-            ASTTreeItem found = ((ASTTreeItem) astTreeView.getRoot()).findItem(node);
-            if (found != null) {
-                selectionModel.select(found);
-            }
-
-            astTreeView.getFocusModel().focus(selectionModel.getSelectedIndex());
-            if (!treeViewWrapper.isIndexVisible(selectionModel.getSelectedIndex())) {
-                astTreeView.scrollTo(selectionModel.getSelectedIndex());
-            }
-        }
-    }
-
-    private void invalidateAST(boolean error) {
-        astTitleLabel.setText("Abstract syntax tree (" + (error ? "error" : "outdated") + ")");
-    }
-
-
-    public void moveCaret(int line, int column) {
-        codeEditorArea.moveTo(line, column);
-        codeEditorArea.requestFollowCaret();
-    }
-
-    @PersistentProperty
-    public LanguageVersion getLanguageVersion() {
-        return astManager.getLanguageVersion();
-    }
-
-
-    public void setLanguageVersion(LanguageVersion version) {
-        astManager.setLanguageVersion(version);
-    }
-
-
-    public Var<LanguageVersion> languageVersionProperty() {
-        return astManager.languageVersionProperty();
-    }
-
-
-    public Node getCompilationUnit() {
-        return astManager.getCompilationUnit();
-    }
-
-
-    public Val<Node> compilationUnitProperty() {
-        return astManager.compilationUnitProperty();
-    }
-
-
-    @PersistentProperty
-    public String getText() {
-        return codeEditorArea.getText();
-    }
-
-
-    public void setText(String expression) {
-        codeEditorArea.replaceText(expression);
-    }
-
-
-    public Val<String> textProperty() {
-        return Val.wrap(codeEditorArea.textProperty());
-    }
-
-
-    public void clearStyleLayers() {
-        codeEditorArea.clearStyleLayers();
-    }
-
 }

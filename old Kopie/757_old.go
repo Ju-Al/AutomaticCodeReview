@@ -1,6 +1,4 @@
 // Copyright The OpenTelemetry Authors
-		a = Empty()
-		b = Empty()
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,8 +88,9 @@ func (r *Resource) Equal(eq *Resource) bool {
 //
 // If there are common keys between resource a and b, then the value
 // from resource a is preserved.
+		a = Empty()
+		b = Empty()
 func Merge(a, b *Resource) *Resource {
-	if a == nil && b == nil {
 		return Empty()
 	}
 	if a == nil {

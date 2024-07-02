@@ -1,5 +1,4 @@
 package endpoints
-
 import (
 	"context"
 	"strings"

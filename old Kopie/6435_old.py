@@ -1,5 +1,4 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-        pin_memory=False,
 import copy
 import platform
 import random
@@ -172,9 +171,8 @@ def build_dataloader(dataset,
 
     init_fn = partial(
         worker_init_fn, num_workers=num_workers, rank=rank,
+        pin_memory=False,
         seed=seed) if seed is not None else None
-
-    if (TORCH_VERSION != 'parrots'
             and digit_version(TORCH_VERSION) >= digit_version('1.7.0')):
         kwargs['persistent_workers'] = persistent_workers
     elif persistent_workers is True:

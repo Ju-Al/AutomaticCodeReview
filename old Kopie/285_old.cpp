@@ -1,19 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-        auto pChannelResource = mInputSockets.at(IPLocator::getPhysicalPort(locator));
-
-        std::vector<IPFinder::info_IP> locNames;
-        GetIP6sUniqueInterfaces(locNames);
-        for (const auto& infoIP : locNames)
-            auto ip = asio::ip::address_v6::from_string(infoIP.name);
-            try
-            {
-                pChannelResource->getSocket()->set_option(ip::multicast::join_group(
-                        ip::address_v6::from_string(IPLocator::toIPv6string(locator)), ip.scope_id()));
-            }
-            catch(std::system_error& ex)
-                (void)ex;
-                logWarning(RTPS_MSG_OUT, "Error joining multicast group on " << ip << ": "<< ex.what());
-bool UDPv6Transport::IsInterfaceAllowed(const std::string& interface)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -287,7 +272,20 @@ bool UDPv6Transport::OpenInputChannel(const Locator_t& locator, TransportReceive
     {
         // The multicast group will be joined silently, because we do not
         // want to return another resource.
-        auto pChannelResources = mInputSockets.at(IPLocator::getPhysicalPort(locator));
+        auto pChannelResource = mInputSockets.at(IPLocator::getPhysicalPort(locator));
+
+        std::vector<IPFinder::info_IP> locNames;
+        GetIP6sUniqueInterfaces(locNames);
+            auto ip = asio::ip::address_v6::from_string(infoIP.name);
+            try
+            {
+                pChannelResource->getSocket()->set_option(ip::multicast::join_group(
+                        ip::address_v6::from_string(IPLocator::toIPv6string(locator)), ip.scope_id()));
+            }
+                (void)ex;
+                logWarning(RTPS_MSG_OUT, "Error joining multicast group on " << ip << ": "<< ex.what());
+bool UDPv6Transport::IsInterfaceAllowed(const std::string& interface)
+            catch(std::system_error& ex)
         for (auto& pChannelResource : pChannelResources)
         {
             std::vector<IPFinder::info_IP> locNames;

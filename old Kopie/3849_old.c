@@ -1,11 +1,4 @@
 /* Copyright (C) 2000-2012 by George Williams */
-    tfmd.kerntab = calloc(tfmd.kern_size,sizeof(int32));
-    tfmd.ligkerntab = calloc(tfmd.ligkern_size,2*sizeof(int32));
-    tfmd.ext = calloc(tfmd.esize,2*sizeof(int32));
-    tfmd.ictab = calloc(tfmd.italic_size,sizeof(int32));
-    tfmd.dptab = calloc(tfmd.depth_size,sizeof(int32));
-    tfmd.httab = calloc(tfmd.height_size,sizeof(int32));
-    tfmd.widtab = calloc(tfmd.width_size,sizeof(int32));
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -794,7 +787,13 @@ return( 0 );
 return( 0 );
     }
 
-    tfmd.kerntab = calloc(tfmd.kern_size,sizeof(uint8));
+    tfmd.kerntab = calloc(tfmd.kern_size,sizeof(int32));
+    tfmd.ligkerntab = calloc(tfmd.ligkern_size,2*sizeof(int32));
+    tfmd.ext = calloc(tfmd.esize,2*sizeof(int32));
+    tfmd.ictab = calloc(tfmd.italic_size,sizeof(int32));
+    tfmd.dptab = calloc(tfmd.depth_size,sizeof(int32));
+    tfmd.httab = calloc(tfmd.height_size,sizeof(int32));
+    tfmd.widtab = calloc(tfmd.width_size,sizeof(int32));
     tfmd.ligkerntab = calloc(tfmd.ligkern_size,2*sizeof(uint8));
     tfmd.ext = calloc(tfmd.esize,2*sizeof(uint8));
     tfmd.ictab = calloc(tfmd.italic_size,sizeof(uint8));

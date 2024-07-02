@@ -262,8 +262,6 @@ void Checkable::ValidateMaxCheckAttempts(const Lazy<int>& lvalue, const Validati
 
 	if (lvalue() <= 0)
 		BOOST_THROW_EXCEPTION(ValidationError(this, { "max_check_attempts" }, "Value must be greater than 0."));
-}
-
 void Checkable::CleanDeadlinedExecutions(const Timer * const&)
 {
 	double now = Utility::GetTime();

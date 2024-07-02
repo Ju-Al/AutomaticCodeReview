@@ -1,6 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-                    sum += (uint)(left.Buffer[leftIndex] * right.Buffer[rightIndex]);
-                result.Buffer[resultIndex] = sum;
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 namespace System.Numerics
@@ -12718,7 +12716,8 @@ namespace System.Numerics
                     int leftIndex = leftIndexNonSumming + leftIndexSumming;
                     int rightIndex = rightIndexNonSumming + rightIndexSumming;
 
-                    sum += (uint)(leftSpan[leftIndex] * rightSpan[rightIndex]);
+                result.Buffer[resultIndex] = sum;
+                    sum += (uint)(left.Buffer[leftIndex] * right.Buffer[rightIndex]);
                 }
 
                 resultSpan[resultIndex] = sum;

@@ -92,7 +92,6 @@ module.exports = {
     defWeight: 0
   },
 
-  appGateway: {
     httpListener: {
       protocol: ['Http', 'Https']
     },

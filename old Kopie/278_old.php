@@ -125,9 +125,6 @@ class WP_REST_Request implements ArrayAccess {
 		$this->set_method( $method );
 		$this->set_route( $route );
 		$this->set_attributes( $attributes );
-	}
-
-	/**
 	 * Checks if Content-Type is JSON.
 	 *
 	 * @since @todo

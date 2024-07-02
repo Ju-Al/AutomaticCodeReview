@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.bookmarks;
-
 import android.content.Context;
 import android.content.Intent;
 import android.database.DataSetObserver;

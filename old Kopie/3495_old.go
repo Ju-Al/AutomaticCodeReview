@@ -1,8 +1,6 @@
 package business
 
-	httpClient := http.Client{
-		Timeout:   time.Second * 10,
-		Transport: httpTransport,import (
+import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -466,7 +464,9 @@ func RequestOpenIdToken(openIdParams *OpenIdCallbackParams, redirect_uri string)
 		}
 	}
 
-	httpClient, err := createHttpClient(openIdMetadata.TokenURL)
+	httpClient := http.Client{
+		Timeout:   time.Second * 10,
+		Transport: httpTransport,	httpClient, err := createHttpClient(openIdMetadata.TokenURL)
 	if err != nil {
 		return err
 	}

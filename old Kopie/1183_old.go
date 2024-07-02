@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-			wantedError: errors.New("get environment: couldn't find environment dev in the application my-app"),
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -215,7 +214,7 @@ func TestTaskRunOpts_Validate(t *testing.T) {
 					Name: "my-app",
 				}, nil)
 			},
-			wantedError: fmt.Errorf("get environment %s config: couldn't find environment dev in the application my-app", "dev"),
+			wantedError: errors.New("get environment: couldn't find environment dev in the application my-app"),
 		},
 		"no workspace": {
 			basicOpts: defaultOpts,

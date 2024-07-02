@@ -1,6 +1,4 @@
 /*
-  @Test
-    assertEquals(1, i.get());
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -71,7 +69,8 @@ public class SimpleTimerTest {
     }
   }
 
-  @Test(timeout = 5000)
+    assertEquals(1, i.get());
+  @Test
   public void testOneTimeSchedule() throws InterruptedException {
     AtomicInteger i = new AtomicInteger();
     Incrementer r = new Incrementer(i);

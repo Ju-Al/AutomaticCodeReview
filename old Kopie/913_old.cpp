@@ -1,5 +1,4 @@
 /******************************************************************************
-    void *handle = ::LoadLibraryA(filename.c_str());
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2018 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -65,7 +64,7 @@ const std::string& DynamicLibrary::Handle::filename() const
 DynamicLibrary::Handle DynamicLibrary::load(const std::string& filename)
 {
 # if defined(WIN32)
-    std::string p(filename);
+    void *handle = ::LoadLibraryA(filename.c_str());
     std::replace(p.begin(), p.end(), '/', '\\'); // ensure Windows style path
     void *handle = ::LoadLibraryExA(p.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 # else

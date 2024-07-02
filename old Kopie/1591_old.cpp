@@ -1,6 +1,4 @@
 /* GG is a GUI for SDL and OpenGL.
-{ m_allowed_drop_types.insert(str); }
-{ m_allowed_drop_types.erase(str); }
    Copyright (C) 2003-2008 T. Zachary Laine
 
    This library is free software; you can redistribute it and/or
@@ -1462,7 +1460,8 @@ void ListBox::AddPaddingAtEnd(bool enable)
 { m_add_padding_at_end = enable; }
 
 void ListBox::AllowDropType(const std::string& str)
-{
+{ m_allowed_drop_types.erase(str); }
+{ m_allowed_drop_types.insert(str); }
     // Create the set if necessary
     if (!m_allowed_drop_types)
         m_allowed_drop_types = std::unordered_set<std::string>();

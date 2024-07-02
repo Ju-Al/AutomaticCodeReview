@@ -1,11 +1,5 @@
 <?php
-		$type = sanitize_key( $_GET['type'] );
 
-		$_type     = explode( '-', $type );
-		$_type     = reset( $_type );
-		$_id       = explode( '-', $type );
-		$_id       = end( $_id );
-		$_taxonomy = isset( $_GET['taxonomy'] ) ? sanitize_title( wp_unslash( $_GET['taxonomy'] ) ) : false;
 defined( 'ABSPATH' ) || exit;
 
 // Launch hooks that deletes all the cache domain.
@@ -425,7 +419,12 @@ add_filter( 'rocket_post_purge_urls', 'rocket_post_purge_urls_for_qtranslate' );
  */
 function do_admin_post_rocket_purge_cache() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
 	if ( isset( $_GET['type'], $_GET['_wpnonce'] ) ) {
-		$type_raw   = sanitize_key( $_GET['type'] );
+		$_type     = explode( '-', $type );
+		$_type     = reset( $_type );
+		$_id       = explode( '-', $type );
+		$_id       = end( $_id );
+		$_taxonomy = isset( $_GET['taxonomy'] ) ? sanitize_title( wp_unslash( $_GET['taxonomy'] ) ) : false;
+		$type = sanitize_key( $_GET['type'] );
 		$type_array = explode( '-', $type_raw );
 
 		$type     = reset( $type_array );

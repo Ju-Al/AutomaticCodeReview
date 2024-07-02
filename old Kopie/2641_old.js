@@ -73,7 +73,6 @@ export const usePagination = (props = {}) => {
         [history, location, searchParam]
     );
 
-    useMemo(() => {
         if (initialPage && initialPage !== currentPage) {
             setCurrentPage(initialPage);
         }

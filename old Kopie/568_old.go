@@ -127,8 +127,6 @@ func Test_Programs(t *testing.T) {
 	var contractAView *delta.View = nil
 	var contractBView *delta.View = nil
 	var txAView *delta.View = nil
-
-	t.Run("contracts can be updated", func(t *testing.T) {
 		retrievedContractA, err := accounts.GetContract("A", addressA)
 		require.NoError(t, err)
 		require.Empty(t, retrievedContractA)

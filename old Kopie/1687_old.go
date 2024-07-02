@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/felix/stringutils"
 )
 
-func (r *DefaultRuleRenderer) CleanupEndPoint(ifaceName string) {
 	r.epmm.RemoveEndPointMark(ifaceName)
 }
 

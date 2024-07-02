@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-    for i, ids in enumerate(list_of_sets):
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -224,7 +223,7 @@ def correct_intermittency(list_of_sets, intermittency):
 
     list_of_sets = deepcopy(list_of_sets)
 
-    for i, elements in enumerate(list_of_sets):
+    for i, ids in enumerate(list_of_sets):
         # initially update each frame as seen 0 ago (now)
         seen_frames_ago = {i: 0 for i in elements}
         for j in range(1, intermittency + 2):

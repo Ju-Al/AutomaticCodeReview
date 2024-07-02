@@ -1,5 +1,4 @@
 <?php
-    public function __construct(UserManager $userManager)
 
 namespace Kunstmaan\AdminBundle\EventListener;
 
@@ -21,7 +20,7 @@ class PasswordResettingListener
     /**
      * @param UserManager $userManager
      */
-    public function __construct(/* UserManager */ $userManager)
+    public function __construct(UserManager $userManager)
     {
         if (!$userManager instanceof UserManager && !$userManager instanceof FOSUserManager) {
             throw new \InvalidArgumentException(sprintf('The "$userManager" argument must be of type "%s" or type "%s"', UserManager::class, FOSUserManager::class));

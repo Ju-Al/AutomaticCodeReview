@@ -267,7 +267,6 @@ function wp_default_packages_scripts( $scripts ) {
 		if ( in_array( 'wp-i18n', $dependencies, true ) ) {
 			$scripts->set_translations( $handle );
 		}
-
 		// Manually set the text direction localization after wp-i18n is
 		// printed. This ensures that wp.i18n.isRTL() returns true in RTL
 		// langauges. We cannot use $scripts->set_translations( 'wp-i18n' ) to

@@ -1,6 +1,5 @@
 package migrations
 
-func (m StorageFormatV5Migration) getContractsOnlyAccounts(payloads []ledger.Payload) *state.Accounts {
 import (
 	"bytes"
 	"encoding/hex"
@@ -161,7 +160,7 @@ func (m *StorageFormatV5Migration) Migrate(payloads []ledger.Payload) ([]ledger.
 	return migratedPayloads, nil
 }
 
-func (m StorageFormatV5Migration) getContractsOnlyAccounts(payloads []ledger.Payload) *state.AccountsState {
+func (m StorageFormatV5Migration) getContractsOnlyAccounts(payloads []ledger.Payload) *state.Accounts {
 	var filteredPayloads []ledger.Payload
 
 	for _, payload := range payloads {

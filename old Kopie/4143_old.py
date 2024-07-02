@@ -1766,6 +1766,8 @@ class Dataset:
         Returns
         -------
         self : Dataset
+                raise ValueError("Length of feature_name({}) and num_feature({}) don't match"
+                                 .format(len(feature_name), self.num_feature()))
             Dataset with set feature name.
         """
         if feature_name != 'auto':
@@ -3258,9 +3260,6 @@ class Booster:
             ctypes.c_int(num_feature),
             ctypes.byref(tmp_out_len),
             ctypes.c_size_t(reserved_string_buffer_size),
-                "Allocated feature name buffer size ({}) was inferior to the needed size ({})."
-                .format(reserved_string_buffer_size, required_string_buffer_size.value)
-            )
             ctypes.byref(required_string_buffer_size),
             ptr_string_buffers))
         if num_feature != tmp_out_len.value:

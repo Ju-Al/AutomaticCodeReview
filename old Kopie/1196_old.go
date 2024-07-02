@@ -94,7 +94,6 @@ func mustAuth(h http.Handler) http.Handler {
 func (a *App) PlayHandler() http.Handler {
 	var data struct {
 		Version string
-		Url     string
 	}
 	data.Version = playVersion
 	data.Url = playUrl

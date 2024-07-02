@@ -1,5 +1,4 @@
 namespace Nancy.Tests.Unit.ModelBinding
-            Assert.DoesNotThrow(() => binder.Bind(context, this.GetType(), null, config));
 {
     using System;
     using System.Collections.Generic;
@@ -98,7 +97,7 @@ namespace Nancy.Tests.Unit.ModelBinding
             var config = new BindingConfig { IgnoreErrors = true };
 
             // When, Then
-            Record.Exception(() => binder.Bind(context, this.GetType(), null, config)).ShouldBeNull();
+            Assert.DoesNotThrow(() => binder.Bind(context, this.GetType(), null, config));
         }
 
         [Fact]

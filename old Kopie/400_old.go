@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/target/goalert/config"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"

@@ -1,6 +1,5 @@
 package protocol
 
-		attachBlocks = append([]*legacy.Block{ancestor}, attachBlocks...)
 import (
 	log "github.com/sirupsen/logrus"
 
@@ -83,7 +82,7 @@ func (c *Chain) getReorganizeBlocks(block *legacy.Block) ([]*legacy.Block, []*le
 	ancestor := block
 
 	for !c.inMainchain(ancestor) {
-		attachBlocks = append(attachBlocks, ancestor)
+		attachBlocks = append([]*legacy.Block{ancestor}, attachBlocks...)
 		ancestor, _ = c.GetBlockByHash(&ancestor.PreviousBlockHash)
 	}
 

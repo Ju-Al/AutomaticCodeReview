@@ -1,5 +1,4 @@
 using System;
-                        var qDetailsLink = row.QuerySelector("a[href^=\"torrents.php?id=\"]");
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics.CodeAnalysis;
@@ -285,7 +284,7 @@ namespace Jackett.Common.Indexers
                         // ignore sub groups info row, it's just an row with an info about the next section, something like "Dual Áudio" or "Legendado"
                         if (row.QuerySelector(".edition_info") != null)
                             continue;
-
+                        var qDetailsLink = row.QuerySelector("a[href^=\"torrents.php?id=\"]");
                         var torrentInfoEl = row.QuerySelector("div.torrent_info");
                         var seasonEl = row.QuerySelector("a[href^=\"torrents.php?torrentid=\"]");
 

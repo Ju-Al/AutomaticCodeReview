@@ -1,5 +1,4 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
-    _InterlockedCompareExchangePointer(&init_allocator, allocator, NULL);
 // All rights reserved.
 //
 // Copyright 2019 Google LLC
@@ -3433,7 +3432,7 @@ enum xnn_status xnn_initialize(const struct xnn_allocator* allocator) {
     allocator = &xnn_default_allocator;
   }
   #ifdef _MSC_VER
-    _InterlockedCompareExchangePointer((void* volatile)(&init_allocator), allocator, NULL);
+    _InterlockedCompareExchangePointer(&init_allocator, allocator, NULL);
   #else
     __sync_bool_compare_and_swap(&init_allocator, NULL, allocator);
   #endif

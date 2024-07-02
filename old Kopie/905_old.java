@@ -106,7 +106,6 @@ public class ScannerIterator implements Iterator<Entry<Key,Value>> {
     iter = getNextBatch().iterator();
     if (!iter.hasNext()) {
       finished = true;
-      activeIters.remove(this);
       return false;
     }
 

@@ -1,5 +1,4 @@
 package server
-func ServeIndex(publicDir, base, rememberMe, resetPassword string) fasthttp.RequestHandler {
 
 import (
 	"fmt"
@@ -17,7 +16,7 @@ var alphaNumericRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV
 // ServeIndex serve the index.html file with nonce generated for supporting
 // restrictive CSP while using material-ui from the embedded virtual filesystem.
 //go:generate broccoli -src ../../public_html -o public_html
-func ServeIndex(publicDir, base, rememberMe, resetPassword, thememaincolor, themename, themesecondarycolor string) fasthttp.RequestHandler {
+func ServeIndex(publicDir, base, rememberMe, resetPassword string) fasthttp.RequestHandler {
 	f, err := br.Open(publicDir + "/index.html")
 	if err != nil {
 		logging.Logger().Fatalf("Unable to open index.html: %v", err)

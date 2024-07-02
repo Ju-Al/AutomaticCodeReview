@@ -4650,8 +4650,6 @@ class DGLHeteroGraph(object):
         return DGLHeteroGraph(self._graph.to_format(restrict_format), self.ntypes, self.etypes,
                               self._node_frames,
                               self._edge_frames)
-
-    def shared_memory(self, name, formats=('coo', 'csr', 'csc')):
         """Return a copy of this graph in shared memory (without node feature or edge feature)
 
         Parameters

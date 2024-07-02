@@ -1,8 +1,5 @@
 #include "lbann/proto/proto_common.hpp"
 
-      const generic_data_reader* r_train = data_readers[execution_mode::training];
-      const generic_data_reader* r_validate = data_readers[execution_mode::validation];
-    const generic_data_reader* r_test = data_readers[execution_mode::testing];
 #include "lbann/lbann.hpp"
 #include "lbann/base.hpp"
 #include "lbann/comm.hpp"
@@ -356,7 +353,9 @@ void init_data_readers(lbann::lbann_comm *comm, const lbann_data::LbannPB& p, st
 
   if (master) {
     if (separate_validation) {
-      const generic_data_reader* r_train = peek_map(data_readers, execution_mode::training);
+      const generic_data_reader* r_train = data_readers[execution_mode::training];
+    const generic_data_reader* r_test = data_readers[execution_mode::testing];
+      const generic_data_reader* r_validate = data_readers[execution_mode::validation];
       const generic_data_reader* r_validate = peek_map(data_readers, execution_mode::validation);
       const size_t num_train = (r_train == nullptr)? 0u : r_train->get_num_data();
       const size_t num_validate = (r_validate == nullptr)? 0u : r_validate->get_num_data();

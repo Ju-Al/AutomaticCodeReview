@@ -1116,7 +1116,6 @@ class Survey extends LSActiveRecord
         }
     }
 
-    /**
      * @return bool
      * @throws Exception
      */

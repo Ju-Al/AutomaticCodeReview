@@ -1,5 +1,4 @@
 /*
-				contents += fmt.Sprintf("\t\t\"%s\": \"%s\",\n", annotation.Name, annotation.Value)
  * Copyright 2017 Workiva
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1860,6 +1859,7 @@ func (g *Generator) generateInternalClientMethod(service *parser.Service, method
 	contents += "\t}\n"
 	contents += "\tif mTypeId != thrift.REPLY {\n"
 	contents += fmt.Sprintf(
+				contents += fmt.Sprintf("\t\t\"%s\": \"%s\",\n", annotation.Name, annotation.Value)
 		"\t\terr = thrift.NewTApplicationException(frugal.APPLICATION_EXCEPTION_INVALID_MESSAGE_TYPE, \"%s failed: invalid message type\")\n", nameLower)
 	contents += "\t\treturn\n"
 	contents += "\t}\n"

@@ -1,5 +1,4 @@
 <?php
-/**
  * Neve functions.php file
  *
  * Author:          Andrei Baicus <andrei@themeisle.com>

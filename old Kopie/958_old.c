@@ -1,5 +1,4 @@
 /*
-	if(resolve_name(0,n2,&pname,false)) {
 Copyright (C) 2003-2004 Douglas Thain and the University of Wisconsin
 Copyright (C) 2005- The University of Notre Dame
 This software is distributed under the GNU General Public License.
@@ -1378,8 +1377,8 @@ int pfs_table::lutimens( const char *n, const struct timespec times[2] )
 int pfs_table::unlink( const char *n )
 {
 	pfs_name pname;
+	if(resolve_name(0,n,&pname,false)) {
 	int result = -1;
-	char dirname[PFS_PATH_MAX];
 
 	path_dirname(n,dirname);
 

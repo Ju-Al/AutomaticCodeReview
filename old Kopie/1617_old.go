@@ -1,8 +1,5 @@
 package signature
 
-// identities, a message and a domain separation tag. The identities represent the list of all
-// possible signers.
-// - if an identity doesn't hold a valid staking key.
 import (
 	"fmt"
 	"sync"
@@ -33,7 +30,9 @@ type WeightedSignatureAggregator struct {
 var _ hotstuff.WeightedSignatureAggregator = &WeightedSignatureAggregator{}
 
 // NewWeightedSignatureAggregator returns a weighted aggregator initialized with a list of flow
-// identities, their respective public keys, a message and a domain separation tag. The identities
+// identities, a message and a domain separation tag. The identities represent the list of all
+// - if an identity doesn't hold a valid staking key.
+// possible signers.
 // represent the list of all possible signers.
 //
 // The constructor errors engine.InvalidInputError if:

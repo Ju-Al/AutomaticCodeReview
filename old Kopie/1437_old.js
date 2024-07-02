@@ -1,104 +1,268 @@
-import { options, createElement as h, render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
-import sinon from 'sinon';
+define(['dom', 'browser', 'events', 'emby-tabs', 'emby-button'], function (dom, browser, events) {
+    'use strict';
 
-import { setupScratch, teardown } from '../../../test/_util/helpers';
-import { act } from '../../src';
+    var tabOwnerView;
+    var queryScope = document.querySelector('.skinHeader');
+    var footerTabsContainer;
+    var headerTabsContainer;
+    var tabsElem;
 
-/** @jsx h */
-describe('act', () => {
+    function enableTabsInFooter() {
+        return false;
+    }
 
-	/** @type {HTMLDivElement} */
-	let scratch;
+    function getTabsContainerElem() {
+    }
 
-	beforeEach(() => {
-		scratch = setupScratch();
-	});
+    function ensureElements(enableInFooter) {
 
-	afterEach(() => {
-		teardown(scratch);
-	});
+        if (enableInFooter) {
+            if (!footerTabsContainer) {
+                footerTabsContainer = document.createElement('div');
+                footerTabsContainer.classList.add('footerTabs');
+                footerTabsContainer.classList.add('sectionTabs');
+                footerTabsContainer.classList.add('hide');
+                //appFooter.add(footerTabsContainer);
+            }
+        }
 
-	it('should reset options after act finishes', () => {
-		expect(options.requestAnimationFrame).to.equal(undefined);
-		act(() => null);
-		expect(options.requestAnimationFrame).to.equal(undefined);
-	});
+        if (!headerTabsContainer) {
+            headerTabsContainer = queryScope.querySelector('.headerTabs');
+        }
+    }
 
-	it('should flush pending effects', () => {
-		let spy = sinon.spy();
-		function StateContainer() {
-			useEffect(spy);
-			return <div />;
-		}
-		act(() => render(<StateContainer />, scratch));
-		expect(spy).to.be.calledOnce;
-	});
+    function onViewTabsReady() {
+        this.selectedIndex(this.readySelectedIndex);
+        this.readySelectedIndex = null;
+    }
 
-	it('should flush pending and initial effects', () => {
-		const spy = sinon.spy();
-		function StateContainer() {
-			const [count, setCount] = useState(0);
-			useEffect(() => spy(), [count]);
-			return (
-				<div>
-					<p>Count: {count}</p>
-					<button onClick={() => setCount(c => c + 11)} />
-				</div>
-			);
-		}
+    function allowSwipe(target) {
 
-		act(() => render(<StateContainer />, scratch));
-		expect(spy).to.be.calledOnce;
-		expect(scratch.textContent).to.include('Count: 0');
-		act(() => {
-			const button = scratch.querySelector('button');
-			button.click();
-			expect(spy).to.be.calledOnce;
-			expect(scratch.textContent).to.include('Count: 0');
-		});
-		expect(spy).to.be.calledTwice;
-		expect(scratch.textContent).to.include('Count: 1');
-	});
+        function allowSwipeOn(elem) {
 
-	it('should drain the queue of hooks', () => {
-		const spy = sinon.spy();
-		function StateContainer() {
-			const [count, setCount] = useState(0);
-			useEffect(() => spy());
-			return (<div>
-				<p>Count: {count}</p>
-				<button onClick={() => setCount(c => c + 11)} />
-			</div>);
-		}
+            if (dom.parentWithTag(elem, 'input')) {
+                return false;
+            }
 
-		render(<StateContainer />, scratch);
-		expect(scratch.textContent).to.include('Count: 0');
-		act(() => {
-			const button = scratch.querySelector('button');
-			button.click();
-			expect(scratch.textContent).to.include('Count: 0');
-		});
-		expect(scratch.textContent).to.include('Count: 1');
-	});
+            var classList = elem.classList;
+            if (classList) {
+                return !classList.contains('scrollX') && !classList.contains('animatedScrollX');
+            }
 
-	it('should restore options.requestAnimationFrame', () => {
-		const spy = sinon.spy();
+            return true;
+        }
 
-		options.requestAnimationFrame = spy;
-		act(() => null);
+        var parent = target;
+        while (parent != null) {
+            if (!allowSwipeOn(parent)) {
+                return false;
+            }
+            parent = parent.parentNode;
+        }
 
-		expect(options.requestAnimationFrame).to.equal(spy);
-		expect(spy).to.not.be.called;
-	});
+        return true;
+    }
 
-	it('should restore options.debounceRendering after act', () => {
-		const spy = sinon.spy();
+    function configureSwipeTabs(view, tabsElem, getTabContainersFn) {
 
-		options.debounceRendering = spy;
-		act(() => null);
+        if (!browser.touch) {
+            return;
+        }
 
-		expect(options.debounceRendering).to.equal(spy);
-		expect(spy).to.not.be.called;
-	});
+        // implement without hammer
+        var pageCount = getTabContainersFn().length;
+        var onSwipeLeft = function (e, target) {
+            if (allowSwipe(target) && view.contains(target)) {
+                tabsElem.selectNext();
+            }
+        };
+
+        var onSwipeRight = function (e, target) {
+            if (allowSwipe(target) && view.contains(target)) {
+                tabsElem.selectPrevious();
+            }
+        };
+
+        require(['touchHelper'], function (TouchHelper) {
+
+            var touchHelper = new TouchHelper(view.parentNode.parentNode);
+
+            events.on(touchHelper, 'swipeleft', onSwipeLeft);
+            events.on(touchHelper, 'swiperight', onSwipeRight);
+
+            view.addEventListener('viewdestroy', function () {
+                touchHelper.destroy();
+            });
+        });
+    }
+
+    function setTabs(view, selectedIndex, getTabsFn, getTabContainersFn, onBeforeTabChange, onTabChange, setSelectedIndex) {
+
+        var enableInFooter = enableTabsInFooter();
+
+        if (!view) {
+            if (tabOwnerView) {
+
+                if (!headerTabsContainer) {
+                    headerTabsContainer = queryScope.querySelector('.headerTabs');
+                }
+
+                ensureElements(enableInFooter);
+
+                document.body.classList.remove('withSectionTabs');
+
+                headerTabsContainer.innerHTML = '';
+                headerTabsContainer.classList.add('hide');
+
+                if (footerTabsContainer) {
+                    footerTabsContainer.innerHTML = '';
+                    footerTabsContainer.classList.add('hide');
+                }
+
+                tabOwnerView = null;
+            }
+            return {
+                tabsContainer: headerTabsContainer,
+                replaced: false
+            };
+        }
+
+        ensureElements(enableInFooter);
+
+        var tabsContainerElem = enableInFooter ? footerTabsContainer : headerTabsContainer;
+
+        if (!tabOwnerView) {
+            tabsContainerElem.classList.remove('hide');
+        }
+
+        if (tabOwnerView !== view) {
+
+            var index = 0;
+
+            var indexAttribute = selectedIndex == null ? '' : (' data-index="' + selectedIndex + '"');
+            var tabsHtml = '<div is="emby-tabs"' + indexAttribute + ' class="tabs-viewmenubar"><div class="emby-tabs-slider" style="white-space:nowrap;">' + getTabsFn().map(function (t) {
+
+                var tabClass = 'emby-tab-button';
+
+                if (t.enabled === false) {
+                    tabClass += ' hide';
+                }
+
+                var tabHtml;
+
+                if (t.cssClass) {
+                    tabClass += ' ' + t.cssClass;
+                }
+
+                if (t.href) {
+                    tabHtml = '<a href="' + t.href + '" is="emby-linkbutton" class="' + tabClass + '" data-index="' + index + '"><div class="emby-button-foreground">' + t.name + '</div></a>';
+                } else {
+                    tabHtml = '<button type="button" is="emby-button" class="' + tabClass + '" data-index="' + index + '"><div class="emby-button-foreground">' + t.name + '</div></button>';
+                }
+
+                index++;
+                return tabHtml;
+
+            }).join('') + '</div></div>';
+
+            tabsContainerElem.innerHTML = tabsHtml;
+            window.CustomElements.upgradeSubtree(tabsContainerElem);
+
+            document.body.classList.add('withSectionTabs');
+            tabOwnerView = view;
+
+            tabsElem = tabsContainerElem.querySelector('[is="emby-tabs"]');
+
+            configureSwipeTabs(view, tabsElem, getTabContainersFn);
+
+            tabsElem.addEventListener('beforetabchange', function (e) {
+
+                var tabContainers = getTabContainersFn();
+                if (e.detail.previousIndex != null) {
+
+                    var previousPanel = tabContainers[e.detail.previousIndex];
+                    if (previousPanel) {
+                        previousPanel.classList.remove('is-active');
+                    }
+                }
+
+                var newPanel = tabContainers[e.detail.selectedTabIndex];
+
+                //if (e.detail.previousIndex != null && e.detail.previousIndex != e.detail.selectedTabIndex) {
+                //    if (newPanel.animate && (animateTabs || []).indexOf(e.detail.selectedTabIndex) != -1) {
+                //        fadeInRight(newPanel);
+                //    }
+                //}
+
+                if (newPanel) {
+                    newPanel.classList.add('is-active');
+                }
+            });
+
+            if (onBeforeTabChange) {
+                tabsElem.addEventListener('beforetabchange', onBeforeTabChange);
+            }
+            if (onTabChange) {
+                tabsElem.addEventListener('tabchange', onTabChange);
+            }
+
+            if (setSelectedIndex !== false) {
+                if (tabsElem.selectedIndex) {
+                    tabsElem.selectedIndex(selectedIndex);
+                } else {
+
+                    tabsElem.readySelectedIndex = selectedIndex;
+                    tabsElem.addEventListener('ready', onViewTabsReady);
+                }
+            }
+
+            //if (enableSwipe !== false) {
+            //    libraryBrowser.configureSwipeTabs(ownerpage, tabs);
+            //}
+
+            return {
+                tabsContainer: tabsContainerElem,
+                tabs: tabsContainerElem.querySelector('[is="emby-tabs"]'),
+                replaced: true
+            };
+        }
+
+        if (!tabsElem) {
+            tabsElem = tabsContainerElem.querySelector('[is="emby-tabs"]');
+        }
+
+        tabsElem.selectedIndex(selectedIndex);
+
+        tabOwnerView = view;
+        return {
+            tabsContainer: tabsContainerElem,
+            tabs: tabsElem,
+            replaced: false
+        };
+    }
+
+    function selectedTabIndex(index) {
+
+        var tabsContainerElem = headerTabsContainer;
+
+        if (!tabsElem) {
+            tabsElem = tabsContainerElem.querySelector('[is="emby-tabs"]');
+        }
+
+        if (index != null) {
+            tabsElem.selectedIndex(index);
+        } else {
+            tabsElem.triggerTabChange();
+        }
+    }
+
+    function getTabsElement() {
+        return document.querySelector('.tabs-viewmenubar');
+    }
+
+    return {
+        setTabs: setTabs,
+        getTabsElement: getTabsElement,
+        selectedTabIndex: selectedTabIndex
+    };
 });

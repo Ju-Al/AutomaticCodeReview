@@ -50,7 +50,6 @@ type SyncPool struct {
 	deliverClient ceclient.Client
 }
 
-type handlerCache struct {
 	handler.Handler
 	t *config.Target
 }

@@ -1,11 +1,4 @@
 # Copyright 2018 Microsoft Corporation
-            cgroup_name = "" if self.is_wrapper_cgroup else self.name
-            cgroup_path = path_maker(hierarchy, cgroup_name)
-    def is_systemd_manager():
-        Determine if systemd is managing system services. Many extensions are structured as a set of services,
-        including the agent itself; systemd expects those services to remain in the cgroups in which it placed them.
-        If this process (presumed to be the agent) is in a cgroup that looks like one created by systemd, we can
-        assume systemd is in use.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -109,7 +102,13 @@ class CGroupConfigurator(object):
                 self.disable()
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
-            cgroup_path = path_maker(hierarchy, self.name)
+            cgroup_name = "" if self.is_wrapper_cgroup else self.name
+    def is_systemd_manager():
+        Determine if systemd is managing system services. Many extensions are structured as a set of services,
+        including the agent itself; systemd expects those services to remain in the cgroups in which it placed them.
+        If this process (presumed to be the agent) is in a cgroup that looks like one created by systemd, we can
+        assume systemd is in use.
+            cgroup_path = path_maker(hierarchy, cgroup_name)
             if not os.path.isdir(cgroup_path):
                 CGroupConfigurator._try_mkdir(cgroup_path)
                 logger.info("Created cgroup {0}".format(cgroup_path))

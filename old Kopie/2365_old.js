@@ -1,17 +1,4 @@
 /*
-        async transform(src, id) {
-            // If we don't find the moduleId, just resolve the module name/namespace
-            const moduleEntry = getModuleQualifiedName(id, mergedPluginOptions);
-
-            const { code, map } = await compiler.transform(src, id, {
-                mode: DEFAULT_MODE, // Use always default mode since any other (prod or compat) will be resolved later
-                name: moduleEntry.moduleName,
-                namespace: moduleEntry.moduleNamespace,
-                moduleSpecifier: moduleEntry.moduleSpecifier,
-                outputConfig: { sourcemap: mergedPluginOptions.sourcemap },
-                stylesheetConfig: mergedPluginOptions.stylesheetConfig,
-                experimentalDynamicComponent: mergedPluginOptions.experimentalDynamicComponent,
-                preserveHtmlComments: mergedPluginOptions.preserveHtmlComments,
  * Copyright (c) 2018, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: MIT
@@ -99,7 +86,19 @@ module.exports = function rollupLwcCompiler(pluginOptions = {}) {
             }
         },
 
-        transform(src, id) {
+            // If we don't find the moduleId, just resolve the module name/namespace
+            const moduleEntry = getModuleQualifiedName(id, mergedPluginOptions);
+
+            const { code, map } = await compiler.transform(src, id, {
+                mode: DEFAULT_MODE, // Use always default mode since any other (prod or compat) will be resolved later
+                name: moduleEntry.moduleName,
+                namespace: moduleEntry.moduleNamespace,
+                moduleSpecifier: moduleEntry.moduleSpecifier,
+                outputConfig: { sourcemap: mergedPluginOptions.sourcemap },
+                stylesheetConfig: mergedPluginOptions.stylesheetConfig,
+                experimentalDynamicComponent: mergedPluginOptions.experimentalDynamicComponent,
+                preserveHtmlComments: mergedPluginOptions.preserveHtmlComments,
+        async transform(src, id) {
             // Filter user-land config and lwc import
             if (!filter(id)) {
                 return;

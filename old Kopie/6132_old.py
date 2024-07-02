@@ -1033,7 +1033,6 @@ class PolygonMasks(BaseInstanceMasks):
         self = cls(masks, height, width)
         return self
 
-    def get_bboxes(self):
         num_masks = len(self)
         boxes = np.zeros((num_masks, 4), dtype=np.float32)
         for idx, poly_per_obj in enumerate(self.masks):

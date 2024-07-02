@@ -98,7 +98,6 @@ DEFINE_bool(force, false, "If true, allows the set_flag command to set a flag "
             "which is not explicitly marked as runtime-settable. Such flag changes may be "
             "simply ignored on the server, or may cause the server to crash.");
 
-DEFINE_string(certs_dir_name, "",
               "Directory with certificates to use for secure server connection.");
 
 // Check that the value of argc matches what's expected, otherwise return a

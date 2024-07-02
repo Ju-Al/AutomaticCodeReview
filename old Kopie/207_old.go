@@ -1,428 +1,141 @@
-package models
+package client
 
 import (
-	"fmt"
-	"os"
-	"sort"
-	"strings"
+	log "github.com/cihub/seelog"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/mysterium/node/client/connection"
+	node_cmd "github.com/mysterium/node/cmd"
+	"github.com/mysterium/node/communication"
+	nats_dialog "github.com/mysterium/node/communication/nats/dialog"
+	nats_discovery "github.com/mysterium/node/communication/nats/discovery"
+	"github.com/mysterium/node/identity"
+	"github.com/mysterium/node/ip"
+	"github.com/mysterium/node/openvpn"
+	"github.com/mysterium/node/openvpn/middlewares/client/bytescount"
+	"github.com/mysterium/node/server"
+	"github.com/mysterium/node/tequilapi"
+	tequilapi_endpoints "github.com/mysterium/node/tequilapi/endpoints"
+	"github.com/mysterium/node/version"
+	"path/filepath"
 	"time"
-
-	"github.com/convox/rack/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws"
-	"github.com/convox/rack/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/convox/rack/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/convox/rack/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
-	"github.com/convox/rack/api/config"
+	"github.com/mysterium/node/location"
 )
 
-type Process struct {
-	Id      string    `json:"id"`
-	App     string    `json:"app"`
-	Command string    `json:"command"`
-	Host    string    `json:"host"`
-	Image   string    `json:"image"`
-	Name    string    `json:"name"`
-	Ports   []string  `json:"ports"`
-	Release string    `json:"release"`
-	Size    int64     `json:"size"`
-	Cpu     float64   `json:"cpu"`
-	Memory  float64   `json:"memory"`
-	Started time.Time `json:"started"`
-
-	binds       []string `json:"-"`
-	containerId string   `json:"-"`
-	taskArn     string   `json:"-"`
+// NewCommand function creates new client command by given options
+func NewCommand(options CommandOptions) *Command {
+	return NewCommandWith(
+		options,
+		server.NewClient(options.DiscoveryAPIAddress),
+	)
 }
 
-type Processes []Process
+// NewCommandWith does the same as NewCommand with possibility to override mysterium api client for external communication
+func NewCommandWith(
+	options CommandOptions,
+	mysteriumClient server.Client,
+) *Command {
+	nats_discovery.Bootstrap()
+	openvpn.Bootstrap()
 
-func ListProcesses(app string) (Processes, error) {
-	_, err := GetApp(app)
+	keystoreDirectory := filepath.Join(options.DirectoryData, "keystore")
+	keystoreInstance := keystore.NewKeyStore(keystoreDirectory, keystore.StandardScryptN, keystore.StandardScryptP)
 
-	if err != nil {
-		return nil, err
+	identityManager := identity.NewIdentityManager(keystoreInstance)
+
+	dialogEstablisherFactory := func(myID identity.Identity) communication.DialogEstablisher {
+		return nats_dialog.NewDialogEstablisher(myID, identity.NewSigner(keystoreInstance, myID))
 	}
 
-	req := &ecs.ListTasksInput{
-		Cluster: aws.String(os.Getenv("CLUSTER")),
+	signerFactory := func(id identity.Identity) identity.Signer {
+		return identity.NewSigner(keystoreInstance, id)
 	}
 
-	res, err := ECS().ListTasks(req)
+	statsKeeper := bytescount.NewSessionStatsKeeper(time.Now)
 
-	if err != nil {
-		return nil, err
-	}
+	locationDetector := location.NewDetector(filepath.Join(options.DirectoryConfig, options.LocationDatabase))
 
-	treq := &ecs.DescribeTasksInput{
-		Cluster: aws.String(os.Getenv("CLUSTER")),
-		Tasks:   res.TaskArns,
-	}
+	vpnClientFactory := connection.ConfigureVpnClientFactory(
+		mysteriumClient,
+		options.OpenvpnBinary,
+		options.DirectoryConfig,
+		options.DirectoryRuntime,
+		signerFactory,
+		statsKeeper,
+		ipResolver,
+		locationDetector,
+	)
+	connectionManager := connection.NewManager(mysteriumClient, dialogEstablisherFactory, vpnClientFactory, statsKeeper)
 
-	tres, err := ECS().DescribeTasks(treq)
+	router := tequilapi.NewAPIRouter()
 
-	psch := make(chan Process)
-	errch := make(chan error)
-	num := 0
+	httpAPIServer := tequilapi.NewServer(options.TequilapiAddress, options.TequilapiPort, router)
 
-	for _, task := range tres.Tasks {
-		tres, err := ECS().DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
-			TaskDefinition: task.TaskDefinitionArn,
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		for _, cd := range tres.TaskDefinition.ContainerDefinitions {
-			family := *tres.TaskDefinition.Family
-
-			if len(tres.TaskDefinition.ContainerDefinitions) == 0 {
-				continue
-			}
-
-			// if this is the rack stack the family name is the app name
-			// otherwise family should be app name + process name
-			if app == os.Getenv("RACK") {
-				if family != app {
-					continue
-				}
-			} else {
-				if family != fmt.Sprintf("%s-%s", app, *tres.TaskDefinition.ContainerDefinitions[0].Name) {
-					continue
-				}
-			}
-
-			var cc *ecs.Container
-
-			for _, c := range task.Containers {
-				if *c.Name == *cd.Name {
-					cc = c
-				}
-			}
-
-			go fetchProcess(app, *task, *tres.TaskDefinition, *cd, *cc, psch, errch)
-
-			num += 1
-		}
-	}
-
-	pss := Processes{}
-
-	for i := 0; i < num; i++ {
-		select {
-		case ps := <-psch:
-			pss = append(pss, ps)
-		case err := <-errch:
-			return nil, err
-		}
-	}
-
-	pending, _ := ListPendingProcesses(app)
-	pss = append(pss, pending...)
-
-	sort.Sort(pss)
-
-	return pss, nil
-}
-
-func ListPendingProcesses(app string) (Processes, error) {
-	pss := Processes{}
-
-	// Describe all services
-	lsres, err := ECS().ListServices(&ecs.ListServicesInput{
-		Cluster: aws.String(os.Getenv("CLUSTER")),
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	dsres, err := ECS().DescribeServices(&ecs.DescribeServicesInput{
-		Cluster:  aws.String(os.Getenv("CLUSTER")),
-		Services: lsres.ServiceArns,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, service := range dsres.Services {
-		if !strings.HasPrefix(*service.ServiceName, fmt.Sprintf("%s-", app)) {
-			continue
-		}
-
-		// Test every service deployment for running != pending, to put in a placeholder
-		for _, d := range service.Deployments {
-			if *d.DesiredCount == *d.RunningCount {
-				continue
-			}
-
-			tres, err := ECS().DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
-				TaskDefinition: d.TaskDefinition,
-			})
-
-			if err != nil {
-				return nil, err
-			}
-
-			if len(tres.TaskDefinition.ContainerDefinitions) == 0 {
-				continue
-			}
-
-			cd := *tres.TaskDefinition.ContainerDefinitions[0]
-
-			ps := Process{
-				Id:   "pending",
-				Name: *cd.Name,
-				Size: *cd.Memory,
-			}
-
-			for _, env := range cd.Environment {
-				if *env.Name == "RELEASE" {
-					ps.Release = *env.Value
-				}
-			}
-
-			for i := *d.RunningCount; i < *d.DesiredCount; i++ {
-				pss = append(pss, ps)
-			}
-		}
-	}
-
-	return pss, nil
-}
-
-func fetchProcess(app string, task ecs.Task, td ecs.TaskDefinition, cd ecs.ContainerDefinition, c ecs.Container, psch chan Process, errch chan error) {
-	idp := strings.Split(*c.ContainerArn, "-")
-	id := idp[len(idp)-1]
-
-	ps := Process{
-		Id:    id,
-		App:   app,
-		Image: *cd.Image,
-		Name:  *cd.Name,
-		Ports: []string{},
-		Size:  *cd.Memory,
-	}
-
-	for _, env := range cd.Environment {
-		if *env.Name == "RELEASE" {
-			ps.Release = *env.Value
-		}
-	}
-
-	hostVolumes := make(map[string]string)
-
-	for _, v := range td.Volumes {
-		hostVolumes[*v.Name] = *v.Host.SourcePath
-	}
-
-	for _, m := range cd.MountPoints {
-		ps.binds = append(ps.binds, fmt.Sprintf("%v:%v", hostVolumes[*m.SourceVolume], *m.ContainerPath))
-	}
-
-	ps.taskArn = *task.TaskArn
-
-	cres, err := ECS().DescribeContainerInstances(&ecs.DescribeContainerInstancesInput{
-		Cluster:            aws.String(os.Getenv("CLUSTER")),
-		ContainerInstances: []*string{task.ContainerInstanceArn},
-	})
-
-	if err != nil {
-		errch <- err
-		return
-	}
-
-	if len(cres.ContainerInstances) != 1 {
-		errch <- fmt.Errorf("could not find ECS instance")
-		return
-	}
-
-	ci := cres.ContainerInstances[0]
-
-	ires, err := EC2().DescribeInstances(&ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			&ec2.Filter{Name: aws.String("instance-id"), Values: []*string{ci.Ec2InstanceId}},
+	command := &Command{
+		connectionManager: connectionManager,
+		httpAPIServer:     httpAPIServer,
+		checkOpenvpn: func() error {
+			return openvpn.CheckOpenvpnBinary(options.OpenvpnBinary)
 		},
-	})
-
-	if err != nil {
-		errch <- err
-		return
 	}
 
-	if len(ires.Reservations) != 1 || len(ires.Reservations[0].Instances) != 1 {
-		errch <- fmt.Errorf("could not find instance")
-		return
-	}
+	tequilapi_endpoints.AddRoutesForIdentities(router, identityManager, mysteriumClient, signerFactory)
+	tequilapi_endpoints.AddRoutesForConnection(router, connectionManager, ipResolver, statsKeeper)
+	tequilapi_endpoints.AddRoutesForProposals(router, mysteriumClient)
+	tequilapi_endpoints.AddRouteForStop(router, node_cmd.NewApplicationStopper(command.Kill), time.Second)
 
-	instance := ires.Reservations[0].Instances[0]
-
-	// Connect to a Docker client
-	// In testing use the stub AWS server.
-	// In development, modify the security group for port 2376 and use the Public IP
-	// In production, use the private IP
-
-	ip := *instance.PrivateIpAddress
-
-	if os.Getenv("DEVELOPMENT") == "true" {
-		ip = *instance.PublicIpAddress
-	}
-
-	ps.Host = ip
-
-	d, err := ps.Docker()
-
-	if err != nil {
-		errch <- fmt.Errorf("could not communicate with docker")
-		return
-	}
-
-	containers, err := d.ListContainers(docker.ListContainersOptions{
-		Filters: map[string][]string{
-			"label": []string{
-				fmt.Sprintf("com.amazonaws.ecs.task-arn=%s", ps.taskArn),
-				fmt.Sprintf("com.amazonaws.ecs.container-name=%s", ps.Name),
-			},
-		},
-	})
-
-	if err != nil {
-		errch <- err
-		return
-	}
-
-	if len(containers) != 1 {
-		fmt.Println(`ns=kernel at=processes.list state=error message="could not find container"`)
-		psch <- ps
-		return
-	}
-
-	ps.containerId = containers[0].ID
-	ps.Command = containers[0].Command
-	ps.Started = time.Unix(containers[0].Created, 0)
-
-	for _, port := range containers[0].Ports {
-		ps.Ports = append(ps.Ports, fmt.Sprintf("%d:%d", port.PublicPort, port.PrivatePort))
-	}
-
-	psch <- ps
+	return command
 }
 
-func GetProcess(app, id string) (*Process, error) {
-	processes, err := ListProcesses(app)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, p := range processes {
-		if p.Id == id {
-			return &p, nil
-		}
-	}
-
-	return nil, nil
+//Command represent entrypoint for Mysterium client with top level components
+type Command struct {
+	connectionManager connection.Manager
+	httpAPIServer     tequilapi.APIServer
+	checkOpenvpn      func() error
 }
 
-func (ps Processes) Len() int {
-	return len(ps)
-}
-
-// Sort processes by name and id
-// Processes with a 'pending' id will naturally come last by design
-func (ps Processes) Less(i, j int) bool {
-	psi := fmt.Sprintf("%s-%s", ps[i].Name, ps[i].Id)
-	psj := fmt.Sprintf("%s-%s", ps[j].Name, ps[j].Id)
-
-	return psi < psj
-}
-
-func (ps Processes) Swap(i, j int) {
-	ps[i], ps[j] = ps[j], ps[i]
-}
-
-func (p *Process) Docker() (*docker.Client, error) {
-	if p.Id == "pending" {
-		return nil, fmt.Errorf("pending")
-	}
-
-	if os.Getenv("TEST") == "true" {
-		return Docker(config.TestConfig.DockerHost)
-	}
-
-	return Docker(fmt.Sprintf("http://%s:2376", p.Host))
-}
-
-func (p *Process) FetchStats() error {
-	d, err := p.Docker()
-
-	if err != nil {
-		if err.Error() == "pending" {
-			return nil
-		}
-
-		return fmt.Errorf("could not communicate with docker")
-	}
-
-	stch := make(chan *docker.Stats)
-	dnch := make(chan bool)
-
-	options := docker.StatsOptions{
-		ID:     p.containerId,
-		Stats:  stch,
-		Done:   dnch,
-		Stream: false,
-	}
-
-	go d.Stats(options)
-
-	stat := <-stch
-	dnch <- true
-
-	pcpu := stat.PreCPUStats.CPUUsage.TotalUsage
-	psys := stat.PreCPUStats.SystemCPUUsage
-
-	p.Cpu = truncate(calculateCPUPercent(pcpu, psys, stat), 4)
-
-	if stat.MemoryStats.Limit > 0 {
-		p.Memory = truncate(float64(stat.MemoryStats.Usage)/float64(stat.MemoryStats.Limit), 4)
-	}
-
-	return nil
-}
-
-func (p *Process) FetchStatsAsync(psch chan Process, errch chan error) {
-	errch <- p.FetchStats()
-	psch <- *p
-}
-
-func (p *Process) Stop() error {
-	req := &ecs.StopTaskInput{
-		Cluster: aws.String(os.Getenv("CLUSTER")),
-		Task:    aws.String(p.taskArn),
-	}
-
-	_, err := ECS().StopTask(req)
-
+// Start starts Tequilapi service - does not block
+func (cmd *Command) Start() error {
+	log.Info("[Client version]", version.AsString())
+	err := cmd.checkOpenvpn()
 	if err != nil {
 		return err
 	}
 
+	err = cmd.httpAPIServer.StartServing()
+	if err != nil {
+		return err
+	}
+
+	port, err := cmd.httpAPIServer.Port()
+	if err != nil {
+		return err
+	}
+	log.Infof("Api started on: %d", port)
+
 	return nil
 }
 
-// from https://github.com/docker/docker/blob/master/api/client/stats.go
-func calculateCPUPercent(previousCPU, previousSystem uint64, v *docker.Stats) float64 {
-	var (
-		cpuPercent = 0.0
-		// calculate the change for the cpu usage of the container in between readings
-		cpuDelta = float64(v.CPUStats.CPUUsage.TotalUsage - previousCPU)
-		// calculate the change for the entire system between readings
-		systemDelta = float64(v.CPUStats.SystemCPUUsage - previousSystem)
-	)
+// Wait blocks until tequilapi service is stopped
+func (cmd *Command) Wait() error {
+	return cmd.httpAPIServer.Wait()
+}
 
-	if systemDelta > 0.0 && cpuDelta > 0.0 {
-		cpuPercent = (cpuDelta / systemDelta) * float64(len(v.CPUStats.CPUUsage.PercpuUsage)) * 100.0
+// Kill stops tequilapi service
+func (cmd *Command) Kill() error {
+	err := cmd.connectionManager.Disconnect()
+	if err != nil {
+		switch err {
+		case connection.ErrNoConnection:
+			log.Info("No active connection - proceeding")
+		default:
+			return err
+		}
+	} else {
+		log.Info("Connection closed")
 	}
-	return cpuPercent
+
+	cmd.httpAPIServer.Stop()
+	log.Info("Api stopped")
+
+	return nil
 }

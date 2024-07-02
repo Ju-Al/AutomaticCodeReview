@@ -1,8 +1,4 @@
 "Hooks provide extensibility at the model level."
-    x = m.eval()(*x) if is_listy(x) else m.eval()(x)
-    res = [(o[0].stored.shape, o[1].stored) for o in hooks]
-    output_size, params = map(list, zip(*res))
-    return (output_size, params, hooks)
 from ..torch_core import *
 from ..callback import *
 from ..basic_train import *
@@ -144,8 +140,11 @@ def params_size(m: nn.Module, size: tuple = (64, 64))->Tuple[Sizes, Tensor, Hook
     else: raise TypeError('You should either pass in a Learner or nn.Module')
     hooks_outputs = hook_outputs(flatten_model(m))
     hooks_params = hook_params(flatten_model(m))
-    hooks = zip(hooks_outputs, hooks_params)
     x = m.eval()(*x) if is_listy(x) else m.eval()(x)
+    hooks = zip(hooks_outputs, hooks_params)
+    res = [(o[0].stored.shape, o[1].stored) for o in hooks]
+    output_size, params = map(list, zip(*res))
+    return (output_size, params, hooks)
     output_size = [(o.stored.shape) for o in hooks_outputs]
     params = [o.stored for o in hooks_params]
     params, trainables = map(list,zip(*params))

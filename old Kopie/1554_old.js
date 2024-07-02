@@ -117,7 +117,6 @@ program
     loadCommand('init', '@vue/cli-init')
   })
 
-program
   .command('config [value]')
   .description('inspect and modify the config')
   .option('-g, --get <path>', 'get value from preset')

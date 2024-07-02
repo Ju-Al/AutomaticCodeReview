@@ -583,8 +583,6 @@ std::string utils::get_potential_units(const std::string & path, const std::stri
   }
   return "";
 }
-
-/* ----------------------------------------------------------------------
    return bitmask of supported conversions for a given property
 ------------------------------------------------------------------------- */
 int utils::get_supported_conversions(const int property)

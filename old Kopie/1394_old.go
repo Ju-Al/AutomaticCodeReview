@@ -467,7 +467,6 @@ func (md *MDServerMemory) GetRange(ctx context.Context, id tlf.ID,
 	}
 }
 
-func (md *MDServerMemory) iTeamMigrationRemoveLock(id tlf.ID) {
 	md.lock.Lock()
 	defer md.lock.Unlock()
 	delete(md.iTeamMigrationLocks, id)

@@ -1,20 +1,4 @@
 //
-    before(function (done) {
-      done();
-    });
-    
-    after(function (done) {
-      done();
-    });
-    
-    beforeEach(function (done) {
-      done();
-    });
-    
-    afterEach(function (done) {
-      done();
-    });
-      var templateFile = path.resolve(__dirname, '../../data/batch.job.simple.json');
 // Copyright (c) Microsoft and contributors.  All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,10 +57,25 @@ function getValueFromJson(obj, val) {
 
 describe('cli', function () {
   describe('batch ncj', function () {
+    before(function (done) {
+      done();
+    });
+    
+    after(function (done) {
+      done();
+    });
+    
+    beforeEach(function (done) {
+      done();
+    });
+    
+    afterEach(function (done) {
+      done();
+    });
 
     it('should expand template with parameter file', function (_) {
       this.interaction = new Interactor(this);
-      var templateFile = path.resolve(__dirname, '../../../Documentation/BatchDocumentation/samples/ffmpeg/job.json');
+      var templateFile = path.resolve(__dirname, '../../data/batch.job.simple.json');
       var parameterFile = path.resolve(__dirname, '../../data/batch.job.parameters.json');
       var full = templateUtils.expandTemplate(this, templateFile, parameterFile, _);
       should.exist(full);

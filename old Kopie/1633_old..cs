@@ -146,7 +146,6 @@ namespace NHibernate.Cache
 			}
 		}
 
-		public object[] GetMultiple(CacheKey[] keys, long txTimestamp)
 		{
 			if (_batchableReadCache == null)
 			{

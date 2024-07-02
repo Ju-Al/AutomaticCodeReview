@@ -1,5 +1,4 @@
 // Copyright (c) 2018-2019 K Team. All Rights Reserved.
-        return att;
 package org.kframework.backend.kore;
 
 import com.google.common.collect.BiMap;
@@ -977,7 +976,7 @@ public class ModuleToKORE {
         if (isMacro) {
             att = att.add("macro");
         }
-        return att.remove(Constants.ORIGINAL_PRD, Production.class);
+        return att;
     }
 
     private boolean isFunction(Production prod) {

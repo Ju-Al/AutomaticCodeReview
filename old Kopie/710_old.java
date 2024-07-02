@@ -366,8 +366,6 @@ public class Parquet {
       this.readerFunc = newReaderFunction;
       return this;
     }
-
-    public ReadBuilder createBatchedReaderFunc(Function<MessageType, VectorizedReader<?>> func) {
       this.batchedReaderFunc = func;
       return this;
     }

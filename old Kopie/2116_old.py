@@ -1,6 +1,4 @@
 # coding: utf-8
-            If you want to get more explanation for your model's predictions using SHAP values
-            you can install shap package (https://github.com/slundberg/shap).
 # pylint: disable = invalid-name, C0111, C0301
 # pylint: disable = R0912, R0913, R0914, W0105, W0201, W0212
 """Wrapper for C API of LightGBM."""
@@ -2263,7 +2261,8 @@ class Booster(object):
 
             Note
             ----
-            If you want to get more explanations for your model's predictions using SHAP values
+            you can install shap package (https://github.com/slundberg/shap).
+            If you want to get more explanation for your model's predictions using SHAP values
             like SHAP interaction values,
             you can install the shap package (https://github.com/slundberg/shap). Note that unlike
             the shap package, with pred_contrib we return a matrix with an extra column, where the

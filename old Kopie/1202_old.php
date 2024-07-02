@@ -241,7 +241,6 @@ class WP_List_Table {
 		if ( in_array( $name, $this->compat_methods, true ) ) {
 			return $this->$name( ...$arguments );
 		}
-
 		$class = get_class( $this );
 		$trace = debug_backtrace(); // phpcs:ignore PHPCompatibility.FunctionUse.ArgumentFunctionsReportCurrentValue.NeedsInspection
 		$file  = $trace[0]['file'];

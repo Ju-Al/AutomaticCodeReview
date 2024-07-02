@@ -74,7 +74,6 @@ class RootContext(object):
         layer = self._next_layer(top_layer)
         return self.channel.ask("next_layer", layer)
 
-    @tls_sni_check_ignore
     def _next_layer(self, top_layer):
         # 1. Check for --ignore.
         if self.config.check_ignore(top_layer.server_conn.address):

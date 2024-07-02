@@ -1,5 +1,3 @@
-/**
- * @file
  *
  * @brief Provides functions to hash Elektra data structures.
  *
@@ -121,4 +119,3 @@ static void hash_to_string (char string[65], const uint8_t hash[32])
 	{
 		string += sprintf (string, "%02x", hash[i]);
 	}
-}

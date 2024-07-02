@@ -1,7 +1,4 @@
 // Package byzcoin implements the ByzCoin ledger.
-// processOneTx takes one transaction and creates a set of StateChanges. It also returns the temporary StateTrie
-// with the StateChanges applied. Any data from the trie should be read from sst and not the service.
-func (s *Service) processOneTx(sst *stagingStateTrie, tx ClientTransaction) (StateChanges, *stagingStateTrie, error) {
 package byzcoin
 
 import (
@@ -2039,7 +2036,9 @@ func (s *Service) createStateChanges(sst *stagingStateTrie, scID skipchain.SkipB
 	return
 }
 
-// processOneTx takes one transaction and creates a set of StateChanges. It
+// processOneTx takes one transaction and creates a set of StateChanges. It also returns the temporary StateTrie
+// with the StateChanges applied. Any data from the trie should be read from sst and not the service.
+func (s *Service) processOneTx(sst *stagingStateTrie, tx ClientTransaction) (StateChanges, *stagingStateTrie, error) {
 // also returns the temporary StateTrie with the StateChanges applied. Any data
 // from the trie should be read from sst and not the service.
 func (s *Service) processOneTx(sst *stagingStateTrie, tx ClientTransaction) (newStateChanges StateChanges, newStateTrie *stagingStateTrie, err error) {

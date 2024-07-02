@@ -143,7 +143,6 @@ return [
 		'html'     => $html,
 		'expected' => $expected,
 	],
-
 	'testShouldExcludeUsingStringFilter' => [
 		'config' => [
 			'rocket_defer_inline_exclusions_filter' => 'first_string|third_string',

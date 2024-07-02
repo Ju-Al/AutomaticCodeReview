@@ -1,7 +1,4 @@
 // Provides reusable UI methods relating to the archiving and restoring documents
-        const hasChildren = isPage && doc._children && doc._children.length;
-        if (hasChildren) {
-          description += `, which has ${doc._children.length} child ${plainType}${doc._children.length > 1 ? 's' : ''}`;
 import AposAdvisoryLockMixin from 'Modules/@apostrophecms/ui/mixins/AposAdvisoryLockMixin';
 
 export default {
@@ -14,8 +11,10 @@ export default {
 
     async archive(doc) {
       try {
+        const hasChildren = isPage && doc._children && doc._children.length;
+        if (hasChildren) {
+          description += `, which has ${doc._children.length} child ${plainType}${doc._children.length > 1 ? 's' : ''}`;
         const moduleOptions = window.apos.modules[doc.type];
-        // Make sure that if there are any modified descendants we know about them
         const isPage = doc.slug.startsWith('/');
         if (isPage) {
           doc = await apos.http.get(`${moduleOptions.action}/${doc._id}`, {

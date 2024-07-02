@@ -1,5 +1,4 @@
 """
-        self.get(self.RESP_TIMES, Counter())
 Aggregating results into DataPoints
 
 Copyright 2015 BlazeMeter Inc.
@@ -70,8 +69,8 @@ class KPISet(BetterDict):
         self.get(self.BYTE_COUNT, 0)
         # vectors
         self.get(self.ERRORS, [])
+        self.get(self.RESP_TIMES, Counter())
         self.get(self.RESP_CODES, Counter())
-        self.get(self.RESP_TIMES, HdrHistogram(1, 60 * 30 * 1000, 3))  # is maximum value of 30 minutes enough?
         self.get(self.PERCENTILES)
         self._concurrencies = BetterDict()  # NOTE: shouldn't it be Counter?
 

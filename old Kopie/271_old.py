@@ -572,7 +572,6 @@ class DefaultOSUtil(object):
                                 expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
-                                    logger.info("entry is not expired")
                                 else:
                                     logger.info("entry is expired")
                             except:

@@ -1,10 +1,4 @@
 /**
-            client->copySyncConfig(syncConfig, [this, request](UnifiedSync *unifiedSync, const SyncError &syncError, error e)
-            {
-                if (!e && !unifiedSync)
-                {
-                    e = API_ENOENT;
-                }
  * @file megaapi_impl.cpp
  * @brief Private implementation of the intermediate layer for the MEGA C++ SDK.
  *
@@ -21666,7 +21660,12 @@ void MegaApiImpl::sendPendingRequests()
                 syncConfig.setError(syncError);
             }
 
-            client->ensureSyncUserAttributes([this, request, syncConfig](Error e){
+            client->copySyncConfig(syncConfig, [this, request](UnifiedSync *unifiedSync, const SyncError &syncError, error e)
+            {
+                if (!e && !unifiedSync)
+                {
+                    e = API_ENOENT;
+                }
 
                 client->copySyncConfig(syncConfig, [this, request](UnifiedSync *unifiedSync, const SyncError &syncError, error e)
                 {

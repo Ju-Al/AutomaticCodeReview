@@ -1,5 +1,3 @@
-/**
- * Copyright Soramitsu Co., Ltd. 2018 All Rights Reserved.
  * http://soramitsu.co.jp
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,4 +92,3 @@ TEST(PipelineIntegrationTest, SendTx) {
       .checkProposal(checkProposal)
       .checkBlock(checkBlock)
       .done();
-}

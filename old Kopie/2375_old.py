@@ -58,7 +58,6 @@ class StatusView(object):
     self._storage_file_path = None
     self._tool_name = tool_name
 
-    if win32console:
       kernel32 = ctypes.windll.kernel32
       stdout_handle = kernel32.GetStdHandle(-11)
       result = kernel32.SetConsoleMode(stdout_handle, 7)

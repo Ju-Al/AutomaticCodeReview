@@ -412,11 +412,6 @@ func (k *KeybaseDaemonRPC) Shutdown() {
 	}
 	if k.keepAliveCancel != nil {
 		k.keepAliveCancel()
-	}
-	k.log.Warning("Keybase service shutdown")
-
-}
-
 // TeamExit (does not) implement keybase1.NotifyTeamInterface.
 func (k *KeybaseDaemonRPC) TeamExit(context.Context, keybase1.TeamID) error {
 	return nil

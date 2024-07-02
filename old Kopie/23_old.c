@@ -1,30 +1,4 @@
 #include <assert.h>
-static void wlr_drm_cursor_bo_update(struct wlr_output_state *output,
-		uint32_t width, uint32_t height) {
-	if (output->cursor_width == width && output->cursor_height == height) {
-		return;
-	}
-	wlr_log(L_DEBUG, "Allocating new cursor bos");
-	struct wlr_backend_state *state =
-		wl_container_of(output->renderer, state, renderer);
-	for (size_t i = 0; i < 2; ++i) {
-		output->cursor_bo[i] = gbm_bo_create(state->renderer.gbm,
-				width, height, GBM_FORMAT_ARGB8888,
-				GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
-		if (!output->cursor_bo[i]) {
-			wlr_log(L_ERROR, "Failed to create cursor bo");
-			return;
-		}
-		if (!get_fb_for_bo(state->fd, output->cursor_bo[i])) {
-			wlr_log(L_ERROR, "Failed to create cursor fb");
-			return;
-		}
-	}
-}
-
-	struct wlr_backend_state *state =
-		wl_container_of(output->renderer, state, renderer);
-	wlr_drm_cursor_bo_update(output, width, height);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -322,9 +296,34 @@ static void wlr_drm_output_transform(struct wlr_output_state *output,
 	output->wlr_output->transform = transform;
 }
 
+static void wlr_drm_cursor_bo_update(struct wlr_output_state *output,
+		uint32_t width, uint32_t height) {
+	if (output->cursor_width == width && output->cursor_height == height) {
+		return;
+	}
+	wlr_log(L_DEBUG, "Allocating new cursor bos");
+	struct wlr_backend_state *state =
+		wl_container_of(output->renderer, state, renderer);
+	for (size_t i = 0; i < 2; ++i) {
+		output->cursor_bo[i] = gbm_bo_create(state->renderer.gbm,
+				width, height, GBM_FORMAT_ARGB8888,
+				GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
+		if (!output->cursor_bo[i]) {
+			wlr_log(L_ERROR, "Failed to create cursor bo");
+			return;
+		}
+		if (!get_fb_for_bo(state->fd, output->cursor_bo[i])) {
+			wlr_log(L_ERROR, "Failed to create cursor fb");
+			return;
+		}
+	}
+}
+
 static bool wlr_drm_output_set_cursor(struct wlr_output_state *output,
 		const uint8_t *buf, int32_t stride, uint32_t width, uint32_t height) {
-	struct wlr_backend_state *state = wl_container_of(output->renderer, state, renderer);
+	struct wlr_backend_state *state =
+	wlr_drm_cursor_bo_update(output, width, height);
+		wl_container_of(output->renderer, state, renderer);
 	if (!buf) {
 		drmModeSetCursor(state->fd, output->crtc, 0, 0, 0);
 		return true;

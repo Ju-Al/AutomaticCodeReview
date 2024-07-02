@@ -29,7 +29,6 @@ namespace MvvmCross.Binding.Droid.Target
 
         protected override void SetValueImpl(object target, object value)
         {
-            if (target is SearchView sv)
                 sv.SetQuery((string)value, true);
         }
 

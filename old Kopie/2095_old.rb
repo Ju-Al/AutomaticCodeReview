@@ -1,22 +1,5 @@
 # Copyright (C) 2020 MongoDB Inc.
-    private
-
-    # Populates the cursor's cached documents if all of the results of the
-    # query fit in the first batch (cursor_id is zero) and the first batch
-    # of results have not been iterated yet. If the result set exceeds the
-    # batch size and a CachingCursor is iterated more than once, an error
-    # is returned.
 #
-    # @return [ Array <BSON::Document> ] The documents returned by the
-    # get_more_operation.
-    def process(result)
-      documents = super
-      if @cursor_id.zero? && !@after_first_batch
-        @cached_docs ||= []
-        @cached_docs.concat(documents)
-      end
-      @after_first_batch = true
-      documents
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -76,7 +59,23 @@ module Mongo
       "#<Mongo::CachingCursor:0x#{object_id} @view=#{@view.inspect}>"
     end
 
-    # Acquires the next document for cursor iteration and then
+    private
+
+    # Populates the cursor's cached documents if all of the results of the
+    # query fit in the first batch (cursor_id is zero) and the first batch
+    # of results have not been iterated yet. If the result set exceeds the
+    # batch size and a CachingCursor is iterated more than once, an error
+    # @return [ Array <BSON::Document> ] The documents returned by the
+    # get_more_operation.
+    def process(result)
+      documents = super
+      if @cursor_id.zero? && !@after_first_batch
+        @cached_docs ||= []
+        @cached_docs.concat(documents)
+      end
+      @after_first_batch = true
+      documents
+    # is returned.
     # inserts that document in the @cached_docs array.
     #
     # @api private

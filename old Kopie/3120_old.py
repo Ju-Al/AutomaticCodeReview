@@ -48,7 +48,6 @@ def sigmoid_focal_loss(pred,
                        alpha=0.25,
                        reduction='mean',
                        avg_factor=None):
-    """A warpper of cuda version
     `Focal Loss <https://arxiv.org/abs/1708.02002>`_
 
     Args:

@@ -1,5 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                _logger.LogError($"Failed to get ACR access token with ACR refresh token. Status code: {accessTokenResponse.StatusCode}.");
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -169,7 +168,7 @@ namespace Microsoft.Health.Fhir.Azure.ContainerRegistry
             }
             else if (!accessTokenResponse.IsSuccessStatusCode)
             {
-                _logger.LogError("Failed to get ACR access token with ACR refresh token. Status code: {0}.", accessTokenResponse.StatusCode);
+                _logger.LogError($"Failed to get ACR access token with ACR refresh token. Status code: {accessTokenResponse.StatusCode}.");
                 throw new AzureContainerRegistryTokenException(Resources.CannotGetAcrAccessToken, accessTokenResponse.StatusCode);
             }
 

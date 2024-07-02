@@ -1,5 +1,4 @@
 // 
-                    throw;  // TODO NLog 5.0 throw NLogConfigurationException. Maybe also include entire input layout-string (if not too long)
 // Copyright (c) 2004-2020 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
@@ -442,7 +441,7 @@ namespace NLog.Layouts
             {
                 if (throwConfigExceptions ?? LogManager.ThrowConfigExceptions ?? LogManager.ThrowExceptions)
                 {
-                    throw new NLogConfigurationException("Error parsing layout {0}", name);
+                    throw;  // TODO NLog 5.0 throw NLogConfigurationException. Maybe also include entire input layout-string (if not too long)
                 }
                 InternalLogger.Error(ex, "Error parsing layout {0} will be ignored.", name);
                 // replace with empty values

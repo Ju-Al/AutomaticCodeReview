@@ -115,7 +115,6 @@ public final class Sinks {
      *     map.put(key, value);
      * </pre>
      *
-     * <b>Note:</b> This operation is <em>NOT</em> lock-aware, it will process the entries
      * no matter if they are locked or not.
      *
      * @param mapName   name of the map

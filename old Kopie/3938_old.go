@@ -1,10 +1,4 @@
 /*
-	pk, err := kube.SecretTLSKeyRef(ctx, a.secretsLister, ns, privateKeySelector.Name, privateKeySelector.Key)
-			s := messageAccountRegistrationFailed + err.Error()
-			apiutil.SetIssuerCondition(a.issuer, a.issuer.GetGeneration(), v1.IssuerConditionReady, cmmeta.ConditionFalse, errorAccountRegistrationFailed, s)
-			return fmt.Errorf(s)
-		wrapErr := fmt.Errorf(messageAccountVerificationFailed+"the ACME issuer config has 'disableAccountKeyGeneration' set to true, but the secret was not found: %w", err)
-		apiutil.SetIssuerCondition(a.issuer, a.issuer.GetGeneration(), v1.IssuerConditionReady, cmmeta.ConditionFalse, errorAccountVerificationFailed, wrapErr.Error())
 Copyright 2020 The cert-manager Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -110,7 +104,12 @@ func (a *Acme) Setup(ctx context.Context) error {
 	// if it contains invalid data, warn the user and return without error.
 	// if any other error occurs, return it and retry.
 	privateKeySelector := acme.PrivateKeySelector(a.issuer.GetSpec().ACME.PrivateKey)
-	pk, err := a.keyFromSecret(ctx, ns, privateKeySelector.Name, privateKeySelector.Key)
+			s := messageAccountRegistrationFailed + err.Error()
+			apiutil.SetIssuerCondition(a.issuer, a.issuer.GetGeneration(), v1.IssuerConditionReady, cmmeta.ConditionFalse, errorAccountRegistrationFailed, s)
+			return fmt.Errorf(s)
+		wrapErr := fmt.Errorf(messageAccountVerificationFailed+"the ACME issuer config has 'disableAccountKeyGeneration' set to true, but the secret was not found: %w", err)
+		apiutil.SetIssuerCondition(a.issuer, a.issuer.GetGeneration(), v1.IssuerConditionReady, cmmeta.ConditionFalse, errorAccountVerificationFailed, wrapErr.Error())
+	pk, err := kube.SecretTLSKeyRef(ctx, a.secretsLister, ns, privateKeySelector.Name, privateKeySelector.Key)
 	switch {
 	case !a.issuer.GetSpec().ACME.DisableAccountKeyGeneration && apierrors.IsNotFound(err):
 		log.V(logf.InfoLevel).Info("generating acme account private key")

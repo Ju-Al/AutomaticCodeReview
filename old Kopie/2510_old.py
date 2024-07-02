@@ -75,7 +75,6 @@ class AlterModule(ModuleCommand, sd.AlterObject[Module]):
 
 class DeleteModule(ModuleCommand, sd.DeleteObject[Module]):
     astnode = qlast.DropModule
-
     def _validate_legal_command(
         self,
         schema: s_schema.Schema,

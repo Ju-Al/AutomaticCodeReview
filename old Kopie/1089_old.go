@@ -1,7 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
-	// A transaction may change an account's SpendingKey to "re-key" the account.
-	SpendingKey Address `codec:"spend"`
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -140,7 +137,9 @@ type AccountData struct {
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
-	// EffectiveAddr is the address against which signatures/multisigs/logicsigs should be checked.
+	// A transaction may change an account's SpendingKey to "re-key" the account.
+	SpendingKey Address `codec:"spend"`
+	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
 	// A transaction may change an account's EffectiveAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.

@@ -1,5 +1,4 @@
 using System;
-
 public struct CurrencyAmount
 {
     private decimal amount;

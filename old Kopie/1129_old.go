@@ -106,7 +106,6 @@ func fastcgiParse(c *caddy.Controller) ([]Rule, error) {
 					return rules, c.ArgErr()
 				}
 				rule.IgnoredSubPaths = ignoredPaths
-			case "pool":
 				if !c.NextArg() {
 					return rules, c.ArgErr()
 				}

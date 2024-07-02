@@ -1,5 +1,4 @@
 /**
-            options.setUserName("?SDK=Android&Version=" + SDK_VERSION);
  * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -832,7 +831,7 @@ public class AWSIotMqttManager {
         options.setKeepAliveInterval(userKeepAlive);
 
         if (isMetricsEnabled()) {
-            StringBuilder username = new StringBuilder("?SDK=Android&Version=" + SDK_VERSION);
+            options.setUserName("?SDK=Android&Version=" + SDK_VERSION);
 
             if (usernameFields != null) {
                 // Append each of the user-specified key-value pair to the username field for the connection

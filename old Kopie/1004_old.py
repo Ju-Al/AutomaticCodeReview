@@ -1,474 +1,474 @@
-#! /usr/bin/env python
+# Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
 #
-# scapy.contrib.description = TZSP
-# scapy.contrib.status = loads
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""
-    TZSP - TaZmen Sniffer Protocol
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#pylint: disable=no-member
+from collections import deque
+from nvidia.dali import backend as b
+from nvidia.dali import edge as Edge
+from nvidia.dali import types
+from threading import local as tls
 
-    :author:    Thomas Tannhaeuser, hecke@naberius.de
-    :license:   GPLv2
-
-        This module is free software; you can redistribute it and/or
-        modify it under the terms of the GNU General Public License
-        as published by the Free Software Foundation; either version 2
-        of the License, or (at your option) any later version.
-
-        This module is distributed in the hope that it will be useful,
-        but WITHOUT ANY WARRANTY; without even the implied warranty of
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-        GNU General Public License for more details.
-
-    :description:
-
-        This module provides Scapy layers for the TZSP protocol.
-
-        references:
-            - https://en.wikipedia.org/wiki/TZSP
-            - https://web.archive.org/web/20050404125022/http://www.networkchemistry.com/support/appnotes/an001_tzsp.html
-
-    :NOTES:
-        - to allow Scapy to dissect this layer automatically, you need to bind the TZSP layer to UDP using
-          the default TZSP port (0x9090), e.g.
-
-            bind_layers(UDP, TZSP, sport=TZSP_PORT_DEFAULT)
-            bind_layers(UDP, TZSP, dport=TZSP_PORT_DEFAULT)
-
-        - packet format definition from www.networkchemistry.com is different from the one given by wikipedia
-        - seems Wireshark implements the wikipedia protocol version (didn't dive into their code)
-        - observed (miss)behavior of Wireshark (2.2.6)
-          - fails to decode RSSI & SNR using short values - only one byte taken
-          - SNR is labeled as silence
-          - WlanRadioHdrSerial is labeled as Sensor MAC
-          - doesn't know the packet count tag (40 / 0x28)
-
-"""
-from scapy.contrib.avs import AVSWLANHeader
-from scapy.error import warning
-from scapy.fields import ByteField, ShortEnumField, IntField, FieldLenField
-from scapy.layers.dot11 import Packet, Dot11, PrismHeader
-from scapy.layers.l2 import Ether, \
-    struct, StrLenField, ByteEnumField, \
-    ShortField, Scapy_Exception
-from scapy.modules.six.moves import range
-from scapy.packet import Raw
+pipeline_tls = tls()
 
 
-TZSP_PORT_DEFAULT = 0x9090
+class Pipeline(object):
+    """Pipeline class encapsulates all data required to define and run
+    DALI input pipeline.
 
-
-class TZSP(Packet):
-    TYPE_RX_PACKET = 0x00
-    TYPE_TX_PACKET = 0x01
-    TYPE_CONFIG = 0x03
-    TYPE_KEEPALIVE = TYPE_NULL = 0x04
-    TYPE_PORT = 0x05
-
-    TYPES = {
-        TYPE_RX_PACKET: 'RX_PACKET',
-        TYPE_TX_PACKET: 'TX_PACKET',
-        TYPE_CONFIG: 'CONFIG',
-        TYPE_NULL: 'KEEPALIVE/NULL',
-        TYPE_PORT: 'PORT',
-    }
-
-    ENCAPSULATED_ETHERNET = 0x01
-    ENCAPSULATED_IEEE_802_11 = 0x12
-    ENCAPSULATED_PRISM_HEADER = 0x77
-    ENCAPSULATED_WLAN_AVS = 0x7f
-
-    ENCAPSULATED_PROTOCOLS = {
-        ENCAPSULATED_ETHERNET: 'ETHERNET',
-        ENCAPSULATED_IEEE_802_11: 'IEEE 802.11',
-        ENCAPSULATED_PRISM_HEADER: 'PRISM HEADER',
-        ENCAPSULATED_WLAN_AVS: 'WLAN AVS'
-    }
-
-    ENCAPSULATED_PROTOCOL_CLASSES = {
-        ENCAPSULATED_ETHERNET: Ether,
-        ENCAPSULATED_IEEE_802_11: Dot11,
-        ENCAPSULATED_PRISM_HEADER: PrismHeader,
-        ENCAPSULATED_WLAN_AVS: AVSWLANHeader
-    }
-
-    fields_desc = [
-        ByteField('version', 0x01),
-        ByteEnumField('type', TYPE_RX_PACKET, TYPES),
-        ShortEnumField('encapsulated_protocol', ENCAPSULATED_ETHERNET, ENCAPSULATED_PROTOCOLS)
-    ]
-
-    def get_encapsulated_payload_class(self):
-        """
-        get the class that holds the encapsulated payload of the TZSP packet
-        :return: class representing the payload, Raw() on error
-        """
-
-        try:
-            return TZSP.ENCAPSULATED_PROTOCOL_CLASSES[self.encapsulated_protocol]
-        except KeyError:
-            warning(
-                'unknown or invalid encapsulation type (%i) - returning payload as raw()' % self.encapsulated_protocol)
-            return Raw
-
-    def guess_payload_class(self, payload):
-        if self.type == TZSP.TYPE_KEEPALIVE:
-            if len(payload):
-                warning('payload (%i bytes) in KEEPALIVE/NULL packet' % len(payload))
-            return Raw
+    Parameters
+    ----------
+    `batch_size` : int, optional, default = -1
+        Batch size of the pipeline. Negative values for this parameter
+        are invalid - the default value may only be used with
+        serialized pipeline (the value stored in serialized pipeline
+        is used instead).
+    `num_threads` : int, optional, default = -1
+        Number of CPU threads used by the pipeline.
+        Negative values for this parameter are invalid - the default
+        value may only be used with serialized pipeline (the value
+        stored in serialized pipeline is used instead).
+    `device_id` : int, optional, default = -1
+        Id of GPU used by the pipeline.
+        Negative values for this parameter are invalid - the default
+        value may only be used with serialized pipeline (the value
+        stored in serialized pipeline is used instead).
+    `seed` : int, optional, default = -1
+        Seed used for random number generation. Leaving the default value
+        for this parameter results in random seed.
+    `exec_pipelined` : bool, optional, default = True
+        Whether to execute the pipeline in a way that enables
+        overlapping CPU and GPU computation, typically resulting
+        in faster execution speed, but larger memory consumption.
+    `exec_async` : bool, optional, default = True
+        Whether to execute the pipeline asynchronously.
+        This makes :meth:`nvidia.dali.pipeline.Pipeline.run` method
+        run asynchronously with respect to the calling Python thread.
+        In order to synchronize with the pipeline one needs to call
+        :meth:`nvidia.dali.pipeline.Pipeline.outputs` method.
+    `bytes_per_sample` : int, optional, default = 0
+        A hint for DALI for how much memory to use for its tensors.
+    `set_affinity` : bool, optional, default = False
+        Whether to set CPU core affinity to the one closest to the
+        GPU being used.
+    `max_streams` : int, optional, default = -1
+        Limit the number of CUDA streams used by the executor.
+        Value of -1 does not impose a limit.
+        This parameter is currently unused (and behavior of
+        unrestricted number of streams is assumed).
+    `prefetch_queue_depth` : int or {"cpu_size": int, "gpu_size": int}, optional, default = 2
+        Depth of the executor pipeline. Deeper pipeline makes DALI
+        more resistant to uneven execution time of each batch, but it
+        also consumes more memory for internal buffers.
+        Specifying a dict:
+        ``{ "cpu_size": x, "gpu_size": y }``
+        instead of integer will cause the pipeline to use separated
+        queues executor, with buffer queue size `x` for cpu stage
+        and `y` for mixed and gpu stages. It is not supported when both `exec_async`
+        and `exec_pipelined` are set to `False`.
+        Executor will buffer cpu and gpu stages separatelly,
+        and will fill the buffer queues when the first :meth:`nvidia.dali.pipeline.Pipeline.run`
+        is issued.
+    """
+    def __init__(self, batch_size = -1, num_threads = -1, device_id = -1, seed = -1,
+                 exec_pipelined=True, prefetch_queue_depth=2,
+                 exec_async=True, bytes_per_sample=0,
+                 set_affinity=False, max_streams=-1, default_cuda_stream_priority = 0):
+        self._batch_size = batch_size
+        self._num_threads = num_threads
+        self._device_id = device_id
+        self._seed = seed
+        self._exec_pipelined = exec_pipelined
+        self._built = False
+        self._first_iter = True
+        self._last_iter = False
+        self._batches_to_consume = 0
+        self._cpu_batches_to_consume = 0
+        self._gpu_batches_to_consume = 0
+        self._prepared = False
+        self._names_and_devices = None
+        self._exec_async = exec_async
+        self._bytes_per_sample = bytes_per_sample
+        self._set_affinity = set_affinity
+        self._max_streams = max_streams
+        self._default_cuda_stream_priority = default_cuda_stream_priority
+        if type(prefetch_queue_depth) is dict:
+            self._exec_separated = True
+            self._cpu_queue_size = prefetch_queue_depth["cpu_size"]
+            self._gpu_queue_size = prefetch_queue_depth["gpu_size"]
+            self._prefetch_queue_depth = self._cpu_queue_size  # dummy value, that will be ignored
+        elif type(prefetch_queue_depth) is int:
+            self._exec_separated = False
+            self._prefetch_queue_depth = prefetch_queue_depth
+            self._cpu_queue_size = prefetch_queue_depth
+            self._gpu_queue_size = prefetch_queue_depth
         else:
-            return _tzsp_guess_next_tag(payload)
+            raise TypeError("Expected prefetch_queue_depth to be either int or Dict[int, int]")
 
-    def get_encapsulated_payload(self):
+    @property
+    def batch_size(self):
+        """Batch size."""
+        return self._batch_size
 
-        has_encapsulated_data = self.type == TZSP.TYPE_RX_PACKET or self.type == TZSP.TYPE_TX_PACKET
+    @property
+    def num_threads(self):
+        """Number of CPU threads used by the pipeline."""
+        return self._num_threads
 
-        if has_encapsulated_data:
-            end_tag_lyr = self.payload.getlayer(TZSPTagEnd)
-            if end_tag_lyr:
-                return end_tag_lyr.payload
+    @property
+    def device_id(self):
+        """Id of the GPU used by the pipeline."""
+        return self._device_id
+
+    def epoch_size(self, name = None):
+        """Epoch size of a pipeline.
+
+        If the `name` parameter is `None`, returns a dictionary of pairs
+        `(reader name, epoch size for that reader)`.
+        If the `name` parameter is not `None`, returns epoch size for that
+        reader.
+
+        Parameters
+        ----------
+        name : str, optional, default = None
+            The reader which should be used to obtain epoch size.
+        """
+
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if name is not None:
+            return self._pipe.epoch_size(name)
+        return self._pipe.epoch_size()
+
+    @staticmethod
+    def current():
+        return getattr(pipeline_tls, 'current_pipeline', None)
+
+    @staticmethod
+    def set_current(pipeline):
+        prev = Pipeline.current()
+        pipeline_tls.current_pipeline = pipeline
+        return prev
+
+    def add_sink(self, edge):
+        self._sinks.append(edge)
+
+    def _prepare_graph(self):
+        self._pipe = b.Pipeline(self._batch_size,
+                                self._num_threads,
+                                self._device_id,
+                                self._seed,
+                                self._exec_pipelined,
+                                self._prefetch_queue_depth,
+                                self._exec_async,
+                                self._bytes_per_sample,
+                                self._set_affinity,
+                                self._max_streams,
+                                self._default_cuda_stream_priority)
+        self._pipe.SetExecutionTypes(self._exec_pipelined, self._exec_separated, self._exec_async)
+        self._pipe.SetQueueSizes(self._cpu_queue_size, self._gpu_queue_size)
+        prev_pipeline = Pipeline.set_current(self)
+        outputs = self.define_graph()
+        Pipeline.set_current(prev_pipeline)
+        if (not isinstance(outputs, tuple) and
+            not isinstance(outputs, list)):
+            outputs = (outputs,)
+
+        for output in outputs:
+            if not isinstance(output, Edge.EdgeReference):
+                raise TypeError(
+                    ("Expected outputs of type "
+                    "EdgeReference. Received "
+                    "output type {}")
+                    .format(type(output).__name__)
+                )
+
+        # Backtrack to construct the graph
+        op_ids = set()
+        edges = deque(list(outputs) + self._sinks)
+        ops = []
+        while edges:
+            current_edge = edges.popleft()
+            source_op = current_edge.source
+            if source_op is None:
+                raise RuntimeError(
+                    "Pipeline encountered "
+                    "Edge with no source op.")
+
+            # To make sure we don't double count ops in
+            # the case that they produce more than one
+            # output, we keep track of the unique op ids
+            # for each op we encounter and only add the
+            # op if we have not already
+            if source_op.id not in op_ids:
+                op_ids.add(source_op.id)
+                source_op.check_args()
+                ops.append(source_op)
             else:
-                return None
+                # If the op was already added, we need to
+                # change its position to the top of the list.
+                # This ensures topological ordering of ops
+                # when adding to the backend pipeline
+                ops.remove(source_op)
+                ops.append(source_op)
+            for edge in source_op.inputs:
+                if isinstance(edge, list):
+                    for e in edge:
+                        edges.append(e)
+                else:
+                    edges.append(edge)
 
+        # Add the ops to the graph and build the backend
+        while ops:
+            op = ops.pop()
+            self._pipe.AddOperator(op.spec, op.name)
+        self._prepared = True
+        self._names_and_devices = [(e.name, e.device) for e in outputs]
 
-def _tzsp_guess_next_tag(payload):
-    """
-    :return: class representing the next tag, Raw on error, None on missing payload
-    """
+    def build(self):
+        """Build the pipeline.
 
-    if not payload:
-        warning('missing payload')
-        return None
-
-    tag_type = struct.unpack('!B', payload[0])[0]
-
-    try:
-        tag_class_definition = _TZSP_TAG_CLASSES[tag_type]
-
-    except KeyError:
-        warning('invalid or unknown tag type (%i) - treat remaining payload as Raw()' % tag_type)
-        return Raw
-
-    if type(tag_class_definition) is not dict:
-        return tag_class_definition
-
-    try:
-        length = struct.unpack('!B', payload[1])[0]
-    except IndexError:
-        length = None
-
-    if not length:
-        warning('no tag length given - packet to short')
-        return Raw
-
-    try:
-        return tag_class_definition[length]
-    except KeyError:
-        warning('invalid tag length {} for tag type {}'.format(length, tag_type))
-        return Raw
-
-
-class _TZSPTag(Packet):
-    TAG_TYPE_PADDING = 0x00
-    TAG_TYPE_END = 0x01
-    TAG_TYPE_RAW_RSSI = 0x0a
-    TAG_TYPE_SNR = 0x0b
-    TAG_TYPE_DATA_RATE = 0x0c
-    TAG_TYPE_TIMESTAMP = 0x0d
-    TAG_TYPE_CONTENTION_FREE = 0x0f
-    TAG_TYPE_DECRYPTED = 0x10
-    TAG_TYPE_FCS_ERROR = 0x11
-    TAG_TYPE_RX_CHANNEL = 0x12
-    TAG_TYPE_PACKET_COUNT = 0x28
-    TAG_TYPE_RX_FRAME_LENGTH = 0x29
-    TAG_TYPE_WLAN_RADIO_HDR_SERIAL = 0x3c
-
-    TAG_TYPES = {
-        TAG_TYPE_PADDING: 'PADDING',
-        TAG_TYPE_END: 'END',
-        TAG_TYPE_RAW_RSSI: 'RAW_RSSI',
-        TAG_TYPE_SNR: 'SNR',
-        TAG_TYPE_DATA_RATE: 'DATA_RATE',
-        TAG_TYPE_TIMESTAMP: 'TIMESTAMP',
-        TAG_TYPE_CONTENTION_FREE: 'CONTENTION_FREE',
-        TAG_TYPE_DECRYPTED: 'DECRYPTED',
-        TAG_TYPE_FCS_ERROR: 'FCS_ERROR',
-        TAG_TYPE_RX_CHANNEL: 'RX_CHANNEL',
-        TAG_TYPE_PACKET_COUNT: 'PACKET_COUNT',
-        TAG_TYPE_RX_FRAME_LENGTH: 'RX_FRAME_LENGTH',
-        TAG_TYPE_WLAN_RADIO_HDR_SERIAL: 'WLAN_RADIO_HDR_SERIAL'
-    }
-
-    def guess_payload_class(self, payload):
-        return _tzsp_guess_next_tag(payload)
-
-
-class TZSPStructureException(Scapy_Exception):
-    pass
-
-
-class TZSPTagPadding(_TZSPTag):
-    """
-    padding tag (should be ignored)
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_PADDING, _TZSPTag.TAG_TYPES),
-    ]
-
-
-class TZSPTagEnd(Packet):
-    """
-    last tag
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_END, _TZSPTag.TAG_TYPES),
-    ]
-
-    def guess_payload_class(self, payload):
+        Pipeline needs to be built in order to run it standalone.
+        Framework-specific plugins handle this step automatically.
         """
-        the type of the payload encapsulation is given be the outer TZSP layers attribute encapsulation_protocol
-        """
+        if self._built:
+            return
 
-        under_layer = self.underlayer
-        tzsp_header = None
+        if not self._prepared:
+            self._prepare_graph()
 
-        while under_layer:
-            if isinstance(under_layer, TZSP):
-                tzsp_header = under_layer
-                break
-            under_layer = under_layer.underlayer
+        self._pipe.Build(self._names_and_devices)
+        self._built = True
 
-        if tzsp_header:
-
-            return tzsp_header.get_encapsulated_payload_class()
+    def feed_input(self, ref, data, layout=types.NHWC):
+        """Bind the NumPy array to a tensor produced by ExternalSource
+        operator. It is worth mentioning that `ref` should not be overriden
+        with other operator outputs."""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if not isinstance(ref, Edge.EdgeReference):
+            raise TypeError(
+                ("Expected argument one to "
+                "be EdgeReference. "
+                "Received output type {}")
+                .format(type(ref).__name__)
+            )
+        if isinstance(data, list):
+            if self._batch_size != len(data):
+                raise RuntimeError("Data list provided to feed_input needs to have batch_size length")
+            inputs = []
+            for datum in data:
+                inputs.append(Edge.TensorCPU(datum, layout))
+            self._pipe.SetExternalTensorInput(ref.name, inputs)
         else:
-            raise TZSPStructureException('missing parent TZSP header')
+            inp = Edge.TensorListCPU(data, layout)
+            self._pipe.SetExternalTLInput(ref.name, inp)
+
+    def _run_cpu(self):
+        """Run CPU portion of the pipeline."""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if not self._last_iter:
+            self._pipe.RunCPU()
+            self._cpu_batches_to_consume += 1
+
+    def _run_gpu(self):
+        """Run GPU portion of the pipeline."""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if self._cpu_batches_to_consume > 0:
+            self._pipe.RunGPU()
+            self._cpu_batches_to_consume -= 1
+            self._gpu_batches_to_consume += 1
+
+    def outputs(self):
+        """Returns the outputs of the pipeline and releases previous buffer.
+
+        If the pipeline is executed asynchronously, this function blocks
+        until the results become available. It rises StopIteration if data set
+        reached its end - usually when iter_setup cannot produce any more data"""
+        if self._batches_to_consume == 0 or self._gpu_batches_to_consume == 0:
+            raise StopIteration
+        self._batches_to_consume -= 1
+        self._gpu_batches_to_consume -= 1
+        return self._outputs()
+
+    def _share_outputs(self):
+        """Returns the outputs of the pipeline.
+
+        Main difference to outputs is that _share_outputs doesn't release
+        returned buffers, _release_outputs need to be called for that.
+        If the pipeline is executed asynchronously, this function blocks
+        until the results become available."""
+        return self._pipe.ShareOutputs()
+
+    def _release_outputs(self):
+        """Release buffers returned by _share_outputs calls.
+
+        It helps in case when output call result is consumed (copied)
+        and buffers can be set free before next _share_outputs call"""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        return self._pipe.ReleaseOutputs()
+
+    def _outputs(self):
+        """Release buffers previously returned and returns  the calls.
+
+        Calling this function is equivalent to calling _release_outputs
+        then calling _share_outputs"""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        return self._pipe.Outputs()
+
+    def run(self):
+        """Run the pipeline and return the result.
+
+        If the pipeline was created with `exec_pipelined` option set to `True`,
+        this function will also start prefetching the next iteration for
+        faster execution."""
+        self._run()
+        return self.outputs()
+
+    def _run(self):
+        """Run the pipeline without returning the results."""
+        if self._first_iter and self._exec_pipelined:
+            self._prefetch()
+        else:
+            self._run_once()
+
+    def _prefetch(self):
+        """Executes pipeline to fill executor's pipeline."""
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if self._exec_separated:
+            self._fill_separated_queues()
+        else:
+            for _ in range(self._prefetch_queue_depth):
+                self._run_once()
+        self._first_iter = False
 
 
-class TZSPTagRawRSSIByte(_TZSPTag):
-    """
-    relative received signal strength - signed byte value
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_RAW_RSSI, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteField('raw_rssi', 0)
-    ]
+    def _run_once(self):
+        """Start running the whole pipeline once without waiting for its results.
+
+        If the pipeline was created with `exec_async` option set to `True`,
+        this function will return without waiting for the execution to end."""
+        try:
+            if not self._last_iter:
+                self.iter_setup()
+                self._batches_to_consume += 1
+            # Special case to prevent a deadlock if user didn't release the only buffer
+            if not self._exec_async and self._prefetch_queue_depth == 1:
+                self._release_outputs()
+            self._run_cpu()
+            self._run_gpu()
+        except StopIteration:
+            self._last_iter = True
+
+    def _run_up_to(self, stage_name):
+        """Call the `_run_X` up to `stage_name` (inclusive).
+        """
+        try:
+            if not self._last_iter:
+                self.iter_setup()
+                self._batches_to_consume += 1
+                self._run_cpu()
+                if stage_name == "cpu":
+                    return
+                self._run_gpu()
+                if stage_name == "gpu":
+                    return
+        except StopIteration:
+            self._last_iter = True
 
 
-class TZSPTagRawRSSIShort(_TZSPTag):
-    """
-    relative received signal strength - signed short value
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_RAW_RSSI, _TZSPTag.TAG_TYPES),
-        ByteField('len', 2),
-        ShortField('raw_rssi', 0)
-    ]
+    def _fill_separated_queues(self):
+        """When using separated execution fill each of the prefetch queues
+        """
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        if not self._first_iter:
+            raise RuntimeError("Queues can be filled only on first iteration.")
+        if not self._exec_separated:
+            raise RuntimeError("This function should be only used with separated execution.")
+        for i in range(self._gpu_queue_size):
+            self._run_up_to("gpu")
+        for i in range(self._cpu_queue_size):
+            self._run_up_to("cpu")
 
+    def reset(self):
+        """Resets pipeline iterator
 
-class TZSPTagSNRByte(_TZSPTag):
-    """
-    signal noise ratio - signed byte value
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_SNR, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteField('snr', 0)
-    ]
+        If pipeline iterator reached the end then reset its state to the beginning.
+        """
+        if self._last_iter:
+            self._first_iter = True
+            self._last_iter = False
 
+    def serialize(self):
+        """Serialize the pipeline to a Protobuf string."""
+        if not self._prepared:
+            self._prepare_graph()
+            self._pipe.SetOutputNames(self._names_and_devices)
+        return self._pipe.SerializeToProtobuf()
 
-class TZSPTagSNRShort(_TZSPTag):
-    """
-    signal noise ratio - signed short value
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_SNR, _TZSPTag.TAG_TYPES),
-        ByteField('len', 2),
-        ShortField('snr', 0)
-    ]
+    def deserialize_and_build(self, serialized_pipeline):
+        """Deserialize and build the pipeline given in serialized form.
 
+        Parameters
+        ----------
+        serialized_pipeline : str
+                              Serialized pipeline.
+        """
+        self._pipe = b.Pipeline(serialized_pipeline,
+                                self._batch_size,
+                                self._num_threads,
+                                self._device_id,
+                                self._exec_pipelined,
+                                self._prefetch_queue_depth,
+                                self._exec_async,
+                                self._bytes_per_sample,
+                                self._set_affinity,
+                                self._max_streams,
+                                self._default_cuda_stream_priority)
+        self._pipe.SetExecutionTypes(self._exec_pipelined, self._exec_separated, self._exec_async)
+        self._pipe.SetQueueSizes(self._cpu_queue_size, self._gpu_queue_size)
+        self._prepared = True
+        self._pipe.Build()
+        self._built = True
 
-class TZSPTagDataRate(_TZSPTag):
-    """
-    wireless link data rate
-    """
-    DATA_RATE_UNKNOWN = 0x00
-    DATA_RATE_1 = 0x02
-    DATA_RATE_2 = 0x04
-    DATA_RATE_5_5 = 0x0B
-    DATA_RATE_6 = 0x0C
-    DATA_RATE_9 = 0x12
-    DATA_RATE_11 = 0x16
-    DATA_RATE_12 = 0x18
-    DATA_RATE_18 = 0x24
-    DATA_RATE_22 = 0x2C
-    DATA_RATE_24 = 0x30
-    DATA_RATE_33 = 0x42
-    DATA_RATE_36 = 0x48
-    DATA_RATE_48 = 0x60
-    DATA_RATE_54 = 0x6C
-    DATA_RATE_LEGACY_1 = 0x0A
-    DATA_RATE_LEGACY_2 = 0x14
-    DATA_RATE_LEGACY_5_5 = 0x37
-    DATA_RATE_LEGACY_11 = 0x6E
+    def save_graph_to_dot_file(self, filename):
+        """Saves the pipeline graph to a file.
 
-    DATA_RATES = {
-        DATA_RATE_UNKNOWN: 'unknown',
-        DATA_RATE_1: '1 MB/s',
-        DATA_RATE_2: '2 MB/s',
-        DATA_RATE_5_5: '5.5 MB/s',
-        DATA_RATE_6: '6 MB/s',
-        DATA_RATE_9: '9 MB/s',
-        DATA_RATE_11: '11 MB/s',
-        DATA_RATE_12: '12 MB/s',
-        DATA_RATE_18: '18 MB/s',
-        DATA_RATE_22: '22 MB/s',
-        DATA_RATE_24: '24 MB/s',
-        DATA_RATE_33: '33 MB/s',
-        DATA_RATE_36: '36 MB/s',
-        DATA_RATE_48: '48 MB/s',
-        DATA_RATE_54: '54 MB/s',
-        DATA_RATE_LEGACY_1: '1 MB/s (legacy)',
-        DATA_RATE_LEGACY_2: '2 MB/s (legacy)',
-        DATA_RATE_LEGACY_5_5: '5.5 MB/s (legacy)',
-        DATA_RATE_LEGACY_11: '11 MB/s (legacy)',
-    }
+        Parameters
+        ----------
+        filename : str
+                   Name of the file to which the graph is written.
+        """
+        if not self._built:
+            raise RuntimeError("Pipeline must be built first.")
+        self._pipe.SaveGraphToDotFile(filename)
 
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_DATA_RATE, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteEnumField('data_rate', DATA_RATE_UNKNOWN, DATA_RATES)
-    ]
+    def define_graph(self):
+        """This function is defined by the user to construct the
+        graph of operations for their pipeline.
 
+        It returns a list of output `EdgeReference`."""
+        raise NotImplementedError
 
-class TZSPTagTimestamp(_TZSPTag):
-    """
-    MAC receive timestamp
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_TIMESTAMP, _TZSPTag.TAG_TYPES),
-        ByteField('len', 4),
-        IntField('timestamp', 0)
-    ]
-
-
-class TZSPTagContentionFree(_TZSPTag):
-    """
-    packet received in contention free period
-    """
-    YES = 0x01
-    NO = 0x00
-
-    CONTENTION_STATES = {
-        NO: 'no',
-        YES: 'yes',
-        range(2, 0xff): 'yes'
-    }
-
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_CONTENTION_FREE, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteEnumField('contention_free', NO, CONTENTION_STATES)
-    ]
-
-
-class TZSPTagDecrypted(_TZSPTag):
-    """
-    packet was decrypted
-    """
-    YES = 0x00
-    NO = 0x01
-
-    DECRYPTION_STATES = {
-        YES: 'yes',
-        NO: 'no',
-        range(2, 0xff): 'no'
-    }
-
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_DECRYPTED, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteEnumField('decrypted', NO, DECRYPTION_STATES)
-    ]
-
-
-class TZSPTagError(_TZSPTag):
-    """
-    frame checksum error
-    """
-    YES = 0x01
-    NO = 0x00
-
-    ERROR_STATES = {
-        NO: 'no',
-        YES: 'yes',
-        range(2, 0xff): 'reserved'
-    }
-
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_FCS_ERROR, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteEnumField('fcs_error', NO, ERROR_STATES)
-    ]
-
-
-class TZSPTagRXChannel(_TZSPTag):
-    """
-    channel the sensor was on while receiving the frame
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_RX_CHANNEL, _TZSPTag.TAG_TYPES),
-        ByteField('len', 1),
-        ByteField('rx_channel', 0)
-    ]
-
-
-class TZSPTagPacketCount(_TZSPTag):
-    """
-    packet counter
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_PACKET_COUNT, _TZSPTag.TAG_TYPES),
-        ByteField('len', 4),
-        IntField('packet_count', 0)
-    ]
-
-
-class TZSPTagRXFrameLength(_TZSPTag):
-    """
-    received packet length
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_RX_FRAME_LENGTH, _TZSPTag.TAG_TYPES),
-        ByteField('len', 2),
-        ShortField('rx_frame_length', 0)
-    ]
-
-
-class TZSPTagWlanRadioHdrSerial(_TZSPTag):
-    """
-    (vendor specific) unique capture device (sensor/AP) identifier
-    """
-    fields_desc = [
-        ByteEnumField('type', _TZSPTag.TAG_TYPE_WLAN_RADIO_HDR_SERIAL, _TZSPTag.TAG_TYPES),
-        FieldLenField('len', None, length_of='sensor_id', fmt='b'),
-        StrLenField('sensor_id', '', length_from=lambda pkt:pkt.len)
-    ]
-
-
-_TZSP_TAG_CLASSES = {
-    _TZSPTag.TAG_TYPE_PADDING: TZSPTagPadding,
-    _TZSPTag.TAG_TYPE_END: TZSPTagEnd,
-    _TZSPTag.TAG_TYPE_RAW_RSSI: {1: TZSPTagRawRSSIByte, 2: TZSPTagRawRSSIShort},
-    _TZSPTag.TAG_TYPE_SNR: {1: TZSPTagSNRByte, 2: TZSPTagSNRShort},
-    _TZSPTag.TAG_TYPE_DATA_RATE: TZSPTagDataRate,
-    _TZSPTag.TAG_TYPE_TIMESTAMP: TZSPTagTimestamp,
-    _TZSPTag.TAG_TYPE_CONTENTION_FREE: TZSPTagContentionFree,
-    _TZSPTag.TAG_TYPE_DECRYPTED: TZSPTagDecrypted,
-    _TZSPTag.TAG_TYPE_FCS_ERROR: TZSPTagError,
-    _TZSPTag.TAG_TYPE_RX_CHANNEL: TZSPTagRXChannel,
-    _TZSPTag.TAG_TYPE_PACKET_COUNT: TZSPTagPacketCount,
-    _TZSPTag.TAG_TYPE_RX_FRAME_LENGTH: TZSPTagRXFrameLength,
-    _TZSPTag.TAG_TYPE_WLAN_RADIO_HDR_SERIAL: TZSPTagWlanRadioHdrSerial
-}
+    def iter_setup(self):
+        """This function can be overriden by user-defined
+        pipeline to perform any needed setup for each iteration.
+        For example, one can use this function to feed the input
+        data from NumPy arrays."""
+        pass

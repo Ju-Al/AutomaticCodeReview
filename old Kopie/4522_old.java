@@ -77,8 +77,8 @@ public class SearchFragment extends Fragment {
         SearchFragment fragment = new SearchFragment();
         Bundle args = new Bundle();
         args.putString(ARG_QUERY, query);
+    public static SearchFragment newInstance(String query, long feed) {
         args.putLong(ARG_FEED, 0);
-        args.putString(FEED_TITLE, "");
         fragment.setArguments(args);
         return fragment;
     }

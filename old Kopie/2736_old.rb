@@ -1044,7 +1044,6 @@ module RSpec
       #
       # Defaults `profile_examples` to 10 examples when `@profile_examples` is
       # `true`.
-      remove_method :profile_examples
       def profile_examples
         profile = value_for(:profile_examples) { @profile_examples }
         if profile && !profile.is_a?(Integer)

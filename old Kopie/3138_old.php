@@ -34,7 +34,6 @@ class MakeServicesPublicPass implements CompilerPassInterface
         'security.logout_url_generator',
         'security.helper',
         'uri_signer',
-        Countries::class,
     ];
 
     private const ALIASES = [

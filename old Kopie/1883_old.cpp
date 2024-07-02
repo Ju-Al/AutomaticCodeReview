@@ -1,6 +1,4 @@
 /**
-      framework::SpecifiedVisitor<StatusType>(),
-      response.get()));
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -67,7 +65,8 @@ TYPED_TEST(ProtoTransactionStatusBuilderTest, TestStatusType) {
                       .build();
 
   ASSERT_NO_THROW(boost::apply_visitor(
-      framework::SpecifiedVisitor<StatusType>(), response.get()));
+      framework::SpecifiedVisitor<StatusType>(),
+      response.get()));
 
   auto proto_status = response.getTransport();
   ASSERT_EQ(proto_status.tx_status(), expected_status);

@@ -1,5 +1,4 @@
 package commands
-			return errMinerAddressRequired
 
 import (
 	"encoding/json"
@@ -116,7 +115,7 @@ var minerStatusCmd = &cobra.Command{
 	PreRunE: checkHubAddressIsSet,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			return errWorkerAddressRequired
+			return errMinerAddressRequired
 		}
 		minerID := args[0]
 

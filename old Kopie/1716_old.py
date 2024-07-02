@@ -194,7 +194,6 @@ class TestLogger(AgentTestCase):
 
             elif x['name'] == 'Context3':
                 self.assertEqual(x['value'], '')
-
     def test_logger_should_log_in_utc(self):
         file_name = "test.log"
         file_path = os.path.join(self.tmp_dir, file_name)

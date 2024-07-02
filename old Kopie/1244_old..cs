@@ -36,7 +36,6 @@ namespace Microsoft.Health.Fhir.Core.Features.Search.Expressions
             TargetResourceType = targetResourceType;
             WildCard = wildCard;
             Reversed = reversed;
-            SourceResourceType = sourceResourceType;
         }
 
         /// <summary>

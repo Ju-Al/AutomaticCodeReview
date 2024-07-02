@@ -1,6 +1,4 @@
 import { NON_DIMENSION_PROPS, NON_BUBBLING_EVENTS } from '../constants';
-		if (!value || isString(value) || isString(old)) {
-			node.style.cssText = value || '';
 import options from '../options';
 import { toLowerCase, isString, isFunction, hashToClassName } from '../util';
 
@@ -37,7 +35,8 @@ export function setAccessor(node, name, old, value, isSvg) {
 		node.className = value || '';
 	}
 	else if (name==='style') {
-		if (!value || typeof value==='string' || typeof old==='string') {
+		if (!value || isString(value) || isString(old)) {
+			node.style.cssText = value || '';
 			node.setAttribute('style', value || '');
 		}
 		if (value && typeof value==='object') {

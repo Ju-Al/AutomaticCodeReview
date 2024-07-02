@@ -1,5 +1,4 @@
 require 'spec_helper'
-
 describe SlackService do
    subject { SlackService }
 

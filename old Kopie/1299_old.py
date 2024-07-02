@@ -50,7 +50,6 @@ def connect(backend=None, host=None, port=None, name=None, max_tries=None,
     # to handle these these additional args. In case of RethinkDBConnection
     # it just does not do anything with it.
     replicaset = replicaset or bigchaindb.config['database'].get('replicaset')
-    ssl = bigchaindb.config['database'].get('ssl') if bigchaindb.config['database'].get('ssl') is not None \
         else ssl
     login = login or bigchaindb.config['database'].get('login')
     password = password or bigchaindb.config['database'].get('password')

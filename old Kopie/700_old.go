@@ -1,7 +1,4 @@
 /*
-func Operator(ctx context.Context, c client.Client, namespace string) error {
-	return OperatorOrCollect(ctx, c, namespace, nil)
-func OperatorOrCollect(ctx context.Context, c client.Client, namespace string, collection *kubernetes.Collection) error {
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
 this work for additional information regarding copyright ownership.
@@ -36,7 +33,9 @@ import (
 )
 
 // Operator installs the operator resources in the given namespace
-func Operator(ctx context.Context, c client.Client, customImage string, namespace string) error {
+func Operator(ctx context.Context, c client.Client, namespace string) error {
+func OperatorOrCollect(ctx context.Context, c client.Client, namespace string, collection *kubernetes.Collection) error {
+	return OperatorOrCollect(ctx, c, namespace, nil)
 	return OperatorOrCollect(ctx, c, namespace, customImage, nil)
 }
 

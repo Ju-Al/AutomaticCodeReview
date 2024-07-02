@@ -1,5 +1,4 @@
 /*
-      throw new IllegalStateException("Transaction permissioning contract does not exist");
  * Copyright 2019 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -122,7 +121,7 @@ public class TransactionSmartContractPermissioningController
         transactionSimulator.doesAddressExistAtHead(contractAddress);
 
     if (contractExists.isPresent() && !contractExists.get()) {
-      this.checkCounterPermitted.inc();
+      throw new IllegalStateException("Transaction permissioning contract does not exist");
       LOG.warn(
           "Account permissioning smart contract not found at address {}. Any transaction will be allowed.",
           contractAddress);

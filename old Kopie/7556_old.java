@@ -1,15 +1,5 @@
 package org.thoughtcrime.securesms.components;
 
-  private RequestBuilder buildThumbnailGlideRequest(@NonNull GlideRequests glideRequests, @NonNull Slide slide) {
-    RequestBuilder builder = glideRequests.load(new DecryptableUri(slide.getThumbnailUri()))
-                                          .transform(new RoundedCorners(radius))
-                                          .centerCrop()
-                                          .transition(withCrossFade());
-    if (slide.isInProgress()) return builder;
-    else                      return builder.apply(RequestOptions.errorOf(R.drawable.ic_missing_thumbnail_picture));
-    return glideRequests.asBitmap()
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
-                        .fitCenter();
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
@@ -305,7 +295,16 @@ public class ThumbnailView extends FrameLayout {
     getTransferControls().showProgressSpinner();
   }
 
-  private GlideRequest buildThumbnailGlideRequest(@NonNull GlideRequests glideRequests, @NonNull Slide slide) {
+  private RequestBuilder buildThumbnailGlideRequest(@NonNull GlideRequests glideRequests, @NonNull Slide slide) {
+                                          .transform(new RoundedCorners(radius))
+                                          .centerCrop()
+                                          .transition(withCrossFade());
+    if (slide.isInProgress()) return builder;
+    else                      return builder.apply(RequestOptions.errorOf(R.drawable.ic_missing_thumbnail_picture));
+    return glideRequests.asBitmap()
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .fitCenter();
+    RequestBuilder builder = glideRequests.load(new DecryptableUri(slide.getThumbnailUri()))
     GlideRequest request = applySizing(glideRequests.load(new DecryptableUri(slide.getThumbnailUri()))
                                           .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                                           .transition(withCrossFade()), new CenterCrop());

@@ -1574,7 +1574,6 @@ class Codebase
         return $completion_items;
     }
 
-    /**
      * @return list<\LanguageServerProtocol\CompletionItem>
      */
     public function getCompletionItemsForType(Type\Union $type): array

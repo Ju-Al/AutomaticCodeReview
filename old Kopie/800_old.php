@@ -1,8 +1,4 @@
 <?php
-					'description' => __( 'Serve cache to mobile devices', 'rocket' ),
-					'help'        => '1234',
-					'description' => __( 'Each logged-in user will receive a specific cache version', 'rocket' ),
-					'help'        => '1234',
 namespace WP_Rocket\Admin\Settings;
 
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
@@ -528,7 +524,10 @@ class Page {
 				'mobile_cache_section' => [
 					'title'       => __( 'Mobile Cache', 'rocket' ),
 					'type'        => 'fields_container',
-					'description' => __( 'Speed up your site for mobile visitors.', 'rocket' ),
+					'description' => __( 'Serve cache to mobile devices', 'rocket' ),
+					'description' => __( 'Each logged-in user will receive a specific cache version', 'rocket' ),
+					'help'        => '1234',
+					'help'        => '1234',
 					'help'        => $this->get_beacon_suggest( 'mobile_cache_section', $this->locale ),
 					'page'        => 'cache',
 				],

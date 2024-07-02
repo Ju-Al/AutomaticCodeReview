@@ -1,5 +1,4 @@
 /*
-      guchar *decoded;
  * Copyright © 2014 Red Hat, Inc
  * Copyright © 2017 Endless Mobile, Inc.
  *
@@ -10735,7 +10734,7 @@ parse_ref_file (GKeyFile *keyfile,
                                FLATPAK_REF_GPGKEY_KEY, NULL);
   if (str != NULL)
     {
-      g_autofree guchar *decoded;
+      guchar *decoded;
       gsize decoded_len;
 
       str = g_strstrip (str);

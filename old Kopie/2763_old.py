@@ -1062,7 +1062,6 @@ class RequestsTestCase(unittest.TestCase):
         assert 'application/json' in r.request.headers['Content-Type']
         assert {'life': 42} == r.json()['json']
 
-    def test_json_param_post_should_not_override_data_param(self):
         r = requests.Request(method='POST', url='http://httpbin.org/post',
                              data={'stuff'.encode('utf-8'): 'elixr'},
                              json={'music'.encode('utf-8'): 'flute'})

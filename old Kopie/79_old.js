@@ -1,6 +1,5 @@
 require('classtool');
 
-    var buf = new Buffer(4);
 function spec(b) {
   var config = b.config || require('./config');
   var log = b.log || require('./util/log');
@@ -154,7 +153,7 @@ function spec(b) {
       bufs.push(txout.serialize());
     });
 
-    buf = new Buffer(4);
+    var buf = new Buffer(4);
     buf.writeUInt32LE(this.lock_time, 0);
     bufs.push(buf);
 

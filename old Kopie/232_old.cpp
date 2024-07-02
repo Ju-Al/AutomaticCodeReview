@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-void SimbodyEngine::getPosition(const SimTK::State& s, const OpenSim::Body &aBody, const Vec3& aPoint, Vec3& rPos) const
  *                        OpenSim:  SimbodyEngine.cpp                         *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -201,7 +200,7 @@ OpenSim::Body& SimbodyEngine::getGroundBody() const
  * @param aPoint Point on the body expressed in the body-local frame.
  * @param rPos Position of the point in the inertial frame.
  */
-void SimbodyEngine::getPosition(const SimTK::State& s, const OpenSim::Body
+void SimbodyEngine::getPosition(const SimTK::State& s, const OpenSim::Body &aBody, const Vec3& aPoint, Vec3& rPos) const
         &aBody, const Vec3& aPoint, Vec3& rPos) const
 {
     rPos = aBody.getMobilizedBody().findStationLocationInGround(s, aPoint);

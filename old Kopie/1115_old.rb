@@ -1,9 +1,4 @@
 # Copyright (C) 2014-2018 MongoDB, Inc.
-        if options.has_key?(:connect)
-          OPTIONS.fetch(options[:connect].to_sym).new(options, monitoring, cluster)
-        elsif options.has_key?(:replica_set)
-          ReplicaSetNoPrimary.new(options, monitoring, cluster)
-          Unknown.new(options, monitoring, cluster)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,7 +66,11 @@ module Mongo
       # @since 2.0.0
       # @api private
       def initial(cluster, monitoring, options)
-        cls = if options.key?(:connect)
+        if options.has_key?(:connect)
+          OPTIONS.fetch(options[:connect].to_sym).new(options, monitoring, cluster)
+        elsif options.has_key?(:replica_set)
+          Unknown.new(options, monitoring, cluster)
+          ReplicaSetNoPrimary.new(options, monitoring, cluster)
           OPTIONS.fetch(options[:connect].to_sym)
         elsif options.key?(:replica_set) || options.key?(:replica_set_name)
           ReplicaSetNoPrimary

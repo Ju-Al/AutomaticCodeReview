@@ -1,6 +1,5 @@
 import warnings
 
-        flip_aug = [False, True] if self.flip else [False]
 import mmcv
 
 from ..builder import PIPELINES
@@ -93,7 +92,7 @@ class MultiScaleFlipAug(object):
         """
 
         aug_data = []
-        flip_args = [[False, None]]
+        flip_aug = [False, True] if self.flip else [False]
         if self.flip:
             flip_args += [[True, direction]
                           for direction in self.flip_direction]

@@ -1,5 +1,4 @@
 package com.hubspot.singularity.runner.base.shared;
-      exceptionNotifier.notify(t, Collections.<String, String>emptyMap());
 
 import java.util.Collections;
 
@@ -47,7 +46,7 @@ public class SingularityRunner {
       System.exit(1);
     } catch (Throwable t) {
       LOG.error("Caught unexpected exception, exiting", t);
-      exceptionNotifier.notify(String.format("Unexcepted excetion in runner (%s)", t.getMessage()), t, Collections.<String, String>emptyMap());
+      exceptionNotifier.notify(t, Collections.<String, String>emptyMap());
       System.exit(1);
     }
 

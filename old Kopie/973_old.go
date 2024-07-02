@@ -1,5 +1,4 @@
 package oidc
-		err := r.ValidateAuthMethod(ctx, WithAuthMethod(updated))
 
 import (
 	"context"
@@ -105,7 +104,7 @@ func (r *Repository) UpdateAuthMethod(ctx context.Context, am *AuthMethod, versi
 	opts := getOpts(opt...)
 	if opts.withDryRun {
 		updated := applyUpdate(am, origAm, fieldMaskPaths)
-		err := r.ValidateDiscoveryInfo(ctx, WithAuthMethod(updated))
+		err := r.ValidateAuthMethod(ctx, WithAuthMethod(updated))
 		return updated, db.NoRowsAffected, err
 	}
 

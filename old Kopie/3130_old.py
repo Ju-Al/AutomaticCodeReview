@@ -910,7 +910,6 @@ class MinIoURandomCrop(object):
 
 @PIPELINES.register_module()
 class Corrupt(object):
-    """Corruption augmentation
 
     Args:
         corruption (str): Corruption name.

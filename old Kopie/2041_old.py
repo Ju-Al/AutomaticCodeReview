@@ -86,9 +86,6 @@ class CAN(Packet):
 
 conf.l2types.register(DLT_CAN_SOCKETCAN, CAN)
 bind_layers(CookedLinux, CAN, proto=12)
-
-
-class SignalField(ScalingField):
     __slots__ = ["start", "size"]
 
     def __init__(self, name, default, start, size, scaling=1, unit="",

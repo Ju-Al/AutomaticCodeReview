@@ -1,6 +1,4 @@
 // @flow
-    });
-      this.isLoadingWallets = false;
 import { observable, action, computed, runInAction, reaction } from 'mobx';
 import Store from './lib/Store';
 import Request from './lib/Request';
@@ -97,7 +95,8 @@ export default class NetworkStatusStore extends Store {
         default:
           console.log('Unknown server notification received:', message);
       }
-    }));
+      this.isLoadingWallets = false;
+    });
   }
 
   _redirectToWalletAfterSync = () => {

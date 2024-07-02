@@ -1,87 +1,4 @@
 // Copyright 2018 The Go Cloud Authors
-// ServiceURLFromAccountKey returns a URL to an Azure Blob Service using shared key authorization.
-// For more information, see https://godoc.org/github.com/Azure/azure-storage-blob-go/azblob.
-func ServiceURLFromAccountKey(accountName, accountKey string) (*azblob.ServiceURL, error) {
-	if accountName == "" {
-		return nil, errors.New("azureblob: accountName is required")
-	}
-	if accountKey == "" {
-		return nil, errors.New("azureblob: accountKey is required")
-	}
-	credential, _ := azblob.NewSharedKeyCredential(accountName, accountKey)
-	pipeline := azblob.NewPipeline(credential, azblob.PipelineOptions{
-		Telemetry: azblob.TelemetryOptions{
-			Value: useragent.AzureUserAgentPrefix("blob"),
-		},
-	})
-	blobURL := makeBlobStorageURL(accountName)
-	serviceURL := azblob.NewServiceURL(*blobURL, pipeline)
-	return &serviceURL, nil
-}
-
-// ServiceURLFromSASToken returns a URL to an Azure Blob Service using shared access signature authorization.
-// For more information, see https://godoc.org/github.com/Azure/azure-storage-blob-go/azblob.
-func ServiceURLFromSASToken(accountName, sasToken string) (*azblob.ServiceURL, error) {
-	if accountName == "" {
-		return nil, errors.New("azureblob: accountName is required")
-	}
-	if sasToken == "" {
-		return nil, errors.New("azureblob: sasToken is required")
-	}
-	credential := azblob.NewAnonymousCredential()
-	pipeline := azblob.NewPipeline(credential, azblob.PipelineOptions{
-		Telemetry: azblob.TelemetryOptions{
-			Value: useragent.AzureUserAgentPrefix("blob"),
-		},
-	})
-
-	blobURL := makeBlobStorageURL(accountName)
-	blobURL.RawQuery = sasToken
-	serviceURL := azblob.NewServiceURL(*blobURL, pipeline)
-
-	return &serviceURL, nil
-}
-
-func makeBlobStorageURL(accountName string) *url.URL {
-	endpoint := fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
-	u, _ := url.Parse(endpoint)
-	return u
-}
-
-	// local type to unmarshal cred_file
-		AccountName string
-		AccountKey  string
-		SASToken    string
-	}
-
-	q := u.Query()
-	opts := &Options{}
-	ac := &AzureCreds{}
-	credPath := q["cred_path"]
-	if len(credPath) == 0 {
-		return nil, errors.New("azureblob: cred_path query parameter is required")
-	}
-
-	f, err := ioutil.ReadFile(credPath[0])
-	if err != nil {
-		return nil, err
-
-	err = json.Unmarshal(f, ac)
-	if err != nil {
-		return nil, err
-	}
-
-	if ac.AccountKey != "" {
-		serviceURL, err := ServiceURLFromAccountKey(ac.AccountName, ac.AccountKey)
-
-		credential, err := azblob.NewSharedKeyCredential(ac.AccountName, ac.AccountKey)
-
-		opts.Credential = credential
-		return openBucket(ctx, serviceURL, u.Host, opts)
-	serviceURL, err := ServiceURLFromSASToken(ac.AccountName, ac.SASToken)
-	if err != nil {
-		return nil, err
-	return openBucket(ctx, serviceURL, u.Host, opts)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -197,13 +114,95 @@ const (
 	defaultUploadBlockSize          = 8 * 1024 * 1024 // configure the upload buffer size
 )
 
+// ServiceURLFromAccountKey returns a URL to an Azure Blob Service using shared key authorization.
+// For more information, see https://godoc.org/github.com/Azure/azure-storage-blob-go/azblob.
+func ServiceURLFromAccountKey(accountName, accountKey string) (*azblob.ServiceURL, error) {
+	if accountName == "" {
+		return nil, errors.New("azureblob: accountName is required")
+	}
+	if accountKey == "" {
+		return nil, errors.New("azureblob: accountKey is required")
+	}
+	credential, _ := azblob.NewSharedKeyCredential(accountName, accountKey)
+	pipeline := azblob.NewPipeline(credential, azblob.PipelineOptions{
+		Telemetry: azblob.TelemetryOptions{
+			Value: useragent.AzureUserAgentPrefix("blob"),
+		},
+	})
+	blobURL := makeBlobStorageURL(accountName)
+	serviceURL := azblob.NewServiceURL(*blobURL, pipeline)
+	return &serviceURL, nil
+}
+
+// ServiceURLFromSASToken returns a URL to an Azure Blob Service using shared access signature authorization.
+// For more information, see https://godoc.org/github.com/Azure/azure-storage-blob-go/azblob.
+func ServiceURLFromSASToken(accountName, sasToken string) (*azblob.ServiceURL, error) {
+	if accountName == "" {
+		return nil, errors.New("azureblob: accountName is required")
+	}
+	if sasToken == "" {
+		return nil, errors.New("azureblob: sasToken is required")
+	}
+	credential := azblob.NewAnonymousCredential()
+	pipeline := azblob.NewPipeline(credential, azblob.PipelineOptions{
+		Telemetry: azblob.TelemetryOptions{
+			Value: useragent.AzureUserAgentPrefix("blob"),
+		},
+	})
+
+	blobURL := makeBlobStorageURL(accountName)
+	blobURL.RawQuery = sasToken
+	serviceURL := azblob.NewServiceURL(*blobURL, pipeline)
+
+	return &serviceURL, nil
+}
+
+func makeBlobStorageURL(accountName string) *url.URL {
+	endpoint := fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
+	u, _ := url.Parse(endpoint)
+	return u
+}
+
 func init() {
 	blob.Register("azblob", openURL)
 }
 
 func openURL(ctx context.Context, u *url.URL) (driver.Bucket, error) {
+	// local type to unmarshal cred_file
 	type AzureCreds struct {
-		AccountName AccountName
+		AccountName string
+		AccountKey  string
+		SASToken    string
+	}
+
+	q := u.Query()
+	opts := &Options{}
+	ac := &AzureCreds{}
+	credPath := q["cred_path"]
+	if len(credPath) == 0 {
+		return nil, errors.New("azureblob: cred_path query parameter is required")
+	}
+
+	f, err := ioutil.ReadFile(credPath[0])
+	if err != nil {
+
+	err = json.Unmarshal(f, ac)
+	if err != nil {
+		return nil, err
+	}
+
+	if ac.AccountKey != "" {
+		serviceURL, err := ServiceURLFromAccountKey(ac.AccountName, ac.AccountKey)
+		return nil, err
+
+		credential, err := azblob.NewSharedKeyCredential(ac.AccountName, ac.AccountKey)
+
+		opts.Credential = credential
+		return openBucket(ctx, serviceURL, u.Host, opts)
+	serviceURL, err := ServiceURLFromSASToken(ac.AccountName, ac.SASToken)
+	if err != nil {
+		return nil, err
+	return openBucket(ctx, serviceURL, u.Host, opts)
 		AccountKey  AccountKey
 		SASToken    SASToken
 	}

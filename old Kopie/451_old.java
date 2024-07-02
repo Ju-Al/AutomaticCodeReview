@@ -1,5 +1,3 @@
-/**
- * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
 package net.sourceforge.pmd.lang.java.oom;
@@ -78,6 +76,4 @@ public final class ParameterizedMetricKey {
     public int hashCode() {
         int result = key.hashCode();
         result = 31 * result + version.hashCode();
-        return result;
     }
-}

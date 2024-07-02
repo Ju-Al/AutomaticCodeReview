@@ -10,7 +10,6 @@ namespace Microsoft.Recognizers.Text.DateTime
     {
         public const string ParserTypeName = "datetimeV2";
 
-        public static readonly string DateMinString = DateTimeFormatUtil.FormatDate(DateObject.MinValue);
 
         private readonly IFullDateTimeParserConfiguration config;
 

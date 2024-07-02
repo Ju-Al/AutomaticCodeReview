@@ -1,6 +1,4 @@
 """Classes for heterogeneous graphs."""
-        cross_reducer : str
-            Cross type reducer. One of ``"sum"``, ``"min"``, ``"max"``, ``"mean"``, ``"stack"``.
 #pylint: disable= too-many-lines
 from collections import defaultdict
 from collections.abc import Mapping, Iterable
@@ -4744,7 +4742,8 @@ class DGLHeteroGraph(object):
                 An optional apply function to further update the node features
                 after the message reduction. It must be a :ref:`apiudf`.
 
-        cross_reducer : str or callable function
+        cross_reducer : str
+            Cross type reducer. One of ``"sum"``, ``"min"``, ``"max"``, ``"mean"``, ``"stack"``.
             Cross type reducer. One of ``"sum"``, ``"min"``, ``"max"``, ``"mean"``, ``"stack"``
             or a callable function. If a callable function is provided, the input arguments is
             a list of tensors from cross types, and the output of function must be a single tensor

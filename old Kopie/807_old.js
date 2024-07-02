@@ -375,7 +375,6 @@ class Field {
                 this.setValue(name, fieldsValue[name], false);
             });
         } else {
-            // NOTE: this is a shallow merge
             this.values = Object.assign({}, this.values, fieldsValue);
             const fields = this.getNames();
             fields.forEach(name => {

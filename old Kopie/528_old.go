@@ -1,11 +1,5 @@
 package dartlang
 
-		contents += g.createExport(constantsName)
-		contents += g.createExport(s.Name)
-		contents += g.createExport(union.Name)
-		contents += g.createExport(exception.Name)
-		contents += g.createExport(enum.Name)
-func (g *Generator) createExport(structName string) string {
 import (
 	"fmt"
 	"os"
@@ -86,7 +80,12 @@ func (g *Generator) SetupGenerator(outputDir string) error {
 
 	if len(g.Frugal.Thrift.Constants) > 0 {
 		constantsName := fmt.Sprintf("%sConstants", snakeToCamel(libraryName))
-		contents += g.createExport(constantsName, false)
+		contents += g.createExport(s.Name)
+		contents += g.createExport(union.Name)
+		contents += g.createExport(exception.Name)
+		contents += g.createExport(enum.Name)
+func (g *Generator) createExport(structName string) string {
+		contents += g.createExport(constantsName)
 	}
 	for _, s := range g.Frugal.Thrift.Structs {
 		contents += g.createExport(s.Name, false)

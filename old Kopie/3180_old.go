@@ -69,8 +69,6 @@ func TestVeleroResourcesExist(t *testing.T) {
 	// Velero API group contains some but not all custom resources: should error
 	veleroAPIResourceList.APIResources = veleroAPIResourceList.APIResources[:3]
 	assert.Error(t, server.veleroResourcesExist())
-}
-
 func TestRemoveControllers(t *testing.T) {
 	logger := velerotest.NewLogger()
 

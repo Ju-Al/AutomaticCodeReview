@@ -1,5 +1,4 @@
 /*
-#if defined(__GNUC__) || defined(__clang__)
  * This work is licensed under a Creative Commons CCZero 1.0 Universal License.
  * See http://creativecommons.org/publicdomain/zero/1.0/ for more information.
  */
@@ -19,7 +18,7 @@ static void print_time(void) {
 const char *LogLevelNames[6] = {"trace", "debug", "info", "warning", "error", "fatal"};
 const char *LogCategoryNames[4] = {"communication", "server", "client", "userland"};
 
-#if ((__GNUC__ >= 4 && __GNUC_MINOR__ >= 6) || defined(__clang__))
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #endif

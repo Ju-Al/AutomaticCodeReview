@@ -49,7 +49,6 @@ bool PlatformWindow::shouldNotTranslate( U32 modifiers, U32 keyCode ) const
    else
       return false;
 }
-
 void PlatformWindow::setVideoMode(const GFXVideoMode &mode)
 {
 _setVideoMode(mode);

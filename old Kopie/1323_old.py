@@ -1,6 +1,4 @@
 """Module for converting graph from/to other object."""
-                # Do nothing; handled in the next loop
-                continue
 from collections import defaultdict
 import numpy as np
 import scipy as sp
@@ -455,7 +453,8 @@ def heterograph(data_dict, num_nodes_dict=None):
                     nsrc = len({n for n, d in data.nodes(data=True) if d['bipartite'] == 0})
                     ndst = data.number_of_nodes() - nsrc
             elif isinstance(data, DGLHeteroGraph):
-                # original node type and edge type of ``data`` is ignored.
+                # Do nothing; handled in the next loop
+                continue
                 assert len(data.canonical_etypes) == 1, \
                     "Relational graphs must have only one edge type."
                 nsrc = data.number_of_nodes(data.canonical_etypes[0][0])

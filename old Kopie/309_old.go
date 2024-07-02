@@ -1,13 +1,5 @@
 package acme
 
-	return &Acme{
-		issuer:                   issuer,
-		client:                   client,
-		cmClient:                 cmClient,
-		recorder:                 recorder,
-		secretsLister:            secretsLister,
-		httpSolver:               http.NewSolver(issuer, client, secretsLister, acmeHTTP01SolverImage),
-	}, nil
 import (
 	"context"
 	"crypto/rsa"
@@ -97,7 +89,14 @@ func New(issuer v1alpha1.GenericIssuer,
 		return nil, fmt.Errorf("resource namespace cannot be empty")
 	}
 
-	a := &Acme{
+	return &Acme{
+		issuer:                   issuer,
+		client:                   client,
+		cmClient:                 cmClient,
+		recorder:                 recorder,
+		httpSolver:               http.NewSolver(issuer, client, secretsLister, acmeHTTP01SolverImage),
+	}, nil
+		secretsLister:            secretsLister,
 		issuer:         issuer,
 		client:         client,
 		cmClient:       cmClient,

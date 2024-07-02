@@ -1,12 +1,4 @@
 /*
-void OpenMPTargetExec::resize_scratch(int64_t reduce_bytes,
-                                      int64_t team_reduce_bytes,
-                                      int64_t team_shared_bytes,
-                                      int64_t thread_local_bytes) {
-      MAX_ACTIVE_TEAMS * reduce_bytes +         // Inter Team Reduction
-      MAX_ACTIVE_TEAMS * team_reduce_bytes +    // Intra Team Reduction
-      MAX_ACTIVE_TEAMS * team_shared_bytes +    // Team Local Scratch
-      MAX_ACTIVE_THREADS * thread_local_bytes;  // Thread Private Scratch
 //@HEADER
 // ************************************************************************
 //
@@ -110,9 +102,15 @@ void OpenMPTargetExec::clear_scratch() {
   space.deallocate(m_scratch_ptr, m_scratch_size);
   m_scratch_ptr  = nullptr;
   m_scratch_size = 0;
+void OpenMPTargetExec::resize_scratch(int64_t reduce_bytes,
+                                      int64_t team_reduce_bytes,
+                                      int64_t team_shared_bytes,
+                                      int64_t thread_local_bytes) {
+      MAX_ACTIVE_TEAMS * reduce_bytes +         // Inter Team Reduction
+      MAX_ACTIVE_TEAMS * team_reduce_bytes +    // Intra Team Reduction
+      MAX_ACTIVE_TEAMS * team_shared_bytes +    // Team Local Scratch
+      MAX_ACTIVE_THREADS * thread_local_bytes;  // Thread Private Scratch
 }
-
-void OpenMPTargetExec::clear_lock_array() {
   if (m_lock_array != nullptr) {
     Kokkos::Experimental::OpenMPTargetSpace space;
     space.deallocate(m_lock_array, m_lock_size);

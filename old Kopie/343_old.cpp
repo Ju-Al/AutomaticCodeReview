@@ -40,7 +40,6 @@ TEST(construction and querying) {
   REQUIRE_EQUAL(slices->size(), 2u);
 }
 
-TEST(sessionized extraction) {
   // FIXME: use directory from fixture
   rm("foo");
   auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);

@@ -857,9 +857,6 @@ void SerialTreeLearner::RecomputeBestSplitForLeaf(int leaf, SplitInfo* split) {
   OMP_THROW_EX();
   auto best_idx = ArrayArgs<SplitInfo>::ArgMax(bests);
   *split = bests[best_idx];
-}
-
-void SerialTreeLearner::GetLeafMap(Tree* tree) {
   std::fill(leaf_map_.begin(), leaf_map_.end(), -1);
   // map data to leaf number
   const data_size_t* ind = data_partition_->indices();

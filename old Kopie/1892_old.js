@@ -1,5 +1,4 @@
 import Component from '@ember/component';
-import { computed } from '@ember/object';
 import { gt, filterBy, not } from '@ember/object/computed';
 import * as validators from 'travis/utils/form-validators';
 

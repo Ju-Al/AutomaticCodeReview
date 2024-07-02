@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-        // TODO: Get history from router context when implemented.
-        signOut({ history: window.history });
-    }, [signOut]);
 import { useHistory } from 'react-router-dom';
 
 import { useUserContext } from '../../context/user';
@@ -63,7 +60,9 @@ export const useAuthModal = props => {
     }, [showMyAccount]);
 
     const handleSignOut = useCallback(() => {
-        signOut({ history, revokeToken });
+        // TODO: Get history from router context when implemented.
+        signOut({ history: window.history });
+    }, [signOut]);
     }, [history, revokeToken, signOut]);
 
     return {

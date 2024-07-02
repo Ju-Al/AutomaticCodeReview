@@ -1,155 +1,154 @@
-package setup
-		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+// Package fpm implements the Pipe interface providing FPM bindings.
+package fpm
 
 import (
-	"crypto/tls"
-	"testing"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/apex/log"
+	"github.com/goreleaser/goreleaser/context"
+	"github.com/goreleaser/goreleaser/internal/linux"
+	"github.com/goreleaser/goreleaser/pipeline"
+	"golang.org/x/sync/errgroup"
 )
 
-func TestTLSParseBasic(t *testing.T) {
-	c := NewTestController(`tls cert.pem key.pem`)
+// ErrNoFPM is shown when fpm cannot be found in $PATH
+var ErrNoFPM = errors.New("fpm not present in $PATH")
 
-	_, err := TLS(c)
+// Pipe for fpm packaging
+type Pipe struct{}
+
+// Description of the pipe
+func (Pipe) Description() string {
+	return "Creating Linux packages with fpm"
+}
+
+// Run the pipe
+func (Pipe) Run(ctx *context.Context) error {
+	if len(ctx.Config.FPM.Formats) == 0 {
+		return pipeline.Skip("no output formats configured")
+	}
+	_, err := exec.LookPath("fpm")
 	if err != nil {
-		t.Errorf("Expected no errors, got: %v", err)
+		return ErrNoFPM
 	}
+	return doRun(ctx)
+}
 
-	// Basic checks
-	if c.TLS.Certificate != "cert.pem" {
-		t.Errorf("Expected certificate arg to be 'cert.pem', was '%s'", c.TLS.Certificate)
-	}
-	if c.TLS.Key != "key.pem" {
-		t.Errorf("Expected key arg to be 'key.pem', was '%s'", c.TLS.Key)
-	}
-	if !c.TLS.Enabled {
-		t.Error("Expected TLS Enabled=true, but was false")
-	}
-
-	// Security defaults
-	if c.TLS.ProtocolMinVersion != tls.VersionTLS10 {
-		t.Errorf("Expected 'tls1.0 (0x0301)' as ProtocolMinVersion, got %#v", c.TLS.ProtocolMinVersion)
-	}
-	if c.TLS.ProtocolMaxVersion != tls.VersionTLS12 {
-		t.Errorf("Expected 'tls1.2 (0x0303)' as ProtocolMaxVersion, got %v", c.TLS.ProtocolMaxVersion)
-	}
-
-	// Cipher checks
-	expectedCiphers := []uint16{
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-		//tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-		//tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
-		tls.TLS_FALLBACK_SCSV,
-	}
-
-	// Ensure count is correct (plus one for TLS_FALLBACK_SCSV)
-	if len(c.TLS.Ciphers) != len(supportedCiphers)-1 {
-		t.Errorf("Expected %v Ciphers (including TLS_FALLBACK_SCSV), got %v",
-			len(supportedCiphers)-1, len(c.TLS.Ciphers))
-	}
-
-	// Ensure ordering is correct
-	for i, actual := range c.TLS.Ciphers {
-		if actual != expectedCiphers[i] {
-			t.Errorf("Expected cipher in position %d to be %0x, got %0x", i, expectedCiphers[i], actual)
+func doRun(ctx *context.Context) error {
+	var g errgroup.Group
+	sem := make(chan bool, ctx.Parallelism)
+	for _, format := range ctx.Config.FPM.Formats {
+		for platform, groups := range ctx.Binaries {
+			if !strings.Contains(platform, "linux") {
+				log.WithField("platform", platform).Debug("skipped non-linux builds for fpm")
+				continue
+			}
+			sem <- true
+			format := format
+			arch := linux.Arch(platform)
+			for folder, binaries := range groups {
+				g.Go(func() error {
+					defer func() {
+						<-sem
+					}()
+					return create(ctx, format, folder, arch, binaries)
+				})
+			}
 		}
 	}
-
-	if !c.TLS.PreferServerCipherSuites {
-		t.Error("Expected PreferServerCipherSuites = true, but was false")
-	}
+	return g.Wait()
 }
 
-func TestTLSParseIncompleteParams(t *testing.T) {
-	c := NewTestController(`tls`)
-
-	_, err := TLS(c)
-	if err == nil {
-		t.Errorf("Expected errors (first check), but no error returned")
-	}
-}
-
-func TestTLSParseWithOptionalParams(t *testing.T) {
-	params := `tls cert.crt cert.key {
-            protocols ssl3.0 tls1.2
-            ciphers RSA-3DES-EDE-CBC-SHA RSA-AES256-CBC-SHA ECDHE-RSA-AES128-GCM-SHA256
-        }`
-	c := NewTestController(params)
-
-	_, err := TLS(c)
+func create(ctx *context.Context, format, folder, arch string, binaries []context.Binary) error {
+	var path = filepath.Join(ctx.Config.Dist, folder)
+	var file = path + "." + format
+	var log = log.WithField("format", format).WithField("arch", arch)
+	dir, err := ioutil.TempDir("", "fpm")
 	if err != nil {
-		t.Errorf("Expected no errors, got: %v", err)
+		return err
+	}
+	log.WithField("file", file).WithField("workdir", dir).Info("creating fpm archive")
+	var options = basicOptions(ctx, dir, format, arch, file)
+
+	if ctx.Config.FPM.Bindir != "" {
+		bindir = ctx.Config.FPM.Bindir
 	}
 
-	if c.TLS.ProtocolMinVersion != tls.VersionSSL30 {
-		t.Errorf("Expected 'ssl3.0 (0x0300)' as ProtocolMinVersion, got %#v", c.TLS.ProtocolMinVersion)
+	for _, binary := range binaries {
+		// This basically tells fpm to put the binary in the bindir, e.g. /usr/local/bin
+		// binary=/usr/local/bin/binary
+		log.WithField("path", binary.Path).
+			WithField("name", binary.Name).
+			Debug("added binary to fpm package")
+		options = append(options, fmt.Sprintf(
+			"%s=%s",
+			binary.Path,
+			filepath.Join(bindir, binary.Name),
+		))
 	}
 
-	if c.TLS.ProtocolMaxVersion != tls.VersionTLS12 {
-		t.Errorf("Expected 'tls1.2 (0x0302)' as ProtocolMaxVersion, got %#v", c.TLS.ProtocolMaxVersion)
+	for src, dest := range ctx.Config.FPM.Files {
+		log.WithField("src", src).
+			WithField("dest", dest).
+			Debug("added an extra file to the fpm package")
+		options = append(options, fmt.Sprintf(
+			"%s=%s",
+			src,
+			dest,
+		))
 	}
 
-	if len(c.TLS.Ciphers)-1 != 3 {
-		t.Errorf("Expected 3 Ciphers (not including TLS_FALLBACK_SCSV), got %v", len(c.TLS.Ciphers))
+	log.WithField("args", options).Debug("creating fpm package")
+	if out, err := exec.Command("fpm", options...).CombinedOutput(); err != nil {
+		return errors.New(string(out))
 	}
+	ctx.AddArtifact(file)
+	return nil
 }
 
-func TestTLSParseWithWrongOptionalParams(t *testing.T) {
-	// Test protocols wrong params
-	params := `tls cert.crt cert.key {
-			protocols ssl tls
-		}`
-	c := NewTestController(params)
-	_, err := TLS(c)
-	if err == nil {
-		t.Errorf("Expected errors, but no error returned")
+func basicOptions(ctx *context.Context, workdir, format, arch, file string) []string {
+	var options = []string{
+		"--input-type", "dir",
+		"--output-type", format,
+		"--name", ctx.Config.ProjectName,
+		"--version", ctx.Version,
+		"--architecture", arch,
+		"--package", file,
+		"--force",
+		"--workdir", workdir,
+		"--debug",
 	}
 
-	// Test ciphers wrong params
-	params = `tls cert.crt cert.key {
-			ciphers not-valid-cipher
-		}`
-	c = NewTestController(params)
-	_, err = TLS(c)
-	if err == nil {
-		t.Errorf("Expected errors, but no error returned")
+	if ctx.Config.FPM.Vendor != "" {
+		options = append(options, "--vendor", ctx.Config.FPM.Vendor)
 	}
-}
-
-func TestTLSParseWithClientAuth(t *testing.T) {
-	params := `tls cert.crt cert.key {
-			clients client_ca.crt client2_ca.crt
-		}`
-	c := NewTestController(params)
-	_, err := TLS(c)
-	if err != nil {
-		t.Errorf("Expected no errors, got: %v", err)
+	if ctx.Config.FPM.Homepage != "" {
+		options = append(options, "--url", ctx.Config.FPM.Homepage)
 	}
-
-	if count := len(c.TLS.ClientCerts); count != 2 {
-		t.Fatalf("Expected two client certs, had %d", count)
+	if ctx.Config.FPM.Maintainer != "" {
+		options = append(options, "--maintainer", ctx.Config.FPM.Maintainer)
 	}
-	if actual := c.TLS.ClientCerts[0]; actual != "client_ca.crt" {
-		t.Errorf("Expected first client cert file to be '%s', but was '%s'", "client_ca.crt", actual)
+	if ctx.Config.FPM.Description != "" {
+		options = append(options, "--description", ctx.Config.FPM.Description)
 	}
-	if actual := c.TLS.ClientCerts[1]; actual != "client2_ca.crt" {
-		t.Errorf("Expected second client cert file to be '%s', but was '%s'", "client2_ca.crt", actual)
+	if ctx.Config.FPM.License != "" {
+		options = append(options, "--license", ctx.Config.FPM.License)
+	}
+	for _, dep := range ctx.Config.FPM.Dependencies {
+		options = append(options, "--depends", dep)
+	}
+	for _, conflict := range ctx.Config.FPM.Conflicts {
+		options = append(options, "--conflicts", conflict)
 	}
 
-	// Test missing client cert file
-	params = `tls cert.crt cert.key {
-			clients
-		}`
-	c = NewTestController(params)
-	_, err = TLS(c)
-	if err == nil {
-		t.Errorf("Expected an error, but no error returned")
+	// FPM requires --rpm-os=linux if your rpm target is linux
+	if format == "rpm" {
+		options = append(options, "--rpm-os", "linux")
 	}
+	return options
 }

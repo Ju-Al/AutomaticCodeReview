@@ -1,5 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-			return nil
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -337,7 +336,6 @@ func (k *Kad) connect(ctx context.Context, peer swarm.Address, ma ma.Multiaddr, 
 	i, err := k.p2p.Connect(ctx, ma)
 	if err != nil {
 		if errors.Is(err, p2p.ErrAlreadyConnected) {
-			if i == nil || swarm.ZeroAddress.Equal(i.Overlay) || i.Overlay.Equal(peer) {
 				return nil
 			}
 

@@ -1,5 +1,4 @@
 // Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
-	_, err := o.runTask()
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -324,7 +323,7 @@ func (o *runTaskOpts) Execute() error {
 		}
 	}
 
-	tasks, err := o.runTask()
+	_, err := o.runTask()
 	if err != nil {
 		return err
 	}

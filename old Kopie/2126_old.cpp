@@ -1,6 +1,4 @@
 /**
-      config[mbr::BlockStorePath].GetString(),
-      config[mbr::PgOpt].GetString(),
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -154,7 +152,8 @@ int main(int argc, char *argv[]) {
 
   // Configuring iroha daemon
   Irohad irohad(
-      config.blok_store_path,
+      config[mbr::BlockStorePath].GetString(),
+      config[mbr::PgOpt].GetString(),
       config.pg_opt,
       kListenIp,  // TODO(mboldyrev) 17/10/2018: add a parameter in
                   // config file and/or command-line arguments?

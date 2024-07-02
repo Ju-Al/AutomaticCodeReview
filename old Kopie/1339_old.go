@@ -1,5 +1,4 @@
 /*
-		return nil, errors.Errorf("unknown %v plugin: %s", m.kind, name)
 Copyright 2018, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +76,7 @@ func (m *serverMux) getHandler(name string) (interface{}, error) {
 
 	initializer, found := m.initializers[name]
 	if !found {
-		return nil, errors.Errorf("%v plugin: %s not found or had invalid format. Valid format: <namespace>/<name>", m.kind, name)
+		return nil, errors.Errorf("unknown %v plugin: %s", m.kind, name)
 	}
 
 	instance, err := initializer(m.serverLog)

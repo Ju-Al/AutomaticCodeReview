@@ -349,7 +349,6 @@ func (queue *Queue) getCWStatsSet(f getUsageFloatFunc) (*ecstcs.CWStatsSet, erro
 		sum += thisStat
 	}
 
-	// don't emit metrics when sampleCount == 0
 	if sampleCount == 0 {
 		return nil, fmt.Errorf("Need at least 1 non-NaN data points in queue to calculate CW stats set")
 	}

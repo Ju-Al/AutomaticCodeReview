@@ -1,5 +1,4 @@
 import React, { Fragment, useEffect } from 'react';
-import { FormattedMessage, useIntl } from 'react-intl';
 import { Form } from 'informed';
 import { shape, string } from 'prop-types';
 

@@ -1,9 +1,5 @@
 #include "dialogue_window.h"
 
-	uint32 popup_id       = POPUPID_DIAWIND;
-	uint32 negative_id    = 0;
-	char   *button_name_0 = nullptr;
-	char   *button_name_1 = nullptr;
 void DialogueWindow::Render(Client *c, std::string markdown)
 {
 	std::string output = markdown;
@@ -103,7 +99,10 @@ void DialogueWindow::Render(Client *c, std::string markdown)
 		}
 	}
 
-	uint32 popup_id = POPUPID_DIAWIND_ONE;
+	uint32 popup_id       = POPUPID_DIAWIND;
+	uint32 negative_id    = 0;
+	char   *button_name_0 = nullptr;
+	char   *button_name_1 = nullptr;
 	uint32 negative_id = POPUPID_DIAWIND_TWO;
 	const char *button_one_name = nullptr;
 	const char *button_two_name = nullptr;

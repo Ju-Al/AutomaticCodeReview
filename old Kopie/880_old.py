@@ -1,12 +1,4 @@
 # coding: utf-8
-    cmake_cmd = "cmake "
-    build_cmd = "make _lightgbm"
-        cmake_cmd += " -DUSE_GPU=ON "
-            cmake_cmd += " -G \"MinGW Makefiles\" "
-            os.system(cmake_cmd + " ../lightgbm/")
-            build_cmd = "mingw32-make.exe _lightgbm"
-            vs_versions = ["Visual Studio 15 2017 Win64", "Visual Studio 14 2015 Win64", "Visual Studio 12 2013 Win64"]
-            try_vs = 1
 # pylint: disable=invalid-name, exec-used, C0111
 """Setup lightgbm package."""
 from __future__ import absolute_import
@@ -84,7 +76,14 @@ def compile_cpp(use_mingw=False, use_gpu=False):
     os.makedirs("build_cpp")
     os.chdir("build_cpp")
 
-    logger.info("Starting to compile the library.")
+    cmake_cmd = "cmake "
+        cmake_cmd += " -DUSE_GPU=ON "
+            cmake_cmd += " -G \"MinGW Makefiles\" "
+            os.system(cmake_cmd + " ../lightgbm/")
+            build_cmd = "mingw32-make.exe _lightgbm"
+            vs_versions = ["Visual Studio 15 2017 Win64", "Visual Studio 14 2015 Win64", "Visual Studio 12 2013 Win64"]
+            try_vs = 1
+    build_cmd = "make _lightgbm"
 
     cmake_cmd = ["cmake", "../lightgbm/"]
     if use_gpu:

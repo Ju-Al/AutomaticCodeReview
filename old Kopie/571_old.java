@@ -14,337 +14,296 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.accumulo.monitor.rest.tservers;
+package org.apache.accumulo.core.client;
 
-import static org.apache.accumulo.monitor.util.ParameterValidator.SERVER_REGEX;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 
-import java.lang.management.ManagementFactory;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response.Status;
-
-import org.apache.accumulo.core.Constants;
-import org.apache.accumulo.core.client.impl.ClientContext;
-import org.apache.accumulo.core.client.impl.Table;
-import org.apache.accumulo.core.client.impl.Tables;
-import org.apache.accumulo.core.conf.Property;
-import org.apache.accumulo.core.data.impl.KeyExtent;
-import org.apache.accumulo.core.master.thrift.MasterMonitorInfo;
-import org.apache.accumulo.core.master.thrift.RecoveryStatus;
-import org.apache.accumulo.core.master.thrift.TabletServerStatus;
-import org.apache.accumulo.core.rpc.ThriftUtil;
-import org.apache.accumulo.core.tabletserver.thrift.ActionStats;
-import org.apache.accumulo.core.tabletserver.thrift.TabletClientService;
-import org.apache.accumulo.core.tabletserver.thrift.TabletStats;
-import org.apache.accumulo.core.trace.Tracer;
-import org.apache.accumulo.core.util.AddressUtil;
-import org.apache.accumulo.core.util.HostAndPort;
-import org.apache.accumulo.core.zookeeper.ZooUtil;
-import org.apache.accumulo.monitor.Monitor;
-import org.apache.accumulo.monitor.rest.master.MasterResource;
-import org.apache.accumulo.server.master.state.DeadServerList;
-import org.apache.accumulo.server.util.ActionStatsUpdator;
+import org.apache.accumulo.core.client.IteratorSetting.Column;
+import org.apache.accumulo.core.client.sample.SamplerConfiguration;
+import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.security.Authorizations;
+import org.apache.accumulo.core.spi.scan.HintScanPrioritizer;
+import org.apache.accumulo.core.spi.scan.ScanDispatcher;
+import org.apache.accumulo.core.spi.scan.ScanInfo;
+import org.apache.accumulo.core.spi.scan.ScanPrioritizer;
+import org.apache.accumulo.core.spi.scan.SimpleScanDispatcher;
+import org.apache.hadoop.io.Text;
 
 /**
- * Generates tserver lists as JSON objects
- *
- * @since 2.0.0
+ * This class hosts configuration methods that are shared between different types of scanners.
  */
-@Path("/tservers")
-@Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
-public class TabletServerResource {
-
-  // Variable names become JSON keys
-  private TabletStats total;
-  private TabletStats historical;
+public interface ScannerBase extends Iterable<Entry<Key,Value>>, AutoCloseable {
 
   /**
-   * Generates tserver summary
+   * Add a server-side scan iterator.
    *
-   * @return tserver summary
+   * @param cfg
+   *          fully specified scan-time iterator, including all options for the iterator. Any
+   *          changes to the iterator setting after this call are not propagated to the stored
+   *          iterator.
+   * @throws IllegalArgumentException
+   *           if the setting conflicts with existing iterators
    */
-  @GET
-  public TabletServers getTserverSummary() {
-    MasterMonitorInfo mmi = Monitor.getMmi();
-    if (null == mmi) {
-      throw new WebApplicationException(Status.INTERNAL_SERVER_ERROR);
-    }
-
-    TabletServers tserverInfo = new TabletServers(mmi.tServerInfo.size());
-    for (TabletServerStatus status : mmi.tServerInfo) {
-      tserverInfo.addTablet(new TabletServer(status));
-    }
-
-    tserverInfo.addBadTabletServer(MasterResource.getTables());
-
-    return tserverInfo;
-  }
+  void addScanIterator(IteratorSetting cfg);
 
   /**
-   * REST call to clear dead servers from list
+   * Remove an iterator from the list of iterators.
    *
-   * @param server
-   *          Dead server to clear
+   * @param iteratorName
+   *          nickname used for the iterator
    */
-  @POST
-  @Consumes(MediaType.TEXT_PLAIN)
-  public void clearDeadServer(
-      @QueryParam("server") @NotNull @Pattern(regexp = SERVER_REGEX) String server) {
-    DeadServerList obit = new DeadServerList(
-        ZooUtil.getRoot(Monitor.getContext().getInstance()) + Constants.ZDEADTSERVERS);
-    obit.delete(server);
-  }
+  void removeScanIterator(String iteratorName);
 
   /**
-   * Generates a recovery tserver list
+   * Update the options for an iterator. Note that this does <b>not</b> change the iterator options
+   * during a scan, it just replaces the given option on a configured iterator before a scan is
+   * started.
    *
-   * @return Recovery tserver list
+   * @param iteratorName
+   *          the name of the iterator to change
+   * @param key
+   *          the name of the option
+   * @param value
+   *          the new value for the named option
    */
-  @Path("recovery")
-  @GET
-  public TabletServersRecovery getTserverRecovery() {
-    TabletServersRecovery recoveryList = new TabletServersRecovery();
-
-    MasterMonitorInfo mmi = Monitor.getMmi();
-    if (null == mmi) {
-      throw new WebApplicationException(Status.INTERNAL_SERVER_ERROR);
-    }
-
-    for (TabletServerStatus server : mmi.tServerInfo) {
-      if (server.logSorts != null) {
-        for (RecoveryStatus recovery : server.logSorts) {
-          String serv = AddressUtil.parseAddress(server.name, false).getHost();
-          String log = recovery.name;
-          int time = recovery.runtime;
-          double progress = recovery.progress;
-
-          recoveryList.addRecovery(new TabletServerRecoveryInformation(serv, log, time, progress));
-        }
-      }
-    }
-
-    return recoveryList;
-  }
+  void updateScanIteratorOption(String iteratorName, String key, String value);
 
   /**
-   * Generates details for the selected tserver
+   * Adds a column family to the list of columns that will be fetched by this scanner. By default
+   * when no columns have been added the scanner fetches all columns. To fetch multiple column
+   * families call this function multiple times.
    *
-   * @param tserverAddress
-   *          TServer name
-   * @return TServer details
+   * <p>
+   * This can help limit which locality groups are read on the server side.
+   *
+   * <p>
+   * When used in conjunction with custom iterators, the set of column families fetched is passed to
+   * the top iterator's seek method. Custom iterators may change this set of column families when
+   * calling seek on their source.
+   *
+   * @param col
+   *          the column family to be fetched
    */
-  @Path("{address}")
-  @GET
-  public TabletServerSummary getTserverDetails(
-      @PathParam("address") @NotNull @Pattern(regexp = SERVER_REGEX) String tserverAddress)
-      throws Exception {
-
-    boolean tserverExists = false;
-    for (TabletServerStatus ts : Monitor.getMmi().getTServerInfo()) {
-      if (tserverAddress.equals(ts.getName())) {
-        tserverExists = true;
-        break;
-      }
-    }
-
-    if (!tserverExists) {
-      return null;
-    }
-
-    double totalElapsedForAll = 0;
-    double splitStdDev = 0;
-    double minorStdDev = 0;
-    double minorQueueStdDev = 0;
-    double majorStdDev = 0;
-    double majorQueueStdDev = 0;
-    double currentMinorAvg = 0;
-    double currentMajorAvg = 0;
-    double currentMinorStdDev = 0;
-    double currentMajorStdDev = 0;
-    total = new TabletStats(null, new ActionStats(), new ActionStats(), new ActionStats(), 0, 0, 0,
-        0);
-    HostAndPort address = HostAndPort.fromString(tserverAddress);
-    historical = new TabletStats(null, new ActionStats(), new ActionStats(), new ActionStats(), 0,
-        0, 0, 0);
-    List<TabletStats> tsStats = new ArrayList<>();
-
-    try {
-      ClientContext context = Monitor.getContext();
-      TabletClientService.Client client = ThriftUtil
-          .getClient(new TabletClientService.Client.Factory(), address, context);
-      try {
-        for (String tableId : Monitor.getMmi().tableMap.keySet()) {
-          tsStats.addAll(client.getTabletStats(Tracer.traceInfo(), context.rpcCreds(), tableId));
-        }
-        historical = client.getHistoricalStats(Tracer.traceInfo(), context.rpcCreds());
-      } finally {
-        ThriftUtil.returnClient(client);
-      }
-    } catch (Exception e) {
-      return null;
-    }
-
-    List<CurrentOperations> currentOps = doCurrentOperations(tsStats);
-
-    if (total.minors.num != 0)
-      currentMinorAvg = (long) (total.minors.elapsed / total.minors.num);
-    if (total.minors.elapsed != 0 && total.minors.num != 0)
-      currentMinorStdDev = stddev(total.minors.elapsed, total.minors.num, total.minors.sumDev);
-    if (total.majors.num != 0)
-      currentMajorAvg = total.majors.elapsed / total.majors.num;
-    if (total.majors.elapsed != 0 && total.majors.num != 0
-        && total.majors.elapsed > total.majors.num)
-      currentMajorStdDev = stddev(total.majors.elapsed, total.majors.num, total.majors.sumDev);
-
-    ActionStatsUpdator.update(total.minors, historical.minors);
-    ActionStatsUpdator.update(total.majors, historical.majors);
-    totalElapsedForAll += total.majors.elapsed + historical.splits.elapsed + total.minors.elapsed;
-
-    minorStdDev = stddev(total.minors.elapsed, total.minors.num, total.minors.sumDev);
-    minorQueueStdDev = stddev(total.minors.queueTime, total.minors.num, total.minors.queueSumDev);
-    majorStdDev = stddev(total.majors.elapsed, total.majors.num, total.majors.sumDev);
-    majorQueueStdDev = stddev(total.majors.queueTime, total.majors.num, total.majors.queueSumDev);
-    splitStdDev = stddev(historical.splits.num, historical.splits.elapsed,
-        historical.splits.sumDev);
-
-    TabletServerDetailInformation details = doDetails(address, tsStats.size());
-
-    List<AllTimeTabletResults> allTime = doAllTimeResults(majorQueueStdDev, minorQueueStdDev,
-        totalElapsedForAll, splitStdDev, majorStdDev, minorStdDev);
-
-    CurrentTabletResults currentRes = doCurrentTabletResults(currentMinorAvg, currentMinorStdDev,
-        currentMajorAvg, currentMajorStdDev);
-
-    return new TabletServerSummary(details, allTime, currentRes, currentOps);
-  }
-
-  private static final int concurrentScans = Monitor.getContext().getConfiguration()
-      .getCount(Property.TSERV_READ_AHEAD_MAXCONCURRENT);
+  void fetchColumnFamily(Text col);
 
   /**
-   * Generates the server stats
+   * Adds a column to the list of columns that will be fetched by this scanner. The column is
+   * identified by family and qualifier. By default when no columns have been added the scanner
+   * fetches all columns.
    *
-   * @return Server stat list
+   * <p>
+   * <b>WARNING</b>. Using this method with custom iterators may have unexpected results. Iterators
+   * have control over which column families are fetched. However iterators have no control over
+   * which column qualifiers are fetched. When this method is called it activates a system iterator
+   * that only allows the requested family/qualifier pairs through. This low level filtering
+   * prevents custom iterators from requesting additional column families when calling seek.
+   *
+   * <p>
+   * For an example, assume fetchColumns(A, Q1) and fetchColumns(B,Q1) is called on a scanner and a
+   * custom iterator is configured. The families (A,B) will be passed to the seek method of the
+   * custom iterator. If the custom iterator seeks its source iterator using the families (A,B,C),
+   * it will never see any data from C because the system iterator filtering A:Q1 and B:Q1 will
+   * prevent the C family from getting through. ACCUMULO-3905 also has an example of the type of
+   * problem this method can cause.
+   *
+   * <p>
+   * tl;dr If using a custom iterator with a seek method that adds column families, then may want to
+   * avoid using this method.
+   *
+   * @param colFam
+   *          the column family of the column to be fetched
+   * @param colQual
+   *          the column qualifier of the column to be fetched
    */
-  @Path("serverStats")
-  @GET
-  public ServerStats getServerStats() {
+  void fetchColumn(Text colFam, Text colQual);
 
-    ServerStats stats = new ServerStats();
+  /**
+   * Adds a column to the list of columns that will be fetch by this scanner.
+   *
+   * @param column
+   *          the {@link Column} to fetch
+   * @since 1.7.0
+   */
+  void fetchColumn(Column column);
 
-    stats.addStats(
-        new ServerStat(ManagementFactory.getOperatingSystemMXBean().getAvailableProcessors(), true,
-            100, "OS Load", "osload"));
-    stats.addStats(new ServerStat(1000, true, 1, "Ingest Entries", "ingest"));
-    stats.addStats(new ServerStat(10000, true, 1, "Scan Entries", "query"));
-    stats.addStats(new ServerStat(10, true, 10, "Ingest MB", "ingestMB"));
-    stats.addStats(new ServerStat(5, true, 10, "Scan MB", "queryMB"));
-    stats.addStats(new ServerStat(concurrentScans * 2, false, 1, "Running Scans", "scans"));
-    stats.addStats(new ServerStat(50, true, 10, "Scan Sessions", "scansessions"));
-    stats.addStats(new ServerStat(60000, false, 1, "Hold Time", "holdtime"));
-    stats.addStats(new ServerStat(1, false, 100, "Overall Avg", true, "allavg"));
-    stats.addStats(new ServerStat(1, false, 100, "Overall Max", true, "allmax"));
+  /**
+   * Clears the columns to be fetched (useful for resetting the scanner for reuse). Once cleared,
+   * the scanner will fetch all columns.
+   */
+  void clearColumns();
 
-    return stats;
-  }
+  /**
+   * Clears scan iterators prior to returning a scanner to the pool.
+   */
+  void clearScanIterators();
 
-  private TabletServerDetailInformation doDetails(HostAndPort address, int numTablets) {
+  /**
+   * Returns an iterator over an accumulo table. This iterator uses the options that are currently
+   * set for its lifetime, so setting options will have no effect on existing iterators.
+   *
+   * <p>
+   * Keys returned by the iterator are not guaranteed to be in sorted order.
+   *
+   * @return an iterator over Key,Value pairs which meet the restrictions set on the scanner
+   */
+  @Override
+  Iterator<Entry<Key,Value>> iterator();
 
-    return new TabletServerDetailInformation(numTablets, total.numEntries, total.minors.status,
-        total.majors.status, historical.splits.status);
-  }
+  /**
+   * This setting determines how long a scanner will automatically retry when a failure occurs. By
+   * default, a scanner will retry forever.
+   *
+   * <p>
+   * Setting the timeout to zero (with any time unit) or {@link Long#MAX_VALUE} (with
+   * {@link TimeUnit#MILLISECONDS}) means no timeout.
+   *
+   * @param timeOut
+   *          the length of the timeout
+   * @param timeUnit
+   *          the units of the timeout
+   * @since 1.5.0
+   */
+  void setTimeout(long timeOut, TimeUnit timeUnit);
 
-  private List<AllTimeTabletResults> doAllTimeResults(double majorQueueStdDev,
-      double minorQueueStdDev, double totalElapsedForAll, double splitStdDev, double majorStdDev,
-      double minorStdDev) {
+  /**
+   * Returns the setting for how long a scanner will automatically retry when a failure occurs.
+   *
+   * @return the timeout configured for this scanner
+   * @since 1.5.0
+   */
+  long getTimeout(TimeUnit timeUnit);
 
-    List<AllTimeTabletResults> allTime = new ArrayList<>();
+  /**
+   * Closes any underlying connections on the scanner. This may invalidate any iterators derived
+   * from the Scanner, causing them to throw exceptions.
+   *
+   * @since 1.5.0
+   */
+  @Override
+  void close();
 
-    // Minor Compaction Operation
-    allTime.add(new AllTimeTabletResults("Minor&nbsp;Compaction", total.minors.num,
-        total.minors.fail,
-        total.minors.num != 0 ? (total.minors.queueTime / total.minors.num) : null,
-        minorQueueStdDev, total.minors.num != 0 ? (total.minors.elapsed / total.minors.num) : null,
-        minorStdDev, total.minors.elapsed));
+  /**
+   * Returns the authorizations that have been set on the scanner
+   *
+   * @since 1.7.0
+   * @return The authorizations set on the scanner instance
+   */
+  Authorizations getAuthorizations();
 
-    // Major Compaction Operation
-    allTime.add(new AllTimeTabletResults("Major&nbsp;Compaction", total.majors.num,
-        total.majors.fail,
-        total.majors.num != 0 ? (total.majors.queueTime / total.majors.num) : null,
-        majorQueueStdDev, total.majors.num != 0 ? (total.majors.elapsed / total.majors.num) : null,
-        majorStdDev, total.majors.elapsed));
-    // Split Operation
-    allTime.add(
-        new AllTimeTabletResults("Split", historical.splits.num, historical.splits.fail, null, null,
-            historical.splits.num != 0 ? (historical.splits.elapsed / historical.splits.num) : null,
-            splitStdDev, historical.splits.elapsed));
+  /**
+   * Setting this will cause the scanner to read sample data, as long as that sample data was
+   * generated with the given configuration. By default this is not set and all data is read.
+   *
+   * <p>
+   * One way to use this method is as follows, where the sampler configuration is obtained from the
+   * table configuration. Sample data can be generated in many different ways, so its important to
+   * verify the sample data configuration meets expectations.
+   *
+   * <pre>
+   * <code>
+   *   // could cache this if creating many scanners to avoid RPCs.
+   *   SamplerConfiguration samplerConfig =
+   *     connector.tableOperations().getSamplerConfiguration(table);
+   *   // verify table's sample data is generated in an expected way before using
+   *   userCode.verifySamplerConfig(samplerConfig);
+   *   scanner.setSamplerCongiguration(samplerConfig);
+   * </code>
+   * </pre>
+   *
+   * <p>
+   * Of course this is not the only way to obtain a {@link SamplerConfiguration}, it could be a
+   * constant, configuration, etc.
+   *
+   * <p>
+   * If sample data is not present or sample data was generated with a different configuration, then
+   * the scanner iterator will throw a {@link SampleNotPresentException}. Also if a table's sampler
+   * configuration is changed while a scanner is iterating over a table, a
+   * {@link SampleNotPresentException} may be thrown.
+   *
+   * @since 1.8.0
+   */
+  void setSamplerConfiguration(SamplerConfiguration samplerConfig);
 
-    return allTime;
-  }
+  /**
+   * @return currently set sampler configuration. Returns null if no sampler configuration is set.
+   * @since 1.8.0
+   */
+  SamplerConfiguration getSamplerConfiguration();
 
-  private CurrentTabletResults doCurrentTabletResults(double currentMinorAvg,
-      double currentMinorStdDev, double currentMajorAvg, double currentMajorStdDev) {
+  /**
+   * Clears sampler configuration making a scanner read all data. After calling this,
+   * {@link #getSamplerConfiguration()} should return null.
+   *
+   * @since 1.8.0
+   */
+  void clearSamplerConfiguration();
 
-    return new CurrentTabletResults(currentMinorAvg, currentMinorStdDev, currentMajorAvg,
-        currentMajorStdDev);
-  }
+  /**
+   * This setting determines how long a scanner will wait to fill the returned batch. By default, a
+   * scanner wait until the batch is full.
+   *
+   * <p>
+   * Setting the timeout to zero (with any time unit) or {@link Long#MAX_VALUE} (with
+   * {@link TimeUnit#MILLISECONDS}) means no timeout.
+   *
+   * @param timeOut
+   *          the length of the timeout
+   * @param timeUnit
+   *          the units of the timeout
+   * @since 1.8.0
+   */
+  void setBatchTimeout(long timeOut, TimeUnit timeUnit);
 
-  private List<CurrentOperations> doCurrentOperations(List<TabletStats> tsStats) throws Exception {
+  /**
+   * Returns the timeout to fill a batch in the given TimeUnit.
+   *
+   * @return the batch timeout configured for this scanner
+   * @since 1.8.0
+   */
+  long getBatchTimeout(TimeUnit timeUnit);
 
-    List<CurrentOperations> currentOperations = new ArrayList<>();
+  /**
+   * Sets the name of the classloader context on this scanner. See the administration chapter of the
+   * user manual for details on how to configure and use classloader contexts.
+   *
+   * @param classLoaderContext
+   *          name of the classloader context
+   * @throws NullPointerException
+   *           if context is null
+   * @since 1.8.0
+   */
+  void setClassLoaderContext(String classLoaderContext);
 
-    for (TabletStats info : tsStats) {
-      if (info.extent == null) {
-        historical = info;
-        continue;
-      }
-      total.numEntries += info.numEntries;
-      ActionStatsUpdator.update(total.minors, info.minors);
-      ActionStatsUpdator.update(total.majors, info.majors);
+  /**
+   * Clears the current classloader context set on this scanner
+   *
+   * @since 1.8.0
+   */
+  void clearClassLoaderContext();
 
-      KeyExtent extent = new KeyExtent(info.extent);
-      Table.ID tableId = extent.getTableId();
-      MessageDigest digester = MessageDigest.getInstance("MD5");
-      if (extent.getEndRow() != null && extent.getEndRow().getLength() > 0) {
-        digester.update(extent.getEndRow().getBytes(), 0, extent.getEndRow().getLength());
-      }
-      String obscuredExtent = Base64.getEncoder().encodeToString(digester.digest());
-      String displayExtent = String.format("[%s]", obscuredExtent);
+  /**
+   * Returns the name of the current classloader context set on this scanner
+   *
+   * @return name of the current context
+   * @since 1.8.0
+   */
+  String getClassLoaderContext();
 
-      String tableName = Tables.getPrintableTableInfoFromId(Monitor.getContext(), tableId);
-
-      currentOperations.add(
-          new CurrentOperations(tableName, tableId, displayExtent, info.numEntries, info.ingestRate,
-              info.queryRate, info.minors.num != 0 ? info.minors.elapsed / info.minors.num : null,
-              stddev(info.minors.elapsed, info.minors.num, info.minors.sumDev),
-              info.minors.elapsed != 0 ? info.minors.count / info.minors.elapsed : null,
-              info.majors.num != 0 ? info.majors.elapsed / info.majors.num : null,
-              stddev(info.majors.elapsed, info.majors.num, info.majors.sumDev),
-              info.majors.elapsed != 0 ? info.majors.count / info.majors.elapsed : null));
-    }
-
-    return currentOperations;
-  }
-
-  private static double stddev(double elapsed, double num, double sumDev) {
-    if (num != 0) {
-      double average = elapsed / num;
-      return Math.sqrt((sumDev / num) - (average * average));
-    }
-    return 0;
-  }
+  /**
+   * Set hints for the configured {@link ScanPrioritizer} and {@link ScanDispatcher}. These hints
+   * are available on the server side via {@link ScanInfo#getExecutionHints()} Depending on the
+   * configuration, these hints may be ignored. These hints should never impacts what data is
+   * returned by a scan, only how quickly it is returned.
+   *
+   * <p>
+   * The default configuration for Accumulo will ignore hints. See {@link HintScanPrioritizer} and
+   * {@link SimpleScanDispatcher} for examples of classes that can react to hints.
+   *
+   * @since 2.0.0
+   */
+  void setExecutionHints(Map<String,String> hints);
 }

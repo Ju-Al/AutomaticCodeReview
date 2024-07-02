@@ -258,8 +258,6 @@ def _get_from_metadata(testcase, name):
       strip=True,
       remove_empty=True)
 
-
-def notify_issue_update(testcase, status):
   """Notify that an issue update occurred (i.e. issue was filed or closed)."""
   topic = local_config.ProjectConfig().get('issue_updates.pubsub_topic')
   if not topic:

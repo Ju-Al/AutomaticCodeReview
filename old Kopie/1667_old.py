@@ -89,9 +89,6 @@ def mask_between_time(dts, start, end, include_start=True, include_end=True):
         left_op(start_micros, time_micros),
         right_op(time_micros, end_micros),
     )
-
-
-def find_in_sorted_index(dts, dt):
     """
     Find the index of ``dt`` in ``dts``.
 

@@ -1,11 +1,4 @@
 /**
-    public Object visit(ASTNewObjectExpression node, Object data) {
-        checkNewObjects(node, data);
-        return data;
-    }
-    @Override
-    public Object visit(ASTVariableDeclaration node, Object data) {
-        findSafeLiterals(node);
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -46,7 +39,12 @@ public class ApexOpenRedirectRule extends AbstractApexRule {
     }
 
     @Override
-    public Object visit(ASTUserClass node, Object data) {
+    public Object visit(ASTNewObjectExpression node, Object data) {
+        checkNewObjects(node, data);
+    @Override
+    public Object visit(ASTVariableDeclaration node, Object data) {
+        findSafeLiterals(node);
+        return data;
         if (Helper.isTestMethodOrClass(node)) {
             return data;
         }

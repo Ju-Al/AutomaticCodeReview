@@ -1653,7 +1653,6 @@ void FixBondReact::find_landlocked_atoms(int myrxn)
     }
   }
 
-  // additionally, if a deleted atom is bonded to a undeleted atom, bad
   for (int i = 0; i < onemol->natoms; i++) {
     if (delete_atoms[i][myrxn] == 1) {
       int ii = reverse_equiv[i][1][myrxn] - 1;

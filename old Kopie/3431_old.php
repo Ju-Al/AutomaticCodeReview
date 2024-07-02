@@ -1,5 +1,4 @@
 <?php
-
 /*
  * This file is part of Cachet.
  *
@@ -9,68 +8,27 @@
  * file that was distributed with this source code.
  */
 
-namespace CachetHQ\Cachet\Bus\Commands\Subscriber;
+namespace CachetHQ\Cachet\Bus\Handlers\Events;
 
 /**
- * This is the subscribe subscriber command.
+ * This class is called immediately before sending a message into the mail channel.
  *
+ * @author Graham Campbell <graham@alt-three.com>
  * @author James Brooks <james@alt-three.com>
  */
-final class SubscribeSubscriberCommand
+class MessageSending
 {
     /**
-     * The subscriber email.
+     * Handle the any actions that need storing.
      *
-     * @var string
-     */
-    public $email;
-
-    /**
-     * The subscriber auto verification.
-     *
-     * @var bool
-     */
-    public $verified;
-
-    /**
-     * The list of subscriptions to set the subscriber up with.
-     *
-     * @var array|null
-     */
-    public $subscriptions;
-
-    /**
-     * If the subscriber accepted the privacy statement.
-     *
-     * @var bool
-     */
-    public $acceptPrivacyStatement;
-
-    /**
-     * The validation rules.
-     *
-     * @var array
-     */
-    public $rules = [
-        'email'                  => 'required|email',
-        'acceptPrivacyStatement' => 'required|accepted',
-    ];
-
-    /**
-     * Create a new subscribe subscriber command instance.
-     *
-     * @param string     $email
-     * @param bool       $verified
-    public function __construct($email, $verified = false, $subscriptions = null)
-     * @param array|null $subscriptions
+     * @param \Illuminate\Mail\Events\MessageSending $event
      *
      * @return void
      */
-    public function __construct($email, $verified = false, $subscriptions = null, $acceptPrivacyStatement = null)
+    public function handle($event)
     {
-        $this->email = $email;
-        $this->verified = $verified;
-        $this->subscriptions = $subscriptions;
-        $this->acceptPrivacyStatement = $acceptPrivacyStatement;
+        if ($unsubscribeUrl = $event->data['unsubscribeUrl'] ?? null) {
+            $event->message->getHeaders()->addTextHeader('List-Unsubscribe', '<'.$unsubscribeUrl.'>');
+        }
     }
 }

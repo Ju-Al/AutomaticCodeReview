@@ -1,8 +1,5 @@
 package cli
 
-			s.Update("Updating on-demand runner config %q...", od.Id)
-			s.Update("No existing on-demand runner config found for id %q...command will create a new config", c.flagId)
-			od = &pb.OnDemandRunnerConfig{}
 import (
 	"io/ioutil"
 	"path/filepath"
@@ -84,7 +81,9 @@ func (c *OnDemandRunnerConfigApplyCommand) Run(args []string) int {
 
 		if resp != nil {
 			od = resp.Config
-			s.Update("Updating on-demand runner config %q (%q)...", od.Name, od.Id)
+			s.Update("No existing on-demand runner config found for id %q...command will create a new config", c.flagId)
+			od = &pb.OnDemandRunnerConfig{}
+			s.Update("Updating on-demand runner config %q...", od.Id)
 			updated = true
 		} else {
 			s.Update("No existing on-demand runner config found for id %q...command will create a new config", c.flagName)

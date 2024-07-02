@@ -1,5 +1,4 @@
 import itertools
-
 import mmcv
 import numpy as np
 from pycocotools.coco import COCO

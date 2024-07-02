@@ -1,5 +1,4 @@
 // Copyright 2016 Google LLC
-						Header: http.Header{"X-Cloud-Trace-Context": {"105445aa7843bc8bf206b120001000/0;o=0"}},
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -287,9 +286,8 @@ func TestToLogEntryTrace(t *testing.T) {
 					},
 				},
 			},
+						Header: http.Header{"X-Cloud-Trace-Context": {"105445aa7843bc8bf206b120001000/0;o=0"}},
 			logging.LogEntry{Trace: "projects/P/traces/105445aa7843bc8bf206b120001000", SpanId: "000000000000004a", TraceSampled: true},
-		},
-		{
 			"X-Trace-Context header with blank trace",
 			Entry{
 				HTTPRequest: &HTTPRequest{

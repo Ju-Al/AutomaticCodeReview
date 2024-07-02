@@ -360,7 +360,6 @@ public class NavDrawerFragment extends Fragment implements AdapterView.OnItemCli
     };
 
     private void loadData() {
-        progressBar.setVisibility(View.VISIBLE);
         disposable = Observable.fromCallable(DBReader::getNavDrawerData)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())

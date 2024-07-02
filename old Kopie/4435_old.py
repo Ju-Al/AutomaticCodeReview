@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-                 extra_directives={}):
 
 from __future__ import print_function
 
@@ -946,7 +945,7 @@ class CythonCompileTestCase(unittest.TestCase):
                  fork=True, language_level=2, warning_errors=False,
                  test_determinism=False,
                  common_utility_dir=None, pythran_dir=None, stats=None, add_cython_import=False,
-                 extra_directives=None):
+                 extra_directives={}):
         if not extra_directives:
             extra_directives = {}
         self.test_directory = test_directory

@@ -1,22 +1,4 @@
 using System;
-        /// Removes the player from the game.
-        public static bool RemovePlayer()
-        {
-            if (logger.LogEnabled()) logger.Log("ClientScene.RemovePlayer() called with connection [" + readyConnection + "]");
-
-            if (readyConnection.identity != null)
-            {
-                readyConnection.Send(new RemovePlayerMessage());
-
-                Object.Destroy(readyConnection.identity.gameObject);
-
-                readyConnection.identity = null;
-                localPlayer = null;
-
-                return true;
-            }
-            return false;
-        }
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -140,8 +122,25 @@ namespace Mirror
             readyConnection.Send(new AddPlayerMessage());
             return true;
         }
+        /// Removes the player from the game.
+        public static bool RemovePlayer()
+        {
+            if (logger.LogEnabled()) logger.Log("ClientScene.RemovePlayer() called with connection [" + readyConnection + "]");
 
-        // Deprecated 5/2/2020
+            if (readyConnection.identity != null)
+            {
+                readyConnection.Send(new RemovePlayerMessage());
+
+                Object.Destroy(readyConnection.identity.gameObject);
+
+                readyConnection.identity = null;
+                localPlayer = null;
+
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>
         /// Obsolete: Removed as a security risk
         /// </summary>

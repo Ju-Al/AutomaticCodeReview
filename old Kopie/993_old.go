@@ -1,7 +1,4 @@
 // Copyright 2014-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-		timer := newDisconnectionTimer(mockWsClient, acsSession.heartbeatTimeout(), acsSession.heartbeatJitter())
-		defer timer.Stop()
-		acsSession.startACSSession(mockWsClient, timer)
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
 // not use this file except in compliance with the License. A copy of the
@@ -807,7 +804,9 @@ func TestConnectionIsClosedOnIdle(t *testing.T) {
 		_heartbeatJitter:     10 * time.Millisecond,
 	}
 	go func() {
-		acsSession.startACSSession(mockWsClient)
+		timer := newDisconnectionTimer(mockWsClient, acsSession.heartbeatTimeout(), acsSession.heartbeatJitter())
+		defer timer.Stop()
+		acsSession.startACSSession(mockWsClient, timer)
 	}()
 
 	// Wait for connection to be closed. If the connection is not closed

@@ -1,5 +1,4 @@
 <?php
-
 namespace Wallabag\CoreBundle\Controller;
 
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;

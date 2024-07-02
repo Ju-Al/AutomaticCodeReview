@@ -1,6 +1,5 @@
 package com.fsck.k9.mail.store.pop3;
 
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;

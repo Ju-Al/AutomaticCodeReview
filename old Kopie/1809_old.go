@@ -1,5 +1,4 @@
 package bdnproto
-
 import (
 	"errors"
 	"testing"

@@ -1,5 +1,4 @@
 /** Makes a shot of a page.  Does all the fancy work.
-      onComplete: watchFunction(function (response) {
 
     main.js sets up ShotContext() to do the work.  Shot() is the model object
     representing shots.
@@ -537,7 +536,7 @@ class Shot extends AbstractShot {
       url: url,
       content: body,
       contentType: "application/json",
-      onComplete: watchFunction((response) => {
+      onComplete: watchFunction(function (response) {
         if (response.status >= 200 && response.status < 300) {
           for (let clipId in response.json.clips) {
             let clip = this.getClip(clipId);

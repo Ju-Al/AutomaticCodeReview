@@ -1,5 +1,4 @@
 // Copyright (c) 2013-2019 K Team. All Rights Reserved.
-                global.stateLog.log(StateLog.LogEvent.SRULE, specRule.toKRewrite(), constrainedTerm.term(), constrainedTerm.constraint(), result.term(), result.constraint());
 package org.kframework.backend.java.symbolic;
 
 import com.google.common.base.Stopwatch;
@@ -1101,6 +1100,7 @@ Step " + step + ": eliminated!
     private ConstrainedTerm applySpecRules(ConstrainedTerm constrainedTerm, List<Rule> specRules) {
         if (global.javaExecutionOptions.logRulesPublic) {
             System.err.println("\nSpec rule application phase\n" +
+                global.stateLog.log(StateLog.LogEvent.SRULE, specRule.toKRewrite(), constrainedTerm.term(), constrainedTerm.constraint(), result.term(), result.constraint());
                     "==========================================\n");
         }
         for (Rule specRule : specRules) {

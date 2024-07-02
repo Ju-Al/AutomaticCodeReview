@@ -172,7 +172,6 @@ TEST_F(SynchronizerTest, ValidWhenBadStorage) {
  * @then Successful commit
  */
 TEST_F(SynchronizerTest, ValidWhenValidChain) {
-  std::shared_ptr<shared_model::interface::Peer> peer =
       makePeer("127.0.0.1", shared_model::crypto::PublicKey("111"));
   std::shared_ptr<PeerList> ledger_peers =
       std::make_shared<PeerList>(PeerList{peer});

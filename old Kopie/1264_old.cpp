@@ -1,5 +1,4 @@
 /******************************************************************************
-        double pi = 3.1415926535;
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -81,7 +80,7 @@ SOFA_XITACTPLUGIN_API void UpdateForceFeedBack(void* toolData)
     if(myData->xiToolData[0]->lcp_forceFeedback)
     {
         //get tool state for each xitact
-        double pi = M_PI;
+        double pi = 3.1415926535;
         for(unsigned int i=0; i<myData->xiToolData.size(); i++)
         {
             xiTrocarAcquire();

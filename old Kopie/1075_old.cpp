@@ -178,7 +178,6 @@ int main()
     {
         // Build the hopper.
         auto hopper = buildHopper();
-        hopper.finalizeFromProperties(); //required due to known bug
 
         // Show all Components in the model.
         showSubcomponentInfo(hopper);

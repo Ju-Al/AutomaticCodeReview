@@ -1,5 +1,4 @@
 import mmcv
-import numpy as np
 import torch
 import torch.nn as nn
 from utils import verify_model

@@ -48,7 +48,6 @@ final class AddMassMediaCommand extends Command
 
     protected function configure(): void
     {
-        \assert(null !== static::$defaultDescription);
 
         $this
             ->setDescription(static::$defaultDescription)

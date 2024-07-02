@@ -1,6 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-func NameForTask(task string) string {
-	return fmt.Sprintf("task-%s", task)
 // SPDX-License-Identifier: Apache-2.0
 
 package stack
@@ -38,6 +36,7 @@ func NameForEnv(app, env string) string {
 }
 
 // NameForTask returns the stack name for a task.
-func NameForTask(task string) TaskStackName {
+func NameForTask(task string) string {
+	return fmt.Sprintf("task-%s", task)
 	return TaskStackName(fmt.Sprintf(fmtTaskStackName, task))
 }

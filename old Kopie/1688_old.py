@@ -1,5 +1,4 @@
 import logger
-import time
 
 class CacheObject(object):
     

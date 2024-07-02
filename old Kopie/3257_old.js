@@ -21,7 +21,6 @@ export const addProductToExistingWishlistFromDialog = wishlistName => {
         .contains(wishlistName)
         .click();
 };
-
 /**
  * Utility function to add simple product to cart from the product page
  *

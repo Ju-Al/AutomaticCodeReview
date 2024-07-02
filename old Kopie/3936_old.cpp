@@ -129,8 +129,6 @@ namespace fheroes2
             assert( 0 );
             return nullptr;
         }
-    }
-
     SupportedLanguage getLanguageFromAbbreviation( const std::string & abbreviation )
     {
         if ( abbreviation.empty() ) {

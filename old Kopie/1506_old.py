@@ -1,6 +1,5 @@
 from os.path import dirname, exists, join
 
-
 def _get_config_directory():
     """ Find the predefined detector config directory """
     try:

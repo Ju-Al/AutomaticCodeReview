@@ -1,5 +1,4 @@
 /*
-          .createDatagramSocket(new DatagramSocketOptions())
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -151,7 +150,7 @@ public class PeerDiscoveryAgent implements DisconnectCallback {
       LOG.info("Starting peer discovery agent on host={}, port={}", host, port);
 
       vertx
-          .createDatagramSocket(new DatagramSocketOptions().setIpV6(true))
+          .createDatagramSocket(new DatagramSocketOptions())
           .listen(
               port,
               host,

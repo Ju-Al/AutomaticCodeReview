@@ -594,7 +594,6 @@ class PyparsingMultiLineTextParser(PyparsingSingleLineTextParser):
 
   BUFFER_SIZE = 2048
 
-  # The maximum number of consecutive lines that don't match known line
   # structures to encounter before aborting parsing.
   MAXIMUM_CONSECUTIVE_LINE_FAILURES = 20
 

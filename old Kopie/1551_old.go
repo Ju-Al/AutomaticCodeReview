@@ -368,7 +368,6 @@ var opts struct {
 			} `positional-args:"true"`
 		} `command:"filter" description:"Filter the given set of targets according to some rules"`
 	} `command:"query" description:"Queries information about the build graph"`
-	Codegen struct {
 		Gitignore string `long:"update_gitignore" description:"The gitignore file to write the generated sources to"`
 		Args   struct {
 			Targets []core.BuildLabel `positional-arg-name:"targets" description:"Targets to filter"`

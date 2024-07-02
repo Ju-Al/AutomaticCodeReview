@@ -233,8 +233,6 @@ class Main {
 			'tpcPath'             => defined( 'TIOB_PATH' ) ? TIOB_PATH . 'template-patterns-collection.php' : 'template-patterns-collection/template-patterns-collection.php',
 			'tpcAdminURL'         => admin_url( 'themes.php?page=tiob-starter-sites' ),
 		];
-
-		if ( ! $this->is_valid_license() ) {
 			$starter_sites_desc                             = $data['strings']['starterSitesCardDescription'];
 			$neve_pro_upsell                                = esc_html__( 'Upgrade to the Pro version and get instant access to all Premium Starter Sites; including Expert Sites, and much more.', 'neve' );
 			$starter_sites_desc_upsell                      = $starter_sites_desc . '<br/><br/>' . $neve_pro_upsell;

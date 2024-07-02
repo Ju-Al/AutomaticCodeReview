@@ -102,7 +102,6 @@ func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	// Hack the OS type if we run the test not on Windows Node.
 	// Because we test some Windows only functions.
 	if !env.IsWindowsPlatform() {
 		env.WindowsOS = runtime.GOOS

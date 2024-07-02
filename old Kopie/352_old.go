@@ -162,7 +162,6 @@ func deterFromConfig(name ...string) *platform.Deterlab {
 	dbg.SetDebugVisible(d.Debug)
 	return d
 }
-
 // Runs a command on the remote host and outputs eventual error
 func runSSH(host, cmd string) {
 	if _, err := platform.SSHRun("", host, cmd); err != nil {

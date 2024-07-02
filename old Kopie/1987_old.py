@@ -1,5 +1,4 @@
 # Microsoft Azure Linux Agent
-           "-run-exthandlers|-show-configuration]"
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -293,7 +292,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
            "-configuration-path:<path to configuration file>" # pylint: disable=C0330
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-mode:full]"
+           "-run-exthandlers|-show-configuration]"
            "").format(sys.argv[0])
     s += "\n" # pylint: disable=C0103
     return s

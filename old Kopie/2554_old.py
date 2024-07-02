@@ -232,9 +232,11 @@ class Uniswap(EthereumModule):
             result_data = result['liquidityPositions']
 
             for lp in result_data:
-                lp_pair = lp['pair']
-                lp_total_supply = FVal(lp_pair['totalSupply'])
+                user_address = to_checksum_address(lp['user']['id'])
                 user_lp_balance = FVal(lp['liquidityTokenBalance'])
+                lp_pair = lp['pair']
+                lp_address = to_checksum_address(lp_pair['id'])
+                lp_total_supply = FVal(lp_pair['totalSupply'])
                 try:
                     user_address = deserialize_ethereum_address(lp['user']['id'])
                     lp_address = deserialize_ethereum_address(lp_pair['id'])
@@ -926,7 +928,7 @@ class Uniswap(EthereumModule):
             result_data = result['tokenDayDatas']
 
             for tdd in result_data:
-                token_address = to_checksum_address(tdd['token']['id'])
+                try:
                     token_address = deserialize_ethereum_address(tdd['token']['id'])
                 except DeserializationError as e:
                     msg = f'Error deserializing address {tdd["token"]["id"]}'

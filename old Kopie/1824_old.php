@@ -37,9 +37,6 @@ class ContentSaveSubscriber implements EventSubscriberInterface
         $this->logger->info('Saved content "{title}" ({content_type} № {content_id})', $context);
 
         return $event;
-    }
-
-    public function preDelete(ContentEvent $event): ContentEvent
     {
         // Saving an entry in the log now. post_delete doesn't have content anymore.
         $context = [

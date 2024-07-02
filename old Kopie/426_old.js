@@ -37,7 +37,6 @@ export default Ember.Component.extend({
   message: function() {
     var message;
     message = this.get('request.message');
-
     if (message === 'github pages branch') {
       this.set('isGHPages', true);
     }

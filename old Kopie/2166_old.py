@@ -427,7 +427,6 @@ class ImageExportToolTest(test_lib.CLIToolTestCase):
       extracted_files = self._RecursiveList(temp_directory)
 
     self.assertEqual(sorted(extracted_files), expected_extracted_files)
-  
   @shared_test_lib.skipUnlessHasTestFile(['artifacts'])
   @shared_test_lib.skipUnlessHasTestFile(['image.qcow2'])
   def testProcessSourcesExtractWithArtifactsGroupFilter(self):

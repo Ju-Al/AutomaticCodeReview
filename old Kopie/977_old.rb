@@ -121,7 +121,6 @@ module Beaker
           :project                => 'Beaker',
           :department             => 'unknown',
           :created_by             => ENV['USER'] || ENV['USERNAME'] || 'unknown',
-          :host_tags              => {
                                       :project    => 'Beaker',
                                       :department => 'unknown',
                                       :created_by => ENV['USER'] || ENV['USERNAME'] || 'unknown'

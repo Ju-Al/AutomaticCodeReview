@@ -1,6 +1,4 @@
 import json
-        result = requests.post(
-            "{}/artist-credit-from-artist-msid/json".format(current_app.config['LISTENBRAINZ_LABS_API_URL']), json=request_data)
 import calendar
 import requests
 from datetime import datetime
@@ -723,7 +721,8 @@ def _get_mbids_from_msids(artist_msids: list) -> list:
     request_data = [{"artist_msid": artist_msid} for artist_msid in artist_msids]
     artist_mbids = []
     try:
-        result = requests.post("{}/artist-credit-from-artist-msid/json?count={}"
+        result = requests.post(
+            "{}/artist-credit-from-artist-msid/json".format(current_app.config['LISTENBRAINZ_LABS_API_URL']), json=request_data)
                                .format(current_app.config['LISTENBRAINZ_LABS_API_URL'], len(request_data)),
                                json=request_data)
         # Raise error if non 200 response is received

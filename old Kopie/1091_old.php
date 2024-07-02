@@ -1151,8 +1151,6 @@ class WooThemes_Sensei_Frontend {
 			$this->sensei_get_template_part( 'content', 'no-permissions' );
 		} // End While Loop
 	} // End sensei_no_permissions_main_content()
-
-
     /**
      * sensei_course_category_order_main_content function
      *

@@ -1,5 +1,4 @@
 const { shim } = require('lib/shim.js');
-	return templates;
 const { time } = require('lib/time-utils.js');
 const Mustache = require('mustache');
 
@@ -57,7 +56,7 @@ TemplateUtils.loadTemplates = async function(filePath) {
 		});
 	}
 
-	return templates.sort((a, b) => { return a.label.localeCompare(b.label); });
+	return templates;
 };
 
 module.exports = TemplateUtils;

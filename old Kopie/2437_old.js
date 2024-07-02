@@ -1,7 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////
-    nickname(value, isAdmin) {
-        checkTypes(arguments, ['string', 'boolean']);
-        return new Credentials('nickname', value, { is_admin: isAdmin || false });
 //
 // Copyright 2016 Realm Inc.
 //
@@ -424,7 +421,9 @@ const credentialsMethods = {
         return new Credentials('anonymous');
     },
 
-    nickname(value) {
+    nickname(value, isAdmin) {
+        checkTypes(arguments, ['string', 'boolean']);
+        return new Credentials('nickname', value, { is_admin: isAdmin || false });
         checkTypes(arguments, ['string' ]);
         return new Credentials('nickname', value);
     },

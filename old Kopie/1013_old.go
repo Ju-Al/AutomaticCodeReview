@@ -1,6 +1,4 @@
 // Package skipchain implements a service in the cothority that
-			return nil, onet.NewClientErrorCode(ErrorBlockNotFound,
-				"Didn't find latest block")
 // keeps track of a skipchain. It offers API-calls to create
 // new skipchains, add blocks to existing skipchains, and
 // request updates to known skipchain.
@@ -146,7 +144,8 @@ func (s *Service) StoreSkipBlock(psbd *StoreSkipBlock) (*StoreSkipBlockReply, on
 		// We're appending a block to an existing chain
 		prev = s.db.GetByID(psbd.LatestID)
 		if prev == nil {
-			// Did not find the block they claim is the latest.
+			return nil, onet.NewClientErrorCode(ErrorBlockNotFound,
+				"Didn't find latest block")
 
 			// If we don't know this chain, we give up (so that
 			// they cannot make us run useless chainSyncs and attack

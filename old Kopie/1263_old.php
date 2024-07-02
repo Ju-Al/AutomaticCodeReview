@@ -1,5 +1,4 @@
 <?php
-		if ( isset( $old_value['manual_preload'], $value['manual_preload'] ) && $old_value['manual_preload'] !== $value['manual_preload'] && 1 === (int) $value['manual_preload'] ) {
 namespace WP_Rocket\Subscriber\Preload;
 
 use WP_Rocket\Event_Management\Subscriber_Interface;
@@ -127,7 +126,7 @@ class Preload_Subscriber implements Subscriber_Interface {
 	 * @return void
 	 */
 	public function maybe_launch_preload( $old_value, $value ) {
-		// These values are ignored because they don't impact the cache content.
+		if ( isset( $old_value['manual_preload'], $value['manual_preload'] ) && $old_value['manual_preload'] !== $value['manual_preload'] && 1 === (int) $value['manual_preload'] ) {
 		$ignored_options = [
 			'cache_mobile'                => true,
 			'purge_cron_interval'         => true,

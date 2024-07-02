@@ -38,7 +38,6 @@ Blockly.Blocks['event_whenflagclicked'] = {
   }
 };
 
-Blockly.Blocks['dropdown_whenbroadcast'] = {
   /**
    * Block for broadcast dropdown (used for shadow).
    * @this Blockly.Block

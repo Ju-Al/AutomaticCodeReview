@@ -1,5 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                Assert.Equal(instant, resource.LastUpdated);
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -122,7 +121,7 @@ namespace Microsoft.Health.Fhir.Core.UnitTests.Persistence
 
                 resource = (await _mediator.UpsertResourceAsync(resource)).Resource;
 
-                Assert.Equal(new DateTimeOffset(DateTimeOffset.Now.Date.AddMilliseconds(6), TimeSpan.Zero), resource.LastUpdated);
+                Assert.Equal(instant, resource.LastUpdated);
             }
         }
 

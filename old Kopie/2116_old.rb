@@ -48,7 +48,6 @@ module Mongo
           cursor_document[FIRST_BATCH]
         end
 
-        # The namespace in which this find command was performed.
         #
         # @return [ String ] The namespace, usually in the format
         #   "database.collection".

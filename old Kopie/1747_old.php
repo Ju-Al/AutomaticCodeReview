@@ -1,6 +1,4 @@
 <?php
-		$query = $db->simple_select("users", "uid", "regdate <= ".(int)$regdate." AND postnum <= ".(int)$mybb->settings['prunepostcount']." AND usergroup IN(".$db->escape_string(implode(',', $in_usergroups)).")");
-		while($user = $db->fetch_array($query))
 /**
  * MyBB 1.8
  * Copyright 2014 MyBB Group, All Rights Reserved
@@ -41,9 +39,9 @@ function task_userpruning($task)
 		{
 			$key = array_search('5', $in_usergroups);
 			unset($in_usergroups[$key]);
+		$query = $db->simple_select("users", "uid", "regdate <= ".(int)$regdate." AND postnum <= ".(int)$mybb->settings['prunepostcount']." AND usergroup IN(".$db->escape_string(implode(',', $in_usergroups)).")");
+		while($user = $db->fetch_array($query))
 		}
-
-		$prunepostcount = (int)$mybb->settings['prunepostcount'];
 
 		$regdate = TIME_NOW-((int)$mybb->settings['dayspruneregistered']*24*60*60);
 

@@ -1,17 +1,4 @@
 
-                if (flag == Flag.SEEN) {
-                    flagNames.add("\\Seen");
-                } else if (flag == Flag.DELETED) {
-                    flagNames.add("\\Deleted");
-                } else if (flag == Flag.ANSWERED) {
-                    flagNames.add("\\Answered");
-                } else if (flag == Flag.FLAGGED) {
-                    flagNames.add("\\Flagged");
-                } else if (flag == Flag.FORWARDED
-                        && (mCanCreateKeywords || mPermanentFlagsIndex.contains(Flag.FORWARDED))) {
-                    flagNames.add("$Forwarded");
-                }
-
 package com.fsck.k9.mail.store.imap;
 
 import java.io.ByteArrayInputStream;
@@ -1977,6 +1964,19 @@ public class ImapStore extends RemoteStore {
             } catch (IOException ioe) {
                 throw ioExceptionHandler(mConnection, ioe);
             }
+                if (flag == Flag.SEEN) {
+                    flagNames.add("\\Seen");
+                } else if (flag == Flag.DELETED) {
+                    flagNames.add("\\Deleted");
+                } else if (flag == Flag.ANSWERED) {
+                    flagNames.add("\\Answered");
+                } else if (flag == Flag.FLAGGED) {
+                    flagNames.add("\\Flagged");
+                } else if (flag == Flag.FORWARDED
+                        && (mCanCreateKeywords || mPermanentFlagsIndex.contains(Flag.FORWARDED))) {
+                    flagNames.add("$Forwarded");
+                }
+
         }
 
         private String combineFlags(Iterable<Flag> flags) {

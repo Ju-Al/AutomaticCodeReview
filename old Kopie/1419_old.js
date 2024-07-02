@@ -1,6 +1,4 @@
 // @flow
-                {isDaedalusDiagnosticsDialogOpen && (
-                {isAboutDialogOpen && <AboutDialog />}
 import React, { Component, Fragment } from 'react';
 import { Provider, observer } from 'mobx-react';
 import { ThemeProvider } from 'react-polymorph/lib/components/ThemeProvider';
@@ -48,7 +46,8 @@ export default class App extends Component<{
               <Fragment>
                 <Router history={history} routes={Routes} />
                 {mobxDevTools}
-                {activeDialog === 'daedalusDiagnostics' && (
+                {isAboutDialogOpen && <AboutDialog />}
+                {isDaedalusDiagnosticsDialogOpen && (
                   <DaedalusDiagnosticsDialog />
                 )}
                 {activeDialog === 'about' && <AboutDialog />}

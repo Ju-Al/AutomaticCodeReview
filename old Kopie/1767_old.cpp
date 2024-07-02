@@ -1,5 +1,4 @@
 /**
-        localnode->deleted = true;
  * @file node.cpp
  * @brief Classes for accessing local and remote nodes
  *
@@ -203,7 +202,7 @@ Node::~Node()
     // sync: remove reference from local filesystem node
     if (localnode)
     {
-        localnode->reactToNodeChange(true);
+        localnode->deleted = true;
         localnode->node = NULL;
     }
 

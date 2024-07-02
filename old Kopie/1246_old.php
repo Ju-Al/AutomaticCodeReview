@@ -1,5 +1,4 @@
 <?php
-/**
  * "Get Side Facets" AJAX handler
  *
  * PHP version 7

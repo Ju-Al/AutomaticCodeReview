@@ -883,7 +883,6 @@ class CArgDeclNode(Node):
     annotation = None
     is_dynamic = 0
 
-    @property
     def name_cstring(self):
         try:
             return self.name.as_encoded_c_string_literal()

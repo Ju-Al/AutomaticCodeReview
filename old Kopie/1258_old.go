@@ -1,11 +1,5 @@
 package p2p
 
-// and they have at least one channel in common.
-	iMajor, _, _, err := splitVersion(info.Version)
-	if err != nil {
-		return err
-	}
-	oMajor, _, _, err := splitVersion(other.Version)
 import (
 	"fmt"
 	"net"
@@ -31,8 +25,13 @@ type NodeInfo struct {
 
 // CompatibleWith checks if two NodeInfo are compatible with eachother.
 // CONTRACT: two nodes are compatible if the major version matches and network match
+// and they have at least one channel in common.
 func (info *NodeInfo) CompatibleWith(other *NodeInfo) error {
-	compatible, err := version.CompatibleWith(other.Version)
+	iMajor, _, _, err := splitVersion(info.Version)
+	if err != nil {
+		return err
+	}
+	oMajor, _, _, err := splitVersion(other.Version)
 	if err != nil {
 		return err
 	} else if !compatible {

@@ -379,7 +379,6 @@ func (o *runTaskOpts) Execute() error {
 		return err
 	}
 
-	if o.env == "" {
 		hasDefaultCluster, err := o.defaultClusterGetter.HasDefaultCluster()
 		if err != nil {
 			return err

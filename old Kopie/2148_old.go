@@ -1,9 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-// Metadata returns the Metadata property of the CloudFormation stack's template.
-func (c *CloudFormation) Metadata(name string) (string, error) {
-	out, err := c.GetTemplateSummary(&cloudformation.GetTemplateSummaryInput{
-		StackName: aws.String(name),
-	})
 // SPDX-License-Identifier: Apache-2.0
 
 // Package cloudformation provides a client to make API requests to AWS CloudFormation.
@@ -205,7 +200,11 @@ func (c *CloudFormation) Exists(name string) (bool, error) {
 	return true, nil
 }
 
-// MetadataOpts sets up optional parameters for Metadata function.
+// Metadata returns the Metadata property of the CloudFormation stack's template.
+func (c *CloudFormation) Metadata(name string) (string, error) {
+	out, err := c.GetTemplateSummary(&cloudformation.GetTemplateSummaryInput{
+		StackName: aws.String(name),
+	})
 type MetadataOpts func() *cloudformation.GetTemplateSummaryInput
 
 // WithStackName sets up the stack name for cloudformation.GetTemplateSummaryInput.

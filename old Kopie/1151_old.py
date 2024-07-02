@@ -266,7 +266,6 @@ def parse_performance_features(log_lines,
       stats['startup_crash_count'] = 0
       stats['edges_total'] = int(match.group(2))
 
-    match = LIBFUZZER_EXTRA_COUNTERS_REGEX.match(line)
     if match:
       stats['startup_crash_count'] = 0
 

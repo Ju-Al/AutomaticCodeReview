@@ -124,7 +124,6 @@ class APICompatTestCase(APICompatIntegrationTestCase):
         response = xmltodict.parse(r.data)
         self.assertEqual(response['lfm']['@status'], 'failed')
         self.assertEqual(response['lfm']['error']['@code'], '4')
-
     def test_record_listen(self):
         """ Tests if listen is recorded correctly if valid information is provided. """
 

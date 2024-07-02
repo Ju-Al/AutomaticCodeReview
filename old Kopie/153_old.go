@@ -1,5 +1,4 @@
 package topology_test
-
 import (
 	"fmt"
 	"os"

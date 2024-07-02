@@ -1,12 +1,4 @@
 <?php
-                    $regex = '/@(psalm-)?var[ \t]+' . CommentAnalyzer::TYPE_REGEX . '/';
-                    $match_offset = 2;
-                    $match_offset = 1;
-                    $match_offset = 1;
-                    $regex = '/@(psalm-)?return[ \t]+' . CommentAnalyzer::TYPE_REGEX . '/';
-                    $match_offset = 2;
-                    $regex = '/@(psalm-)method[ \t]+.*/';
-                    $match_offset = 2;
 namespace Psalm;
 
 use PhpParser;
@@ -221,7 +213,14 @@ class CodeLocation
         if ($this->regex_type !== null) {
             switch ($this->regex_type) {
                 case self::VAR_TYPE:
-                    $regex = '/@(?:psalm-)?var[ \t]+' . CommentAnalyzer::TYPE_REGEX . '/';
+                    $regex = '/@(psalm-)?var[ \t]+' . CommentAnalyzer::TYPE_REGEX . '/';
+                    $match_offset = 1;
+                    $match_offset = 1;
+                    $regex = '/@(psalm-)?return[ \t]+' . CommentAnalyzer::TYPE_REGEX . '/';
+                    $match_offset = 2;
+                    $regex = '/@(psalm-)method[ \t]+.*/';
+                    $match_offset = 2;
+                    $match_offset = 2;
                     break;
 
                 case self::FUNCTION_RETURN_TYPE:

@@ -1,6 +1,5 @@
 package multitenant
 
-	reportSize, err := c.s3.StoreReportBytes(ctx, reportKey, buf)
 import (
 	"crypto/md5"
 	"fmt"
@@ -382,7 +381,7 @@ func (c *awsCollector) Add(ctx context.Context, rep report.Report, buf []byte) e
 		return err
 	}
 
-	var reportSize int
+	reportSize, err := c.s3.StoreReportBytes(ctx, reportKey, buf)
 	err = withBackoff(func() error {
 		var err error
 		reportSize, err = c.s3.StoreReportBytes(ctx, reportKey, buf)

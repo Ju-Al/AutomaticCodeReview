@@ -1,7 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-				if err := stream.Close(); err != nil {
-					s.logger.Debugf("handle protocol %s/%s: stream %s: peer %s: handle headers close stream: %v", p.Name, p.Version, ss.Name, overlay, err)
-				}
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -288,7 +285,9 @@ func (s *Service) AddProtocol(p p2p.ProtocolSpec) (err error) {
 			// exchange headers
 			if err := handleHeaders(ss.Headler, stream); err != nil {
 				s.logger.Debugf("handle protocol %s/%s: stream %s: peer %s: handle headers: %v", p.Name, p.Version, ss.Name, overlay, err)
-				_ = stream.Reset()
+				if err := stream.Close(); err != nil {
+					s.logger.Debugf("handle protocol %s/%s: stream %s: peer %s: handle headers close stream: %v", p.Name, p.Version, ss.Name, overlay, err)
+				}
 				s.logger.Debugf("handle protocol %s/%s: stream %s: peer %s: handle headers close stream: %v", p.Name, p.Version, ss.Name, overlay, err)
 				return
 			}

@@ -1,8 +1,4 @@
 #include "gbdt.h"
-    if (OutputMetric(iter + 1)) return;
-    fprintf(output_model_file, "Tree=%d\n", iter);
-    fprintf(output_model_file, "%s\n", new_tree->ToString().c_str());
-    fflush(output_model_file);
 
 #include <LightGBM/utils/common.h>
 
@@ -189,7 +185,10 @@ void GBDT::Train() {
     UpdateScore(new_tree);
     UpdateScoreOutOfBag(new_tree);
     // print message for metric
-    bool is_early_stopping = OutputMetric(iter + 1);
+    fprintf(output_model_file, "Tree=%d\n", iter);
+    fprintf(output_model_file, "%s\n", new_tree->ToString().c_str());
+    fflush(output_model_file);
+    if (OutputMetric(iter + 1)) return;
     // add model
     models_.push_back(new_tree);
     // save model to file per iteration

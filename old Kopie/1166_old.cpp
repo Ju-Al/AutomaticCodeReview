@@ -1,5 +1,4 @@
 /***************************************************************************
-    Button buttonOkay( area.x + 96, area.y + 350, ICN::SPANBTN, 0, 1 );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -77,7 +76,7 @@ int Dialog::SystemOptions( void )
 
     LocalEvent & le = LocalEvent::Get();
 
-    Button buttonOkay( area.x + 96, area.y + 350, Settings::Get().ExtGameEvilInterface() ? ICN::SPANBTNE : ICN::SPANBTN, 0, 1 );
+    Button buttonOkay( area.x + 96, area.y + 350, ICN::SPANBTN, 0, 1 );
     buttonOkay.Draw();
 
     cursor.Show();

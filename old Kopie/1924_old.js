@@ -294,8 +294,6 @@ module.exports = function(self, options) {
       }
       if (!page) {
         return next('notfound');
-      }
-
       var parentPage = page._ancestors && page._ancestors[0] && page._ancestors[page._ancestors.length - 1];
       var schema = self.allowedSchema(req, page, parentPage);
 

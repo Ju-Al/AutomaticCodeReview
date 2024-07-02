@@ -1,6 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-        '--gpus',
-        help='number of gpus to use 'import argparse
+import argparse
 import copy
 import os
 import os.path as osp
@@ -36,7 +35,7 @@ def parse_args():
         help='whether not to evaluate the checkpoint during training')
     group_gpus = parser.add_mutually_exclusive_group()
     group_gpus.add_argument(
-        '--gpu-id',
+        help='number of gpus to use '        '--gpus',
         type=int,
         default=0,
         help='id of gpu to use '

@@ -616,7 +616,6 @@ func doInit(ctx Context, params InitParams, keybaseServiceCn KeybaseServiceCn,
 		log.Warning("Could not enable disk limiter: %+v", err)
 		return nil, err
 	}
-	goctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// TODO: Don't turn on journaling if either -bserver or
 	// -mdserver point to local implementations.

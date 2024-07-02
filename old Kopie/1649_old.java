@@ -77,7 +77,6 @@ public class CommentTest {
         Comment comment = cu.getAllContainedComments().get(0);
         assertEquals(" xxx\\u2122xxx", comment.getContent());
     }
-
     @Test
     public void testReplaceDuplicateJavaDocComment() {
         // Arrange

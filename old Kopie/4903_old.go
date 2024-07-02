@@ -1,5 +1,4 @@
 // Copyright 2014 Google LLC
-		h.mustWrite(b1.Object(obj1).NewWriter(ctx), []byte("hello")) // note: b1, not b.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2956,6 +2955,7 @@ func TestIntegration_RequesterPays(t *testing.T) {
 		return err
 	})
 	call("delete object", func(b *BucketHandle) error {
+		h.mustWrite(b1.Object(obj1).NewWriter(ctx), []byte("hello")) // note: b1, not b.
 		// Make sure the object exists, so we don't get confused by ErrObjectNotExist.
 		// The storage service may perform validation in any order (perhaps in parallel),
 		// so if we delete an object that doesn't exist and for which we lack permission,

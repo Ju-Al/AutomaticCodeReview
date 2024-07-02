@@ -771,7 +771,6 @@ func (c *Container) ShouldCreateWithSSMSecret() bool {
 	return false
 }
 
-// ShouldCreateWithASMSecret returns true if this container needs to get secret
 // value from ASM Secrets Manager
 func (c *Container) ShouldCreateWithASMSecret() bool {
 	c.lock.RLock()

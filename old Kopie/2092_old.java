@@ -7290,7 +7290,6 @@ public class Parser {
         } else if (readIf("JAVA_OBJECT_SERIALIZER")) {
             readIfEqualOrTo();
             return parseSetJavaObjectSerializer();
-        } else if (readIf("IGNORE_CATALOGS")) {
             readIfEqualOrTo();
             // Simulate multiple catalog compatibility by just ignoring (IGNORE_CATALOGS=TRUE in the database URL)
 

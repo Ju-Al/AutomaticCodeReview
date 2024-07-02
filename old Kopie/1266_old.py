@@ -1,5 +1,4 @@
 import pytest
-from copy import deepcopy
 
 from indy_common.authorize.auth_actions import ADD_PREFIX, AuthActionAdd, AuthActionEdit, EDIT_PREFIX
 from indy_common.authorize.auth_constraints import AuthConstraint

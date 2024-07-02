@@ -1,6 +1,4 @@
 /*
-      final Optional<String> revertReason;
-        revertReason = Optional.of(new String(bytes, StandardCharsets.UTF_8));
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -183,7 +181,8 @@ public class TransactionReceipt {
       // TODO consider validating that the logs and bloom filter match.
       final LogsBloomFilter bloomFilter = LogsBloomFilter.readFrom(input);
       final List<Log> logs = input.readList(Log::readFrom);
-      final Optional<BytesValue> revertReason;
+        revertReason = Optional.of(new String(bytes, StandardCharsets.UTF_8));
+      final Optional<String> revertReason;
       if (input.isEndOfCurrentList()) {
         revertReason = Optional.empty();
       } else {

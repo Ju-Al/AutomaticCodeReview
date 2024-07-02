@@ -1,5 +1,4 @@
 ﻿using NHibernate.Cfg.MappingSchema;
-using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
 
 namespace NHibernate.Test.Hql

@@ -252,10 +252,6 @@ public class SqlJsonTest extends SqlTestSupport {
                 + '\'' + OPTION_FORMAT + "'='" + JSON_FORMAT + '\''
                 + ", '" + FileSqlConnector.OPTION_PATH + "'='/non-existent-directory'"
                 + ", '" + FileSqlConnector.OPTION_GLOB + "'='" + "foo.json" + '\''
-                + ")"
-        );
-    }
-
     @Test
     public void when_fileDoesNotExist_then_fails() {
         String name = randomName();

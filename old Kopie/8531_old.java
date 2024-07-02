@@ -1,6 +1,4 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-      span.setStatus(Status.ABORTED.withDescription(e.getMessage()));
-      span.setStatus(Status.UNKNOWN.withDescription(e.getMessage()));
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
@@ -212,7 +210,8 @@ public class LocalDistributor extends Distributor {
       return sessionResponse;
     } catch (SessionNotCreatedException e) {
       span.setAttribute("error", true);
-      span.setStatus(Status.ABORTED);
+      span.setStatus(Status.UNKNOWN.withDescription(e.getMessage()));
+      span.setStatus(Status.ABORTED.withDescription(e.getMessage()));
       Map<String, EventAttributeValue> attributeValueMap = new HashMap<>();
       attributeValueMap.put("Error Message", EventAttribute.setValue(e.getMessage()));
       span.addEvent("Session not created",attributeValueMap);

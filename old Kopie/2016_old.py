@@ -1,7 +1,4 @@
 # Microsoft Azure Linux Agent
-        fetch_full_goal_state = False
-        if full_goal_state:
-            fetch_full_goal_state = True
 #
 # Copyright 2020 Microsoft Corporation
 #
@@ -78,7 +75,9 @@ class GoalState(object): # pylint: disable=R0902
 
         AgentGlobals.update_container_id(self.container_id)
 
-        if full_goal_state and role_config:
+        fetch_full_goal_state = False
+        if full_goal_state:
+            fetch_full_goal_state = True
             reason = 'force update'
         elif base_incarnation not in (None, self.incarnation) and role_config:
             reason = 'new incarnation'

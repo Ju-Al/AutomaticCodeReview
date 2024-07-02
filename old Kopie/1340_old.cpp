@@ -1,7 +1,4 @@
 // Copyright 2017 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-                ret = parseXMLConsumer(*p_element);
-                if (ret != XMLP_ret::XML_OK)
-                    return ret;
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2751,7 +2748,9 @@ XMLP_ret XMLParser::parseLogConfig(
             }
             else if (strcmp(tag, CONSUMER) == 0)
             {
-                XMLP_ret aux_ret = parseXMLConsumer(*p_element);
+                ret = parseXMLConsumer(*p_element);
+                    return ret;
+                if (ret != XMLP_ret::XML_OK)
                 if (aux_ret != XMLP_ret::XML_OK)
                 {
                     ret = aux_ret;

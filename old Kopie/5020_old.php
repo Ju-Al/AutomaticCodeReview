@@ -1,14 +1,5 @@
 <?php
 
-		if ( is_array( $args->value ) ) {
-			if ( ! isset( $args->value[0] ) ) {
-				$keys = array_map( 'strval', array_keys( $args->value ) );
-				if ( in_array( (string) $item_id, $keys, true ) ) {
-					$selected = true;
-				}
-			if ( ! $selected ) {
-				// Cast values in array as string.
-				$args->value = array_map( 'strval', $args->value );
 /**
  * @package Pods\Fields
  */
@@ -1307,7 +1298,15 @@ class PodsField_Pick extends PodsField {
 		// Determine if this is a selected item
 		$selected = false;
 
-		$values = array();
+		if ( is_array( $args->value ) ) {
+			if ( ! isset( $args->value[0] ) ) {
+				if ( in_array( (string) $item_id, $keys, true ) ) {
+					$selected = true;
+				}
+			if ( ! $selected ) {
+				// Cast values in array as string.
+				$args->value = array_map( 'strval', $args->value );
+				$keys = array_map( 'strval', array_keys( $args->value ) );
 
 		// If we have values, let's cast them.
 		if ( ! empty( $args->value ) ) {

@@ -1,8 +1,4 @@
 // Copyright (c) 2018 Uber Technologies, Inc.
-		// TODO: This is a bit odd; we set the error in response AND return it.
-		// However, to preserve the current behavior of YARPC, this is
-		// necessary. This is most likely where the error details will be added,
-		// so we expect this to change.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -86,7 +82,10 @@ func (u *unaryTransportHandler) Handle(ctx context.Context, req *Request, reqBuf
 	}
 
 	if appErr != nil {
-		encodedError, err := codec.EncodeError(appErr)
+		// TODO: This is a bit odd; we set the error in response AND return it.
+		// However, to preserve the current behavior of YARPC, this is
+		// necessary. This is most likely where the error details will be added,
+		// so we expect this to change.
 		if err != nil {
 			return res, nil, err
 		}

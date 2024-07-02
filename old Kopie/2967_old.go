@@ -32,7 +32,6 @@ func (c *Client) DebugPprof(name string) ([]byte, error) {
 
 	return body, nil
 }
-
 func (c *Client) DebugMigrations() (*fleet.MigrationStatus, error) {
 	response, err := c.AuthenticatedDo("GET", "/debug/migrations", "", nil)
 	if err != nil {

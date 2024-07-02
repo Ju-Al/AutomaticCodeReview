@@ -1,25 +1,4 @@
 /* Licensed under the Apache License, Version 2.0 (the "License");
-        assertNotNull(flowElement);
-        assertTrue(flowElement instanceof StartEvent);
-        assertEquals("start1", flowElement.getId());
-        assertNotNull(flowElement);
-        assertTrue(flowElement instanceof SubProcess);
-        assertEquals("subprocess1", flowElement.getId());
-        SubProcess subProcess = (SubProcess) flowElement;
-        assertTrue(subProcess.getLoopCharacteristics().isSequential());
-        assertEquals("10", subProcess.getLoopCharacteristics().getLoopCardinality());
-        assertEquals("${assignee == \"\"}", subProcess.getLoopCharacteristics().getCompletionCondition());
-        assertEquals(5, subProcess.getFlowElements().size());
-        assertEquals(2, attributes.size());
-        for (String key : attributes.keySet()) {
-            if (key.equals("Attr3")) {
-                assertEquals("3", attributes.get(key));
-            } else if (key.equals("Attr4")) {
-                assertEquals("4", attributes.get(key));
-            } else {
-                fail("Unknown key value");
-            }
-        }
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -149,7 +128,27 @@ public class SubProcessWithExtensionsConverterTest extends AbstractConverterTest
 
     private void validateModel(BpmnModel model) {
         FlowElement flowElement = model.getMainProcess().getFlowElement("start1");
-        assertThat(flowElement)
+        assertNotNull(flowElement);
+        assertTrue(flowElement instanceof StartEvent);
+        assertNotNull(flowElement);
+        assertTrue(flowElement instanceof SubProcess);
+        assertEquals("subprocess1", flowElement.getId());
+        SubProcess subProcess = (SubProcess) flowElement;
+        assertTrue(subProcess.getLoopCharacteristics().isSequential());
+        assertEquals("10", subProcess.getLoopCharacteristics().getLoopCardinality());
+        assertEquals("${assignee == \"\"}", subProcess.getLoopCharacteristics().getCompletionCondition());
+        assertEquals(5, subProcess.getFlowElements().size());
+        assertEquals(2, attributes.size());
+        for (String key : attributes.keySet()) {
+            if (key.equals("Attr3")) {
+                assertEquals("3", attributes.get(key));
+            } else if (key.equals("Attr4")) {
+                assertEquals("4", attributes.get(key));
+            } else {
+                fail("Unknown key value");
+            }
+        }
+        assertEquals("start1", flowElement.getId());
                 .isInstanceOfSatisfying(StartEvent.class, startEvent -> {
                     assertThat(startEvent.getId()).isEqualTo("start1");
                 });

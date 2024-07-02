@@ -46,9 +46,6 @@ Cachable::Cachable()
 {
     dbid = 0;
     notified = 0;
-}
-
-CacheableWriter::CacheableWriter(string& d)
     : dest(d)
 {
 }

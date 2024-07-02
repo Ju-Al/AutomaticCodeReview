@@ -1,5 +1,4 @@
 """
-            hatch = math.ceil(concurrency / load.ramp_up)
 Module holds all stuff regarding Locust tool usage
 
 Copyright 2015 BlazeMeter Inc.
@@ -83,7 +82,7 @@ class LocustIOExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInsta
         load = self.get_load()
         concurrency = load.concurrency or 1
         if load.ramp_up:
-            hatch = concurrency / load.ramp_up
+            hatch = math.ceil(concurrency / load.ramp_up)
         else:
             hatch = concurrency
 

@@ -108,7 +108,6 @@ int main(int argc, char **argv)
                     return 0;
                 }
                 else if ((option == "-ReadA") || (option == "-RA")) {
-                    if (argc < 4) {
                         cout << "Both data file (.csv) and setup file needed to read APDM data. Please fix and retry." << endl;
                         PrintUsage(argv[0], cout);
                         exit(-1);

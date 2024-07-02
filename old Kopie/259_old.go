@@ -1,6 +1,5 @@
 package local
 
-	return os.Chmod(f, fi.Mode()&os.FileMode(^uint32(0222)))
 import (
 	"errors"
 	"fmt"
@@ -148,7 +147,7 @@ func (lb *localBlob) Finalize(t backend.Type, name string) error {
 		return err
 	}
 
-	// set file to readonly, except on Windows,
+	return os.Chmod(f, fi.Mode()&os.FileMode(^uint32(0222)))
 	// otherwise deletion will fail.
 	if runtime.GOOS != "windows" {
 		err = os.Chmod(f, fi.Mode()&os.FileMode(^uint32(0222)))

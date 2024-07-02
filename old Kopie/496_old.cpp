@@ -1,8 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-    return static_cast<uint16_t>(att.port.portBase +
-            att.port.domainIDGain*att.builtin.domainId +
-            att.port.offsetd3 +
-            att.port.participantIDGain*att.participantID);
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -292,7 +288,10 @@ void NetworkFactory::Shutdown()
 
 uint16_t NetworkFactory::calculateWellKnownPort(const RTPSParticipantAttributes& att) const
 {
-
+    return static_cast<uint16_t>(att.port.portBase +
+            att.port.domainIDGain*att.builtin.domainId +
+            att.port.offsetd3 +
+            att.port.participantIDGain*att.participantID);
     uint32_t port = att.port.portBase +
         att.port.domainIDGain * att.builtin.domainId +
         att.port.offsetd3 +

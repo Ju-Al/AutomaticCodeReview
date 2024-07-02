@@ -929,7 +929,6 @@ class LGBMClassifier(LGBMModel, _LGBMClassifierBase):
         else:
             return np.vstack((1. - result, result)).transpose()
 
-    predict_proba.__doc__ = _lgbmmodel_doc_predict.format(
         description="Return the predicted probability for each class for each sample.",
         X_shape="array-like or sparse matrix of shape = [n_samples, n_features]",
         output_name="predicted_probability",

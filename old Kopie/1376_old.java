@@ -1,1875 +1,896 @@
 /*
- * Copyright 2004-2018 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
- * Initial Developer: H2 Group
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-package org.h2.engine;
+package org.apache.accumulo.gc;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.HashMap;
-import java.util.HashSet;
+import static org.apache.accumulo.fate.util.UtilWaitThread.sleepUninterruptibly;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.UnknownHostException;
+import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.h2.api.ErrorCode;
-import org.h2.command.Command;
-import org.h2.command.CommandInterface;
-import org.h2.command.Parser;
-import org.h2.command.Prepared;
-import org.h2.command.ddl.Analyze;
-import org.h2.command.dml.Query;
-import org.h2.constraint.Constraint;
-import org.h2.index.Index;
-import org.h2.index.ViewIndex;
-import org.h2.jdbc.JdbcConnection;
-import org.h2.message.DbException;
-import org.h2.message.Trace;
-import org.h2.message.TraceSystem;
-import org.h2.mvstore.MVMap;
-import org.h2.mvstore.db.MVTable;
-import org.h2.mvstore.db.MVTableEngine;
-import org.h2.mvstore.tx.Transaction;
-import org.h2.mvstore.tx.TransactionStore;
-import org.h2.mvstore.tx.VersionedValue;
-import org.h2.result.ResultInterface;
-import org.h2.result.Row;
-import org.h2.result.SortOrder;
-import org.h2.schema.Schema;
-import org.h2.store.DataHandler;
-import org.h2.store.InDoubtTransaction;
-import org.h2.store.LobStorageFrontend;
-import org.h2.table.SubQueryInfo;
-import org.h2.table.Table;
-import org.h2.table.TableFilter;
-import org.h2.table.TableType;
-import org.h2.util.ColumnNamerConfiguration;
-import org.h2.util.CurrentTimestamp;
-import org.h2.util.SmallLRUCache;
-import org.h2.util.Utils;
-import org.h2.value.DataType;
-import org.h2.value.Value;
-import org.h2.value.ValueArray;
-import org.h2.value.ValueLong;
-import org.h2.value.ValueNull;
-import org.h2.value.ValueString;
-import org.h2.value.ValueTimestampTimeZone;
 
-/**
- * A session represents an embedded database connection. When using the server
- * mode, this object resides on the server side and communicates with a
- * SessionRemote object on the client side.
- */
-public class Session extends SessionWithState implements TransactionStore.RollbackListener {
+import org.apache.accumulo.core.Constants;
+import org.apache.accumulo.core.client.AccumuloException;
+import org.apache.accumulo.core.client.AccumuloSecurityException;
+import org.apache.accumulo.core.client.BatchWriter;
+import org.apache.accumulo.core.client.BatchWriterConfig;
+import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.Instance;
+import org.apache.accumulo.core.client.IsolatedScanner;
+import org.apache.accumulo.core.client.MutationsRejectedException;
+import org.apache.accumulo.core.client.Scanner;
+import org.apache.accumulo.core.client.TableNotFoundException;
+import org.apache.accumulo.core.client.impl.Tables;
+import org.apache.accumulo.core.conf.AccumuloConfiguration;
+import org.apache.accumulo.core.conf.Property;
+import org.apache.accumulo.core.conf.SiteConfiguration;
+import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.Mutation;
+import org.apache.accumulo.core.data.PartialKey;
+import org.apache.accumulo.core.data.Range;
+import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.gc.thrift.GCMonitorService.Iface;
+import org.apache.accumulo.core.gc.thrift.GCMonitorService.Processor;
+import org.apache.accumulo.core.gc.thrift.GCStatus;
+import org.apache.accumulo.core.gc.thrift.GcCycleStats;
+import org.apache.accumulo.core.master.state.tables.TableState;
+import org.apache.accumulo.core.metadata.MetadataTable;
+import org.apache.accumulo.core.metadata.RootTable;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.DataFileColumnFamily;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ScanFileColumnFamily;
+import org.apache.accumulo.core.replication.ReplicationSchema.StatusSection;
+import org.apache.accumulo.core.replication.ReplicationTable;
+import org.apache.accumulo.core.replication.ReplicationTableOfflineException;
+import org.apache.accumulo.core.security.Authorizations;
+import org.apache.accumulo.core.security.thrift.TCredentials;
+import org.apache.accumulo.core.trace.DistributedTrace;
+import org.apache.accumulo.core.trace.ProbabilitySampler;
+import org.apache.accumulo.core.trace.Span;
+import org.apache.accumulo.core.trace.Trace;
+import org.apache.accumulo.core.trace.thrift.TInfo;
+import org.apache.accumulo.core.util.HostAndPort;
+import org.apache.accumulo.core.util.NamingThreadFactory;
+import org.apache.accumulo.core.util.Pair;
+import org.apache.accumulo.core.util.ServerServices;
+import org.apache.accumulo.core.util.ServerServices.Service;
+import org.apache.accumulo.core.volume.Volume;
+import org.apache.accumulo.core.zookeeper.ZooUtil;
+import org.apache.accumulo.fate.zookeeper.ZooLock.LockLossReason;
+import org.apache.accumulo.fate.zookeeper.ZooLock.LockWatcher;
+import org.apache.accumulo.gc.metrics2.GcMetrics2;
+import org.apache.accumulo.gc.metrics2.GcRunMetrics;
+import org.apache.accumulo.gc.replication.CloseWriteAheadLogReferences;
+import org.apache.accumulo.server.Accumulo;
+import org.apache.accumulo.server.AccumuloServerContext;
+import org.apache.accumulo.server.ServerConstants;
+import org.apache.accumulo.server.ServerOpts;
+import org.apache.accumulo.server.client.HdfsZooInstance;
+import org.apache.accumulo.server.conf.ServerConfigurationFactory;
+import org.apache.accumulo.server.fs.VolumeManager;
+import org.apache.accumulo.server.fs.VolumeManager.FileType;
+import org.apache.accumulo.server.fs.VolumeManagerImpl;
+import org.apache.accumulo.server.fs.VolumeUtil;
+import org.apache.accumulo.server.master.LiveTServerSet;
+import org.apache.accumulo.server.master.state.TServerInstance;
+import org.apache.accumulo.server.metrics.MetricsSystemHelper;
+import org.apache.accumulo.server.replication.proto.Replication.Status;
+import org.apache.accumulo.server.rpc.RpcWrapper;
+import org.apache.accumulo.server.rpc.ServerAddress;
+import org.apache.accumulo.server.rpc.TCredentialsUpdatingWrapper;
+import org.apache.accumulo.server.rpc.TServerUtils;
+import org.apache.accumulo.server.rpc.ThriftServerType;
+import org.apache.accumulo.server.security.SecurityUtil;
+import org.apache.accumulo.server.tables.TableManager;
+import org.apache.accumulo.server.util.Halt;
+import org.apache.accumulo.server.util.TabletIterator;
+import org.apache.accumulo.server.zookeeper.ZooLock;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.zookeeper.KeeperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-    public enum State { INIT, RUNNING, BLOCKED, SLEEP, CLOSED }
+import com.beust.jcommander.Parameter;
+import com.google.common.base.Function;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Maps;
+import com.google.protobuf.InvalidProtocolBufferException;
 
-    /**
-     * This special log position means that the log entry has been written.
-     */
-    public static final int LOG_WRITTEN = -1;
+public class SimpleGarbageCollector extends AccumuloServerContext implements Iface {
+  private static final Text EMPTY_TEXT = new Text();
 
-    /**
-     * The prefix of generated identifiers. It may not have letters, because
-     * they are case sensitive.
-     */
-    private static final String SYSTEM_IDENTIFIER_PREFIX = "_";
-    private static int nextSerialId;
+  /**
+   * Options for the garbage collector.
+   */
+  static class Opts extends ServerOpts {
+    @Parameter(names = {"-v", "--verbose"},
+        description = "extra information will get printed to stdout also")
+    boolean verbose = false;
+    @Parameter(names = {"-s", "--safemode"}, description = "safe mode will not delete files")
+    boolean safeMode = false;
+  }
 
-    private final int serialId = nextSerialId++;
-    private final Database database;
-    private ConnectionInfo connectionInfo;
-    private final User user;
-    private final int id;
-    private final ArrayList<Table> locks = Utils.newSmallArrayList();
-    private UndoLog undoLog;
-    private boolean autoCommit = true;
-    private Random random;
-    private int lockTimeout;
-    private Value lastIdentity = ValueLong.get(0);
-    private Value lastScopeIdentity = ValueLong.get(0);
-    private Value lastTriggerIdentity;
-    private GeneratedKeys generatedKeys;
-    private int firstUncommittedLog = Session.LOG_WRITTEN;
-    private int firstUncommittedPos = Session.LOG_WRITTEN;
-    private HashMap<String, Savepoint> savepoints;
-    private HashMap<String, Table> localTempTables;
-    private HashMap<String, Index> localTempTableIndexes;
-    private HashMap<String, Constraint> localTempTableConstraints;
-    private long throttleNs;
-    private long lastThrottle;
-    private Command currentCommand;
-    private boolean allowLiterals;
-    private String currentSchemaName;
-    private String[] schemaSearchPath;
-    private Trace trace;
-    private HashMap<String, Value> removeLobMap;
-    private int systemIdentifier;
-    private HashMap<String, Procedure> procedures;
-    private boolean undoLogEnabled = true;
-    private boolean redoLogBinary = true;
-    private boolean autoCommitAtTransactionEnd;
-    private String currentTransactionName;
-    private volatile long cancelAtNs;
-    private boolean closed;
-    private final long sessionStart = System.currentTimeMillis();
-    private ValueTimestampTimeZone transactionStart;
-    private long currentCommandStart;
-    private HashMap<String, Value> variables;
-    private HashSet<ResultInterface> temporaryResults;
-    private int queryTimeout;
-    private boolean commitOrRollbackDisabled;
-    private Table waitForLock;
-    private Thread waitForLockThread;
-    private int modificationId;
-    private int objectId;
-    private final int queryCacheSize;
-    private SmallLRUCache<String, Command> queryCache;
-    private long modificationMetaID = -1;
-    private SubQueryInfo subQueryInfo;
-    private ArrayDeque<String> viewNameStack;
-    private int preparingQueryExpression;
-    private volatile SmallLRUCache<Object, ViewIndex> viewIndexCache;
-    private HashMap<Object, ViewIndex> subQueryIndexCache;
-    private boolean joinBatchEnabled;
-    private boolean forceJoinOrder;
-    private boolean lazyQueryExecution;
-    private ColumnNamerConfiguration columnNamerConfiguration;
-    /**
-     * Tables marked for ANALYZE after the current transaction is committed.
-     * Prevents us calling ANALYZE repeatedly in large transactions.
-     */
-    private HashSet<Table> tablesToAnalyze;
+  /**
+   * A fraction representing how much of the JVM's available memory should be used for gathering
+   * candidates.
+   */
+  static final float CANDIDATE_MEMORY_PERCENTAGE = 0.50f;
 
-    /**
-     * Temporary LOBs from result sets. Those are kept for some time. The
-     * problem is that transactions are committed before the result is returned,
-     * and in some cases the next transaction is already started before the
-     * result is read (for example when using the server mode, when accessing
-     * metadata methods). We can't simply free those values up when starting the
-     * next transaction, because they would be removed too early.
-     */
-    private LinkedList<TimeoutValue> temporaryResultLobs;
+  private static final Logger log = LoggerFactory.getLogger(SimpleGarbageCollector.class);
 
-    /**
-     * The temporary LOBs that need to be removed on commit.
-     */
-    private ArrayList<Value> temporaryLobs;
+  private VolumeManager fs;
+  private Opts opts = new Opts();
+  private ZooLock lock;
 
-    private Transaction transaction;
-    private State state = State.INIT;
-    private long startStatement = -1;
+  private GCStatus status =
+      new GCStatus(new GcCycleStats(), new GcCycleStats(), new GcCycleStats(), new GcCycleStats());
 
-    /**
-     * Set of database object ids to be released at the end of transaction
-     */
-    private final BitSet idsToRelease = new BitSet();
+  private GcRunMetrics gcRunMetrics = new GcRunMetrics();
 
+  public static void main(String[] args) throws UnknownHostException, IOException {
+    final String app = "gc";
+    Accumulo.setupLogging(app);
+    SecurityUtil.serverLogin(SiteConfiguration.getInstance());
+    Instance instance = HdfsZooInstance.getInstance();
+    ServerConfigurationFactory conf = new ServerConfigurationFactory(instance);
+    log.info("Version " + Constants.VERSION);
+    log.info("Instance " + instance.getInstanceID());
+    final VolumeManager fs = VolumeManagerImpl.get();
+    MetricsSystemHelper.configure(SimpleGarbageCollector.class.getSimpleName());
+    Accumulo.init(fs, conf, app);
+    Opts opts = new Opts();
+    opts.parseArgs(app, args);
+    SimpleGarbageCollector gc = new SimpleGarbageCollector(opts, fs, conf);
 
-    public Session(Database database, User user, int id) {
-        this.database = database;
-        this.queryTimeout = database.getSettings().maxQueryTimeout;
-        this.queryCacheSize = database.getSettings().queryCacheSize;
-        this.user = user;
-        this.id = id;
-        this.lockTimeout = database.getLockTimeout();
-        this.currentSchemaName = Constants.SCHEMA_MAIN;
-        this.columnNamerConfiguration = ColumnNamerConfiguration.getDefault();
+    DistributedTrace.enable(opts.getAddress(), app, conf.getConfiguration());
+    try {
+      gc.run();
+    } finally {
+      DistributedTrace.disable();
     }
+  }
 
-    public void setLazyQueryExecution(boolean lazyQueryExecution) {
-        this.lazyQueryExecution = lazyQueryExecution;
-    }
 
-    public boolean isLazyQueryExecution() {
-        return lazyQueryExecution;
-    }
+  /**
+   * Creates a new garbage collector.
+   *
+   * @param opts
+   *          options
+   */
+  public SimpleGarbageCollector(Opts opts, VolumeManager fs,
+      ServerConfigurationFactory confFactory) {
+    super(confFactory);
+    this.opts = opts;
+    this.fs = fs;
 
-    public void setForceJoinOrder(boolean forceJoinOrder) {
-        this.forceJoinOrder = forceJoinOrder;
-    }
+    final AccumuloConfiguration conf = getConfiguration();
 
-    public boolean isForceJoinOrder() {
-        return forceJoinOrder;
-    }
+    GcMetrics2 gcMetrics2 = null;
+    MetricsSystemHelper.configure("acc_gc");
+    gcMetrics2 = GcMetrics2.init(this, MetricsSystemHelper.getInstance());
+    gcMetrics2.register();
 
-    public void setJoinBatchEnabled(boolean joinBatchEnabled) {
-        this.joinBatchEnabled = joinBatchEnabled;
-    }
+    // if (conf.getBoolean(Property.GC_ENABLE_METRICS2)) {
+    // MetricsSystemHelper.configure(SimpleGarbageCollector.class.getSimpleName());
+    // GcMetrics2.init(this, MetricsSystemHelper.getInstance());
+    // }
 
-    public boolean isJoinBatchEnabled() {
-        return joinBatchEnabled;
-    }
+    final long gcDelay = conf.getTimeInMillis(Property.GC_CYCLE_DELAY);
+    final String useFullCompaction = conf.get(Property.GC_USE_FULL_COMPACTION);
 
-    /**
-     * Create a new row for a table.
-     *
-     * @param data the values
-     * @param memory whether the row is in memory
-     * @return the created row
-     */
-    public Row createRow(Value[] data, int memory) {
-        return database.createRow(data, memory);
-    }
+    log.info("start delay: {} milliseconds", getStartDelay());
+    log.info("time delay: {} milliseconds", gcDelay);
+    log.info("safemode: {}", opts.safeMode);
+    log.info("verbose: {}", opts.verbose);
+    log.info("memory threshold: {} of {} bytes", CANDIDATE_MEMORY_PERCENTAGE,
+        Runtime.getRuntime().maxMemory());
+    log.info("delete threads: {}", getNumDeleteThreads());
+    log.info("gc post metadata action: {}", useFullCompaction);
+  }
 
-    /**
-     * Add a subquery info on top of the subquery info stack.
-     *
-     * @param masks the mask
-     * @param filters the filters
-     * @param filter the filter index
-     * @param sortOrder the sort order
-     */
-    public void pushSubQueryInfo(int[] masks, TableFilter[] filters, int filter,
-            SortOrder sortOrder) {
-        subQueryInfo = new SubQueryInfo(subQueryInfo, masks, filters, filter, sortOrder);
-    }
+  /**
+   * Gets the delay before the first collection.
+   *
+   * @return start delay, in milliseconds
+   */
+  long getStartDelay() {
+    return getConfiguration().getTimeInMillis(Property.GC_CYCLE_START);
+  }
 
-    /**
-     * Remove the current subquery info from the stack.
-     */
-    public void popSubQueryInfo() {
-        subQueryInfo = subQueryInfo.getUpper();
-    }
+  /**
+   * Gets the volume manager used by this GC.
+   *
+   * @return volume manager
+   */
+  VolumeManager getVolumeManager() {
+    return fs;
+  }
 
-    public SubQueryInfo getSubQueryInfo() {
-        return subQueryInfo;
-    }
+  /**
+   * Checks if the volume manager should move files to the trash rather than delete them.
+   *
+   * @return true if trash is used
+   */
+  boolean isUsingTrash() {
+    return !getConfiguration().getBoolean(Property.GC_TRASH_IGNORE);
+  }
 
-    /**
-     * Stores name of currently parsed view in a stack so it can be determined
-     * during {@code prepare()}.
-     *
-     * @param parsingView
-     *            {@code true} to store one more name, {@code false} to remove it
-     *            from stack
-     * @param viewName
-     *            name of the view
-     */
-    public void setParsingCreateView(boolean parsingView, String viewName) {
-        if (viewNameStack == null) {
-            viewNameStack = new ArrayDeque<>(3);
-        }
-        if (parsingView) {
-            viewNameStack.push(viewName);
-        } else {
-            String name = viewNameStack.pop();
-            assert viewName.equals(name);
-        }
-    }
+  /**
+   * Gets the options for this garbage collector.
+   */
+  Opts getOpts() {
+    return opts;
+  }
 
-    public String getParsingCreateViewName() {
-        return viewNameStack != null ? viewNameStack.peek() : null;
-    }
+  /**
+   * Gets the number of threads used for deleting files.
+   *
+   * @return number of delete threads
+   */
+  int getNumDeleteThreads() {
+    return getConfiguration().getCount(Property.GC_DELETE_THREADS);
+  }
 
-    public boolean isParsingCreateView() {
-        return viewNameStack != null && !viewNameStack.isEmpty();
-    }
+  /**
+   * Should files be archived (as opposed to preserved in trash)
+   *
+   * @return True if files should be archived, false otherwise
+   */
+  boolean shouldArchiveFiles() {
+    return getConfiguration().getBoolean(Property.GC_FILE_ARCHIVE);
+  }
 
-    /**
-     * Optimize a query. This will remember the subquery info, clear it, prepare
-     * the query, and reset the subquery info.
-     *
-     * @param query the query to prepare
-     */
-    public void optimizeQueryExpression(Query query) {
-        // we have to hide current subQueryInfo if we are going to optimize
-        // query expression
-        SubQueryInfo tmp = subQueryInfo;
-        subQueryInfo = null;
-        preparingQueryExpression++;
-        try {
-            query.prepare();
-        } finally {
-            subQueryInfo = tmp;
-            preparingQueryExpression--;
-        }
-    }
+  private class GCEnv implements GarbageCollectionEnvironment {
 
-    public boolean isPreparingQueryExpression() {
-        assert preparingQueryExpression >= 0;
-        return preparingQueryExpression != 0;
+    private String tableName;
+
+    GCEnv(String tableName) {
+      this.tableName = tableName;
     }
 
     @Override
-    public ArrayList<String> getClusterServers() {
-        return new ArrayList<>();
-    }
+    public boolean getCandidates(String continuePoint, List<String> result)
+        throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
+      // want to ensure GC makes progress... if the 1st N deletes are stable and we keep processing
+      // them,
+      // then will never inspect deletes after N
+      Range range = MetadataSchema.DeletesSection.getRange();
+      if (continuePoint != null && !continuePoint.isEmpty()) {
+        String continueRow = MetadataSchema.DeletesSection.getRowPrefix() + continuePoint;
+        range = new Range(new Key(continueRow).followingKey(PartialKey.ROW), true,
+            range.getEndKey(), range.isEndKeyInclusive());
+      }
 
-    public boolean setCommitOrRollbackDisabled(boolean x) {
-        boolean old = commitOrRollbackDisabled;
-        commitOrRollbackDisabled = x;
-        return old;
-    }
+      Scanner scanner = getConnector().createScanner(tableName, Authorizations.EMPTY);
+      scanner.setRange(range);
+      result.clear();
+      // find candidates for deletion; chop off the prefix
+      for (Entry<Key,Value> entry : scanner) {
+        String cand = entry.getKey().getRow().toString()
+            .substring(MetadataSchema.DeletesSection.getRowPrefix().length());
+        result.add(cand);
+        if (almostOutOfMemory(Runtime.getRuntime())) {
+          log.info("List of delete candidates has exceeded the memory"
+              + " threshold. Attempting to delete what has been gathered so far.");
+          return true;
+        }
+      }
 
-    private void initVariables() {
-        if (variables == null) {
-            variables = database.newStringMap();
-        }
-    }
-
-    /**
-     * Set the value of the given variable for this session.
-     *
-     * @param name the name of the variable (may not be null)
-     * @param value the new value (may not be null)
-     */
-    public void setVariable(String name, Value value) {
-        initVariables();
-        modificationId++;
-        Value old;
-        if (value == ValueNull.INSTANCE) {
-            old = variables.remove(name);
-        } else {
-            // link LOB values, to make sure we have our own object
-            value = value.copy(database,
-                    LobStorageFrontend.TABLE_ID_SESSION_VARIABLE);
-            old = variables.put(name, value);
-        }
-        if (old != null) {
-            // remove the old value (in case it is a lob)
-            old.remove();
-        }
-    }
-
-    /**
-     * Get the value of the specified user defined variable. This method always
-     * returns a value; it returns ValueNull.INSTANCE if the variable doesn't
-     * exist.
-     *
-     * @param name the variable name
-     * @return the value, or NULL
-     */
-    public Value getVariable(String name) {
-        initVariables();
-        Value v = variables.get(name);
-        return v == null ? ValueNull.INSTANCE : v;
-    }
-
-    /**
-     * Get the list of variable names that are set for this session.
-     *
-     * @return the list of names
-     */
-    public String[] getVariableNames() {
-        if (variables == null) {
-            return new String[0];
-        }
-        return variables.keySet().toArray(new String[variables.size()]);
-    }
-
-    /**
-     * Get the local temporary table if one exists with that name, or null if
-     * not.
-     *
-     * @param name the table name
-     * @return the table, or null
-     */
-    public Table findLocalTempTable(String name) {
-        if (localTempTables == null) {
-            return null;
-        }
-        return localTempTables.get(name);
-    }
-
-    public ArrayList<Table> getLocalTempTables() {
-        if (localTempTables == null) {
-            return Utils.newSmallArrayList();
-        }
-        return new ArrayList<>(localTempTables.values());
-    }
-
-    /**
-     * Add a local temporary table to this session.
-     *
-     * @param table the table to add
-     * @throws DbException if a table with this name already exists
-     */
-    public void addLocalTempTable(Table table) {
-        if (localTempTables == null) {
-            localTempTables = database.newStringMap();
-        }
-        if (localTempTables.get(table.getName()) != null) {
-            throw DbException.get(ErrorCode.TABLE_OR_VIEW_ALREADY_EXISTS_1,
-                    table.getSQL()+" AS "+table.getName());
-        }
-        modificationId++;
-        localTempTables.put(table.getName(), table);
-    }
-
-    /**
-     * Drop and remove the given local temporary table from this session.
-     *
-     * @param table the table
-     */
-    public void removeLocalTempTable(Table table) {
-        // Exception thrown in org.h2.engine.Database.removeMeta if line below
-        // is missing with TestGeneralCommonTableQueries
-        boolean wasLocked = database.lockMeta(this);
-        try {
-            modificationId++;
-            localTempTables.remove(table.getName());
-            synchronized (database) {
-                table.removeChildrenAndResources(this);
-            }
-        } finally {
-            if (!wasLocked) {
-                database.unlockMeta(this);
-            }
-        }
-    }
-
-    /**
-     * Get the local temporary index if one exists with that name, or null if
-     * not.
-     *
-     * @param name the table name
-     * @return the table, or null
-     */
-    public Index findLocalTempTableIndex(String name) {
-        if (localTempTableIndexes == null) {
-            return null;
-        }
-        return localTempTableIndexes.get(name);
-    }
-
-    public HashMap<String, Index> getLocalTempTableIndexes() {
-        if (localTempTableIndexes == null) {
-            return new HashMap<>();
-        }
-        return localTempTableIndexes;
-    }
-
-    /**
-     * Add a local temporary index to this session.
-     *
-     * @param index the index to add
-     * @throws DbException if a index with this name already exists
-     */
-    public void addLocalTempTableIndex(Index index) {
-        if (localTempTableIndexes == null) {
-            localTempTableIndexes = database.newStringMap();
-        }
-        if (localTempTableIndexes.get(index.getName()) != null) {
-            throw DbException.get(ErrorCode.INDEX_ALREADY_EXISTS_1,
-                    index.getSQL());
-        }
-        localTempTableIndexes.put(index.getName(), index);
-    }
-
-    /**
-     * Drop and remove the given local temporary index from this session.
-     *
-     * @param index the index
-     */
-    public void removeLocalTempTableIndex(Index index) {
-        if (localTempTableIndexes != null) {
-            localTempTableIndexes.remove(index.getName());
-            synchronized (database) {
-                index.removeChildrenAndResources(this);
-            }
-        }
-    }
-
-    /**
-     * Get the local temporary constraint if one exists with that name, or
-     * null if not.
-     *
-     * @param name the constraint name
-     * @return the constraint, or null
-     */
-    public Constraint findLocalTempTableConstraint(String name) {
-        if (localTempTableConstraints == null) {
-            return null;
-        }
-        return localTempTableConstraints.get(name);
-    }
-
-    /**
-     * Get the map of constraints for all constraints on local, temporary
-     * tables, if any. The map's keys are the constraints' names.
-     *
-     * @return the map of constraints, or null
-     */
-    public HashMap<String, Constraint> getLocalTempTableConstraints() {
-        if (localTempTableConstraints == null) {
-            return new HashMap<>();
-        }
-        return localTempTableConstraints;
-    }
-
-    /**
-     * Add a local temporary constraint to this session.
-     *
-     * @param constraint the constraint to add
-     * @throws DbException if a constraint with the same name already exists
-     */
-    public void addLocalTempTableConstraint(Constraint constraint) {
-        if (localTempTableConstraints == null) {
-            localTempTableConstraints = database.newStringMap();
-        }
-        String name = constraint.getName();
-        if (localTempTableConstraints.get(name) != null) {
-            throw DbException.get(ErrorCode.CONSTRAINT_ALREADY_EXISTS_1,
-                    constraint.getSQL());
-        }
-        localTempTableConstraints.put(name, constraint);
-    }
-
-    /**
-     * Drop and remove the given local temporary constraint from this session.
-     *
-     * @param constraint the constraint
-     */
-    void removeLocalTempTableConstraint(Constraint constraint) {
-        if (localTempTableConstraints != null) {
-            localTempTableConstraints.remove(constraint.getName());
-            synchronized (database) {
-                constraint.removeChildrenAndResources(this);
-            }
-        }
+      return false;
     }
 
     @Override
-    public boolean getAutoCommit() {
-        return autoCommit;
-    }
+    public Iterator<String> getBlipIterator()
+        throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
+      @SuppressWarnings("resource")
+      IsolatedScanner scanner =
+          new IsolatedScanner(getConnector().createScanner(tableName, Authorizations.EMPTY));
 
-    public User getUser() {
-        return user;
-    }
+      scanner.setRange(MetadataSchema.BlipSection.getRange());
 
-    @Override
-    public void setAutoCommit(boolean b) {
-        autoCommit = b;
-    }
-
-    public int getLockTimeout() {
-        return lockTimeout;
-    }
-
-    public void setLockTimeout(int lockTimeout) {
-        this.lockTimeout = lockTimeout;
-    }
-
-    @Override
-    public synchronized CommandInterface prepareCommand(String sql,
-            int fetchSize) {
-        return prepareLocal(sql);
-    }
-
-    /**
-     * Parse and prepare the given SQL statement. This method also checks the
-     * rights.
-     *
-     * @param sql the SQL statement
-     * @return the prepared statement
-     */
-    public Prepared prepare(String sql) {
-        return prepare(sql, false, false);
-    }
-
-    /**
-     * Parse and prepare the given SQL statement.
-     *
-     * @param sql the SQL statement
-     * @param rightsChecked true if the rights have already been checked
-     * @param literalsChecked true if the sql string has already been checked
-     *            for literals (only used if ALLOW_LITERALS NONE is set).
-     * @return the prepared statement
-     */
-    public Prepared prepare(String sql, boolean rightsChecked, boolean literalsChecked) {
-        Parser parser = new Parser(this);
-        parser.setRightsChecked(rightsChecked);
-        parser.setLiteralsChecked(literalsChecked);
-        return parser.prepare(sql);
-    }
-
-    /**
-     * Parse and prepare the given SQL statement.
-     * This method also checks if the connection has been closed.
-     *
-     * @param sql the SQL statement
-     * @return the prepared statement
-     */
-    public Command prepareLocal(String sql) {
-        if (closed) {
-            throw DbException.get(ErrorCode.CONNECTION_BROKEN_1,
-                    "session closed");
+      return Iterators.transform(scanner.iterator(), new Function<Entry<Key,Value>,String>() {
+        @Override
+        public String apply(Entry<Key,Value> entry) {
+          return entry.getKey().getRow().toString()
+              .substring(MetadataSchema.BlipSection.getRowPrefix().length());
         }
-        Command command;
-        if (queryCacheSize > 0) {
-            if (queryCache == null) {
-                queryCache = SmallLRUCache.newInstance(queryCacheSize);
-                modificationMetaID = database.getModificationMetaId();
-            } else {
-                long newModificationMetaID = database.getModificationMetaId();
-                if (newModificationMetaID != modificationMetaID) {
-                    queryCache.clear();
-                    modificationMetaID = newModificationMetaID;
-                }
-                command = queryCache.get(sql);
-                if (command != null && command.canReuse()) {
-                    command.reuse();
-                    return command;
-                }
+      });
+    }
+
+    @Override
+    public Iterator<Entry<Key,Value>> getReferenceIterator()
+        throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
+      IsolatedScanner scanner =
+          new IsolatedScanner(getConnector().createScanner(tableName, Authorizations.EMPTY));
+      scanner.fetchColumnFamily(DataFileColumnFamily.NAME);
+      scanner.fetchColumnFamily(ScanFileColumnFamily.NAME);
+      TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.fetch(scanner);
+      TabletIterator tabletIterator =
+          new TabletIterator(scanner, MetadataSchema.TabletsSection.getRange(), false, true);
+
+      return Iterators.concat(Iterators.transform(tabletIterator,
+          new Function<Map<Key,Value>,Iterator<Entry<Key,Value>>>() {
+            @Override
+            public Iterator<Entry<Key,Value>> apply(Map<Key,Value> input) {
+              return input.entrySet().iterator();
             }
-        }
-        Parser parser = new Parser(this);
-        try {
-            command = parser.prepareCommand(sql);
-        } finally {
-            // we can't reuse sub-query indexes, so just drop the whole cache
-            subQueryIndexCache = null;
-        }
-        command.prepareJoinBatch();
-        if (queryCache != null) {
-            if (command.isCacheable()) {
-                queryCache.put(sql, command);
-            }
-        }
-        return command;
-    }
-
-    void releaseDatabaseObjectId(int id) {
-        idsToRelease.set(id);
-    }
-
-    public Database getDatabase() {
-        return database;
+          }));
     }
 
     @Override
-    public int getPowerOffCount() {
-        return database.getPowerOffCount();
+    public Set<String> getTableIDs() {
+      return Tables.getIdToNameMap(getInstance()).keySet();
     }
 
     @Override
-    public void setPowerOffCount(int count) {
-        database.setPowerOffCount(count);
-    }
+    public void delete(SortedMap<String,String> confirmedDeletes)
+        throws IOException, AccumuloException, AccumuloSecurityException, TableNotFoundException {
 
-    /**
-     * Commit the current transaction. If the statement was not a data
-     * definition statement, and if there are temporary tables that should be
-     * dropped or truncated at commit, this is done as well.
-     *
-     * @param ddl if the statement was a data definition statement
-     */
-    public void commit(boolean ddl) {
-        checkCommitRollback();
+      if (opts.safeMode) {
+        if (opts.verbose)
+          System.out.println("SAFEMODE: There are " + confirmedDeletes.size()
+              + " data file candidates marked for deletion.%n"
+              + "          Examine the log files to identify them.%n");
+        log.info("SAFEMODE: Listing all data file candidates for deletion");
+        for (String s : confirmedDeletes.values())
+          log.info("SAFEMODE: " + s);
+        log.info("SAFEMODE: End candidates for deletion");
+        return;
+      }
 
-        int rowCount = getDatabase().getSettings().analyzeSample / 10;
-        if (tablesToAnalyze != null) {
-            for (Table table : tablesToAnalyze) {
-                Analyze.analyzeTable(this, table, rowCount, false);
-            }
-            // analyze can lock the meta
-            database.unlockMeta(this);
-        }
-        tablesToAnalyze = null;
+      Connector c = getConnector();
+      BatchWriter writer = c.createBatchWriter(tableName, new BatchWriterConfig());
 
-        currentTransactionName = null;
-        transactionStart = null;
-        if (transaction != null) {
+      // when deleting a dir and all files in that dir, only need to delete the dir
+      // the dir will sort right before the files... so remove the files in this case
+      // to minimize namenode ops
+      Iterator<Entry<String,String>> cdIter = confirmedDeletes.entrySet().iterator();
+
+      String lastDir = null;
+      while (cdIter.hasNext()) {
+        Entry<String,String> entry = cdIter.next();
+        String relPath = entry.getKey();
+        String absPath = fs.getFullPath(FileType.TABLE, entry.getValue()).toString();
+
+        if (isDir(relPath)) {
+          lastDir = absPath;
+        } else if (lastDir != null) {
+          if (absPath.startsWith(lastDir)) {
+            log.debug("Ignoring " + entry.getValue() + " because " + lastDir + " exist");
             try {
-                // increment the data mod count, so that other sessions
-                // see the changes
-                // TODO should not rely on locking
-                if (!locks.isEmpty()) {
-                    for (Table t : locks) {
-                        if (t instanceof MVTable) {
-                            ((MVTable) t).commit();
-                        }
-                    }
-                }
-                transaction.commit();
-            } finally {
-                transaction = null;
+              putMarkerDeleteMutation(entry.getValue(), writer);
+            } catch (MutationsRejectedException e) {
+              throw new RuntimeException(e);
             }
-        } else if (containsUncommitted()) {
-            // need to commit even if rollback is not possible
-            // (create/drop table and so on)
-            database.commit(this);
+            cdIter.remove();
+          } else {
+            lastDir = null;
+          }
         }
-        removeTemporaryLobs(true);
-        if (undoLog != null && undoLog.size() > 0) {
-            undoLog.clear();
-        }
-        if (!ddl) {
-            // do not clean the temp tables if the last command was a
-            // create/drop
-            cleanTempTables(false);
-            if (autoCommitAtTransactionEnd) {
-                autoCommit = true;
-                autoCommitAtTransactionEnd = false;
-            }
-        }
+      }
 
-        endTransaction();
-    }
+      final BatchWriter finalWriter = writer;
 
-    private void removeTemporaryLobs(boolean onTimeout) {
-        assert this != getDatabase().getLobSession() || Thread.holdsLock(this) || Thread.holdsLock(getDatabase());
-        if (temporaryLobs != null) {
-            for (Value v : temporaryLobs) {
-                if (!v.isLinkedToTable()) {
-                    v.remove();
-                }
-            }
-            temporaryLobs.clear();
-        }
-        if (temporaryResultLobs != null && !temporaryResultLobs.isEmpty()) {
-            long keepYoungerThan = System.nanoTime() -
-                    TimeUnit.MILLISECONDS.toNanos(database.getSettings().lobTimeout);
-            while (!temporaryResultLobs.isEmpty()) {
-                TimeoutValue tv = temporaryResultLobs.getFirst();
-                if (onTimeout && tv.created >= keepYoungerThan) {
-                    break;
-                }
-                Value v = temporaryResultLobs.removeFirst().value;
-                if (!v.isLinkedToTable()) {
-                    v.remove();
-                }
-            }
-        }
-    }
+      ExecutorService deleteThreadPool =
+          Executors.newFixedThreadPool(getNumDeleteThreads(), new NamingThreadFactory("deleting"));
 
-    private void checkCommitRollback() {
-        if (commitOrRollbackDisabled && !locks.isEmpty()) {
-            throw DbException.get(ErrorCode.COMMIT_ROLLBACK_NOT_ALLOWED);
-        }
-    }
+      final List<Pair<Path,Path>> replacements = ServerConstants.getVolumeReplacements();
 
-    private void endTransaction() {
-        if (removeLobMap != null && removeLobMap.size() > 0) {
-            if (database.getStore() == null) {
-                // need to flush the transaction log, because we can't unlink
-                // lobs if the commit record is not written
-                database.flush();
-            }
-            for (Value v : removeLobMap.values()) {
-                v.remove();
-            }
-            removeLobMap = null;
-        }
-        unlockAll();
-        database.releaseDatabaseObjectIds(idsToRelease);
-        idsToRelease.clear();
-    }
+      for (final String delete : confirmedDeletes.values()) {
 
-    /**
-     * Fully roll back the current transaction.
-     */
-    public void rollback() {
-        checkCommitRollback();
-        currentTransactionName = null;
-        transactionStart = null;
-        boolean needCommit = undoLog != null && undoLog.size() > 0 || transaction != null;
-        if (needCommit) {
-            rollbackTo(null);
-        }
-        if (!locks.isEmpty() || needCommit) {
-            database.commit(this);
-        }
-        cleanTempTables(false);
-        if (autoCommitAtTransactionEnd) {
-            autoCommit = true;
-            autoCommitAtTransactionEnd = false;
-        }
-        endTransaction();
-    }
+        Runnable deleteTask = new Runnable() {
+          @Override
+          public void run() {
+            boolean removeFlag;
 
-    /**
-     * Partially roll back the current transaction.
-     *
-     * @param savepoint the savepoint to which should be rolled back
-     */
-    public void rollbackTo(Savepoint savepoint) {
-        int index = savepoint == null ? 0 : savepoint.logIndex;
-        if (undoLog != null) {
-            while (undoLog.size() > index) {
-                UndoLogRecord entry = undoLog.getLast();
-                entry.undo(this);
-                undoLog.removeLast();
-            }
-        }
-        if (transaction != null) {
-            if (savepoint == null) {
-                transaction.rollback();
-                transaction = null;
-            } else {
-                transaction.rollbackToSavepoint(savepoint.transactionSavepoint);
-            }
-        }
-        if (savepoints != null) {
-            String[] names = savepoints.keySet().toArray(new String[savepoints.size()]);
-            for (String name : names) {
-                Savepoint sp = savepoints.get(name);
-                int savepointIndex = sp.logIndex;
-                if (savepointIndex > index) {
-                    savepoints.remove(name);
-                }
-            }
-        }
-
-        // Because cache may have captured query result (in Query.lastResult),
-        // which is based on data from uncommitted transaction.,
-        // It is not valid after rollback, therefore cache has to be cleared.
-        if(queryCache != null) {
-            queryCache.clear();
-        }
-    }
-
-    @Override
-    public boolean hasPendingTransaction() {
-        return undoLog != null && undoLog.size() > 0;
-    }
-
-    /**
-     * Create a savepoint to allow rolling back to this state.
-     *
-     * @return the savepoint
-     */
-    public Savepoint setSavepoint() {
-        Savepoint sp = new Savepoint();
-        if (undoLog != null) {
-            sp.logIndex = undoLog.size();
-        }
-        if (database.getStore() != null) {
-            sp.transactionSavepoint = getStatementSavepoint();
-        }
-        return sp;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    @Override
-    public void cancel() {
-        cancelAtNs = System.nanoTime();
-    }
-
-    @Override
-    public void close() {
-        if (!closed) {
-            state = State.CLOSED;
             try {
-                database.checkPowerOff();
+              Path fullPath;
+              String switchedDelete = VolumeUtil.switchVolume(delete, FileType.TABLE, replacements);
+              if (switchedDelete != null) {
+                // actually replacing the volumes in the metadata table would be tricky because the
+                // entries would be different rows. So it could not be
+                // atomically in one mutation and extreme care would need to be taken that delete
+                // entry was not lost. Instead of doing that, just deal with
+                // volume switching when something needs to be deleted. Since the rest of the code
+                // uses suffixes to compare delete entries, there is no danger
+                // of deleting something that should not be deleted. Must not change value of delete
+                // variable because thats whats stored in metadata table.
+                log.debug("Volume replaced " + delete + " -> " + switchedDelete);
+                fullPath = fs.getFullPath(FileType.TABLE, switchedDelete);
+              } else {
+                fullPath = fs.getFullPath(FileType.TABLE, delete);
+              }
 
-                // release any open table locks
-                rollback();
+              log.debug("Deleting " + fullPath);
 
-                removeTemporaryLobs(false);
-                cleanTempTables(true);
-                commit(true);       // temp table rempval may have opened new transaction
-                if (undoLog != null) {
-                    undoLog.clear();
+              if (archiveOrMoveToTrash(fullPath) || fs.deleteRecursively(fullPath)) {
+                // delete succeeded, still want to delete
+                removeFlag = true;
+                synchronized (SimpleGarbageCollector.this) {
+                  ++status.current.deleted;
                 }
-                // Table#removeChildrenAndResources can take the meta lock,
-                // and we need to unlock before we call removeSession(), which might
-                // want to take the meta lock using the system session.
-                database.unlockMeta(this);
-            } finally {
-                closed = true;
-                database.removeSession(this);
-            }
-        }
-    }
-
-    /**
-     * Add a lock for the given table. The object is unlocked on commit or
-     * rollback.
-     *
-     * @param table the table that is locked
-     */
-    public void addLock(Table table) {
-        if (SysProperties.CHECK) {
-            if (locks.contains(table)) {
-                DbException.throwInternalError(table.toString());
-            }
-        }
-        locks.add(table);
-    }
-
-    /**
-     * Add an undo log entry to this session.
-     *
-     * @param table the table
-     * @param operation the operation type (see {@link UndoLogRecord})
-     * @param row the row
-     */
-    public void log(Table table, short operation, Row row) {
-        if (table.isMVStore()) {
-            return;
-        }
-        if (undoLogEnabled) {
-            UndoLogRecord log = new UndoLogRecord(table, operation, row);
-            // called _after_ the row was inserted successfully into the table,
-            // otherwise rollback will try to rollback a not-inserted row
-            if (SysProperties.CHECK) {
-                int lockMode = database.getLockMode();
-                if (lockMode != Constants.LOCK_MODE_OFF &&
-                        !database.isMVStore()) {
-                    TableType tableType = log.getTable().getTableType();
-                    if (!locks.contains(log.getTable())
-                            && TableType.TABLE_LINK != tableType
-                            && TableType.EXTERNAL_TABLE_ENGINE != tableType) {
-                        DbException.throwInternalError(String.valueOf(tableType));
-                    }
+              } else if (fs.exists(fullPath)) {
+                // leave the entry in the metadata; we'll try again later
+                removeFlag = false;
+                synchronized (SimpleGarbageCollector.this) {
+                  ++status.current.errors;
                 }
-            }
-            if (undoLog == null) {
-                undoLog = new UndoLog(database);
-            }
-            undoLog.add(log);
-        }
-    }
-
-    /**
-     * Unlock all read locks. This is done if the transaction isolation mode is
-     * READ_COMMITTED.
-     */
-    public void unlockReadLocks() {
-        if (!database.isMVStore() && database.isMultiThreaded() &&
-                database.getLockMode() == Constants.LOCK_MODE_READ_COMMITTED) {
-            for (Iterator<Table> iter = locks.iterator(); iter.hasNext(); ) {
-                Table t = iter.next();
-                if (!t.isLockedExclusively()) {
-                    t.unlock(this);
-                    iter.remove();
+                log.warn("File exists, but was not deleted for an unknown reason: " + fullPath);
+              } else {
+                // this failure, we still want to remove the metadata entry
+                removeFlag = true;
+                synchronized (SimpleGarbageCollector.this) {
+                  ++status.current.errors;
                 }
-            }
-        }
-    }
-
-    /**
-     * Unlock just this table.
-     *
-     * @param t the table to unlock
-     */
-    void unlock(Table t) {
-        locks.remove(t);
-    }
-
-    private void unlockAll() {
-        if (SysProperties.CHECK) {
-            if (undoLog != null && undoLog.size() > 0) {
-                DbException.throwInternalError();
-            }
-        }
-        if (!locks.isEmpty()) {
-            for (Table t : locks) {
-                t.unlock(this);
-            }
-            locks.clear();
-        }
-        database.unlockMetaDebug(this);
-        savepoints = null;
-        sessionStateChanged = true;
-    }
-
-    private void cleanTempTables(boolean closeSession) {
-        if (localTempTables != null && localTempTables.size() > 0) {
-            if (database.isMVStore()) {
-                _cleanTempTables(closeSession);
-            } else {
-                synchronized (database) {
-                    _cleanTempTables(closeSession);
+                String parts[] = fullPath.toString().split(Constants.ZTABLES)[1].split("/");
+                if (parts.length > 2) {
+                  String tableId = parts[1];
+                  String tabletDir = parts[2];
+                  TableManager.getInstance().updateTableStateCache(tableId);
+                  TableState tableState = TableManager.getInstance().getTableState(tableId);
+                  if (tableState != null && tableState != TableState.DELETING) {
+                    // clone directories don't always exist
+                    if (!tabletDir.startsWith(Constants.CLONE_PREFIX))
+                      log.debug("File doesn't exist: " + fullPath);
+                  }
+                } else {
+                  log.warn("Very strange path name: " + delete);
                 }
-            }
-        }
-    }
+              }
 
-    private void _cleanTempTables(boolean closeSession) {
-        Iterator<Table> it = localTempTables.values().iterator();
-        while (it.hasNext()) {
-            Table table = it.next();
-            if (closeSession || table.getOnCommitDrop()) {
-                modificationId++;
-                table.setModified();
-                it.remove();
-                // Exception thrown in org.h2.engine.Database.removeMeta
-                // if line below is missing with TestDeadlock
-                database.lockMeta(this);
-                table.removeChildrenAndResources(this);
-                if (closeSession) {
-                    // need to commit, otherwise recovery might
-                    // ignore the table removal
-                    database.commit(this);
-                }
-            } else if (table.getOnCommitTruncate()) {
-                table.truncate(this);
-            }
-        }
-    }
-
-    public Random getRandom() {
-        if (random == null) {
-            random = new Random();
-        }
-        return random;
-    }
-
-    @Override
-    public Trace getTrace() {
-        if (trace != null && !closed) {
-            return trace;
-        }
-        String traceModuleName = "jdbc[" + id + "]";
-        if (closed) {
-            return new TraceSystem(null).getTrace(traceModuleName);
-        }
-        trace = database.getTraceSystem().getTrace(traceModuleName);
-        return trace;
-    }
-
-    public void setLastIdentity(Value last) {
-        this.lastIdentity = last;
-        this.lastScopeIdentity = last;
-    }
-
-    public Value getLastIdentity() {
-        return lastIdentity;
-    }
-
-    public void setLastScopeIdentity(Value last) {
-        this.lastScopeIdentity = last;
-    }
-
-    public Value getLastScopeIdentity() {
-        return lastScopeIdentity;
-    }
-
-    public void setLastTriggerIdentity(Value last) {
-        this.lastTriggerIdentity = last;
-    }
-
-    public Value getLastTriggerIdentity() {
-        return lastTriggerIdentity;
-    }
-
-    public GeneratedKeys getGeneratedKeys() {
-        if (generatedKeys == null) {
-            generatedKeys = new GeneratedKeys();
-        }
-        return generatedKeys;
-    }
-
-    /**
-     * Called when a log entry for this session is added. The session keeps
-     * track of the first entry in the transaction log that is not yet
-     * committed.
-     *
-     * @param logId the transaction log id
-     * @param pos the position of the log entry in the transaction log
-     */
-    public void addLogPos(int logId, int pos) {
-        if (firstUncommittedLog == Session.LOG_WRITTEN) {
-            firstUncommittedLog = logId;
-            firstUncommittedPos = pos;
-        }
-    }
-
-    public int getFirstUncommittedLog() {
-        return firstUncommittedLog;
-    }
-
-    /**
-     * This method is called after the transaction log has written the commit
-     * entry for this session.
-     */
-    void setAllCommitted() {
-        firstUncommittedLog = Session.LOG_WRITTEN;
-        firstUncommittedPos = Session.LOG_WRITTEN;
-    }
-
-    /**
-     * Whether the session contains any uncommitted changes.
-     *
-     * @return true if yes
-     */
-    public boolean containsUncommitted() {
-        if (database.getStore() != null) {
-            return transaction != null && transaction.hasChanges();
-        }
-        return firstUncommittedLog != Session.LOG_WRITTEN;
-    }
-
-    /**
-     * Create a savepoint that is linked to the current log position.
-     *
-     * @param name the savepoint name
-     */
-    public void addSavepoint(String name) {
-        if (savepoints == null) {
-            savepoints = database.newStringMap();
-        }
-        savepoints.put(name, setSavepoint());
-    }
-
-    /**
-     * Undo all operations back to the log position of the given savepoint.
-     *
-     * @param name the savepoint name
-     */
-    public void rollbackToSavepoint(String name) {
-        checkCommitRollback();
-        currentTransactionName = null;
-        transactionStart = null;
-        if (savepoints == null) {
-            throw DbException.get(ErrorCode.SAVEPOINT_IS_INVALID_1, name);
-        }
-        Savepoint savepoint = savepoints.get(name);
-        if (savepoint == null) {
-            throw DbException.get(ErrorCode.SAVEPOINT_IS_INVALID_1, name);
-        }
-        rollbackTo(savepoint);
-    }
-
-    /**
-     * Prepare the given transaction.
-     *
-     * @param transactionName the name of the transaction
-     */
-    public void prepareCommit(String transactionName) {
-        if (containsUncommitted()) {
-            // need to commit even if rollback is not possible (create/drop
-            // table and so on)
-            database.prepareCommit(this, transactionName);
-        }
-        currentTransactionName = transactionName;
-    }
-
-    /**
-     * Commit or roll back the given transaction.
-     *
-     * @param transactionName the name of the transaction
-     * @param commit true for commit, false for rollback
-     */
-    public void setPreparedTransaction(String transactionName, boolean commit) {
-        if (currentTransactionName != null &&
-                currentTransactionName.equals(transactionName)) {
-            if (commit) {
-                commit(false);
-            } else {
-                rollback();
-            }
-        } else {
-            ArrayList<InDoubtTransaction> list = database
-                    .getInDoubtTransactions();
-            int state = commit ? InDoubtTransaction.COMMIT
-                    : InDoubtTransaction.ROLLBACK;
-            boolean found = false;
-            if (list != null) {
-                for (InDoubtTransaction p: list) {
-                    if (p.getTransactionName().equals(transactionName)) {
-                        p.setState(state);
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if (!found) {
-                throw DbException.get(ErrorCode.TRANSACTION_NOT_FOUND_1,
-                        transactionName);
-            }
-        }
-    }
-
-    @Override
-    public boolean isClosed() {
-        return closed;
-    }
-
-    public void setThrottle(int throttle) {
-        this.throttleNs = TimeUnit.MILLISECONDS.toNanos(throttle);
-    }
-
-    /**
-     * Wait for some time if this session is throttled (slowed down).
-     */
-    public void throttle() {
-        if (currentCommandStart == 0) {
-            currentCommandStart = System.currentTimeMillis();
-        }
-        if (throttleNs == 0) {
-            return;
-        }
-        long time = System.nanoTime();
-        if (lastThrottle + TimeUnit.MILLISECONDS.toNanos(Constants.THROTTLE_DELAY) > time) {
-            return;
-        }
-        State prevState = this.state;
-        lastThrottle = time + throttleNs;
-        try {
-            this.state = State.SLEEP;
-            Thread.sleep(TimeUnit.NANOSECONDS.toMillis(throttleNs));
-        } catch (Exception e) {
-            // ignore InterruptedException
-        } finally {
-            this.state = prevState;
-        }
-    }
-
-    /**
-     * Set the current command of this session. This is done just before
-     * executing the statement.
-     *
-     * @param command the command
-     * @param generatedKeysRequest
-     *            {@code false} if generated keys are not needed, {@code true} if
-     *            generated keys should be configured automatically, {@code int[]}
-     *            to specify column indices to return generated keys from, or
-     *            {@code String[]} to specify column names to return generated keys
-     *            from
-     */
-    public void setCurrentCommand(Command command, Object generatedKeysRequest) {
-        this.currentCommand = command;
-        // Preserve generated keys in case of a new query due to possible nested
-        // queries in update
-        if (command != null && !command.isQuery()) {
-            getGeneratedKeys().clear(generatedKeysRequest);
-        }
-        if (queryTimeout > 0 && command != null) {
-            currentCommandStart = System.currentTimeMillis();
-            long now = System.nanoTime();
-            cancelAtNs = now + TimeUnit.MILLISECONDS.toNanos(queryTimeout);
-        }
-        state = command == null ? State.SLEEP : State.RUNNING;
-    }
-
-    /**
-     * Check if the current transaction is canceled by calling
-     * Statement.cancel() or because a session timeout was set and expired.
-     *
-     * @throws DbException if the transaction is canceled
-     */
-    public void checkCanceled() {
-        throttle();
-        if (cancelAtNs == 0) {
-            return;
-        }
-        long time = System.nanoTime();
-        if (time >= cancelAtNs) {
-            cancelAtNs = 0;
-            throw DbException.get(ErrorCode.STATEMENT_WAS_CANCELED);
-        }
-    }
-
-    /**
-     * Get the cancel time.
-     *
-     * @return the time or 0 if not set
-     */
-    public long getCancel() {
-        return cancelAtNs;
-    }
-
-    public Command getCurrentCommand() {
-        return currentCommand;
-    }
-
-    public long getCurrentCommandStart() {
-        return currentCommandStart;
-    }
-
-    public boolean getAllowLiterals() {
-        return allowLiterals;
-    }
-
-    public void setAllowLiterals(boolean b) {
-        this.allowLiterals = b;
-    }
-
-    public void setCurrentSchema(Schema schema) {
-        modificationId++;
-        this.currentSchemaName = schema.getName();
-    }
-
-    @Override
-    public String getCurrentSchemaName() {
-        return currentSchemaName;
-    }
-
-    @Override
-    public void setCurrentSchemaName(String schemaName) {
-        Schema schema = database.getSchema(schemaName);
-        setCurrentSchema(schema);
-    }
-
-    /**
-     * Create an internal connection. This connection is used when initializing
-     * triggers, and when calling user defined functions.
-     *
-     * @param columnList if the url should be 'jdbc:columnlist:connection'
-     * @return the internal connection
-     */
-    public JdbcConnection createConnection(boolean columnList) {
-        String url;
-        if (columnList) {
-            url = Constants.CONN_URL_COLUMNLIST;
-        } else {
-            url = Constants.CONN_URL_INTERNAL;
-        }
-        return new JdbcConnection(this, getUser().getName(), url);
-    }
-
-    @Override
-    public DataHandler getDataHandler() {
-        return database;
-    }
-
-    /**
-     * Remember that the given LOB value must be removed at commit.
-     *
-     * @param v the value
-     */
-    public void removeAtCommit(Value v) {
-        final String key = v.toString();
-        if (SysProperties.CHECK && !v.isLinkedToTable()) {
-            DbException.throwInternalError(key);
-        }
-        if (removeLobMap == null) {
-            removeLobMap = new HashMap<>();
-        }
-        removeLobMap.put(key, v);
-    }
-
-    /**
-     * Do not remove this LOB value at commit any longer.
-     *
-     * @param v the value
-     */
-    public void removeAtCommitStop(Value v) {
-        if (removeLobMap != null) {
-            removeLobMap.remove(v.toString());
-        }
-    }
-
-    /**
-     * Get the next system generated identifiers. The identifier returned does
-     * not occur within the given SQL statement.
-     *
-     * @param sql the SQL statement
-     * @return the new identifier
-     */
-    public String getNextSystemIdentifier(String sql) {
-        String identifier;
-        do {
-            identifier = SYSTEM_IDENTIFIER_PREFIX + systemIdentifier++;
-        } while (sql.contains(identifier));
-        return identifier;
-    }
-
-    /**
-     * Add a procedure to this session.
-     *
-     * @param procedure the procedure to add
-     */
-    public void addProcedure(Procedure procedure) {
-        if (procedures == null) {
-            procedures = database.newStringMap();
-        }
-        procedures.put(procedure.getName(), procedure);
-    }
-
-    /**
-     * Remove a procedure from this session.
-     *
-     * @param name the name of the procedure to remove
-     */
-    public void removeProcedure(String name) {
-        if (procedures != null) {
-            procedures.remove(name);
-        }
-    }
-
-    /**
-     * Get the procedure with the given name, or null
-     * if none exists.
-     *
-     * @param name the procedure name
-     * @return the procedure or null
-     */
-    public Procedure getProcedure(String name) {
-        if (procedures == null) {
-            return null;
-        }
-        return procedures.get(name);
-    }
-
-    public void setSchemaSearchPath(String[] schemas) {
-        modificationId++;
-        this.schemaSearchPath = schemas;
-    }
-
-    public String[] getSchemaSearchPath() {
-        return schemaSearchPath;
-    }
-
-    @Override
-    public int hashCode() {
-        return serialId;
-    }
-
-    @Override
-    public String toString() {
-        return "#" + serialId + " (user: " + (user == null ? "<null>" : user.getName()) + ")";
-    }
-
-    public void setUndoLogEnabled(boolean b) {
-        this.undoLogEnabled = b;
-    }
-
-    public void setRedoLogBinary(boolean b) {
-        this.redoLogBinary = b;
-    }
-
-    public boolean isUndoLogEnabled() {
-        return undoLogEnabled;
-    }
-
-    /**
-     * Begin a transaction.
-     */
-    public void begin() {
-        autoCommitAtTransactionEnd = true;
-        autoCommit = false;
-    }
-
-    public long getSessionStart() {
-        return sessionStart;
-    }
-
-    public ValueTimestampTimeZone getTransactionStart() {
-        if (transactionStart == null) {
-            transactionStart = CurrentTimestamp.get();
-        }
-        return transactionStart;
-    }
-
-    public Table[] getLocks() {
-        // copy the data without synchronizing
-        ArrayList<Table> copy = new ArrayList<>(locks.size());
-        for (Table lock : locks) {
-            try {
-                copy.add(lock);
+              // proceed to clearing out the flags for successful deletes and
+              // non-existent files
+              if (removeFlag && finalWriter != null) {
+                putMarkerDeleteMutation(delete, finalWriter);
+              }
             } catch (Exception e) {
-                // ignore
-                break;
+              log.error("{}", e.getMessage(), e);
             }
-        }
-        return copy.toArray(new Table[0]);
-    }
 
-    /**
-     * Wait if the exclusive mode has been enabled for another session. This
-     * method returns as soon as the exclusive mode has been disabled.
-     */
-    public void waitIfExclusiveModeEnabled() {
-        // Even in exclusive mode, we have to let the LOB session proceed, or we
-        // will get deadlocks.
-        if (database.getLobSession() == this) {
-            return;
-        }
-        while (true) {
-            Session exclusive = database.getExclusiveSession();
-            if (exclusive == null || exclusive == this) {
-                break;
-            }
-            if (Thread.holdsLock(exclusive)) {
-                // if another connection is used within the connection
-                break;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        }
-    }
+          }
 
-    /**
-     * Get the view cache for this session. There are two caches: the subquery
-     * cache (which is only use for a single query, has no bounds, and is
-     * cleared after use), and the cache for regular views.
-     *
-     * @param subQuery true to get the subquery cache
-     * @return the view cache
-     */
-    public Map<Object, ViewIndex> getViewIndexCache(boolean subQuery) {
-        if (subQuery) {
-            // for sub-queries we don't need to use LRU because the cache should
-            // not grow too large for a single query (we drop the whole cache in
-            // the end of prepareLocal)
-            if (subQueryIndexCache == null) {
-                subQueryIndexCache = new HashMap<>();
-            }
-            return subQueryIndexCache;
+        };
+
+        deleteThreadPool.execute(deleteTask);
+      }
+
+      deleteThreadPool.shutdown();
+
+      try {
+        while (!deleteThreadPool.awaitTermination(1000, TimeUnit.MILLISECONDS)) {}
+      } catch (InterruptedException e1) {
+        log.error("{}", e1.getMessage(), e1);
+      }
+
+      if (writer != null) {
+        try {
+          writer.close();
+        } catch (MutationsRejectedException e) {
+          log.error("Problem removing entries from the metadata table: ", e);
         }
-        SmallLRUCache<Object, ViewIndex> cache = viewIndexCache;
-        if (cache == null) {
-            viewIndexCache = cache = SmallLRUCache.newInstance(Constants.VIEW_INDEX_CACHE_SIZE);
-        }
-        return cache;
-    }
-
-    /**
-     * Remember the result set and close it as soon as the transaction is
-     * committed (if it needs to be closed). This is done to delete temporary
-     * files as soon as possible, and free object ids of temporary tables.
-     *
-     * @param result the temporary result set
-     */
-    public void addTemporaryResult(ResultInterface result) {
-        if (!result.needToClose()) {
-            return;
-        }
-        if (temporaryResults == null) {
-            temporaryResults = new HashSet<>();
-        }
-        if (temporaryResults.size() < 100) {
-            // reference at most 100 result sets to avoid memory problems
-            temporaryResults.add(result);
-        }
-    }
-
-    private void closeTemporaryResults() {
-        if (temporaryResults != null) {
-            for (ResultInterface result : temporaryResults) {
-                result.close();
-            }
-            temporaryResults = null;
-        }
-    }
-
-    public void setQueryTimeout(int queryTimeout) {
-        int max = database.getSettings().maxQueryTimeout;
-        if (max != 0 && (max < queryTimeout || queryTimeout == 0)) {
-            // the value must be at most max
-            queryTimeout = max;
-        }
-        this.queryTimeout = queryTimeout;
-        // must reset the cancel at here,
-        // otherwise it is still used
-        this.cancelAtNs = 0;
-    }
-
-    public int getQueryTimeout() {
-        return queryTimeout;
-    }
-
-    /**
-     * Set the table this session is waiting for, and the thread that is
-     * waiting.
-     *
-     * @param waitForLock the table
-     * @param waitForLockThread the current thread (the one that is waiting)
-     */
-    public void setWaitForLock(Table waitForLock, Thread waitForLockThread) {
-        this.waitForLock = waitForLock;
-        this.waitForLockThread = waitForLockThread;
-    }
-
-    public Table getWaitForLock() {
-        return waitForLock;
-    }
-
-    public Thread getWaitForLockThread() {
-        return waitForLockThread;
-    }
-
-    public int getModificationId() {
-        return modificationId;
+      }
     }
 
     @Override
-    public boolean isReconnectNeeded(boolean write) {
-        while (true) {
-            boolean reconnect = database.isReconnectNeeded();
-            if (reconnect) {
-                return true;
-            }
-            if (write) {
-                if (database.beforeWriting()) {
-                    return false;
+    public void deleteTableDirIfEmpty(String tableID) throws IOException {
+      // if dir exist and is empty, then empty list is returned...
+      // hadoop 2.0 will throw an exception if the file does not exist
+      for (String dir : ServerConstants.getTablesDirs()) {
+        FileStatus[] tabletDirs = null;
+        try {
+          tabletDirs = fs.listStatus(new Path(dir + "/" + tableID));
+        } catch (FileNotFoundException ex) {
+          continue;
+        }
+
+        if (tabletDirs.length == 0) {
+          Path p = new Path(dir + "/" + tableID);
+          log.debug("Removing table dir " + p);
+          if (!archiveOrMoveToTrash(p))
+            fs.delete(p);
+        }
+      }
+    }
+
+    @Override
+    public void incrementCandidatesStat(long i) {
+      status.current.candidates += i;
+    }
+
+    @Override
+    public void incrementInUseStat(long i) {
+      status.current.inUse += i;
+    }
+
+    @Override
+    public Iterator<Entry<String,Status>> getReplicationNeededIterator()
+        throws AccumuloException, AccumuloSecurityException {
+      Connector conn = getConnector();
+      try {
+        Scanner s = ReplicationTable.getScanner(conn);
+        StatusSection.limit(s);
+        return Iterators.transform(s.iterator(),
+            new Function<Entry<Key,Value>,Entry<String,Status>>() {
+
+              @Override
+              public Entry<String,Status> apply(Entry<Key,Value> input) {
+                String file = input.getKey().getRow().toString();
+                Status stat;
+                try {
+                  stat = Status.parseFrom(input.getValue().get());
+                } catch (InvalidProtocolBufferException e) {
+                  log.warn("Could not deserialize protobuf for: " + input.getKey());
+                  stat = null;
                 }
-            } else {
-                return false;
-            }
+                return Maps.immutableEntry(file, stat);
+              }
+
+            });
+      } catch (ReplicationTableOfflineException e) {
+        // No elements that we need to preclude
+        return Collections.emptyIterator();
+      }
+    }
+
+  }
+
+  private void run() {
+
+    // Sleep for an initial period, giving the master time to start up and
+    // old data files to be unused
+    log.info("Trying to acquire ZooKeeper lock for garbage collector");
+
+    try {
+      getZooLock(startStatsService());
+    } catch (Exception ex) {
+      log.error("{}", ex.getMessage(), ex);
+      System.exit(1);
+    }
+
+    try {
+      long delay = getStartDelay();
+      log.debug(
+          "Sleeping for " + delay + " milliseconds before beginning garbage collection cycles");
+      Thread.sleep(delay);
+    } catch (InterruptedException e) {
+      log.warn("{}", e.getMessage(), e);
+      return;
+    }
+
+    ProbabilitySampler sampler =
+        new ProbabilitySampler(getConfiguration().getFraction(Property.GC_TRACE_PERCENT));
+
+    // This is created outside of the run loop and passed to the walogCollector so that
+    // only a single timed task is created (internal to LiveTServerSet using SimpleTimer.
+    final LiveTServerSet liveTServerSet = new LiveTServerSet(this, new LiveTServerSet.Listener() {
+      @Override
+      public void update(LiveTServerSet current, Set<TServerInstance> deleted,
+          Set<TServerInstance> added) {
+
+        log.debug("Number of current servers {}, tservers added {}, removed {}",
+            current == null ? -1 : current.size(), added, deleted);
+
+        if (log.isTraceEnabled()) {
+          log.trace("Current servers: {}
+Added: {}
+ Removed: {}", current, added, deleted);
         }
-    }
+      }
+    });
 
-    @Override
-    public void afterWriting() {
-        database.afterWriting();
-    }
+    while (true) {
+      Trace.on("gc", sampler);
 
-    @Override
-    public SessionInterface reconnect(boolean write) {
-        readSessionState();
-        close();
-        Session newSession = Engine.getInstance().createSession(connectionInfo);
-        newSession.sessionState = sessionState;
-        newSession.recreateSessionState();
-        if (write) {
-            while (!newSession.database.beforeWriting()) {
-                // wait until we are allowed to write
-            }
+      Span gcSpan = Trace.start("loop");
+      final long tStart = System.nanoTime();
+      try {
+        System.gc(); // make room
+
+        status.current.started = System.currentTimeMillis();
+
+        new GarbageCollectionAlgorithm().collect(new GCEnv(RootTable.NAME));
+        new GarbageCollectionAlgorithm().collect(new GCEnv(MetadataTable.NAME));
+
+        log.info("Number of data file candidates for deletion: " + status.current.candidates);
+        log.info("Number of data file candidates still in use: " + status.current.inUse);
+        log.info("Number of successfully deleted data files: " + status.current.deleted);
+        log.info("Number of data files delete failures: " + status.current.errors);
+
+        status.current.finished = System.currentTimeMillis();
+        status.last = status.current;
+        gcRunMetrics.setLastCollect(status.current);
+        status.current = new GcCycleStats();
+
+      } catch (Exception e) {
+        log.error("{}", e.getMessage(), e);
+      }
+
+      final long tStop = System.nanoTime();
+      log.info(String.format("Collect cycle took %.2f seconds",
+          (TimeUnit.NANOSECONDS.toMillis(tStop - tStart) / 1000.0)));
+
+      // We want to prune references to fully-replicated WALs from the replication table which are
+      // no longer referenced in the metadata table
+      // before running GarbageCollectWriteAheadLogs to ensure we delete as many files as possible.
+      Span replSpan = Trace.start("replicationClose");
+      try {
+        CloseWriteAheadLogReferences closeWals = new CloseWriteAheadLogReferences(this);
+        closeWals.run();
+      } catch (Exception e) {
+        log.error("Error trying to close write-ahead logs for replication table", e);
+      } finally {
+        replSpan.stop();
+      }
+
+      Span waLogs = Trace.start("walogs");
+
+      try {
+        GarbageCollectWriteAheadLogs walogCollector =
+            new GarbageCollectWriteAheadLogs(this, fs, liveTServerSet, isUsingTrash());
+        log.info("Beginning garbage collection of write-ahead logs");
+        walogCollector.collect(status);
+        gcRunMetrics.setLastWalCollect(status.lastLog);
+      } catch (Exception e) {
+        log.error("{}", e.getMessage(), e);
+      } finally {
+        waLogs.stop();
+      }
+      gcSpan.stop();
+
+      // We just made a lot of metadata changes. Flush them out.
+      // Either with flush and full compaction, or flush only and allow automatic triggering
+      // of any necessary compactions.
+      try {
+        Connector connector = getConnector();
+
+        final long actionStart = System.nanoTime();
+
+        String action = getConfiguration().get(Property.GC_USE_FULL_COMPACTION);
+        log.debug("gc post action {} started", action);
+
+        switch (action) {
+          case "compact":
+            connector.tableOperations().compact(MetadataTable.NAME, null, null, true, true);
+            connector.tableOperations().compact(RootTable.NAME, null, null, true, true);
+            break;
+          case "flush":
+            connector.tableOperations().flush(MetadataTable.NAME, null, null, true);
+            connector.tableOperations().flush(RootTable.NAME, null, null, true);
+            break;
+          default:
+            log.trace("\'none - no action\' or invalid value provided: {}", action);
         }
-        return newSession;
-    }
 
-    public void setConnectionInfo(ConnectionInfo ci) {
-        connectionInfo = ci;
-    }
+        final long actionComplete = System.nanoTime();
 
-    public Value getTransactionId() {
-        if (database.getStore() != null) {
-            if (transaction == null || !transaction.hasChanges()) {
-                return ValueNull.INSTANCE;
-            }
-            return ValueString.get(Long.toString(getTransaction().getSequenceNum()));
-        }
-        if (!database.isPersistent()) {
-            return ValueNull.INSTANCE;
-        }
-        if (undoLog == null || undoLog.size() == 0) {
-            return ValueNull.INSTANCE;
-        }
-        return ValueString.get(firstUncommittedLog + "-" + firstUncommittedPos +
-                "-" + id);
-    }
+        gcRunMetrics.setPostOpDuration(actionComplete - actionStart);
 
-    /**
-     * Get the next object id.
-     *
-     * @return the next object id
-     */
-    public int nextObjectId() {
-        return objectId++;
-    }
+        log.info("gc post action {} completed in {} seconds", action, String.format("%.2f",
+            (TimeUnit.NANOSECONDS.toMillis(actionComplete - actionStart) / 1000.0)));
 
-    public boolean isRedoLogBinaryEnabled() {
-        return redoLogBinary;
-    }
+      } catch (Exception e) {
+        log.warn("{}", e.getMessage(), e);
+      }
 
-    /**
-     * Get the transaction to use for this session.
-     *
-     * @return the transaction
-     */
-    public Transaction getTransaction() {
-        if (transaction == null) {
-            MVTableEngine.Store store = database.getStore();
-            if (store != null) {
-                if (store.getMvStore().isClosed()) {
-                    Throwable backgroundException = database.getBackgroundException();
-                    database.shutdownImmediately();
-                    throw DbException.get(ErrorCode.DATABASE_IS_CLOSED, backgroundException);
-                }
-                transaction = store.getTransactionStore().begin(this, this.lockTimeout, id);
-            }
-            startStatement = -1;
-        }
-        return transaction;
+      Trace.off();
+      try {
+        gcRunMetrics.incrementRunCycleCount();
+        long gcDelay = getConfiguration().getTimeInMillis(Property.GC_CYCLE_DELAY);
+        log.debug("Sleeping for {} milliseconds", gcDelay);
+        Thread.sleep(gcDelay);
+      } catch (InterruptedException e) {
+        log.warn("{}", e.getMessage(), e);
+        return;
+      }
     }
+  }
 
-    private long getStatementSavepoint() {
-        if (startStatement == -1) {
-            startStatement = getTransaction().setSavepoint();
-        }
-        return startStatement;
-    }
-
-    /**
-     * Start a new statement within a transaction.
-     */
-    public void startStatementWithinTransaction() {
-        Transaction transaction = getTransaction();
-        if(transaction != null) {
-            transaction.markStatementStart();
-        }
-        startStatement = -1;
-    }
-
-    /**
-     * Mark the statement as completed. This also close all temporary result
-     * set, and deletes all temporary files held by the result sets.
-     */
-    public void endStatement() {
-        if(transaction != null) {
-            transaction.markStatementEnd();
-        }
-        startStatement = -1;
-        closeTemporaryResults();
-    }
-
-    /**
-     * Clear the view cache for this session.
-     */
-    public void clearViewIndexCache() {
-        viewIndexCache = null;
-    }
-
-    @Override
-    public void addTemporaryLob(Value v) {
-        if (!DataType.isLargeObject(v.getType())) {
-            return;
-        }
-        if (v.getTableId() == LobStorageFrontend.TABLE_RESULT
-                || v.getTableId() == LobStorageFrontend.TABLE_TEMP) {
-            if (temporaryResultLobs == null) {
-                temporaryResultLobs = new LinkedList<>();
-            }
-            temporaryResultLobs.add(new TimeoutValue(v));
-        } else {
-            if (temporaryLobs == null) {
-                temporaryLobs = new ArrayList<>();
-            }
-            temporaryLobs.add(v);
-        }
-    }
-
-    @Override
-    public boolean isRemote() {
+  /**
+   * Moves a file to trash. If this garbage collector is not using trash, this method returns false
+   * and leaves the file alone. If the file is missing, this method returns false as opposed to
+   * throwing an exception.
+   *
+   * @return true if the file was moved to trash
+   * @throws IOException
+   *           if the volume manager encountered a problem
+   */
+  boolean archiveOrMoveToTrash(Path path) throws IOException {
+    if (shouldArchiveFiles()) {
+      return archiveFile(path);
+    } else {
+      if (!isUsingTrash())
         return false;
+      try {
+        return fs.moveToTrash(path);
+      } catch (FileNotFoundException ex) {
+        return false;
+      }
+    }
+  }
+
+  /**
+   * Move a file, that would otherwise be deleted, to the archive directory for files
+   *
+   * @param fileToArchive
+   *          Path to file that is to be archived
+   * @return True if the file was successfully moved to the file archive directory, false otherwise
+   */
+  boolean archiveFile(Path fileToArchive) throws IOException {
+    // Figure out what the base path this volume uses on this FileSystem
+    Volume sourceVolume = fs.getVolumeByPath(fileToArchive);
+    String sourceVolumeBasePath = sourceVolume.getBasePath();
+
+    log.debug("Base path for volume: " + sourceVolumeBasePath);
+
+    // Get the path for the file we want to archive
+    String sourcePathBasePath = fileToArchive.toUri().getPath();
+
+    // Strip off the common base path for the file to archive
+    String relativeVolumePath = sourcePathBasePath.substring(sourceVolumeBasePath.length());
+    if (Path.SEPARATOR_CHAR == relativeVolumePath.charAt(0)) {
+      if (relativeVolumePath.length() > 1) {
+        relativeVolumePath = relativeVolumePath.substring(1);
+      } else {
+        relativeVolumePath = "";
+      }
     }
 
-    /**
-     * Mark that the given table needs to be analyzed on commit.
-     *
-     * @param table the table
-     */
-    public void markTableForAnalyze(Table table) {
-        if (tablesToAnalyze == null) {
-            tablesToAnalyze = new HashSet<>();
-        }
-        tablesToAnalyze.add(table);
+    log.debug("Computed relative path for file to archive: " + relativeVolumePath);
+
+    // The file archive path on this volume (we can't archive this file to a different volume)
+    Path archivePath = new Path(sourceVolumeBasePath, ServerConstants.FILE_ARCHIVE_DIR);
+
+    log.debug("File archive path: " + archivePath);
+
+    fs.mkdirs(archivePath);
+
+    // Preserve the path beneath the Volume's base directory (e.g. tables/1/A_0000001.rf)
+    Path fileArchivePath = new Path(archivePath, relativeVolumePath);
+
+    log.debug("Create full path of " + fileArchivePath + " from " + archivePath + " and "
+        + relativeVolumePath);
+
+    // Make sure that it doesn't already exist, something is wrong.
+    if (fs.exists(fileArchivePath)) {
+      log.warn("Tried to archive file, but it already exists: " + fileArchivePath);
+      return false;
     }
 
-    public State getState() {
-        return getBlockingSessionId() != 0 ? State.BLOCKED : state;
+    log.debug("Moving " + fileToArchive + " to " + fileArchivePath);
+    return fs.rename(fileToArchive, fileArchivePath);
+  }
+
+  private void getZooLock(HostAndPort addr) throws KeeperException, InterruptedException {
+    String path = ZooUtil.getRoot(getInstance()) + Constants.ZGC_LOCK;
+
+    LockWatcher lockWatcher = new LockWatcher() {
+      @Override
+      public void lostLock(LockLossReason reason) {
+        Halt.halt("GC lock in zookeeper lost (reason = " + reason + "), exiting!", 1);
+      }
+
+      @Override
+      public void unableToMonitorLockNode(final Throwable e) {
+        // ACCUMULO-3651 Level changed to error and FATAL added to message for slf4j compatibility
+        Halt.halt(-1, new Runnable() {
+
+          @Override
+          public void run() {
+            log.error("FATAL: No longer able to monitor lock node ", e);
+          }
+        });
+
+      }
+    };
+
+    while (true) {
+      lock = new ZooLock(path);
+      if (lock.tryLock(lockWatcher,
+          new ServerServices(addr.toString(), Service.GC_CLIENT).toString().getBytes())) {
+        log.debug("Got GC ZooKeeper lock");
+        return;
+      }
+      log.debug("Failed to get GC ZooKeeper lock, will retry");
+      sleepUninterruptibly(1, TimeUnit.SECONDS);
     }
+  }
 
-    public void setState(State state) {
-        this.state = state;
+  private HostAndPort startStatsService() throws UnknownHostException {
+    Iface rpcProxy = RpcWrapper.service(this, new Processor<Iface>(this));
+    final Processor<Iface> processor;
+    if (ThriftServerType.SASL == getThriftServerType()) {
+      Iface tcProxy = TCredentialsUpdatingWrapper.service(rpcProxy, getClass(), getConfiguration());
+      processor = new Processor<>(tcProxy);
+    } else {
+      processor = new Processor<>(rpcProxy);
     }
-
-    public int getBlockingSessionId() {
-        return transaction == null ? 0 : transaction.getBlockerId();
+    int port[] = getConfiguration().getPort(Property.GC_PORT);
+    HostAndPort[] addresses = TServerUtils.getHostAndPorts(this.opts.getAddress(), port);
+    long maxMessageSize = getConfiguration().getMemoryInBytes(Property.GENERAL_MAX_MESSAGE_SIZE);
+    try {
+      ServerAddress server = TServerUtils.startTServer(getConfiguration(), getThriftServerType(),
+          processor, this.getClass().getSimpleName(), "GC Monitor Service", 2,
+          getConfiguration().getCount(Property.GENERAL_SIMPLETIMER_THREADPOOL_SIZE), 1000,
+          maxMessageSize, getServerSslParams(), getSaslParams(), 0, addresses);
+      log.debug("Starting garbage collector listening on " + server.address);
+      return server.address;
+    } catch (Exception ex) {
+      // ACCUMULO-3651 Level changed to error and FATAL added to message for slf4j compatibility
+      log.error("FATAL:", ex);
+      throw new RuntimeException(ex);
     }
+  }
 
-    @Override
-    public void onRollback(MVMap<Object, VersionedValue> map, Object key,
-                            VersionedValue existingValue,
-                            VersionedValue restoredValue) {
-        // Here we are relying on the fact that map which backs table's primary index
-        // has the same name as the table itself
-        MVTableEngine.Store store = database.getStore();
-        if(store != null) {
-            MVTable table = store.getTable(map.getName());
-            if (table != null) {
-                long recKey = ((ValueLong)key).getLong();
-                Row oldRow = getRowFromVersionedValue(table, recKey, existingValue);
-                Row newRow = getRowFromVersionedValue(table, recKey, restoredValue);
-                table.fireAfterRow(this, oldRow, newRow, true);
+  /**
+   * Checks if the system is almost out of memory.
+   *
+   * @param runtime
+   *          Java runtime
+   * @return true if system is almost out of memory
+   * @see #CANDIDATE_MEMORY_PERCENTAGE
+   */
+  static boolean almostOutOfMemory(Runtime runtime) {
+    return runtime.totalMemory() - runtime.freeMemory()
+        > CANDIDATE_MEMORY_PERCENTAGE * runtime.maxMemory();
+  }
 
-                if (table.getContainsLargeObject()) {
-                    if (oldRow != null) {
-                        for (int i = 0, len = oldRow.getColumnCount(); i < len; i++) {
-                            Value v = oldRow.getValue(i);
-                            if (v.isLinkedToTable()) {
-                                removeAtCommit(v);
-                            }
-                        }
-                    }
-                    if (newRow != null) {
-                        for (int i = 0, len = newRow.getColumnCount(); i < len; i++) {
-                            Value v = newRow.getValue(i);
-                            if (v.isLinkedToTable()) {
-                                removeAtCommitStop(v);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+  private static void putMarkerDeleteMutation(final String delete, final BatchWriter writer)
+      throws MutationsRejectedException {
+    Mutation m = new Mutation(MetadataSchema.DeletesSection.getRowPrefix() + delete);
+    m.putDelete(EMPTY_TEXT, EMPTY_TEXT);
+    writer.addMutation(m);
+  }
+
+  /**
+   * Checks if the given string is a directory.
+   *
+   * @param delete
+   *          possible directory
+   * @return true if string is a directory
+   */
+  static boolean isDir(String delete) {
+    if (delete == null) {
+      return false;
     }
+    int slashCount = 0;
+    for (int i = 0; i < delete.length(); i++)
+      if (delete.charAt(i) == '/')
+        slashCount++;
+    return slashCount == 1;
+  }
 
-    private static Row getRowFromVersionedValue(MVTable table, long recKey,
-                                                VersionedValue versionedValue) {
-        Object value = versionedValue == null ? null : versionedValue.value;
-        if (value == null) {
-            return null;
-        }
-        Row result;
-        if(value instanceof Row) {
-            result = (Row) value;
-            assert result.getKey() == recKey : result.getKey() + " != " + recKey;
-        } else {
-            ValueArray array = (ValueArray) value;
-            result = table.createRow(array.getList(), 0);
-            result.setKey(recKey);
-        }
-        return result;
-    }
+  @Override
+  public GCStatus getStatus(TInfo info, TCredentials credentials) {
+    return status;
+  }
 
-
-    /**
-     * Represents a savepoint (a position in a transaction to where one can roll
-     * back to).
-     */
-    public static class Savepoint {
-
-        /**
-         * The undo log index.
-         */
-        int logIndex;
-
-        /**
-         * The transaction savepoint id.
-         */
-        long transactionSavepoint;
-    }
-
-    /**
-     * An object with a timeout.
-     */
-    public static class TimeoutValue {
-
-        /**
-         * The time when this object was created.
-         */
-        final long created = System.nanoTime();
-
-        /**
-         * The value.
-         */
-        final Value value;
-
-        TimeoutValue(Value v) {
-            this.value = v;
-        }
-
-    }
-
-    public ColumnNamerConfiguration getColumnNamerConfiguration() {
-        return columnNamerConfiguration;
-    }
-
-    public void setColumnNamerConfiguration(ColumnNamerConfiguration columnNamerConfiguration) {
-        this.columnNamerConfiguration = columnNamerConfiguration;
-    }
-
-    @Override
-    public boolean isSupportsGeneratedKeys() {
-        return true;
-    }
-
+  public GcRunMetrics getGcRunMetrics() {
+    return gcRunMetrics;
+  }
 }

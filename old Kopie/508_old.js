@@ -224,7 +224,6 @@ class Test {
           next(null, accounts);
         });
       },
-      function getBalance(accounts, next) {
         web3.eth.getBalance(web3.eth.defaultAccount).then((balance) => {
           if (parseInt(balance) === 0) {
             console.warn("Warning: default account has no funds");

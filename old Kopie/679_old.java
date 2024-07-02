@@ -1,5 +1,4 @@
 /*
-    AccumuloConfiguration acuconf = DefaultConfiguration.getInstance();
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -85,7 +84,7 @@ class RFileSummariesRetriever implements SummaryInputArguments, SummaryFSOptions
   @Override
   public Collection<Summary> read() throws IOException {
     SummarizerFactory factory = new SummarizerFactory();
-    ConfigurationCopy acuconf = new ConfigurationCopy(DefaultConfiguration.getInstance());
+    AccumuloConfiguration acuconf = DefaultConfiguration.getInstance();
     Configuration conf = in.getFileSystem().getConf();
     config.forEach((k, v) -> acuconf.set(k, v));
 

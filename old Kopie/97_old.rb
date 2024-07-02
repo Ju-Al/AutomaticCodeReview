@@ -51,7 +51,6 @@ Puppet::Type.type(:a2mod).provide(:redhat) do
   def modfile
     modfile ||= "#{self.class.modpath}/#{resource[:name]}.load"
   end
-
   # Set libfile path: If absolute path is passed then maintain it, else make it default 'modules/module-name'
   def libfile
     abs_path_regex = /^\/.*/

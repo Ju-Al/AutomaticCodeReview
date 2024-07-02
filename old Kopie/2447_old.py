@@ -1,5 +1,4 @@
 # coding: utf-8
-            feature_name='auto', categorical_feature='auto', callbacks=None):
 # pylint: disable = invalid-name, W0105, C0111, C0301
 """Scikit-learn wrapper interface for LightGBM."""
 from __future__ import absolute_import
@@ -376,7 +375,7 @@ class LGBMModel(_LGBMModelBase):
             eval_set=None, eval_names=None, eval_sample_weight=None,
             eval_class_weight=None, eval_init_score=None, eval_group=None,
             eval_metric=None, early_stopping_rounds=None, verbose=True,
-            feature_name='auto', categorical_feature='auto', 
+            feature_name='auto', categorical_feature='auto', callbacks=None):
             init_model=None, callbacks=None):
         """Build a gradient boosting model from the training set (X, y).
 

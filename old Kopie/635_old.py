@@ -227,7 +227,6 @@ class _LocIndexer(_LocationIndexerBase):
     """A indexer for ray_df.loc[] functionality"""
 
     def __getitem__(self, key):
-        # When getting along a single axis,
         if not isinstance(key, tuple):
             # Try to fasttrack the code through already optimized path
             try:

@@ -1,9 +1,4 @@
 define(['loading', 'libraryMenu', 'dom', 'globalize', 'cardStyle', 'emby-button'], function (loading, libraryMenu, dom, globalize) {
-        menuItems.push({
-            name: globalize.translate('ButtonUninstall'),
-            id: 'delete',
-            icon: 'delete'
-        });
     'use strict';
 
     function deletePlugin(page, uniqueid, name) {
@@ -125,7 +120,11 @@ define(['loading', 'libraryMenu', 'dom', 'globalize', 'cardStyle', 'emby-button'
             });
         }
 
-        if (removable == 'true') {
+        menuItems.push({
+            name: globalize.translate('ButtonUninstall'),
+            id: 'delete',
+            icon: 'delete'
+        });
             menuItems.push({
                 name: globalize.translate('ButtonUninstall'),
                 id: 'delete',

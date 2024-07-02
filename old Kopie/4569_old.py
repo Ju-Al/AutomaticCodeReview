@@ -654,7 +654,6 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         if rescale:
             mlvl_bboxes /= mlvl_bboxes.new_tensor(scale_factor)
         mlvl_scores = torch.cat(mlvl_scores)
-        # Set max number of box to be feed into nms in deployment
         if torch.onnx.is_in_onnx_export():
             deploy_nms_pre = cfg.nms.get('deploy_nms_pre', 2000)
             max_scores, _ = mlvl_scores.max(dim=1)

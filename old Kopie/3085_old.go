@@ -1,96 +1,108 @@
-package s3
+package handlers
 
-	Connections  uint   `option:"connections" help:"set a limit for the number of concurrent connections (default: 5)"`
-	MaxRetries   uint   `option:"retries" help:"set the number of retries attempted"`
-	Region       string `option:"region" help:"set region"`
-	BucketLookup string `option:"bucket-lookup" help:"bucket lookup style: 'auto', 'dns', or 'path'."`
 import (
-	"net/url"
-	"path"
-	"strings"
+	"net/http"
 
-	"github.com/restic/restic/internal/errors"
-	"github.com/restic/restic/internal/options"
+	"github.com/gorilla/mux"
+
+	"github.com/kiali/kiali/log"
+	"github.com/kiali/kiali/models"
+	"github.com/kiali/kiali/prometheus"
 )
 
-// Config contains all configuration necessary to connect to an s3 compatible
-// server.
-type Config struct {
-	Endpoint      string
-	UseHTTP       bool
-	KeyID, Secret string
-	Bucket        string
-	Prefix        string
-	Layout        string `option:"layout" help:"use this backend layout (default: auto-detect)"`
-	StorageClass  string `option:"storage-class" help:"set S3 storage class (STANDARD, STANDARD_IA, ONEZONE_IA, INTELLIGENT_TIERING or REDUCED_REDUNDANCY)"`
+func NamespaceList(w http.ResponseWriter, r *http.Request) {
+	business, err := getBusiness(r)
 
-	Connections   uint   `option:"connections" help:"set a limit for the number of concurrent connections (default: 5)"`
-	MaxRetries    uint   `option:"retries" help:"set the number of retries attempted"`
-	Region        string `option:"region" help:"set region"`
-	BucketLookup  string `option:"bucket-lookup" help:"bucket lookup style: 'auto', 'dns', or 'path'."`
-	ListObjectsV1 bool   `option:"list-objects-v1" help:"use deprecated V1 api for ListObjects calls."`
-}
-
-// NewConfig returns a new Config with the default values filled in.
-func NewConfig() Config {
-	return Config{
-		Connections:   5,
-		ListObjectsV1: false,
-	}
-}
-
-func init() {
-	options.Register("s3", Config{})
-}
-
-// ParseConfig parses the string s and extracts the s3 config. The two
-// supported configuration formats are s3://host/bucketname/prefix and
-// s3:host/bucketname/prefix. The host can also be a valid s3 region
-// name. If no prefix is given the prefix "restic" will be used.
-func ParseConfig(s string) (interface{}, error) {
-	switch {
-	case strings.HasPrefix(s, "s3:http"):
-		// assume that a URL has been specified, parse it and
-		// use the host as the endpoint and the path as the
-		// bucket name and prefix
-		url, err := url.Parse(s[3:])
-		if err != nil {
-			return nil, errors.Wrap(err, "url.Parse")
-		}
-
-		if url.Path == "" {
-			return nil, errors.New("s3: bucket name not found")
-		}
-
-		path := strings.SplitN(url.Path[1:], "/", 2)
-		return createConfig(url.Host, path, url.Scheme == "http")
-	case strings.HasPrefix(s, "s3://"):
-		s = s[5:]
-	case strings.HasPrefix(s, "s3:"):
-		s = s[3:]
-	default:
-		return nil, errors.New("s3: invalid format")
-	}
-	// use the first entry of the path as the endpoint and the
-	// remainder as bucket name and prefix
-	path := strings.SplitN(s, "/", 3)
-	return createConfig(path[0], path[1:], false)
-}
-
-func createConfig(endpoint string, p []string, useHTTP bool) (interface{}, error) {
-	if len(p) < 1 {
-		return nil, errors.New("s3: invalid format, host/region or bucket name not found")
+	if err != nil {
+		log.Error(err)
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	var prefix string
-	if len(p) > 1 && p[1] != "" {
-		prefix = path.Clean(p[1])
+	namespaces, err := business.Namespace.GetNamespaces()
+	if err != nil {
+		log.Error(err)
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	cfg := NewConfig()
-	cfg.Endpoint = endpoint
-	cfg.UseHTTP = useHTTP
-	cfg.Bucket = p[0]
-	cfg.Prefix = prefix
-	return cfg, nil
+	RespondWithJSON(w, http.StatusOK, namespaces)
+}
+
+// NamespaceMetrics is the API handler to fetch metrics to be displayed, related to all
+// services in the namespace
+func NamespaceMetrics(w http.ResponseWriter, r *http.Request) {
+	getNamespaceMetrics(w, r, defaultPromClientSupplier)
+}
+
+// getServiceMetrics (mock-friendly version)
+func getNamespaceMetrics(w http.ResponseWriter, r *http.Request, promSupplier promClientSupplier) {
+	vars := mux.Vars(r)
+	namespace := vars["namespace"]
+
+	prom, namespaceInfo := initClientsForMetrics(w, r, promSupplier, namespace)
+	if prom == nil {
+		// any returned value nil means error & response already written
+		return
+	}
+
+	params := prometheus.IstioMetricsQuery{Namespace: namespace}
+	err := extractIstioMetricsQueryParams(r, &params, namespaceInfo)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	metrics := prom.GetMetrics(&params)
+	RespondWithJSON(w, http.StatusOK, metrics)
+}
+
+// NamespaceValidationSummary is the API handler to fetch validations summary to be displayed.
+// It is related to all the Istio Objects within the namespace
+func NamespaceValidationSummary(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	namespace := vars["namespace"]
+
+	business, err := getBusiness(r)
+	if err != nil {
+		log.Error(err)
+		RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var validationSummary models.IstioValidationSummary
+
+	istioConfigValidationResults, errValidations := business.Validations.GetValidations(namespace, "")
+	if errValidations != nil {
+		log.Error(errValidations)
+		RespondWithError(w, http.StatusInternalServerError, errValidations.Error())
+	} else {
+		validationSummary = istioConfigValidationResults.SummarizeValidation(namespace)
+	}
+
+	RespondWithJSON(w, http.StatusOK, validationSummary)
+}
+
+// NamespaceUpdate is the API to perform a patch on a Namespace configuration
+func NamespaceUpdate(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	business, err := getBusiness(r)
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError, "Namespace initialization error: "+err.Error())
+		return
+	}
+	namespace := params["namespace"]
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Update request with bad update patch: "+err.Error())
+	}
+	jsonPatch := string(body)
+
+	ns, err := business.Namespace.UpdateNamespace(namespace, jsonPatch)
+	if err != nil {
+		handleErrorResponse(w, err)
+		return
+	}
+	audit(r, "UPDATE on Namespace: "+namespace+" Patch: "+jsonPatch)
+	RespondWithJSON(w, http.StatusOK, ns)
 }

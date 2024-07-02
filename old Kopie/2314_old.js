@@ -65,7 +65,6 @@ function getActiveIdentityId(grains) {
 
 Template.accountButtons.helpers({
   displayName: function () {
-    if (Meteor.user() && !Meteor.user().loginIdentities) {
       // Need to wait for resume token to complete login. For some reason, `Meteor.loggingIn()`
       // is still false in this case.
       return "Loading...";

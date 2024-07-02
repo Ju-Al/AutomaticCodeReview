@@ -1,5 +1,4 @@
 <?php
-        wp_register_script( 'sensei-core-select2', Sensei()->plugin_url . '/assets/js/select2/select2' . $suffix . '.js', array( 'jquery' ), Sensei()->version );
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
 /**
@@ -298,8 +297,8 @@ class Sensei_Admin {
         $screen = get_current_screen();
 
         // Allow developers to load non-minified versions of scripts
+        wp_register_script( 'sensei-core-select2', Sensei()->plugin_url . '/assets/js/select2/select2' . $suffix . '.js', array( 'jquery' ), Sensei()->version );
         $suffix = defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
-		$select_two_location = '/assets/vendor/select2-4.0.3/dist/js/select2.full';
 
         // Select2 script used to enhance all select boxes
         wp_register_script( 'sensei-core-select2', Sensei()->plugin_url . $select_two_location. $suffix . '.js', array( 'jquery' ), Sensei()->version );

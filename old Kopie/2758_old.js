@@ -1,181 +1,328 @@
 // @flow
+import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, ipcMain, Menu, Rectangle } from 'electron';
-import { environment } from '../environment';
-import ipcApi from '../ipc';
-import RendererErrorHandler from '../utils/rendererErrorHandler';
-import { getTranslation } from '../utils/getTranslation';
-import { getContentMinimumSize } from '../utils/getContentMinimumSize';
-import { buildLabel, launcherConfig } from '../config';
-import { ledgerStatus } from '../ipc/getHardwareWalletChannel';
-import { getRtsFlags } from '../utils/rtsFlags';
+import { app, dialog, BrowserWindow, screen, shell } from 'electron';
+import { client } from 'electron-connect';
+import EventEmitter from 'events';
+import { requestElectronStore } from './ipc/electronStoreConversation';
+import { logger } from './utils/logging';
+import {
+  setupLogging,
+  logSystemInfo,
+  logStateSnapshot,
+  generateWalletMigrationReport,
+} from './utils/setupLogging';
+import { handleDiskSpace } from './utils/handleDiskSpace';
+import { handleCheckBlockReplayProgress } from './utils/handleCheckBlockReplayProgress';
+import { createMainWindow } from './windows/main';
+import { installChromeExtensions } from './utils/installChromeExtensions';
+import { environment } from './environment';
+import mainErrorHandler from './utils/mainErrorHandler';
+import {
+  launcherConfig,
+  pubLogsFolderPath,
+  stateDirectoryPath,
+  RTS_FLAGS,
+  MINIMUM_AMOUNT_OF_RAM_FOR_RTS_FLAGS,
+} from './config';
+import { setupCardanoNode } from './cardano/setup';
+import { CardanoNode } from './cardano/CardanoNode';
+import { safeExitWithCode } from './utils/safeExitWithCode';
+import { buildAppMenus } from './utils/buildAppMenus';
+import { getLocale } from './utils/getLocale';
+import { getRtsFlags, setRtsFlagsAndRestart } from './utils/rtsFlags';
+import { detectSystemLocale } from './utils/detectSystemLocale';
+import { ensureXDGDataIsSet } from './cardano/config';
+import { rebuildApplicationMenu } from './ipc/rebuild-application-menu';
+import { getStateDirectoryPathChannel } from './ipc/getStateDirectoryPathChannel';
+import { getDesktopDirectoryPathChannel } from './ipc/getDesktopDirectoryPathChannel';
+import { getSystemLocaleChannel } from './ipc/getSystemLocaleChannel';
+import { CardanoNodeStates } from '../common/types/cardano-node.types';
+import type {
+  GenerateWalletMigrationReportRendererRequest,
+  SetStateSnapshotLogMainResponse,
+} from '../common/ipc/api';
+import { logUsedVersion } from './utils/logUsedVersion';
+import { setStateSnapshotLogChannel } from './ipc/set-log-state-snapshot';
+import { generateWalletMigrationReportChannel } from './ipc/generateWalletMigrationReportChannel';
+import { enableApplicationMenuNavigationChannel } from './ipc/enableApplicationMenuNavigationChannel';
+import { pauseActiveDownloads } from './ipc/downloadManagerChannel';
+import {
+  restoreSavedWindowBounds,
+  saveWindowBoundsOnSizeAndPositionChange,
+} from './windows/windowBounds';
 
-const rendererErrorHandler = new RendererErrorHandler();
-const { network } = environment;
+/* eslint-disable consistent-return */
 
-const rtsFlags = getRtsFlags(network);
-const { isDev, isTest, isLinux, isBlankScreenFixActive } = environment;
+// Global references to windows to prevent them from being garbage collected
+let mainWindow: BrowserWindow;
+let cardanoNode: CardanoNode;
 
-const id = 'window';
+const {
+  isDev,
+  isTest,
+  isWatchMode,
+  isBlankScreenFixActive,
+  isSelfnode,
+  network,
+  os: osName,
+  version: daedalusVersion,
+  nodeVersion: cardanoNodeVersion,
+  apiVersion: cardanoWalletVersion,
+  keepLocalClusterRunning,
+} = environment;
 
-const getWindowTitle = (locale: string): string => {
-  const translations = require(`../locales/${locale}`);
-  const translation = getTranslation(translations, id);
-  let title = buildLabel;
-  if (isBlankScreenFixActive)
-    title += ` ${translation('title.blankScreenFix')}`;
-  if (!!rtsFlags && rtsFlags?.length > 0)
-    title += ` ${translation('title.usingRtsFlags')}`;
-  return title;
+if (isBlankScreenFixActive) {
+  // Run "console.log(JSON.stringify(daedalus.stores.app.gpuStatus, null, 2))"
+  // in DevTools JavaScript console to see if the flag is active
+  app.disableHardwareAcceleration();
+}
+
+// Increase maximum event listeners to avoid IPC channel stalling
+// (1/2) this line increases the limit for the main process
+EventEmitter.defaultMaxListeners = 100; // Default: 10
+
+app.allowRendererProcessReuse = true;
+const safeExit = async () => {
+  pauseActiveDownloads();
+  if (!cardanoNode || cardanoNode.state === CardanoNodeStates.STOPPED) {
+    logger.info('Daedalus:safeExit: exiting Daedalus with code 0', { code: 0 });
+    return safeExitWithCode(0);
+  }
+  if (cardanoNode.state === CardanoNodeStates.STOPPING) {
+    logger.info('Daedalus:safeExit: waiting for cardano-node to stop...');
+    cardanoNode.exitOnStop();
+    return;
+  }
+  try {
+    const pid = cardanoNode.pid || 'null';
+    logger.info(`Daedalus:safeExit: stopping cardano-node with PID: ${pid}`, {
+      pid,
+    });
+    await cardanoNode.stop();
+    logger.info('Daedalus:safeExit: exiting Daedalus with code 0', { code: 0 });
+    safeExitWithCode(0);
+  } catch (error) {
+    logger.error('Daedalus:safeExit: cardano-node did not exit correctly', {
+      error,
+    });
+    safeExitWithCode(0);
+  }
 };
 
-type WindowOptionsType = {
-  show: boolean,
-  width: number,
-  height: number,
-  webPreferences: {
-    nodeIntegration: boolean,
-    webviewTag: boolean,
-    enableRemoteModule: boolean,
-    preload: string,
-  },
-  icon?: string,
-};
+const onAppReady = async () => {
+  setupLogging();
+  logUsedVersion(
+    environment.version,
+    path.join(pubLogsFolderPath, 'Daedalus-versions.json')
+  );
 
-export const createMainWindow = (locale: string, windowBounds?: Rectangle) => {
-  const windowOptions: WindowOptionsType = {
-    show: false,
-    width: 1150,
-    height: 870,
-    ...windowBounds,
-    webPreferences: {
-      nodeIntegration: isTest,
-      webviewTag: false,
-      contextIsolation: false, // TODO: change to ipc
-      enableRemoteModule: isTest,
-      preload: path.join(__dirname, './preload.js'),
-      additionalArguments: isBlankScreenFixActive ? ['--safe-mode'] : [],
-    },
+  const cpu = os.cpus();
+  const platformVersion = os.release();
+  const ram = JSON.stringify(os.totalmem(), null, 2);
+
+  const startTime = new Date().toISOString();
+  // first checks for Japanese locale, otherwise returns english
+  const systemLocale = detectSystemLocale();
+  const userLocale = getLocale(network);
+
+  const systemInfo = logSystemInfo({
+    cardanoNodeVersion,
+    cardanoWalletVersion,
+    cpu,
+    daedalusVersion,
+    isBlankScreenFixActive,
+    network,
+    osName,
+    platformVersion,
+    ram,
+    startTime,
+  });
+
+  // We need DAEDALUS_INSTALL_DIRECTORY in PATH in order for the
+  // cardano-launcher to find cardano-wallet and cardano-node executables
+  process.env.PATH = [
+    process.env.PATH,
+    process.env.DAEDALUS_INSTALL_DIRECTORY,
+  ].join(path.delimiter);
+
+  logger.info(`Daedalus is starting at ${startTime}`, { startTime });
+
+  logger.info('Updating System-info.json file', { ...systemInfo.data });
+
+  logger.info(`Current working directory is: ${process.cwd()}`, {
+    cwd: process.cwd(),
+  });
+
+  logger.info('System and user locale', { systemLocale, userLocale });
+
+  ensureXDGDataIsSet();
+  await installChromeExtensions(isDev);
+
+  logger.info('Setting up Main Window...');
+  mainWindow = createMainWindow(
+    userLocale,
+    restoreSavedWindowBounds(screen, requestElectronStore)
+  );
+  saveWindowBoundsOnSizeAndPositionChange(mainWindow, requestElectronStore);
+
+  logger.info('Setting up Cardano Node...');
+  cardanoNode = setupCardanoNode(launcherConfig, mainWindow);
+    const rtsFlagsFromStorage = getRtsFlags(network);
+    if (!rtsFlagsFromStorage) {
+      if (os.totalmem() < MINIMUM_AMOUNT_OF_RAM_FOR_RTS_FLAGS) {
+        setRtsFlagsAndRestart(environment.network, RTS_FLAGS);
+        return RTS_FLAGS;
+      }
+      return [];
+    }
+    return rtsFlagsFromStorage;
   };
 
-  if (isLinux) {
-    windowOptions.icon = path.join(launcherConfig.stateDir, 'icon.png');
+  const rtsFlags = getRtsFlagsAccordingToSpecs();
+  logger.info(
+    `Setting up Cardano Node... with flags: ${JSON.stringify(rtsFlags)}`
+  );
+  cardanoNode = setupCardanoNode(launcherConfig, mainWindow, rtsFlags);
+
+  buildAppMenus(mainWindow, cardanoNode, userLocale, {
+    isNavigationEnabled: false,
+  });
+
+  enableApplicationMenuNavigationChannel.onReceive(
+    () =>
+      new Promise((resolve) => {
+        const locale = getLocale(network);
+        buildAppMenus(mainWindow, cardanoNode, locale, {
+          isNavigationEnabled: true,
+        });
+        resolve();
+      })
+  );
+
+  rebuildApplicationMenu.onReceive(
+    (data) =>
+      new Promise((resolve) => {
+        const locale = getLocale(network);
+        buildAppMenus(mainWindow, cardanoNode, locale, {
+          isNavigationEnabled: data.isNavigationEnabled,
+        });
+        mainWindow.updateTitle(locale);
+        resolve();
+      })
+  );
+
+  setStateSnapshotLogChannel.onReceive(
+    (data: SetStateSnapshotLogMainResponse) => {
+      return Promise.resolve(logStateSnapshot(data));
+    }
+  );
+
+  generateWalletMigrationReportChannel.onReceive(
+    (data: GenerateWalletMigrationReportRendererRequest) => {
+      return Promise.resolve(generateWalletMigrationReport(data));
+    }
+  );
+
+  getStateDirectoryPathChannel.onRequest(() =>
+    Promise.resolve(stateDirectoryPath)
+  );
+
+  getDesktopDirectoryPathChannel.onRequest(() =>
+    Promise.resolve(app.getPath('desktop'))
+  );
+
+  getSystemLocaleChannel.onRequest(() => Promise.resolve(systemLocale));
+
+  const handleCheckDiskSpace = handleDiskSpace(mainWindow, cardanoNode);
+  const onMainError = (error: string) => {
+    if (error.indexOf('ENOSPC') > -1) {
+      handleCheckDiskSpace();
+      return false;
+    }
+  };
+  mainErrorHandler(onMainError);
+  await handleCheckDiskSpace();
+  await handleCheckBlockReplayProgress(mainWindow, launcherConfig.logsPrefix);
+
+  if (isWatchMode) {
+    // Connect to electron-connect server which restarts / reloads windows on file changes
+    client.create(mainWindow);
   }
 
-  // Construct new BrowserWindow
-  const window = new BrowserWindow(windowOptions);
-
-  rendererErrorHandler.setup(window, createMainWindow);
-
-  const { minWindowsWidth, minWindowsHeight } = getContentMinimumSize(window);
-  window.setMinimumSize(minWindowsWidth, minWindowsHeight);
-
-  // Initialize our ipc api methods that can be called by the render processes
-  ipcApi(window);
-
-  // Provide render process with an api to resize the main window
-  ipcMain.on('resize-window', (event, { width, height, animate }) => {
-    if (event.sender !== window.webContents) return;
-    window.setSize(width, height, animate);
-  });
-
-  // Provide render process with an api to close the main window
-  ipcMain.on('close-window', (event) => {
-    if (event.sender !== window.webContents) return;
-    window.close();
-  });
-
-  window.loadURL(`file://${__dirname}/../renderer/index.html`);
-  window.on('page-title-updated', (event) => {
+  mainWindow.on('close', async (event) => {
+    logger.info(
+      'mainWindow received <close> event. Safe exiting Daedalus now.'
+    );
     event.preventDefault();
-  });
-  window.setTitle(getWindowTitle(locale));
-
-  window.webContents.on('context-menu', (e, props) => {
-    const { canCopy, canPaste } = props.editFlags;
-    const contextMenuOptions = [];
-    if (canCopy && props.selectionText) {
-      contextMenuOptions.push({
-        label: 'Copy',
-        accelerator: 'CmdOrCtrl+C',
-        role: 'copy',
-      });
-    }
-    if (canPaste) {
-      contextMenuOptions.push({
-        label: 'Paste',
-        accelerator: 'CmdOrCtrl+V',
-        role: 'paste',
-      });
-    }
-
-    if (isDev || isTest) {
-      const { x, y } = props;
-      contextMenuOptions.push({
-        label: 'Inspect element',
-        click() {
-          window.inspectElement(x, y);
-        },
-      });
-    }
-
-    if (contextMenuOptions.length) {
-      Menu.buildFromTemplate(contextMenuOptions).popup(window);
-    }
+    await safeExit();
   });
 
-  window.webContents.on('did-frame-finish-load', () => {
-    if (isDev) {
-      window.webContents.openDevTools();
-      // Focus the main window after dev tools opened
-      window.webContents.on('devtools-opened', () => {
-        window.focus();
-        setImmediate(() => {
-          window.focus();
-        });
-      });
+  // Security feature: Prevent creation of new browser windows
+  // https://github.com/electron/electron/blob/master/docs/tutorial/security.md#14-disable-or-limit-creation-of-new-windows
+  app.on('web-contents-created', (_, contents) => {
+    contents.on('new-window', (event, url) => {
+      // Prevent creation of new BrowserWindows via links / window.open
+      event.preventDefault();
+      logger.info('Prevented creation of new browser window', { url });
+      // Open these links with the default browser
+      shell.openExternal(url);
+    });
+  });
+
+  // Wait for controlled cardano-node shutdown before quitting the app
+  app.on('before-quit', async (event) => {
+    logger.info('app received <before-quit> event. Safe exiting Daedalus now.');
+    event.preventDefault(); // prevent Daedalus from quitting immediately
+
+    if (isSelfnode) {
+      if (keepLocalClusterRunning || isTest) {
+        logger.info(
+          'ipcMain: Keeping the local cluster running while exiting Daedalus',
+          {
+            keepLocalClusterRunning,
+          }
+        );
+        return safeExitWithCode(0);
+      }
+
+      const exitSelfnodeDialogOptions = {
+        buttons: ['Yes', 'No'],
+        type: 'warning',
+        title: 'Daedalus is about to close',
+        message: 'Do you want to keep the local cluster running?',
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
+      const { response } = await dialog.showMessageBox(
+        mainWindow,
+        exitSelfnodeDialogOptions
+      );
+      if (response === 0) {
+        logger.info(
+          'ipcMain: Keeping the local cluster running while exiting Daedalus'
+        );
+        return safeExitWithCode(0);
+      }
+      logger.info('ipcMain: Exiting local cluster together with Daedalus');
     }
+
+    await safeExit();
   });
-
-  window.webContents.on('did-finish-load', () => {
-    if (isTest || isDev) {
-      window.showInactive(); // show without focusing the window
-    } else {
-      window.show(); // show also focuses the window
-    }
-  });
-
-  /**
-   * We need to set bounds explicitly because passing them to the
-   * window constructor above was buggy (height was not correctly applied)
-   */
-  window.on('ready-to-show', () => {
-    if (windowBounds) {
-      window.setBounds(windowBounds);
-    }
-  });
-
-  window.on('closed', (event) => {
-    event.preventDefault();
-    if (ledgerStatus.listening && !!ledgerStatus.Listener) {
-      ledgerStatus.Listener.unsubscribe();
-      setTimeout(() => app.quit(), 5000);
-    } else {
-      app.quit();
-    }
-  });
-
-  window.webContents.on('did-fail-load', (err) => {
-    rendererErrorHandler.onError('did-fail-load', err);
-  });
-
-  window.webContents.on('crashed', (err) => {
-    rendererErrorHandler.onError('crashed', err);
-  });
-
-  window.updateTitle = (locale: string) => {
-    window.setTitle(getWindowTitle(locale));
-  };
-
-  return window;
 };
+
+// Make sure this is the only Daedalus instance running per cluster before doing anything else
+const isSingleInstance = app.requestSingleInstanceLock();
+
+if (!isSingleInstance) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  app.on('ready', onAppReady);
+}

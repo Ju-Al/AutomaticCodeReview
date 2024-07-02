@@ -1,5 +1,5 @@
 <?php
-            'excerpt' => $this->magicexcerpt(),
+
 declare(strict_types=1);
 
 namespace Bolt\Entity;
@@ -189,7 +189,7 @@ class Content
             'contenttype' => $this->getDefinition()->get('slug'),
             'slug' => $this->getSlug(),
             'title' => $this->magicTitle(),
-            'excerpt' => $this->magicexcerpt(200, false),
+            'excerpt' => $this->magicexcerpt(),            'excerpt' => $this->magicexcerpt(200, false),
             'image' => $this->magicImage(),
             'link' => $this->magicLink(),
             'editlink' => $this->magicEditLink(),

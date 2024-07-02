@@ -389,7 +389,6 @@ namespace Microsoft.Health.Fhir.SqlServer.Features.Search.Expressions.Visitors.Q
                 case TableExpressionKind.Include:
                     var includeExpression = (IncludeExpression)tableExpression.NormalizedPredicate;
 
-                    _includeCtes = _includeCtes ?? new List<string>();
                     _includeLimitCtesByResourceType = _includeLimitCtesByResourceType ?? new Dictionary<string, List<string>>();
                     _includeFromCtes = _includeFromCtes ?? new List<string>();
 

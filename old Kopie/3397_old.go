@@ -57,7 +57,6 @@ type OAuthRouteTLSSpec struct {
 
 const serverPrefix = "https://kubernetes.default.svc/"
 
-var defaultRequestTimeout, _ = time.ParseDuration("10s")
 
 var kialiNamespace string
 

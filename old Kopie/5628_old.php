@@ -1,6 +1,5 @@
 <?php
 
-            if (realpath($input_path) === realpath(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'psalm')
 namespace Psalm;
 
 use Composer\Autoload\ClassLoader;
@@ -230,7 +229,7 @@ function getPathsToCheck($f_paths): ?array
             /** @var string */
             $input_path = $input_paths[$i];
 
-            if (
+            if (realpath($input_path) === realpath(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'psalm')
                 realpath($input_path) === realpath(dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psalm')
                 || realpath($input_path) === realpath(dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psalter')
                 || realpath($input_path) === realpath(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'psalm')

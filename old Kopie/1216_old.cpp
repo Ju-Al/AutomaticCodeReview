@@ -1242,7 +1242,6 @@ void MainWindow::qmUser_aboutToShow() {
 		qaUserLocalIgnore->setEnabled(false);
 		qaUserCommentReset->setEnabled(false);
 		qaUserCommentView->setEnabled(false);
-
 		qaUserMute->setEnabled(false);
 		qaUserDeaf->setEnabled(false);
 		qaUserPrioritySpeaker->setEnabled(false);

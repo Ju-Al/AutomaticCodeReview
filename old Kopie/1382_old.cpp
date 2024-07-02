@@ -1,5 +1,4 @@
 #include "secuenceedit.h"
-#include "../settingscache.h"
 #include <QLineEdit>
 #include <QPushButton>
 #include <QHBoxLayout>

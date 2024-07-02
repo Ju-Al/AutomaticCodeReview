@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.review;
-                explanation = getString(R.string.review_thanks_explanation, getReviewActivity().reviewController.firstRevision.getUser());
 
 import android.graphics.Color;
 import android.os.Bundle;
@@ -112,7 +111,7 @@ public class ReviewImageFragment extends CommonsDaggerSupportFragment {
                 break;
             case THANKS:
                 question = getString(R.string.review_thanks);
-
+                explanation = getString(R.string.review_thanks_explanation, getReviewActivity().reviewController.firstRevision.getUser());
                 //Get existing user name if it is already saved using savedInstanceState else get from reviewController
                 if(savedInstanceState == null)
                     user = getReviewActivity().reviewController.firstRevision.getUser();

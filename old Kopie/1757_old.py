@@ -1,13 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-    def create(self, organization_id, query=None, fields=None, max_results=500, verb='create'):
-            fields (str): Fields to include in the response - partial response.
-        req_body = {}
-        arguments = {'body': req_body,
-                     'orgName': 'organizations/' + str(organization_id)}
-        if query:
-            req_body['sourceFinding'] = query
-
-#        req_body[self._max_results_field] = max_results
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -295,7 +286,15 @@ class SearchQueryMixin(object):
 class CreateQueryMixin(object):
     """Mixin that implements a Create query."""
 
-    def create(self, verb='create', **kwargs):
+            fields (str): Fields to include in the response - partial response.
+        req_body = {}
+        arguments = {'body': req_body,
+                     'orgName': 'organizations/' + str(organization_id)}
+        if query:
+            req_body['sourceFinding'] = query
+
+#        req_body[self._max_results_field] = max_results
+    def create(self, organization_id, query=None, fields=None, max_results=500, verb='create'):
         """Create a resource.
 
         Args:

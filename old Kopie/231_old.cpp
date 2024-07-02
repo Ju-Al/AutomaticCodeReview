@@ -1,7 +1,4 @@
 /***************************************************************************
-    for(ListFiles::const_iterator
-	it = files.begin(); it != files.end(); ++it)
-    	if(System::IsFile(*it)) conf.Read(*it);
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -280,7 +277,9 @@ void ReadConfigs(void)
     Settings & conf = Settings::Get();
     ListFiles files = conf.GetListFiles("", "fheroes2.cfg");
 
-    bool isValidConfigurationFile = false;
+    for(ListFiles::const_iterator
+	it = files.begin(); it != files.end(); ++it)
+    	if(System::IsFile(*it)) conf.Read(*it);
     for ( ListFiles::const_iterator it = files.begin(); it != files.end(); ++it ) {
         if( System::IsFile( *it ) ) {
             conf.Read(*it);

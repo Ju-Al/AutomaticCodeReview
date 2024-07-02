@@ -1,6 +1,5 @@
 // A "manage" modal for pieces, displaying them list and/or grid views and providing
-    // shrink and grow make visual reflectments to accommodate the the new Select Everything element
-    self.shrinkGrid = function() {// filtering and sorting features. The manager modal is also extended on the fly
+// filtering and sorting features. The manager modal is also extended on the fly
 // by the chooser for use as a more full-featured chooser when selecting pieces
 // to appear in a widget, such as a slideshow.
 
@@ -702,7 +701,8 @@ apos.define('apostrophe-pieces-manager-modal', {
       });
     };
 
-    // reflect the modal's layout and size in response to
+    // shrink and grow make visual reflectments to accommodate the the new Select Everything element
+    self.shrinkGrid = function() {    // reflect the modal's layout and size in response to
     // whether the select everything box should appear
     // at this time. Also reflect the state of the select
     // everything checkbox based on what is actually selected

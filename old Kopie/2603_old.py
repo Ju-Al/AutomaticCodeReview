@@ -45,8 +45,6 @@ def universe():
 @pytest.fixture()
 def lipid_heads(universe):
     return universe.select_atoms(LIPID_HEAD_STRING)
-
-def lines2one(lines):
     """Join lines and squash all whitespace"""
     return " ".join(" ".join(lines).split())
 

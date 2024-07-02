@@ -1,5 +1,5 @@
 // Copyright 2019 Liquidata, Inc.
-			"https://dolthub.com",//
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -45,7 +45,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 		{
 			"",
 			config.NewMapConfig(map[string]string{}),
-			"https://doltremoteapi.beta.dolthub.com",
+			"https://dolthub.com",			"https://doltremoteapi.beta.dolthub.com",
 			"https",
 			false,
 		},

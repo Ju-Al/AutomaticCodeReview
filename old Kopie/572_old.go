@@ -1,5 +1,4 @@
 // Copyright (C) 2019 Algorand, Inc.
-			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -199,7 +198,7 @@ func (s *Service) fetchAndWrite(fetcher rpcs.Fetcher, r basics.Round, prevFetchC
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if !block.ContentsMatchHeader() {
-			// Check if this mismatch is due to an unsupported protocol version
+			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
 			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 				if i == 10 {
 					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected", )

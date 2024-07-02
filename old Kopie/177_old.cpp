@@ -1,7 +1,5 @@
 /* Copyright (C) 2005-2011, Thorvald Natvig <thorvald@natvig.com>
 
-		//TODO: hook for Direct3DCreate9Ex
-		// pDirect3DCreate9Ex d3dcreate9ex = reinterpret_cast<pDirect3DCreate9Ex>(GetProcAddress(hD3D, "Direct3DCreate9Ex"));
    All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
@@ -956,7 +954,8 @@ void hookD3D9(HMODULE hD3D, bool preonly) {
 			ods("D3D9: Library without Direct3DCreate9?");
 		}
 
-		pDirect3DCreate9Ex d3dcreate9ex = reinterpret_cast<pDirect3DCreate9Ex>(GetProcAddress(hD3D, "Direct3DCreate9Ex"));
+		//TODO: hook for Direct3DCreate9Ex
+		// pDirect3DCreate9Ex d3dcreate9ex = reinterpret_cast<pDirect3DCreate9Ex>(GetProcAddress(hD3D, "Direct3DCreate9Ex"));
 		if (d3dcreate9ex) {
 			ods("D3D9: Got %p for Direct3DCreate9Ex", d3dcreate9ex);
 			IDirect3D9Ex** pD3D11Device = 0;

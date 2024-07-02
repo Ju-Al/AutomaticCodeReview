@@ -36,7 +36,6 @@ func (p *Platform) Config() (interface{}, error) {
 	return &p.config, nil
 }
 
-// ConfigSet is called after a configuration has been decoded
 // we can use this to validate the config
 func (p *Platform) ConfigSet(config interface{}) error {
 	c, ok := config.(*Config)

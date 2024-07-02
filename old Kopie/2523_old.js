@@ -1,5 +1,4 @@
 // Sandstorm - Personal Cloud Sandbox
-    Meteor.call("deleteOwnAccount", instance._deleteFeedback.get(), function (err) {
 // Copyright (c) 2015 Sandstorm Development Group, Inc. and contributors
 // All rights reserved.
 //
@@ -305,7 +304,7 @@ Template.sandstormAccountSettings.events({
 
   "click button.delete-account-real": function (ev, instance) {
     instance._deleteSubmitting.set(true);
-    Meteor.call("deleteOwnAccount", instance.$(".feedback").val(), function (err) {
+    Meteor.call("deleteOwnAccount", instance._deleteFeedback.get(), function (err) {
       if (err) {
         instance._deleteError.set(err.message);
       } else {

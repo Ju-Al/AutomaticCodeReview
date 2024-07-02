@@ -1,609 +1,1250 @@
-/******************************************************************************
-        .add<std::vector<std::string>>("schema-paths", schema_desc.c_str())
- *                    _   _____   __________                                  *
- *                   | | / / _ | / __/_  __/     Visibility                   *
- *                   | |/ / __ |_\ \  / /          Across                     *
- *                   |___/_/ |_/___/ /_/       Space and Time                 *
- *                                                                            *
- * This file is part of VAST. It is subject to the license terms in the       *
- * LICENSE file found in the top-level directory of this distribution and at  *
- * http://vast.io/license. No part of VAST, including this file, may be       *
- * copied, modified, propagated, or distributed except according to the terms *
- * contained in the LICENSE file.                                             *
- ******************************************************************************/
+/**********************************************************************
+ *  Copyright (c) 2008-2014, Alliance for Sustainable Energy.
+ *  All rights reserved.
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ **********************************************************************/
 
-#include "vast/system/application.hpp"
+#include "Building.hpp"
+#include "Building_Impl.hpp"
 
-#include "vast/command.hpp"
-#include "vast/config.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/process.hpp"
-#include "vast/documentation.hpp"
-#include "vast/format/ascii.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/json/default_selector.hpp"
-#include "vast/format/json/suricata_selector.hpp"
-#include "vast/format/json/zeek_selector.hpp"
-#include "vast/format/null.hpp"
-#include "vast/format/simdjson.hpp"
-#include "vast/format/syslog.hpp"
-#include "vast/format/test.hpp"
-#include "vast/format/zeek.hpp"
-#include "vast/system/configuration.hpp"
-#include "vast/system/count_command.hpp"
-#include "vast/system/explore_command.hpp"
-#include "vast/system/get_command.hpp"
-#include "vast/system/import_command.hpp"
-#include "vast/system/infer_command.hpp"
-#include "vast/system/pivot_command.hpp"
-#include "vast/system/remote_command.hpp"
-#include "vast/system/start_command.hpp"
-#include "vast/system/stop_command.hpp"
-#include "vast/system/version_command.hpp"
-#include "vast/system/writer_command.hpp"
+#include "Model.hpp"
+#include "Model_Impl.hpp"
+#include "BuildingStory.hpp"
+#include "BuildingStory_Impl.hpp"
+#include "Facility.hpp"
+#include "Facility_Impl.hpp"
+#include "Space.hpp"
+#include "Space_Impl.hpp"
+#include "SpaceType.hpp"
+#include "SpaceType_Impl.hpp"
+#include "DefaultConstructionSet.hpp"
+#include "DefaultConstructionSet_Impl.hpp"
+#include "DefaultScheduleSet.hpp"
+#include "DefaultScheduleSet_Impl.hpp"
+#include "ThermalZone.hpp"
+#include "ThermalZone_Impl.hpp"
+#include "ShadingSurface.hpp"
+#include "ShadingSurface_Impl.hpp"
+#include "ShadingSurfaceGroup.hpp"
+#include "ShadingSurfaceGroup_Impl.hpp"
+#include "Meter.hpp"
+#include "Meter_Impl.hpp"
+#include "Surface.hpp"
+#include "Surface_Impl.hpp"
 
-#if VAST_ENABLE_ARROW
-#  include "vast/format/arrow.hpp"
-#endif
+#include <utilities/idd/IddFactory.hxx>
 
-#if VAST_ENABLE_PCAP
-#  include "vast/format/pcap.hpp"
-#  include "vast/system/pcap_writer_command.hpp"
-#endif
+#include <utilities/idd/OS_Building_FieldEnums.hxx>
+#include <utilities/idd/IddEnums.hxx>
+#include <utilities/idd/OS_ThermalZone_FieldEnums.hxx>
+#include <utilities/idd/IddEnums.hxx>
 
-namespace vast::system {
+#include "../utilities/math/FloatCompare.hpp"
+#include "../utilities/data/DataEnums.hpp"
+#include "../utilities/geometry/Geometry.hpp"
+#include "../utilities/geometry/Transformation.hpp"
+#include "../utilities/core/Compare.hpp"
+#include "../utilities/core/Assert.hpp"
+#include "../utilities/units/QuantityConverter.hpp"
 
-namespace {
+#include <boost/optional.hpp>
+#include <boost/algorithm/string.hpp>
 
-auto make_pcap_options(std::string_view category) {
-  return sink_opts(category).add<size_t>(
-    "flush-interval,f", "flush to disk after this many packets");
-}
+namespace openstudio {
+namespace model {
 
-command::opts_builder add_index_opts(command::opts_builder ob) {
-  return std::move(ob)
-    .add<size_t>("max-partition-size", "maximum number of events in a "
-                                       "partition")
-    .add<size_t>("max-resident-partitions", "maximum number of in-memory "
-                                            "partitions")
-    .add<size_t>("max-taste-partitions", "maximum number of immediately "
-                                         "scheduled partitions")
-    .add<size_t>("max-queries,q", "maximum number of concurrent queries");
-}
+namespace detail {
 
-command::opts_builder add_archive_opts(command::opts_builder ob) {
-  return std::move(ob)
-    .add<size_t>("segments,s", "number of cached segments")
-    .add<size_t>("max-segment-size,m", "maximum segment size in MB");
-}
-
-auto make_root_command(std::string_view path) {
-  // We're only interested in the application name, not in its path. For
-  // example, argv[0] might contain "./build/release/bin/vast" and we are only
-  // interested in "vast".
-  path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
-  // For documentation, we use the complete man-page formatted as Markdown
-  auto binary = detail::objectpath();
-  auto schema_desc
-    = "list of directories to look for schema files ([/etc/vast/schema"s;
-  if (binary) {
-    auto relative_schema_dir
-      = binary->parent().parent() / "share" / "vast" / "schema";
-    schema_desc += ", " + relative_schema_dir.str();
+  Building_Impl::Building_Impl(const IdfObject& idfObject, Model_Impl* model, bool keepHandle)
+    : ParentObject_Impl(idfObject, model, keepHandle)
+  {
+    OS_ASSERT(idfObject.iddObject().type() == Building::iddObjectType());
   }
-  schema_desc += "])";
-  auto ob
-    = opts("?vast")
-        .add<std::string>("config", "path to a configuration file")
-        .add<caf::atom_value>("verbosity", "output verbosity level on the "
-                                           "console")
-        .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
-        .add<std::string>("db-directory,d", "directory for persistent state")
-        .add<std::string>("log-file", "log filename")
-        .add<std::string>("client-log-file", "client log file (default: "
-                                             "disabled)")
-        .add<std::string>("endpoint,e", "node endpoint")
-        .add<std::string>("node-id,i", "the unique ID of this node")
-        .add<bool>("node,N", "spawn a node instead of connecting to one")
-        .add<bool>("enable-metrics", "keep track of performance metrics")
-        .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions")
-        .add<std::vector<std::string>>("plugin-dirs", "additional directories "
-                                                      "to load plugins from")
-        .add<std::vector<std::string>>("plugins", "plugins to load at startup")
-        .add<std::string>("aging-frequency", "interval between two aging "
-                                             "cycles")
-        .add<std::string>("aging-query", "query for aging out obsolete data")
-        .add<std::string>("shutdown-grace-period",
-                          "time to wait until component shutdown "
-                          "finishes cleanly before inducing a hard kill");
-  ob = add_index_opts(std::move(ob));
-  ob = add_archive_opts(std::move(ob));
-  return std::make_unique<command>(path, "", documentation::vast,
-                                   std::move(ob));
-}
 
-auto make_count_command() {
-  return std::make_unique<command>(
-    "count", "count hits for a query without exporting data",
-    documentation::vast_count,
-    opts("?vast.count")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<bool>("estimate,e", "estimate an upper bound by "
-                               "skipping candidate checks"));
-}
+  Building_Impl::Building_Impl(const openstudio::detail::WorkspaceObject_Impl& other,
+                               Model_Impl* model,
+                               bool keepHandle)
+    : ParentObject_Impl(other,model,keepHandle)
+  {
+    OS_ASSERT(other.iddObject().type() == Building::iddObjectType());
+  }
 
-auto make_dump_command() {
-  auto dump = std::make_unique<command>(
-    "dump", "print configuration objects as JSON", documentation::vast_dump,
-    opts("?vast.dump").add<bool>("yaml", "format output as YAML"));
-  dump->add_subcommand("concepts", "print all registered concept definitions",
-                       documentation::vast_dump_concepts,
-                       opts("?vast.dump.concepts"));
-  dump->add_subcommand("models", "print all registered model definitions",
-                       documentation::vast_dump_models,
-                       opts("?vast.dump.models"));
-  return dump;
-}
+  Building_Impl::Building_Impl(const Building_Impl& other,
+                               Model_Impl* model,
+                               bool keepHandle)
+    : ParentObject_Impl(other,model,keepHandle)
+  {}
 
-auto make_explore_command() {
-  return std::make_unique<command>(
-    "explore", "explore context around query results",
-    documentation::vast_explore,
-    opts("?vast.explore")
-      .add<std::string>("format", "output format (default: JSON)")
-      .add<std::string>("after,A", "include all records up to this much"
-                                   " time after each result")
-      .add<std::string>("before,B", "include all records up to this much"
-                                    " time before each result")
-      .add<std::string>("by", "perform an equijoin on the given field")
-      .add<count>("max-events,n", "maximum number of results")
-      .add<count>("max-events-query", "maximum results for initial query")
-      .add<count>("max-events-context", "maximum results per exploration"));
-}
+  boost::optional<ParentObject> Building_Impl::parent() const
+  {
+    return boost::optional<ParentObject>(this->facility());
+  }
 
-auto make_export_command() {
-  auto export_ = std::make_unique<command>(
-    "export", "exports query results to STDOUT or file",
-    documentation::vast_export,
-    opts("?vast.export")
-      .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("unified,u", "marks a query as unified")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<size_t>("max-events,n", "maximum number of results")
-      .add<std::string>("read,r", "path for reading the query"));
-  export_->add_subcommand("zeek", "exports query results in Zeek format",
-                          documentation::vast_export_zeek,
-                          sink_opts("?vast.export.zeek"));
-  export_->add_subcommand("csv", "exports query results in CSV format",
-                          documentation::vast_export_csv,
-                          sink_opts("?vast.export.csv"));
-  export_->add_subcommand("ascii", "exports query results in ASCII format",
-                          documentation::vast_export_ascii,
-                          sink_opts("?vast.export.ascii"));
-  export_->add_subcommand("json", "exports query results in JSON format",
-                          documentation::vast_export_json,
-                          sink_opts("?vast.export.json")
-                            .add<bool>("flatten", "flatten nested objects into "
-                                                  "the top-level"));
-  export_->add_subcommand("null",
-                          "exports query without printing them (debug option)",
-                          documentation::vast_export_null,
-                          sink_opts("?vast.export.null"));
-#if VAST_ENABLE_ARROW
-  // The Arrow export does not support --write or --uds, so we don't use the
-  // sink_opts here intentionally.
-  export_->add_subcommand("arrow", "exports query results in Arrow format",
-                          documentation::vast_export_arrow,
-                          opts("?vast.export.arrow"));
+  std::vector<ModelObject> Building_Impl::children() const
+  {
+    std::vector<ModelObject> result;
 
-#endif
-#if VAST_ENABLE_PCAP
-  export_->add_subcommand("pcap", "exports query results in PCAP format",
-                          documentation::vast_export_pcap,
-                          make_pcap_options("?vast.export.pcap"));
-#endif
-  return export_;
-}
+    // meters
+    MeterVector meters = this->meters();
+    result.insert(result.end(),meters.begin(),meters.end());
 
-auto make_get_command() {
-  return std::make_unique<command>(
-    "get", "extracts the events assiciated with ids", documentation::vast_get,
-    opts("?vast.get")
-      .add<std::string>("format", "output format (default: JSON)"));
-}
+    // building stories
+    BuildingStoryVector stories = model().getConcreteModelObjects<BuildingStory>();
+    result.insert(result.end(),stories.begin(),stories.end());
 
-auto make_infer_command() {
-  return std::make_unique<command>(
-    "infer", "infers the schema from data", documentation::vast_infer,
-    opts("?vast.infer")
-      .add<size_t>("buffer,b", "maximum number of bytes to buffer")
-      .add<std::string>("read,r", "path to the input data"));
-}
+    // exterior shading groups
+    ShadingSurfaceGroupVector shadingSurfaceGroups = this->shadingSurfaceGroups();
+    result.insert(result.end(), shadingSurfaceGroups.begin(), shadingSurfaceGroups.end());
 
-auto make_import_command() {
-  auto import_ = std::make_unique<command>(
-    "import", "imports data from STDIN or file", documentation::vast_import,
-    opts("?vast.import")
-      .add<std::string>("batch-encoding", "encoding type of table slices "
-                                          "(arrow or msgpack)")
-      .add<size_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
-      .add<size_t>("max-events,n", "the maximum number of events to import"));
-  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
-                          documentation::vast_import_zeek,
-                          source_opts("?vast.import.zeek"));
-  import_->add_subcommand("zeek-json",
-                          "imports Zeek JSON logs from STDIN or file",
-                          documentation::vast_import_zeek,
-                          source_opts_json("?vast.import.zeek-json"));
-  import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
-                          documentation::vast_import_csv,
-                          source_opts("?vast.import.csv"));
-  import_->add_subcommand("json", "imports JSON with schema",
-                          documentation::vast_import_json,
-                          source_opts_json("?vast.import.json"));
-  import_->add_subcommand("suricata", "imports suricata eve json",
-                          documentation::vast_import_suricata,
-                          source_opts_json("?vast.import.suricata"));
-  import_->add_subcommand("syslog", "imports syslog messages",
-                          documentation::vast_import_syslog,
-                          source_opts("?vast.import.syslog"));
-  import_->add_subcommand(
-    "test", "imports random data for testing or benchmarking",
-    documentation::vast_import_test,
-    source_opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
-#if VAST_ENABLE_PCAP
-  import_->add_subcommand(
-    "pcap", "imports PCAP logs from STDIN or file",
-    documentation::vast_import_pcap,
-    source_opts("?vast.import.pcap")
-      .add<std::string>("interface,i", "network interface to read packets from")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("max-flows,m", "number of concurrent flows to track")
-      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes")
-      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
-                                          "warnings to occur")
-      .add<bool>("disable-community-id", "disable computation of community id "
-                                         "for every packet"));
-#endif
-  return import_;
-}
+    // thermal zones
+    ThermalZoneVector thermalZones = this->thermalZones();
+    result.insert(result.end(), thermalZones.begin(), thermalZones.end());
 
-auto make_kill_command() {
-  return std::make_unique<command>("kill", "terminates a component", "",
-                                   opts("?vast.kill"), false);
-}
+    // spaces
+    SpaceVector spaces = this->spaces();
+    result.insert(result.end(), spaces.begin(), spaces.end());
 
-auto make_peer_command() {
-  return std::make_unique<command>("peer", "peers with another node", "",
-                                   opts("?vast.peer"), false);
-}
+    return result;
+  }
 
-auto make_pivot_command() {
-  auto pivot = std::make_unique<command>(
-    "pivot", "extracts related events of a given type",
-    documentation::vast_pivot,
-    make_pcap_options("?vast.pivot")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<std::string>("format", "output format "
-                                  "(default: JSON)"));
-  return pivot;
-}
+  bool Building_Impl::setParent(ParentObject& newParent)
+  {
+    if (newParent.optionalCast<Facility>()){
+      return true;
+    }
+    return false;
+  }
 
-auto make_send_command() {
-  return std::make_unique<command>("send",
-                                   "sends a message to a registered actor", "",
-                                   opts("?vast.send"), false);
-}
+  std::vector<IddObjectType> Building_Impl::allowableChildTypes() const
+  {
+    std::vector<IddObjectType> result;
+    result.push_back(IddObjectType::OS_Space);
+    result.push_back(IddObjectType::OS_ShadingSurfaceGroup);
+    result.push_back(IddObjectType::OS_ThermalZone);
+    return result;
+  }
 
-auto make_spawn_source_command() {
-  auto spawn_source = std::make_unique<command>(
-    "source", "creates a new source inside the node",
-    documentation::vast_spawn_source,
-    opts("?vast.spawn.source")
-      .add<std::string>("batch-encoding", "encoding type of table slices "
-                                          "(arrow or msgpack)")
-      .add<size_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<size_t>("max-events,n", "the maximum number of events to import"));
-  spawn_source->add_subcommand("csv",
-                               "creates a new CSV source inside the node",
-                               documentation::vast_spawn_source_csv,
-                               source_opts("?vast.spawn.source.csv"));
-  spawn_source->add_subcommand("json",
-                               "creates a new JSON source inside the node",
-                               documentation::vast_spawn_source_json,
-                               source_opts("?vast.spawn.source.json"));
-#if VAST_ENABLE_PCAP
-  spawn_source->add_subcommand(
-    "pcap", "creates a new PCAP source inside the node",
-    documentation::vast_spawn_source_pcap,
-    source_opts("?vast.spawn.source.pcap")
-      .add<std::string>("interface,i", "network interface to read packets from")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("max-flows,m", "number of concurrent flows to track")
-      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes")
-      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
-                                          "warnings to occur")
-      .add<bool>("disable-community-id", "disable computation of community id "
-                                         "for every packet"));
-#endif
-  spawn_source->add_subcommand("suricata",
-                               "creates a new Suricata source inside the node",
-                               documentation::vast_spawn_source_suricata,
-                               source_opts("?vast.spawn.source.suricata"));
-  spawn_source->add_subcommand("syslog",
-                               "creates a new Syslog source inside the node",
-                               documentation::vast_spawn_source_syslog,
-                               source_opts("?vast.spawn.source.syslog"));
-  spawn_source->add_subcommand(
-    "test", "creates a new test source inside the node",
-    documentation::vast_spawn_source_test,
-    source_opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
-  spawn_source->add_subcommand("zeek",
-                               "creates a new Zeek source inside the node",
-                               documentation::vast_spawn_source_zeek,
-                               source_opts("?vast.spawn.source.zeek"));
-  return spawn_source;
-}
+  const std::vector<std::string>& Building_Impl::outputVariableNames() const
+  {
+    static std::vector<std::string> result;
+    if (result.empty()){
+    }
+    return result;
+  }
 
-auto make_spawn_sink_command() {
-  auto spawn_sink = std::make_unique<command>(
-    "sink", "creates a new sink", "",
-    opts("?vast.spawn.sink")
-      .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
-    false);
-  spawn_sink->add_subcommand("pcap", "creates a new PCAP sink", "",
-                             opts("?vast.spawn.sink.pcap")
-                               .add<size_t>("flush,f", "flush to disk after "
-                                                       "this many packets"));
-  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "",
-                             opts("?vast.spawn.sink.zeek"));
-  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "",
-                             opts("?vast.spawn.sink.ascii"));
-  spawn_sink->add_subcommand("csv", "creates a new CSV sink", "",
-                             opts("?vast.spawn.sink.csv"));
-  spawn_sink->add_subcommand("json", "creates a new JSON sink", "",
-                             opts("?vast.spawn.sink.json"));
-  return spawn_sink;
-}
+  IddObjectType Building_Impl::iddObjectType() const {
+    return Building::iddObjectType();
+  }
 
-auto make_spawn_command() {
-  auto spawn
-    = std::make_unique<command>("spawn", "creates a new component",
-                                documentation::vast_spawn, opts("?vast.spawn"));
-  spawn->add_subcommand("accountant", "spawns the accountant", "",
-                        opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand("archive", "creates a new archive", "",
-                        add_archive_opts(opts("?vast.spawn.archive")), false);
-  spawn->add_subcommand(
-    "explorer", "creates a new explorer", "",
-    opts("?vast.spawn.explorer")
-      .add<vast::duration>("after,A", "timebox after each result")
-      .add<vast::duration>("before,B", "timebox before each result"),
-    false);
-  spawn->add_subcommand(
-    "exporter", "creates a new exporter", "",
-    opts("?vast.spawn.exporter")
-      .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("unified,u", "marks a query as unified")
-      .add<uint64_t>("events,e", "maximum number of results"),
-    false);
-  spawn->add_subcommand("importer", "creates a new importer", "",
-                        opts("?vast.spawn.importer")
-                          .add<size_t>("ids,n", "number of initial IDs to "
-                                                "request (deprecated)"),
-                        false);
-  spawn->add_subcommand("index", "creates a new index", "",
-                        add_index_opts(opts("?vast.spawn.index")), false);
-  spawn->add_subcommand(make_spawn_source_command());
-  spawn->add_subcommand(make_spawn_sink_command());
-  return spawn;
-}
+  double Building_Impl::northAxis() const {
+    boost::optional<double> value = getDouble(OS_BuildingFields::NorthAxis,true);
+    OS_ASSERT(value);
+    return value.get();
+  }
 
-auto make_status_command() {
-  return std::make_unique<command>(
-    "status", "shows properties of a server process",
-    documentation::vast_status,
-    opts("?vast.status")
-      .add<bool>("detailed", "add more information to the output")
-      .add<bool>("debug", "include extra debug information"));
-}
+  bool Building_Impl::isNorthAxisDefaulted() const {
+    return isEmpty(OS_BuildingFields::NorthAxis);
+  }
 
-auto make_start_command() {
-  return std::make_unique<command>(
-    "start", "starts a node", documentation::vast_start,
-    opts("?vast.start")
-      .add<bool>("print-endpoint", "print the client endpoint on stdout")
-      .add<size_t>("disk-budget-check-interval", "time between two disk size "
-                                                 "scans")
-      .add<std::string>("disk-budget-high", "high-water mark for disk budget")
-      .add<std::string>("disk-budget-low", "low-water mark for disk budget"));
-}
+  double Building_Impl::nominalFloortoFloorHeight() const {
+    boost::optional<double> value = getDouble(OS_BuildingFields::NominalFloortoFloorHeight,true);
+    OS_ASSERT(value);
+    return value.get();
+  }
 
-auto make_stop_command() {
-  return std::make_unique<command>(
-    "stop", "stops a node", documentation::vast_stop, opts("?vast.stop"));
-}
+  bool Building_Impl::isNominalFloortoFloorHeightDefaulted() const {
+    return isEmpty(OS_BuildingFields::NominalFloortoFloorHeight);
+  }
 
-auto make_version_command() {
-  return std::make_unique<command>("version", "prints the software version",
-                                   documentation::vast_version,
-                                   opts("?vast.version"));
-}
+  boost::optional<int> Building_Impl::standardsNumberOfStories() const
+  {
+    boost::optional<int> value = getInt(OS_BuildingFields::StandardsNumberofStories, false);
+    return value;
+  }
 
-auto make_command_factory() {
-  // When updating this list, remember to update its counterpart in node.cpp as
-  // well iff necessary
-  // clang-format off
-  return command::factory{
-    {"count", count_command},
-    {"dump", remote_command},
-    {"dump concepts", remote_command},
-    {"dump models", remote_command},
-    {"explore", explore_command},
-    {"export ascii", make_writer_command("ascii")},
-    {"export csv", make_writer_command("csv")},
-    {"export json", make_writer_command("json")},
-    {"export null", make_writer_command("null")},
-#if VAST_ENABLE_ARROW
-    {"export arrow", make_writer_command("arrow")},
-#endif
-#if VAST_ENABLE_PCAP
-    {"export pcap", pcap_writer_command},
-#endif
-    {"export zeek", make_writer_command("zeek")},
-    {"get", get_command},
-    {"infer", infer_command},
-    {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command_json<
-      format::json::reader<format::json::default_selector>,
-      format::simdjson::reader<format::json::default_selector>,
-      defaults::import::json>},
-#if VAST_ENABLE_PCAP
-    {"import pcap", import_command<format::pcap::reader,
-      defaults::import::pcap>},
-#endif
-    {"import suricata", import_command_json<
-      format::json::reader<format::json::suricata_selector>,
-      format::simdjson::reader<format::json::suricata_selector>,
-      defaults::import::suricata>},
-    {"import syslog", import_command<format::syslog::reader,
-      defaults::import::syslog>},
-    {"import test", import_command<format::test::reader,
-      defaults::import::test>},
-    {"import zeek", import_command<format::zeek::reader,
-      defaults::import::zeek>},
-    {"import zeek-json", import_command_json<
-      format::json::reader<format::json::zeek_selector>,
-      format::simdjson::reader<format::json::zeek_selector>,
-      defaults::import::zeek_json>},
-    {"kill", remote_command},
-    {"peer", remote_command},
-    {"pivot", pivot_command},
-    {"send", remote_command},
-    {"spawn accountant", remote_command},
-    {"spawn archive", remote_command},
-    {"spawn eraser", remote_command},
-    {"spawn exporter", remote_command},
-    {"spawn explorer", remote_command},
-    {"spawn importer", remote_command},
-    {"spawn type-registry", remote_command},
-    {"spawn index", remote_command},
-    {"spawn sink ascii", remote_command},
-    {"spawn sink csv", remote_command},
-    {"spawn sink json", remote_command},
-    {"spawn sink pcap", remote_command},
-    {"spawn sink zeek", remote_command},
-    {"spawn source csv", remote_command},
-    {"spawn source json", remote_command},
-    {"spawn source pcap", remote_command},
-    {"spawn source suricata", remote_command},
-    {"spawn source syslog", remote_command},
-    {"spawn source test", remote_command},
-    {"spawn source zeek", remote_command},
-    {"spawn source zeek-json", remote_command},
-    {"start", start_command},
-    {"status", remote_command},
-    {"stop", stop_command},
-    {"version", version_command},
-  };
-  // clang-format on
-}
+  boost::optional<int> Building_Impl::standardsNumberOfAboveGroundStories() const
+  {
+    boost::optional<int> value = getInt(OS_BuildingFields::StandardsNumberofAboveGroundStories, false);
+    return value;
+  }
+  {
+    boost::optional<int> value = getInt(OS_BuildingFields::StandardsNumberofLivingUnits, false);
+    return value;
+  }
 
-} // namespace
+  double Building_Impl::nominalFloortoCeilingHeight() const {
+    boost::optional<double> value = getDouble(OS_BuildingFields::NominalFloortoCeilingHeight, true);
+    OS_ASSERT(value);
+    return value.get();
+  }
 
-std::pair<std::unique_ptr<command>, command::factory>
-make_application(std::string_view path) {
-  auto root = make_root_command(path);
-  root->add_subcommand(make_count_command());
-  root->add_subcommand(make_dump_command());
-  root->add_subcommand(make_export_command());
-  root->add_subcommand(make_explore_command());
-  root->add_subcommand(make_get_command());
-  root->add_subcommand(make_infer_command());
-  root->add_subcommand(make_import_command());
-  root->add_subcommand(make_kill_command());
-  root->add_subcommand(make_peer_command());
-  root->add_subcommand(make_pivot_command());
-  root->add_subcommand(make_send_command());
-  root->add_subcommand(make_spawn_command());
-  root->add_subcommand(make_start_command());
-  root->add_subcommand(make_status_command());
-  root->add_subcommand(make_stop_command());
-  root->add_subcommand(make_version_command());
-  return {std::move(root), make_command_factory()};
-}
+  Quantity Building_Impl::getNominalFloortoCeilingHeight(bool returnIP) const {
+    OSOptionalQuantity value = getQuantity(OS_BuildingFields::NominalFloortoCeilingHeight, true, returnIP);
+    OS_ASSERT(value.isSet());
+    return value.get();
+  }
 
-void render_error(const command& root, const caf::error& err,
-                  std::ostream& os) {
-  if (!err)
-    // The user most likely killed the process via CTRL+C, print nothing.
-    return;
-  os << render(err) << '
-';
-  if (err.category() == caf::atom("vast")) {
-    auto x = static_cast<vast::ec>(err.code());
-    switch (x) {
-      default:
-        break;
-      case ec::invalid_subcommand:
-      case ec::missing_subcommand:
-      case ec::unrecognized_option: {
-        auto ctx = err.context();
-        if (ctx.match_element<std::string>(1)) {
-          auto name = ctx.get_as<std::string>(1);
-          if (auto cmd = resolve(root, name))
-            helptext(*cmd, os);
-        } else {
-          VAST_ASSERT(!"User visible error contexts must consist of strings!");
-        }
-        break;
+  bool Building_Impl::isNominalFloortoCeilingHeightDefaulted() const {
+    return isEmpty(OS_BuildingFields::NominalFloortoCeilingHeight);
+  }
+
+  boost::optional<std::string> Building_Impl::standardsBuildingType() const
+  {
+    return getString(OS_BuildingFields::StandardsBuildingType, false, true);
+  }
+
+  std::vector<std::string> Building_Impl::suggestedStandardsBuildingTypes() const
+  {
+    std::vector<std::string> result;
+
+    boost::optional<std::string> standardsBuildingType = this->standardsBuildingType();
+
+    // DLM: temp code, eventually get from StandardsLibrary
+    Model tempModel;
+    SpaceType tempSpaceType(tempModel);
+    std::vector<std::string> tempSuggestions = tempSpaceType.suggestedStandardsBuildingTypes();
+    for (const std::string& suggestion : tempSuggestions){
+      result.push_back(suggestion);
+    }
+
+    // include values from model
+    for (const SpaceType& other : this->model().getConcreteModelObjects<SpaceType>()){
+      boost::optional<std::string> otherBuildingType = other.standardsBuildingType();
+      if (otherBuildingType){
+        result.push_back(*otherBuildingType);
       }
     }
+
+    // remove standardsBuildingType
+    IstringFind finder;
+    if (standardsBuildingType){
+      finder.addTarget(*standardsBuildingType);
+    }
+    auto it = std::remove_if(result.begin(), result.end(), finder); 
+    result.resize( std::distance(result.begin(),it) ); 
+
+    // sort
+    std::sort(result.begin(), result.end(), IstringCompare());
+
+    // make unique
+    // DLM: have to sort before calling unique, unique only works on consecutive elements
+    it = std::unique(result.begin(), result.end(), IstringEqual()); 
+    result.resize( std::distance(result.begin(),it) ); 
+
+    // add current to front
+    if (standardsBuildingType){
+      result.insert(result.begin(), *standardsBuildingType);
+    }
+
+    return result;
   }
+
+  boost::optional<std::string> Building_Impl::relocatable() const
+  {
+    return getString(OS_BuildingFields::Relocatable, false, true);
+  }
+
+  std::vector<std::string> Building_Impl::suggestedRelocatables() const
+  {
+    std::vector<std::string> result;
+
+    result.push_back("True");
+    result.push_back("False");
+
+    return result;
+  }
+
+  void Building_Impl::setNorthAxis(double northAxis) {
+    bool result = setDouble(OS_BuildingFields::NorthAxis, northAxis);
+    OS_ASSERT(result);
+  }
+
+  void Building_Impl::resetNorthAxis() {
+    bool result = setString(OS_BuildingFields::NorthAxis, "");
+    OS_ASSERT(result);
+  }
+
+  bool Building_Impl::setNominalFloortoFloorHeight(double nominalFloortoFloorHeight) {
+    bool result = setDouble(OS_BuildingFields::NominalFloortoFloorHeight, nominalFloortoFloorHeight);
+    return result;
+  }
+
+  void Building_Impl::resetNominalFloortoFloorHeight() {
+    bool result = setString(OS_BuildingFields::NominalFloortoFloorHeight, "");
+    OS_ASSERT(result);
+  }
+
+  bool Building_Impl::setStandardsNumberOfStories(int value)
+  {
+    bool test = setInt(OS_BuildingFields::StandardsNumberofStories, value);
+    return test;
+  }
+
+  void Building_Impl::resetStandardsNumberOfStories()
+  {
+    bool test = setString(OS_BuildingFields::StandardsNumberofStories, "");
+    OS_ASSERT(test);
+  }
+
+  bool Building_Impl::setStandardsNumberOfAboveGroundStories(int value)
+  {
+    bool test = setInt(OS_BuildingFields::StandardsNumberofAboveGroundStories, value);
+    return test;
+  }
+
+  void Building_Impl::resetStandardsNumberOfAboveGroundStories()
+  {
+    bool test = setString(OS_BuildingFields::StandardsNumberofAboveGroundStories, "");
+    OS_ASSERT(test);
+  }
+
+  bool Building_Impl::setStandardsNumberOfLivingUnits(int value)
+  {
+    bool test = setInt(OS_BuildingFields::StandardsNumberofLivingUnits, value);
+    return test;
+  }
+
+  void Building_Impl::resetStandardsNumberOfLivingUnits()
+  {
+    bool test = setString(OS_BuildingFields::StandardsNumberofLivingUnits, "");
+    OS_ASSERT(test);
+  }
+  
+  bool Building_Impl::setNominalFloortoCeilingHeight(double nominalFloortoCeilingHeight) {
+    bool result = setDouble(OS_BuildingFields::NominalFloortoCeilingHeight, nominalFloortoCeilingHeight);
+    return result;
+  }
+
+  bool Building_Impl::setNominalFloortoCeilingHeight(const Quantity& nominalFloortoCeilingHeight) {
+    return setQuantity(OS_BuildingFields::NominalFloortoCeilingHeight, nominalFloortoCeilingHeight);
+  }
+
+  void Building_Impl::resetNominalFloortoCeilingHeight() {
+    bool result = setString(OS_BuildingFields::NominalFloortoCeilingHeight, "");
+    OS_ASSERT(result);
+  }
+
+  bool Building_Impl::setStandardsBuildingType(const std::string& standardsBuildingType)
+  {
+    bool result = setString(OS_BuildingFields::StandardsBuildingType, standardsBuildingType);
+    OS_ASSERT(result);
+    return result;
+  }
+
+  void Building_Impl::resetStandardsBuildingType()
+  {
+    bool test = setString(OS_BuildingFields::StandardsBuildingType, "");
+    OS_ASSERT(test);
+  }
+
+  bool Building_Impl::setRelocatable(const std::string& relocatable)
+  {
+    bool result = setString(OS_BuildingFields::Relocatable, relocatable);
+    OS_ASSERT(result);
+    return result;
+  }
+
+  void Building_Impl::resetRelocatable()
+  {
+    bool test = setString(OS_BuildingFields::Relocatable, "");
+    OS_ASSERT(test);
+  }
+
+  boost::optional<SpaceType> Building_Impl::spaceType() const
+  {
+    return getObject<ModelObject>().getModelObjectTarget<SpaceType>(OS_BuildingFields::SpaceTypeName);
+  }
+
+  bool Building_Impl::setSpaceType(const SpaceType& spaceType)
+  {
+    return setPointer(OS_BuildingFields::SpaceTypeName, spaceType.handle());
+  }
+
+  void Building_Impl::resetSpaceType()
+  {
+    bool test = setString(OS_BuildingFields::SpaceTypeName, "");
+    OS_ASSERT(test);
+  }
+
+  boost::optional<DefaultConstructionSet> Building_Impl::defaultConstructionSet() const
+  {
+    return getObject<ModelObject>().getModelObjectTarget<DefaultConstructionSet>(OS_BuildingFields::DefaultConstructionSetName);
+  }
+
+  bool Building_Impl::setDefaultConstructionSet(const DefaultConstructionSet& defaultConstructionSet)
+  {
+    return setPointer(OS_BuildingFields::DefaultConstructionSetName, defaultConstructionSet.handle());
+  }
+
+  void Building_Impl::resetDefaultConstructionSet()
+  {
+    setString(OS_BuildingFields::DefaultConstructionSetName, "");
+  }
+
+  boost::optional<DefaultScheduleSet> Building_Impl::defaultScheduleSet() const
+  {
+    return getObject<ModelObject>().getModelObjectTarget<DefaultScheduleSet>(OS_BuildingFields::DefaultScheduleSetName);
+  }
+
+  bool Building_Impl::setDefaultScheduleSet(const DefaultScheduleSet& defaultScheduleSet)
+  {
+    return setPointer(OS_BuildingFields::DefaultScheduleSetName, defaultScheduleSet.handle());
+  }
+
+  void Building_Impl::resetDefaultScheduleSet()
+  {
+    setString(OS_BuildingFields::DefaultScheduleSetName, "");
+  }
+
+  MeterVector Building_Impl::meters() const
+  {
+    MeterVector result;
+    MeterVector meters = this->model().getConcreteModelObjects<Meter>();
+    for (const Meter& meter : meters){
+      if (meter.installLocationType() && (InstallLocationType::Building == meter.installLocationType().get().value())){
+        result.push_back(meter);
+      }
+    }
+    return result;
+  }
+
+  OptionalFacility Building_Impl::facility() const
+  {
+    return this->model().getOptionalUniqueModelObject<Facility>();
+  }
+
+  std::vector<Space> Building_Impl::spaces() const
+  {
+    // all spaces in workspace implicitly belong to building
+    return this->model().getConcreteModelObjects<Space>();
+  }
+
+  ShadingSurfaceGroupVector Building_Impl::shadingSurfaceGroups() const
+  {
+    ShadingSurfaceGroupVector result;
+    for (ShadingSurfaceGroup shadingGroup : this->model().getConcreteModelObjects<ShadingSurfaceGroup>()){
+      if (istringEqual(shadingGroup.shadingSurfaceType(), "Building")){
+        result.push_back(shadingGroup);
+      }
+    }
+    return result;
+  }
+
+  std::vector<ThermalZone> Building_Impl::thermalZones() const
+  {
+    // all thermal zones in workspace implicitly belong to building
+    return this->model().getConcreteModelObjects<ThermalZone>();
+  }
+
+  std::vector<Surface> Building_Impl::exteriorWalls() const {
+    SurfaceVector result;
+    SurfaceVector candidates = model().getConcreteModelObjects<Surface>();
+    for (const Surface& candidate : candidates) {
+      std::string surfaceType = candidate.surfaceType();
+      std::string outsideBoundaryCondition = candidate.outsideBoundaryCondition();
+      if (openstudio::istringEqual(surfaceType, "Wall") && openstudio::istringEqual(outsideBoundaryCondition, "Outdoors")) {
+        result.push_back(candidate);
+      }
+    }
+    return result;
+  }
+
+  std::vector<Surface> Building_Impl::roofs() const {
+    SurfaceVector result;
+    SurfaceVector candidates = model().getConcreteModelObjects<Surface>();
+    for (const Surface& candidate : candidates) {
+      std::string surfaceType = candidate.surfaceType();
+      std::string outsideBoundaryCondition = candidate.outsideBoundaryCondition();
+      if (openstudio::istringEqual(surfaceType, "RoofCeiling") && openstudio::istringEqual(outsideBoundaryCondition, "Outdoors")) {
+        result.push_back(candidate);
+      }
+    }
+    return result;
+  }
+
+  double Building_Impl::floorArea() const
+  {
+    double result = 0;
+    for (const Space& space : spaces()){
+      bool partofTotalFloorArea = space.partofTotalFloorArea();
+      if (partofTotalFloorArea) {
+        result += space.multiplier() * space.floorArea();
+      }
+    }
+    return result;
+  }
+
+  boost::optional<double> Building_Impl::conditionedFloorArea() const
+  {
+    boost::optional<double> result;
+
+    for (const ThermalZone& thermalZone : thermalZones()){
+      boost::optional<std::string> isConditioned = thermalZone.isConditioned();
+
+      if (isConditioned) {
+
+        if (!result){
+          result = 0;
+        }
+
+        if (istringEqual("Yes", *isConditioned)){
+          for (const Space& space : thermalZone.spaces()){
+            bool partofTotalFloorArea = space.partofTotalFloorArea();
+            if (partofTotalFloorArea) {
+              result = *result + space.multiplier() * space.floorArea();
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  double Building_Impl::exteriorSurfaceArea() const {
+    double result(0.0);
+    for (const Surface& surface : model().getModelObjects<Surface>()) {
+      OptionalSpace space = surface.space();
+      std::string outsideBoundaryCondition = surface.outsideBoundaryCondition();
+      if (space && openstudio::istringEqual(outsideBoundaryCondition, "Outdoors")) {
+        result += surface.grossArea() * space->multiplier();
+      }
+    }
+    return result;
+  }
+
+  double Building_Impl::exteriorWallArea() const {
+    double result(0.0);
+    for (const Surface& exteriorWall : exteriorWalls()) {
+      if (OptionalSpace space = exteriorWall.space()) {
+        result += exteriorWall.grossArea() * space->multiplier();
+      }
+    }
+    return result;
+  }
+
+  double Building_Impl::airVolume() const {
+    double result(0.0);
+    for (const Space& space : spaces()) {
+      result += space.volume() * space.multiplier();
+    }
+    return result;
+  }
+
+  double Building_Impl::numberOfPeople() const {
+    double result(0.0);
+    for (const Space& space : spaces()) {
+      result += space.numberOfPeople() * space.multiplier();
+    }
+    return result;
+  }
+
+  double Building_Impl::peoplePerFloorArea() const {
+    double area = floorArea();
+    double np = numberOfPeople();
+    if (equal(area,0.0)) {
+      if (equal(np,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].peoplePerFloorArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return np / area;
+  }
+
+  double Building_Impl::floorAreaPerPerson() const {
+    double area = floorArea();
+    double np = numberOfPeople();
+    if (equal(np,0.0)) {
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return area / np;
+  }
+  
+  double Building_Impl::lightingPower() const {
+    double result(0.0);
+    for (const Space& space : spaces()){
+      result += space.multiplier() * space.lightingPower();
+    }
+    return result;
+  }
+
+  double Building_Impl::lightingPowerPerFloorArea() const {
+    double area = floorArea();
+    double lp = lightingPower();
+    if (equal(area,0.0)) {
+      if (equal(lp,0.0)) {
+        return 0.0;
+      }
+      else if (spaces().size() == 1u) {
+        return spaces()[0].lightingPowerPerFloorArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return lp / area;
+  }
+
+  double Building_Impl::lightingPowerPerPerson() const {
+    double np = numberOfPeople();
+    double lp = lightingPower();
+    if (equal(np,0.0)) {
+      if (equal(lp,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].lightingPowerPerPerson();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return lp / np;
+  }
+
+  double Building_Impl::electricEquipmentPower() const {
+    double result(0.0);
+    for (const Space& space : spaces()){
+      result += space.multiplier() * space.electricEquipmentPower();
+    }
+    return result;
+  }
+
+  double Building_Impl::electricEquipmentPowerPerFloorArea() const {
+    double area = floorArea();
+    double ep = electricEquipmentPower();
+    if (equal(area,0.0)) {
+      if (equal(ep,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].electricEquipmentPowerPerFloorArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return ep / area;
+  }
+
+  double Building_Impl::electricEquipmentPowerPerPerson() const {
+    double np = numberOfPeople();
+    double ep = electricEquipmentPower();
+    if (equal(np,0.0)) {
+      if (equal(ep,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].electricEquipmentPowerPerPerson();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return ep / np;
+  }
+
+  double Building_Impl::gasEquipmentPower() const {
+    double result(0.0);
+    for (const Space& space : spaces()){
+      result += space.multiplier() * space.gasEquipmentPower();
+    }
+    return result;
+  }
+
+  double Building_Impl::gasEquipmentPowerPerFloorArea() const {
+    double area = floorArea();
+    double ep = gasEquipmentPower();
+    if (equal(area,0.0)) {
+      if (equal(ep,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].gasEquipmentPowerPerFloorArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return ep / area;
+  }
+
+  double Building_Impl::gasEquipmentPowerPerPerson() const {
+    double np = numberOfPeople();
+    double ep = gasEquipmentPower();
+    if (equal(np,0.0)) {
+      if (equal(ep,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].gasEquipmentPowerPerPerson();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return ep / np;
+  }
+
+  double Building_Impl::infiltrationDesignFlowRate() const {
+    double result(0.0);
+    for (const Space& space : spaces()){
+      result += space.multiplier() * space.infiltrationDesignFlowRate();
+    }
+    return result;
+  }
+
+  double Building_Impl::infiltrationDesignFlowPerSpaceFloorArea() const {
+    double area = floorArea();
+    double idfr = infiltrationDesignFlowRate();
+    if (equal(area,0.0)) {
+      if (equal(idfr,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].infiltrationDesignFlowPerSpaceFloorArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return idfr/area;
+  }
+
+  double Building_Impl::infiltrationDesignFlowPerExteriorSurfaceArea() const {
+    double area = exteriorSurfaceArea();
+    double idfr = infiltrationDesignFlowRate();
+    if (equal(area,0.0)) {
+      if (equal(idfr,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].infiltrationDesignFlowPerExteriorSurfaceArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return idfr/area;
+  }
+
+  double Building_Impl::infiltrationDesignFlowPerExteriorWallArea() const {
+    double area = exteriorWallArea();
+    double idfr = infiltrationDesignFlowRate();
+    if (equal(area,0.0)) {
+      if (equal(idfr,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].infiltrationDesignFlowPerExteriorWallArea();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return idfr/area;
+  }
+
+  double Building_Impl::infiltrationDesignAirChangesPerHour() const {
+    double volume = airVolume();
+    double idfr = infiltrationDesignFlowRate();
+    if (equal(volume,0.0)) {
+      if (equal(idfr,0.0)) {
+        return 0.0;
+      }
+      if (spaces().size() == 1u) {
+        return spaces()[0].infiltrationDesignAirChangesPerHour();
+      }
+      LOG_AND_THROW("Calculation would require division by 0.");
+    }
+    return convert(idfr/volume,"1/s","1/h").get();
+  }
+
+  Transformation Building_Impl::transformation() const
+  {
+    // rotate negative amount around the z axis, EnergyPlus defines rotation clockwise
+    return Transformation::rotation(Vector3d(0,0,1), -degToRad(this->northAxis()));
+  }
+
+  std::vector<std::vector<Point3d> > Building_Impl::generateSkylightPattern(double skylightToProjectedFloorRatio, double desiredWidth, double desiredHeight) const
+  {
+    return openstudio::model::generateSkylightPattern(this->spaces(), 0.0, skylightToProjectedFloorRatio, desiredWidth, desiredHeight);
+  }
+
+  openstudio::Quantity Building_Impl::northAxis_SI() const
+  {
+    OSOptionalQuantity value = getQuantity(OS_BuildingFields::NorthAxis,true,false);
+    OS_ASSERT(value.isSet());
+    return value.get();
+  }
+
+  openstudio::Quantity Building_Impl::northAxis_IP() const
+  {
+    OSOptionalQuantity value = getQuantity(OS_BuildingFields::NorthAxis,true,true);
+    OS_ASSERT(value.isSet());
+    return value.get();
+  }
+
+  bool Building_Impl::setNorthAxis(const Quantity& northAxis)
+  {
+    bool result = setQuantity(OS_BuildingFields::NorthAxis, northAxis);
+    return result;
+  }
+
+  openstudio::Quantity Building_Impl::nominalFloortoFloorHeight_SI() const
+  {
+    OSOptionalQuantity value = getQuantity(OS_BuildingFields::NominalFloortoFloorHeight,true,false);
+    OS_ASSERT(value.isSet());
+    return value.get();
+  }
+
+  openstudio::Quantity Building_Impl::nominalFloortoFloorHeight_IP() const
+  {
+    OSOptionalQuantity value = getQuantity(OS_BuildingFields::NominalFloortoFloorHeight,true,true);
+    OS_ASSERT(value.isSet());
+    return value.get();
+  }
+
+  bool Building_Impl::setNominalFloortoFloorHeight(const Quantity& nominalFloortoFloorHeight)
+  {
+    bool result = setQuantity(OS_BuildingFields::NominalFloortoFloorHeight, nominalFloortoFloorHeight);
+    return result;
+  }
+
+  boost::optional<ModelObject> Building_Impl::spaceTypeAsModelObject() const {
+    OptionalModelObject result;
+    OptionalSpaceType intermediate = spaceType();
+    if (intermediate) {
+      result = *intermediate;
+    }
+    return result;
+  }
+
+  boost::optional<ModelObject> Building_Impl::defaultConstructionSetAsModelObject() const {
+    OptionalModelObject result;
+    OptionalDefaultConstructionSet intermediate = defaultConstructionSet();
+    if (intermediate) {
+      result = *intermediate;
+    }
+    return result;
+  }
+
+  boost::optional<ModelObject> Building_Impl::defaultScheduleSetAsModelObject() const {
+    OptionalModelObject result;
+    OptionalDefaultScheduleSet intermediate = defaultScheduleSet();
+    if (intermediate) {
+      result = *intermediate;
+    }
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::metersAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(meters());
+    return result;
+  }
+
+  boost::optional<ModelObject> Building_Impl::facilityAsModelObject() const {
+    OptionalModelObject result;
+    OptionalFacility intermediate = facility();
+    if (intermediate) {
+      result = *intermediate;
+    }
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::spacesAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(spaces());
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::shadingSurfaceGroupsAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(shadingSurfaceGroups());
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::thermalZonesAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(thermalZones());
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::exteriorWallsAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(exteriorWalls());
+    return result;
+  }
+
+  std::vector<ModelObject> Building_Impl::roofsAsModelObjects() const {
+    ModelObjectVector result = castVector<ModelObject>(roofs());
+    return result;
+  }
+
+  bool Building_Impl::setSpaceTypeAsModelObject(const boost::optional<ModelObject>& modelObject) {
+    if (modelObject) {
+      OptionalSpaceType intermediate = modelObject->optionalCast<SpaceType>();
+      if (intermediate) {
+        return setSpaceType(*intermediate);
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      resetSpaceType();
+    }
+    return true;
+  }
+
+  bool Building_Impl::setDefaultConstructionSetAsModelObject(const boost::optional<ModelObject>& modelObject) {
+    if (modelObject) {
+      OptionalDefaultConstructionSet intermediate = modelObject->optionalCast<DefaultConstructionSet>();
+      if (intermediate) {
+        return setDefaultConstructionSet(*intermediate);
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      resetDefaultConstructionSet();
+    }
+    return true;
+  }
+
+  bool Building_Impl::setDefaultScheduleSetAsModelObject(const boost::optional<ModelObject>& modelObject) {
+    if (modelObject) {
+      OptionalDefaultScheduleSet intermediate = modelObject->optionalCast<DefaultScheduleSet>();
+      if (intermediate) {
+        return setDefaultScheduleSet(*intermediate);
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      resetDefaultScheduleSet();
+    }
+    return true;
+  }
+
+} // detail
+
+IddObjectType Building::iddObjectType() {
+  IddObjectType result(IddObjectType::OS_Building);
+  return result;
 }
 
-command::opts_builder source_opts(std::string_view category) {
-  return command::opts(category)
-    .add<std::string>("listen,l", "the endpoint to listen on "
-                                  "([host]:port/type)")
-    .add<std::string>("read,r", "path to input where to read events from")
-    .add<std::string>("schema-file,s", "path to alternate schema")
-    .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("type,t", "filter event type based on prefix matching")
-    .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
+double Building::northAxis() const {
+  return getImpl<detail::Building_Impl>()->northAxis();
 }
 
-command::opts_builder source_opts_json(std::string_view category) {
-  return source_opts(category).add<bool>("simdjson", "Use simdjson for JSON "
-                                                     "parsing");
+bool Building::isNorthAxisDefaulted() const {
+  return getImpl<detail::Building_Impl>()->isNorthAxisDefaulted();
 }
 
-command::opts_builder sink_opts(std::string_view category) {
-  return command::opts(category)
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
+double Building::nominalFloortoFloorHeight() const {
+  return getImpl<detail::Building_Impl>()->nominalFloortoFloorHeight();
 }
 
-command::opts_builder opts(std::string_view category) {
-  return command::opts(category);
+bool Building::isNominalFloortoFloorHeightDefaulted() const {
+  return getImpl<detail::Building_Impl>()->isNominalFloortoFloorHeightDefaulted();
 }
 
-} // namespace vast::system
+boost::optional<int> Building::standardsNumberOfStories() const{
+  return getImpl<detail::Building_Impl>()->standardsNumberOfStories();
+}
+
+boost::optional<int> Building::standardsNumberOfAboveGroundStories() const{
+  return getImpl<detail::Building_Impl>()->standardsNumberOfAboveGroundStories();
+}
+
+boost::optional<int> Building::standardsNumberOfLivingUnits() const{
+  return getImpl<detail::Building_Impl>()->standardsNumberOfLivingUnits();
+}
+
+double Building::nominalFloortoCeilingHeight() const {
+  return getImpl<detail::Building_Impl>()->nominalFloortoCeilingHeight();
+}
+
+Quantity Building::getNominalFloortoCeilingHeight(bool returnIP) const {
+  return getImpl<detail::Building_Impl>()->getNominalFloortoCeilingHeight(returnIP);
+}
+
+bool Building::isNominalFloortoCeilingHeightDefaulted() const {
+  return getImpl<detail::Building_Impl>()->isNominalFloortoCeilingHeightDefaulted();
+}
+
+boost::optional<std::string> Building::standardsBuildingType() const{
+  return getImpl<detail::Building_Impl>()->standardsBuildingType();
+}
+
+std::vector<std::string> Building::suggestedStandardsBuildingTypes() const{
+  return getImpl<detail::Building_Impl>()->suggestedStandardsBuildingTypes();
+}
+
+boost::optional<std::string> Building::relocatable() const{
+  return getImpl<detail::Building_Impl>()->relocatable();
+}
+
+std::vector<std::string> Building::suggestedRelocatables() const{
+  return getImpl<detail::Building_Impl>()->suggestedRelocatables();
+}
+
+void Building::setNorthAxis(double northAxis) {
+  getImpl<detail::Building_Impl>()->setNorthAxis(northAxis);
+}
+
+void Building::resetNorthAxis() {
+  getImpl<detail::Building_Impl>()->resetNorthAxis();
+}
+
+bool Building::setNominalFloortoFloorHeight(double nominalFloortoFloorHeight) {
+  return getImpl<detail::Building_Impl>()->setNominalFloortoFloorHeight(nominalFloortoFloorHeight);
+}
+
+void Building::resetNominalFloortoFloorHeight() {
+  getImpl<detail::Building_Impl>()->resetNominalFloortoFloorHeight();
+}
+
+bool Building::setStandardsNumberOfStories(int value){
+  return getImpl<detail::Building_Impl>()->setStandardsNumberOfStories(value);
+}
+
+void Building::resetStandardsNumberOfStories(){
+  getImpl<detail::Building_Impl>()->resetStandardsNumberOfStories();
+}
+
+bool Building::setStandardsNumberOfAboveGroundStories(int value){
+  return getImpl<detail::Building_Impl>()->setStandardsNumberOfAboveGroundStories(value);
+}
+
+void Building::resetStandardsNumberOfAboveGroundStories(){
+  getImpl<detail::Building_Impl>()->resetStandardsNumberOfAboveGroundStories();
+}
+
+bool Building::setStandardsNumberOfLivingUnits(int value){
+  return getImpl<detail::Building_Impl>()->setStandardsNumberOfLivingUnits(value);
+}
+
+void Building::resetStandardsNumberOfLivingUnits(){
+  getImpl<detail::Building_Impl>()->resetStandardsNumberOfLivingUnits();
+}
+
+bool Building::setNominalFloortoCeilingHeight(double nominalFloortoCeilingHeight) {
+  return getImpl<detail::Building_Impl>()->setNominalFloortoCeilingHeight(nominalFloortoCeilingHeight);
+}
+
+bool Building::setNominalFloortoCeilingHeight(const Quantity& nominalFloortoCeilingHeight) {
+  return getImpl<detail::Building_Impl>()->setNominalFloortoCeilingHeight(nominalFloortoCeilingHeight);
+}
+
+void Building::resetNominalFloortoCeilingHeight() {
+  getImpl<detail::Building_Impl>()->resetNominalFloortoCeilingHeight();
+}
+
+bool Building::setStandardsBuildingType(const std::string& standardsBuildingType){
+  return getImpl<detail::Building_Impl>()->setStandardsBuildingType(standardsBuildingType);
+}
+
+void Building::resetStandardsBuildingType(){
+  getImpl<detail::Building_Impl>()->resetStandardsBuildingType();
+}
+
+bool Building::setRelocatable(const std::string& relocatable){
+  return getImpl<detail::Building_Impl>()->setRelocatable(relocatable);
+}
+
+void Building::resetRelocatable(){
+  getImpl<detail::Building_Impl>()->resetRelocatable();
+}
+
+boost::optional<SpaceType> Building::spaceType() const
+{
+  return getImpl<detail::Building_Impl>()->spaceType();
+}
+
+bool Building::setSpaceType(const SpaceType& spaceType)
+{
+  return getImpl<detail::Building_Impl>()->setSpaceType(spaceType);
+}
+
+void Building::resetSpaceType()
+{
+  getImpl<detail::Building_Impl>()->resetSpaceType();
+}
+
+boost::optional<DefaultConstructionSet> Building::defaultConstructionSet() const
+{
+  return getImpl<detail::Building_Impl>()->defaultConstructionSet();
+}
+
+bool Building::setDefaultConstructionSet(const DefaultConstructionSet& defaultConstructionSet)
+{
+  return getImpl<detail::Building_Impl>()->setDefaultConstructionSet(defaultConstructionSet);
+}
+
+void Building::resetDefaultConstructionSet()
+{
+  getImpl<detail::Building_Impl>()->resetDefaultConstructionSet();
+}
+
+boost::optional<DefaultScheduleSet> Building::defaultScheduleSet() const
+{
+  return getImpl<detail::Building_Impl>()->defaultScheduleSet();
+}
+
+bool Building::setDefaultScheduleSet(const DefaultScheduleSet& defaultScheduleSet)
+{
+  return getImpl<detail::Building_Impl>()->setDefaultScheduleSet(defaultScheduleSet);
+}
+
+void Building::resetDefaultScheduleSet()
+{
+  getImpl<detail::Building_Impl>()->resetDefaultScheduleSet();
+}
+
+MeterVector Building::meters() const
+{
+  return getImpl<detail::Building_Impl>()->meters();
+}
+
+OptionalFacility Building::facility() const
+{
+  return getImpl<detail::Building_Impl>()->facility();
+}
+
+SpaceVector Building::spaces() const
+{
+  return getImpl<detail::Building_Impl>()->spaces();
+}
+
+ShadingSurfaceGroupVector Building::shadingSurfaceGroups() const
+{
+  return getImpl<detail::Building_Impl>()->shadingSurfaceGroups();
+}
+
+std::vector<ThermalZone> Building::thermalZones() const
+{
+  return getImpl<detail::Building_Impl>()->thermalZones();
+}
+
+std::vector<Surface> Building::exteriorWalls() const {
+  return getImpl<detail::Building_Impl>()->exteriorWalls();
+}
+
+std::vector<Surface> Building::roofs() const {
+  return getImpl<detail::Building_Impl>()->roofs();
+}
+
+double Building::floorArea() const
+{
+  return getImpl<detail::Building_Impl>()->floorArea();
+}
+
+boost::optional<double> Building::conditionedFloorArea() const
+{
+  return getImpl<detail::Building_Impl>()->conditionedFloorArea();
+}
+
+double Building::exteriorSurfaceArea() const {
+  return getImpl<detail::Building_Impl>()->exteriorSurfaceArea();
+}
+
+double Building::exteriorWallArea() const {
+  return getImpl<detail::Building_Impl>()->exteriorWallArea();
+}
+
+double Building::airVolume() const {
+  return getImpl<detail::Building_Impl>()->airVolume();
+}
+
+double Building::numberOfPeople() const {
+  return getImpl<detail::Building_Impl>()->numberOfPeople();
+}
+
+double Building::peoplePerFloorArea() const {
+  return getImpl<detail::Building_Impl>()->peoplePerFloorArea();
+}
+
+double Building::floorAreaPerPerson() const {
+  return getImpl<detail::Building_Impl>()->floorAreaPerPerson();
+}
+
+double Building::lightingPower() const {
+  return getImpl<detail::Building_Impl>()->lightingPower();
+}
+
+double Building::lightingPowerPerFloorArea() const {
+  return getImpl<detail::Building_Impl>()->lightingPowerPerFloorArea();
+}
+
+double Building::lightingPowerPerPerson() const {
+  return getImpl<detail::Building_Impl>()->lightingPowerPerPerson();
+}
+
+double Building::electricEquipmentPower() const {
+  return getImpl<detail::Building_Impl>()->electricEquipmentPower();
+}
+
+double Building::electricEquipmentPowerPerFloorArea() const {
+  return getImpl<detail::Building_Impl>()->electricEquipmentPowerPerFloorArea();
+}
+
+double Building::electricEquipmentPowerPerPerson() const {
+  return getImpl<detail::Building_Impl>()->electricEquipmentPowerPerPerson();
+}
+
+double Building::gasEquipmentPower() const {
+  return getImpl<detail::Building_Impl>()->gasEquipmentPower();
+}
+
+double Building::gasEquipmentPowerPerFloorArea() const {
+  return getImpl<detail::Building_Impl>()->gasEquipmentPowerPerFloorArea();
+}
+
+double Building::gasEquipmentPowerPerPerson() const {
+  return getImpl<detail::Building_Impl>()->gasEquipmentPowerPerPerson();
+}
+
+double Building::infiltrationDesignFlowRate() const {
+  return getImpl<detail::Building_Impl>()->infiltrationDesignFlowRate();
+}
+
+double Building::infiltrationDesignFlowPerSpaceFloorArea() const {
+  return getImpl<detail::Building_Impl>()->infiltrationDesignFlowPerSpaceFloorArea();
+}
+
+double Building::infiltrationDesignFlowPerExteriorSurfaceArea() const {
+  return getImpl<detail::Building_Impl>()->infiltrationDesignFlowPerExteriorSurfaceArea();
+}
+
+double Building::infiltrationDesignFlowPerExteriorWallArea() const {
+  return getImpl<detail::Building_Impl>()->infiltrationDesignFlowPerExteriorWallArea();
+}
+
+double Building::infiltrationDesignAirChangesPerHour() const {
+  return getImpl<detail::Building_Impl>()->infiltrationDesignAirChangesPerHour();
+}
+
+Transformation Building::transformation() const
+{
+  return getImpl<detail::Building_Impl>()->transformation();
+}
+
+std::vector<std::vector<Point3d> > Building::generateSkylightPattern(double skylightToProjectedFloorRatio, double desiredWidth, double desiredHeight) const
+{
+  return getImpl<detail::Building_Impl>()->generateSkylightPattern(skylightToProjectedFloorRatio, desiredWidth, desiredHeight);
+}
+
+/// @cond
+Building::Building(std::shared_ptr<detail::Building_Impl> impl)
+  : ParentObject(impl)
+{}
+
+Building::Building(Model& model)
+  : ParentObject(Building::iddObjectType(),model)
+{
+  setNominalFloortoCeilingHeight(0); // TODO replace with smart default, when available
+}
+
+/// @endcond
+
+} // model
+} // openstudio
+

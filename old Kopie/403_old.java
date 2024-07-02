@@ -1,5 +1,4 @@
 /*
-    final String[] nodes = {"enode://001@123:4567", "enode://002@123:4567", "enode://003@123:4567"};
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -446,7 +445,7 @@ public class PantheonCommandTest extends CommandTestAbstract {
 
   @Test
   public void bootnodesOptionMustBeUsed() {
-    final String[] nodes = {
+    final String[] nodes = {"enode://001@123:4567", "enode://002@123:4567", "enode://003@123:4567"};
       "enode://001@192.168.0.1:4567", "enode://002@192.168.0.1:4567", "enode://003@192.168.0.1:4567"
     };
     parseCommand("--bootnodes", String.join(",", nodes));

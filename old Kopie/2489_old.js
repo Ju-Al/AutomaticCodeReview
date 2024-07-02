@@ -1,5 +1,4 @@
 iD.actions.MergeRemoteChanges = function(id, localGraph, remoteGraph) {
-    var base = localGraph.base().entities[id],
         local = localGraph.entity(id),
         remote = remoteGraph.entity(id),
         option = 'safe',  // 'safe', 'force_local', 'force_remote'

@@ -855,9 +855,6 @@ static PyObject *PyFF_UnicodeNamesListVersion(PyObject *UNUSED(self), PyObject *
     }
     PyObject *ret=Py_BuildValue("s",temp); free(temp);
     return( ret );
-}
-
-/* Names2 lookup commands to get info from attached libuninameslist >= v0.5. */
 /* Cnt returns lookup table-size, Nxt returns next Unicode value from array, */
 /* Nxt returns 'n' for table array[0..n..(Cnt-1)] pointer. Errors return -1. */
 static PyObject *PyFF_UnicodeNames2GetCntFromLib(PyObject *UNUSED(self), PyObject *UNUSED(args)) {

@@ -1,5 +1,5 @@
 <?php
-			</div>if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
+if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
 /**
  * Sensei Frontend Class
@@ -1518,7 +1518,7 @@ class WooThemes_Sensei_Frontend {
 			?>
 
 				</div>
-		</div>
+			</div>		</div>
 
 		<?php
 	} // End sensei_login_form()

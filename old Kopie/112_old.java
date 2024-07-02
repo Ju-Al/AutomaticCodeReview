@@ -147,9 +147,6 @@ public class StreamDefinition {
 		@Override
 		public void remove() {
 			throw new UnsupportedOperationException();
-		}
-
-		/**
 		 * Return whether or not this iterator is past the very first module to deploy.
 		 */
 		public boolean hasMoreDownstream() {

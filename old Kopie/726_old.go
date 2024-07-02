@@ -1,8 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-	InitialSyncDone     chan struct{}
-	initialSyncNotified uint32
-	protocolErrorLogged bool
-	lastSupportedRound  basics.Round
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -79,7 +75,10 @@ type Service struct {
 
 	// The channel gets closed when the initial sync is complete. This allows for other services to avoid
 	// the overhead of starting prematurely (before this node is caught-up and can validate messages for example).
-	InitialSyncDone              chan struct{}
+	InitialSyncDone     chan struct{}
+	initialSyncNotified uint32
+	protocolErrorLogged bool
+	lastSupportedRound  basics.Round
 	initialSyncNotified          uint32
 	protocolErrorLogged          bool
 	lastSupportedRound           basics.Round

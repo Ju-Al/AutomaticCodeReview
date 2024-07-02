@@ -1,5 +1,4 @@
 /*
-            String keyword = WebUtils.optional(request, "keyword", StringUtils.EMPTY);
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -151,7 +150,7 @@ public class CatalogController {
             List<ServiceDetailInfo> serviceDetailInfoList = new ArrayList<>();
             int pageNo = Integer.parseInt(WebUtils.required(request, "pageNo"));
             int pageSize = Integer.parseInt(WebUtils.required(request, "pageSize"));
-            String serviceName = WebUtils.optional(request, "serviceNameParam", StringUtils.EMPTY);
+            String keyword = WebUtils.optional(request, "keyword", StringUtils.EMPTY);
             String groupName = WebUtils.optional(request, "groupNameParam", StringUtils.EMPTY);
             String param = StringUtils.isBlank(serviceName) && StringUtils.isBlank(groupName) ?
                 StringUtils.EMPTY :

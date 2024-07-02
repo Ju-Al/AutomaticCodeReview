@@ -1,5 +1,4 @@
 iD.modes.SelectImage = function (context) {
-    var mode = {
         button: 'selectImage',
         id: 'selectImage',
         title: t('modes.selectImage.title'),

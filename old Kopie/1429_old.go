@@ -1,6 +1,4 @@
 package ipam
-	for i, op := range *ops {
-		if op.ForContainer(ident) {
 
 import (
 	"bytes"
@@ -128,7 +126,8 @@ func (alloc *Allocator) cancelOps(ops *[]operation) {
 // if we found any.
 func (alloc *Allocator) cancelOpsFor(ops *[]operation, ident string) bool {
 	var found bool
-	for i := 0; i < len(*ops); {
+	for i, op := range *ops {
+		if op.ForContainer(ident) {
 		if op := (*ops)[i]; op.ForContainer(ident) {
 			found = true
 			op.Cancel()

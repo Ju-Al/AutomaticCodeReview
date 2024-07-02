@@ -1,5 +1,4 @@
 import pytest
-from indy_node.utils.node_control_tool import NodeControlTool
 from plenum.test.helper import randomText
 
 

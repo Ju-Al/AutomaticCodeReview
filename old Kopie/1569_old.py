@@ -1,53 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        with self.assertRaises(ValueError):
-class _BaseHausdorffDistance(TestCase):
-    __test__ = False
-
-    def setUp(self):
-        self.random_angles = np.random.random((100,)) * np.pi * 2
-        self.random_columns = np.column_stack((self.random_angles,
-                                               self.random_angles,
-                                               np.zeros((100,))))
-        self.random_columns[...,0] = np.cos(self.random_columns[...,0])
-        self.random_columns[...,1] = np.sin(self.random_columns[...,1])
-        self.random_columns_2 = np.column_stack((self.random_angles,
-                                                 self.random_angles,
-                                                 np.zeros((100,))))
-        self.random_columns_2[1:,0] = np.cos(self.random_columns_2[1:,0]) * 2.0
-        self.random_columns_2[1:,1] = np.sin(self.random_columns_2[1:,1]) * 2.0
-        self.random_columns_2[0,0] = np.cos(self.random_columns_2[0,0]) * 3.3
-        self.random_columns_2[0,1] = np.sin(self.random_columns_2[0,1]) * 3.3
-        self.path_1 = self.random_columns
-        self.path_2 = self.random_columns_2
-
-    def tearDown(self):
-        del self.random_angles
-        del self.random_columns
-        del self.random_columns_2
-        del self.path_1
-        del self.path_2
-
-    def test_symmetry(self):
-        forward = self.h(self.path_1, self.path_2)
-        reverse = self.h(self.path_2, self.path_1)
-    def test_hausdorff_value(self):
-        actual = self.h(self.path_1, self.path_2)
-        assert_almost_equal(actual, self.expected,
-                            decimal=2)
-    __test__ = True
-    def setUp(self):
-        super(TestHausdorffSymmetric, self).setUp()
-        self.h = PSA.hausdorff
-        # radii differ by ~ 2.3 for outlier
-        self.expected = 2.3
-    __test__ = True
-    def setUp(self):
-        super(TestWeightedAvgHausdorffSymmetric, self).setUp()
-        self.h = PSA.hausdorff_wavg
-        self.distance_matrix = scipy.spatial.distance.cdist(self.path_1,
-                                                            self.path_2)
-        self.expected = (np.mean(np.amin(self.distance_matrix, axis=0)) +
-                         np.mean(np.amin(self.distance_matrix, axis = 1))) / 2.
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -223,7 +174,55 @@ class TestPSAExceptions(object):
             PSA.dist_mat_to_vec(5, '6', '7')
         assert 'all must be of type int' in str(err.value)
 
-        with pytest.raises(ValueError):
+class _BaseHausdorffDistance(TestCase):
+    __test__ = False
+
+    def setUp(self):
+        self.random_angles = np.random.random((100,)) * np.pi * 2
+        self.random_columns = np.column_stack((self.random_angles,
+                                               self.random_angles,
+                                               np.zeros((100,))))
+        self.random_columns[...,0] = np.cos(self.random_columns[...,0])
+        self.random_columns[...,1] = np.sin(self.random_columns[...,1])
+        self.random_columns_2 = np.column_stack((self.random_angles,
+                                                 self.random_angles,
+                                                 np.zeros((100,))))
+        self.random_columns_2[1:,0] = np.cos(self.random_columns_2[1:,0]) * 2.0
+        self.random_columns_2[1:,1] = np.sin(self.random_columns_2[1:,1]) * 2.0
+        self.random_columns_2[0,0] = np.cos(self.random_columns_2[0,0]) * 3.3
+        self.random_columns_2[0,1] = np.sin(self.random_columns_2[0,1]) * 3.3
+        self.path_1 = self.random_columns
+        self.path_2 = self.random_columns_2
+
+    def tearDown(self):
+        del self.random_angles
+        del self.random_columns
+        del self.random_columns_2
+        del self.path_1
+        del self.path_2
+
+    def test_symmetry(self):
+        forward = self.h(self.path_1, self.path_2)
+        reverse = self.h(self.path_2, self.path_1)
+    def test_hausdorff_value(self):
+        actual = self.h(self.path_1, self.path_2)
+        assert_almost_equal(actual, self.expected,
+                            decimal=2)
+    __test__ = True
+    def setUp(self):
+        super(TestHausdorffSymmetric, self).setUp()
+        self.h = PSA.hausdorff
+        # radii differ by ~ 2.3 for outlier
+        self.expected = 2.3
+    __test__ = True
+    def setUp(self):
+        super(TestWeightedAvgHausdorffSymmetric, self).setUp()
+        self.h = PSA.hausdorff_wavg
+        self.distance_matrix = scipy.spatial.distance.cdist(self.path_1,
+                                                            self.path_2)
+        self.expected = (np.mean(np.amin(self.distance_matrix, axis=0)) +
+                         np.mean(np.amin(self.distance_matrix, axis = 1))) / 2.
+        with self.assertRaises(ValueError):
             PSA.dist_mat_to_vec(5, float(6), 7)
 
 

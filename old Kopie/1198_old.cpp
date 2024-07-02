@@ -1,5 +1,4 @@
 /*
-
  //@HEADER
  // ************************************************************************
  //
@@ -269,7 +268,7 @@ void initialize() {
       beginDeepCopyCallee = *((beginDeepCopyFunction*) &p13);
       auto p14 = dlsym(firstProfileLibrary, "kokkosp_end_deep_copy");
       endDeepCopyCallee = *((endDeepCopyFunction*) &p14);
-      
+
       auto p15 = dlsym(firstProfileLibrary, "kokkosp_create_profile_section");
       createSectionCallee = *((createProfileSectionFunction*) &p15);
       auto p16 = dlsym(firstProfileLibrary, "kokkosp_start_profile_section");

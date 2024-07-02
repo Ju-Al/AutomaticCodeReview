@@ -1,5 +1,4 @@
 /******************************************************************************
-        QString group = data->getGroup();
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -162,7 +161,7 @@ void QDisplayPropertyWidget::addComponent(const QString& component, core::object
             continue;
 
         // for each data of the current object we determine where it belongs
-        QString group = data->getGroup().c_str();
+        QString group = data->getGroup();
 
         // use the default group if data does not belong to any group
         if(group.isEmpty())

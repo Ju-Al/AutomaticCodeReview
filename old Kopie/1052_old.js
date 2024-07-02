@@ -1,16 +1,4 @@
 import MarkdownIt from 'markdown-it'
-    try {
-      output = runCodeWithLanguage(state.loadedLanguages[evalLanguageId], code)
-    } catch (e) {
-      output = e
-      // evalStatus = 'ERROR'
-    }
-    // clear the console input and text cache immediately after eval
-    dispatch(updateConsoleText(''))
-    dispatch({ type: 'CLEAR_CONSOLE_TEXT_CACHE' })
-    const updateAfterEvaluation = () => {
-    const evaluation = Promise.resolve()
-      .then(updateAfterEvaluation)
 import MarkdownItKatex from 'markdown-it-katex'
 import MarkdownItAnchor from 'markdown-it-anchor'
 
@@ -164,8 +152,19 @@ export function evalConsoleInput(languageId) {
 
     // dispatch(temporarilySaveRunningCellID(cell.id))
     dispatch(incrementExecutionNumber())
+    try {
+      output = runCodeWithLanguage(state.loadedLanguages[evalLanguageId], code)
+    } catch (e) {
+      output = e
+      // evalStatus = 'ERROR'
+    }
+    // clear the console input and text cache immediately after eval
+    dispatch(updateConsoleText(''))
+    dispatch({ type: 'CLEAR_CONSOLE_TEXT_CACHE' })
 
-    const updateAfterEvaluation = (output) => {
+    const evaluation = Promise.resolve()
+      .then(updateAfterEvaluation)
+    const updateAfterEvaluation = () => {
       // const cellProperties = { rendered: true }
       // if (evalStatus === 'ERROR') {
       //   cellProperties.evalStatus = evalStatus

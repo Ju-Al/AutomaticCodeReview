@@ -1,7 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-        type_name = Column(get_string_by_dialect(dbengine.dialect.name, 512),
-            get_string_by_dialect(dbengine.dialect.name, 512),
-        name = Column(String(256), nullable=False)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -325,7 +322,9 @@ def define_model(model_name, dbengine, model_seed):
         cai_resource_name = Column(String(4096))
         cai_resource_type = Column(String(512))
         full_name = Column(String(2048), nullable=False)
-        type_name = Column(get_string_by_dialect(dbengine.dialect.name, 700),
+            get_string_by_dialect(dbengine.dialect.name, 512),
+        name = Column(String(256), nullable=False)
+        type_name = Column(get_string_by_dialect(dbengine.dialect.name, 512),
                            primary_key=True)
         parent_type_name = Column(
             get_string_by_dialect(dbengine.dialect.name, 700),

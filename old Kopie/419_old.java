@@ -1,6 +1,4 @@
 /*
-                // TODO(dfox): apply this to all source sets, not just 'main' and 'test'
-                java.target("src/main/java/**/*.java", "src/main/test/**/*.java");
  * (c) Copyright 2018 Palantir Technologies Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +31,8 @@ class BaselineFormat extends AbstractBaselinePlugin {
             project.getPluginManager().apply("com.diffplug.gradle.spotless");
 
             project.getExtensions().getByType(SpotlessExtension.class).java(java -> {
-                Object[] allJavaFiles = project
+                // TODO(dfox): apply this to all source sets, not just 'main' and 'test'
+                java.target("src/main/java/**/*.java", "src/main/test/**/*.java");
                         .getConvention()
                         .getPlugin(JavaPluginConvention.class)
                         .getSourceSets()

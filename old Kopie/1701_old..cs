@@ -20,7 +20,6 @@
         public static bool EncodingEnabled { get; set; }
 
         /// <summary>
-        /// Gets or sets whether there sdould be indentation and newlines, for XML responses.
         /// </summary>
         public static bool IncludeWhiteSpace { get; set; }
 

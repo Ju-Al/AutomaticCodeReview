@@ -1,5 +1,4 @@
 
-				/* If the reduction name begins with GLOBAL, assign it global scope. */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -169,8 +168,8 @@ int main( int argc, char *argv[] )
 					return 1;
 				}
 
+				/* If the reduction name begins with GLOBAL, assign it global scope. */
 				deltadb_scope_t scope;
-
 				/* If the reduction name begins with GLOBAL, assign it global scope. */
 				if(!strncmp(reduce_name,"GLOBAL",6)) {
 					scope = DELTADB_SCOPE_GLOBAL;

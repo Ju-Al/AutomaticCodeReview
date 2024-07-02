@@ -270,7 +270,6 @@ class PolygonMasks(BaseInstanceMasks):
             assert isinstance(masks[0], list)
             assert isinstance(masks[0][0], np.ndarray)
 
-        for poly_per_obj in masks:
             for part in poly_per_obj:
                 assert part[0::2].max().round() <= width
                 assert part[1::2].max().round() <= height

@@ -1,6 +1,4 @@
 /******************************************************************************
-  auto negate_pred = [](predicate p) { return negation{expression{p}}; };
-  auto negate_expr = [](expression expr) { return negation{expr}; };
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -183,7 +181,8 @@ static auto make_expression_parser() {
     return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
   };
   auto ws = ignore(*parsers::space);
-  auto negate_expr = [](expression expr) { return negation{std::move(expr)}; };
+  auto negate_pred = [](predicate p) { return negation{expression{p}}; };
+  auto negate_expr = [](expression expr) { return negation{expr}; };
   rule<Iterator, expression> expr;
   rule<Iterator, expression> group;
   // clang-format off

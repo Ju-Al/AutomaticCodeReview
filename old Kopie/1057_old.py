@@ -1,6 +1,5 @@
 from unittest import TestCase
 
-    """ZiplineTestCase mixing providing cls.log_handler as an instance-level
 from contextlib2 import ExitStack
 from logbook import NullHandler
 import pandas as pd
@@ -126,7 +125,7 @@ class ZiplineTestCase(with_metaclass(FinalMeta, TestCase)):
 
 
 class WithLogger(object):
-    """
+    """ZiplineTestCase mixing providing cls.log_handler as an instance-level
     ZiplineTestCase mixing providing cls.log_handler as an instance-level
     fixture.
 

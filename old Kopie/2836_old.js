@@ -1,9 +1,4 @@
 // Sandstorm - Personal Cloud Sandbox
-  socket.send(message, 0, message.length, 8080, SANDCATS_HOSTNAME, (err) => {
-    if (err) {
-      console.error("Couldn't send UDP sandcats ping", err);
-    }
-  });
 // Copyright (c) 2014 Sandstorm Development Group, Inc. and contributors
 // All rights reserved.
 //
@@ -68,7 +63,11 @@ const pingUdp = () => {
     }
   });
 
-  socket.bind({ address: process.env.BIND_IP }, () => {
+  socket.send(message, 0, message.length, 8080, SANDCATS_HOSTNAME, (err) => {
+    if (err) {
+      console.error("Couldn't send UDP sandcats ping", err);
+    }
+  });
     socket.send(message, 0, message.length, 8080, SANDCATS_HOSTNAME, (err) => {
       if (err) {
         console.error("Couldn't send UDP sandcats ping", err);

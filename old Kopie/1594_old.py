@@ -1,5 +1,4 @@
 # Copyright 2018 Microsoft Corporation
-    def test_if_extensions_root_slice_is_created(self):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -304,7 +303,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    def test_if_extensions_root_slice_is_created(self):
     def test_it_should_create_extensions_root_slice(self):
         SystemdCgroupsApi().create_extension_cgroups_root()
 

@@ -34,7 +34,6 @@ func TestEmptyEncoding(t *testing.T) {
 	var b bundle
 	require.Equal(t, 1, len(protocol.Encode(&b)))
 }
-
 func TestEncodings(t *testing.T) {
 	protocol.RunEncodingTest(t, &unauthenticatedVote{})
 	// protocol.RunEncodingTest(t, &unauthenticatedBundle{})

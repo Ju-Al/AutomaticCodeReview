@@ -44,8 +44,6 @@ def _init_rpc(ip_config, num_servers, max_queue_size, net_type, role, num_thread
         print(e, flush=True)
         traceback.print_exc()
         raise e
-
-
 class MpCommand(Enum):
     """Enum class for multiprocessing command"""
     INIT_RPC = 0  # Not used in the task queue

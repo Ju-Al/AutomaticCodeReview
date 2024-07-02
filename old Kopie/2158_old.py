@@ -1,286 +1,237 @@
-# -*- coding: utf-8 -*-
-"""Delimiter separated values (DSV) parser interface."""
+import asyncio
+import base64
+import copy
+import os
+import subprocess
 
-from __future__ import unicode_literals
+from aiohttp import web
+from multidict import CIMultiDict
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-import abc
-import csv
+from app.service.interfaces.i_file_svc import FileServiceInterface
+from app.utility.base_service import BaseService
+from app.utility.payload_encoder import xor_file, xor_bytes
 
-from dfvfs.helpers import text_file
-
-from plaso.lib import errors
-from plaso.lib import line_reader_file
-from plaso.lib import py2to3
-from plaso.lib import specification
-from plaso.parsers import interface
-
-
-# The Python 2 version of the csv module does not support Unicode input
-# and we cannot use dfvfs.TextFile. csv.DictReader requires a file-like
-# object that implements readline. BinaryLineReader provides readline on top
-# of dfvfs.FileIO objects.
+FILE_ENCRYPTION_FLAG = '%encrypted%'
 
 
-class DSVParser(interface.FileObjectParser):
-  """Delimiter separated values (DSV) parser interface."""
+class FileSvc(FileServiceInterface, BaseService):
 
-  # A list that contains the names of all the fields in the log file. This
-  # needs to be defined by each DSV parser.
-  COLUMNS = []
+    def __init__(self):
+        self.log = self.add_service('file_svc', self)
+        self.data_svc = self.get_service('data_svc')
+        self.special_payloads = dict()
+        self.encryptor = self._get_encryptor()
+        self.encrypt_output = False if self.get_config('encrypt_files') is False else True
+        self.packers = dict()
 
-  # The default delimiter is a comma, but a tab, pipe or other character are
-  # known to be used. Note the delimiter must be a byte string otherwise csv
-  # module can raise a TypeError indicating that "delimiter" must be a single
-  # character string.
-  DELIMITER = b','
+    async def get_file(self, headers):
+        headers = CIMultiDict(headers)
+        if 'file' not in headers:
+            raise KeyError('File key was not provided')
 
-  # If there is a header before the lines start it can be defined here, and
-  # the number of header lines that need to be skipped before the parsing
-  # starts.
-  NUMBER_OF_HEADER_LINES = 0
+        packer = None
+        display_name = payload = headers.get('file')
+        if ':' in payload:
+            _, display_name = packer, payload = payload.split(':')
+            headers['file'] = payload
+        if any(payload.endswith(x) for x in [y for y in self.special_payloads if y.startswith('.')]):
+            payload, display_name = await self._operate_extension(payload, headers)
+        if self.is_uuid4(payload):
+            payload, display_name = self.get_payload_name_from_uuid(payload)
+        if payload in self.special_payloads:
+            payload, display_name = await self.special_payloads[payload](headers)
+        file_path, contents = await self.read_file(payload)
+        if packer:
+            if packer in self.packers:
+                file_path, contents = await self.get_payload_packer(packer).pack(file_path, contents)
+            else:
+                self.log.warning('packer <%s> not available for payload <%s>, returning unpacked' % (packer, payload))
+        if headers.get('xor_key'):
+            xor_key = headers['xor_key']
+            contents = xor_bytes(contents, xor_key.encode())
+        if headers.get('name'):
+            display_name = headers.get('name')
+        if file_path.endswith('.xored'):
+            display_name = file_path.replace('.xored', '')
+            display_name = self.remove_xored_extension(file_path)
+        return file_path, contents, display_name
 
-  # If there is a special quote character used inside the structured text
-  # it can be defined here.
-  QUOTE_CHAR = b'"'
+    async def save_file(self, filename, payload, target_dir, encrypt=True):
+        self._save(os.path.join(target_dir, filename), payload, encrypt)
 
-  # The maximum size of a single field in the parser
-  FILE_SIZE_LIMIT = csv.field_size_limit()
+    async def create_exfil_sub_directory(self, dir_name):
+        path = os.path.join(self.get_config('exfil_dir'), dir_name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return path
 
-  # Value that should not appear inside the file, made to test the actual
-  # file to see if it confirms to standards.
-  _MAGIC_TEST_STRING = b'RegnThvotturMeistarans'
+    async def save_multipart_file_upload(self, request, target_dir):
+        try:
+            reader = await request.multipart()
+            while True:
+                field = await reader.next()
+                if not field:
+                    break
+                _, filename = os.path.split(field.filename)
+                await self.save_file(filename, bytes(await field.read()), target_dir)
+                self.log.debug('Uploaded file %s/%s' % (target_dir, filename))
+            return web.Response()
+        except Exception as e:
+            self.log.debug('Exception uploading file: %s' % e)
 
-  # Maximum supported file size of 16 MiB.
-  _MAXIMUM_SUPPORTED_FILE_SIZE = 16 * 1024 * 1024
+    async def find_file_path(self, name, location=''):
+        for plugin in await self.data_svc.locate('plugins', match=dict(enabled=True)):
+            for subd in ['', 'data']:
+                file_path = await self.walk_file_path(os.path.join('plugins', plugin.name, subd, location), name)
+                if file_path:
+                    return plugin.name, file_path
+        file_path = await self.walk_file_path(os.path.join('data'), name)
+        if file_path:
+            return None, file_path
+        return None, await self.walk_file_path('%s' % location, name)
 
-  def __init__(self, encoding=None):
-    """Initializes a delimiter separated values (DSV) parser.
+    async def read_file(self, name, location='payloads'):
+        _, file_name = await self.find_file_path(name, location=location)
+        if file_name:
+            if file_name.endswith('.xored'):
+                return name, xor_file(file_name)
+            return name, self._read(file_name)
+        raise FileNotFoundError
 
-    Args:
-      encoding (Optional[str]): encoding used in the DSV file, where None
-          indicates the codepage of the parser mediator should be used.
-    """
-    super(DSVParser, self).__init__()
-    self._encoding = encoding
-    self._maximum_line_length = len(self.COLUMNS) * self.FILE_SIZE_LIMIT
+    def read_result_file(self, link_id, location='data/results'):
+        buf = self._read(os.path.join(location, link_id))
+        return buf.decode('utf-8')
 
-  def _ConvertRowToUnicode(self, parser_mediator, row):
-    """Converts all strings in a DSV row dict to Unicode.
+    def write_result_file(self, link_id, output, location='data/results'):
+        output = bytes(output, encoding='utf-8')
+        self._save(os.path.join(location, link_id), output)
 
-    Args:
-      parser_mediator (ParserMediator): mediates interactions between parsers
-          and other components, such as storage and dfvfs.
-      row (dict[str, bytes]): a row from a DSV file, where the dictionary
-          key contains the column name and the value a binary string.
+    async def add_special_payload(self, name, func):
+        """
+        Call a special function when specific payloads are downloaded
 
-    Returns:
-      dict[str, str]: a row from the DSV file, where the dictionary key
-          contains the column name and the value a Unicode string.
-    """
-    for key, value in iter(row.items()):
-      if isinstance(value, py2to3.UNICODE_TYPE):
-        continue
+        :param name:
+        :param func:
+        :return:
+        """
+        if callable(func):  # Check to see if the passed function is already a callable function
+            self.special_payloads[name] = func
 
-      try:
-        row[key] = value.decode(self._encoding)
-      except UnicodeDecodeError:
-        replaced_value = value.decode(self._encoding, errors='replace')
-        parser_mediator.ProduceExtractionError(
-            'error decoding DSV value: {0:s} as {1:s}, characters have been '
-            'replaced in {2:s}'.format(key, self._encoding, replaced_value))
-        row[key] = replaced_value
+    async def compile_go(self, platform, output, src_fle, arch='amd64', ldflags='-s -w', cflags='', buildmode='',
+                         build_dir='.', loop=None):
+        env = copy.copy(os.environ)
+        env['GOARCH'] = arch
+        env['GOOS'] = platform
+        if cflags:
+            for cflag in cflags.split(' '):
+                name, value = cflag.split('=')
+                env[name] = value
 
-    return row
+        args = ['go', 'build']
+        if buildmode:
+            args.append(buildmode)
+        if ldflags:
+            args.extend(['-ldflags', "{}".format(ldflags)])
 
-  def _CreateDictReader(self, line_reader):
-    """Returns a reader that processes each row and yields dictionaries.
+        args.extend(['-o', output, src_fle])
 
-    csv.DictReader does this job well for single-character delimiters; parsers
-    that need multi-character delimiters need to override this method.
+        loop = loop if loop else asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, lambda: subprocess.check_output(args, cwd=build_dir, env=env))
+        except subprocess.CalledProcessError as e:
+            self.log.warning('Problem building golang executable {}: {} '.format(src_fle, e))
 
-    Args:
-      line_reader (iter): yields lines from a file-like object.
+    def get_payload_name_from_uuid(self, payload):
+        for t in ['standard_payloads', 'special_payloads']:
+            for k, v in self.get_config(prop=t, name='payloads').items():
+                if v['id'] == payload:
+                    if v.get('obfuscation_name'):
+                        return k, v['obfuscation_name'][0]
+                    return k, k
+        return payload, payload
 
-    Returns:
-      iter: a reader of dictionaries, as returned by csv.DictReader().
-    """
-    delimiter = self.DELIMITER
-    quotechar = self.QUOTE_CHAR
-    magic_test_string = self._MAGIC_TEST_STRING
-    # Python 3 csv module requires arguments to constructor to be of type str.
-    if py2to3.PY_3:
-      delimiter = delimiter.decode(self._encoding)
-      quotechar = quotechar.decode(self._encoding)
-      magic_test_string = magic_test_string.decode(self._encoding)
+    def get_payload_packer(self, packer):
+        return self.packers[packer].Packer(self)
 
-    return csv.DictReader(
-        line_reader, delimiter=delimiter, fieldnames=self.COLUMNS,
-        quotechar=quotechar, restkey=magic_test_string,
-        restval=magic_test_string)
+    def list_exfilled_files(self, startdir=None):
+        if not startdir:
+            startdir = self.get_config('exfil_dir')
+        if not os.path.exists(startdir):
+            return dict()
 
-  # pylint: disable=missing-return-type-doc
-  def _CreateLineReader(self, file_object):
-    """Returns an object that returns lines from a text file.
+        exfil_files = dict()
+        exfil_folders = [f.path for f in os.scandir(startdir) if f.is_dir()]
+        for d in exfil_folders:
+            exfil_key = d.split(os.sep)[-1]
+            exfil_files[exfil_key] = {}
+            for file in [f.path for f in os.scandir(d) if f.is_file()]:
+                exfil_files[exfil_key][file.split(os.sep)[-1]] = file
+        return exfil_files
 
-    The line reader is advanced to the beginning of the DSV content, skipping
-    any header lines.
+    @staticmethod
+    async def walk_file_path(path, target):
+        for root, _, files in os.walk(path):
+            if target in files:
+                return os.path.join(root, target)
+            xored_target = FileSvc.add_xored_extension(target)
+            if xored_target in files:
+                return os.path.join(root, xored_target)
+        return None
 
-    Args:
-      file_object (dfvfs.FileIO): file-like object.
+    @staticmethod
+    def remove_xored_extension(filename):
+        if FileSvc.is_extension_xored(filename):
+            return filename.replace('.xored', '')
+        return filename
 
-    Returns:
-      TextFile|BinaryLineReader: an object that implements an iterator
-          over lines in a text file.
+    @staticmethod
+    def is_extension_xored(filename):
+        return filename.endswith('.xored')
 
-    Raises:
-      UnicodeDecodeError: if the file cannot be read with the specified
-          encoding.
-    """
-    # The Python 2 csv module reads bytes and the Python 3 csv module Unicode
-    # reads strings.
-    if py2to3.PY_3:
-      line_reader = text_file.TextFile(file_object, encoding=self._encoding)
-    else:
-      line_reader = line_reader_file.BinaryLineReader(file_object)
-    # If we specifically define a number of lines we should skip, do that here.
-    for _ in range(0, self.NUMBER_OF_HEADER_LINES):
-      try:
-        line_reader.readline(self._maximum_line_length)
-      except UnicodeDecodeError:
-        raise
-    return line_reader
+    @staticmethod
+    def add_xored_extension(filename):
+        if FileSvc.is_extension_xored(filename):
+            return filename
+        return '%s.xored' % filename
 
-  def _HasExpectedLineLength(self, file_object):
-    """Determines if a file begins with lines of the expected length.
+    """ PRIVATE """
 
-    As we know the maximum length of valid lines in the DSV file, the presence
-    of lines longer than this indicates that the file will not be parsed
-    successfully, without reading excessive data from a large file.
+    def _save(self, filename, content, encrypt=True):
+        if encrypt and (self.encryptor and self.encrypt_output):
+            content = bytes(FILE_ENCRYPTION_FLAG, 'utf-8') + self.encryptor.encrypt(content)
+        with open(filename, 'wb') as f:
+            f.write(content)
 
-    Args:
-      file_object (dfvfs.FileIO): file-like object.
+    def _read(self, filename):
+        with open(filename, 'rb') as f:
+            buf = f.read()
+        if self.encryptor and buf.startswith(bytes(FILE_ENCRYPTION_FLAG, encoding='utf-8')):
+            buf = self.encryptor.decrypt(buf[len(FILE_ENCRYPTION_FLAG):])
+        return buf
 
-    Returns:
-        bool: True if the file has lines of the expected length.
-    """
-    original_file_position = file_object.tell()
-    line_reader = self._CreateLineReader(file_object)
-    for _ in range(0, 20):
-      # Attempt to read a line that twice as long as any line that should be in
-      # the file.
-      sample_line = line_reader.readline(self._maximum_line_length * 2)
-      if len(sample_line) > self._maximum_line_length:
-        file_object.seek(original_file_position)
-        return False
-    file_object.seek(original_file_position)
-    return True
+    def _get_encryptor(self):
+        generated_key = PBKDF2HMAC(algorithm=hashes.SHA256(),
+                                   length=32,
+                                   salt=bytes(self.get_config('crypt_salt'), 'utf-8'),
+                                   iterations=2 ** 20,
+                                   backend=default_backend())
+        return Fernet(base64.urlsafe_b64encode(generated_key.derive(bytes(self.get_config('encryption_key'), 'utf-8'))))
 
-  @classmethod
-  def GetFormatSpecification(cls):
-    """Retrieves the format specification.
+    async def _operate_extension(self, payload, headers):
+        try:
+            target = '.' + payload.split('.')[-1]
+            return await self.special_payloads[target](self.get_services(), headers)
+        except Exception as e:
+            self.log.error('Error loading extension handler=%s, %s' % (payload, e))
 
-    Returns:
-      FormatSpecification: format specification.
-    """
-    return specification.FormatSpecification(cls.NAME, text_format=True)
 
-  def ParseFileObject(self, parser_mediator, file_object):
-    """Parses a DSV text file-like object.
+def _go_vars(arch, platform):
+    return '%s GOARCH=%s %s GOOS=%s' % (_get_header(), arch, _get_header(), platform)
 
-    Args:
-      parser_mediator (ParserMediator): mediates interactions between parsers
-          and other components, such as storage and dfvfs.
-      file_object (dfvfs.FileIO): file-like object.
 
-    Raises:
-      UnableToParseFile: when the file cannot be parsed.
-    """
-    # TODO: Replace this with detection of the file encoding via byte-order
-    # marks. Also see: https://github.com/log2timeline/plaso/issues/1971
-    if not self._encoding:
-      self._encoding = parser_mediator.codepage
-
-    try:
-      if not self._HasExpectedLineLength(file_object):
-        display_name = parser_mediator.GetDisplayName()
-        raise errors.UnableToParseFile(
-            '[{0:s}] Unable to parse DSV file: {1:s} with error: '
-            'unexpected line length.'.format(
-                self.NAME, display_name))
-    except UnicodeDecodeError as exception:
-      display_name = parser_mediator.GetDisplayName()
-      raise errors.UnableToParseFile(
-          '[{0:s}] Unable to parse DSV file: {1:s} with error: {2!s}.'.format(
-              self.NAME, display_name, exception))
-
-    try:
-      line_reader = self._CreateLineReader(file_object)
-      reader = self._CreateDictReader(line_reader)
-      row_offset = line_reader.tell()
-      row = next(reader)
-    except (StopIteration, csv.Error, UnicodeDecodeError) as exception:
-      display_name = parser_mediator.GetDisplayName()
-      raise errors.UnableToParseFile(
-          '[{0:s}] Unable to parse DSV file: {1:s} with error: {2!s}.'.format(
-              self.NAME, display_name, exception))
-
-    number_of_columns = len(self.COLUMNS)
-    number_of_records = len(row)
-
-    if number_of_records != number_of_columns:
-      display_name = parser_mediator.GetDisplayName()
-      raise errors.UnableToParseFile((
-          '[{0:s}] Unable to parse DSV file: {1:s}. Wrong number of '
-          'records (expected: {2:d}, got: {3:d})').format(
-              self.NAME, display_name, number_of_columns,
-              number_of_records))
-
-    for key, value in row.items():
-      if self._MAGIC_TEST_STRING in (key, value):
-        display_name = parser_mediator.GetDisplayName()
-        raise errors.UnableToParseFile((
-            '[{0:s}] Unable to parse DSV file: {1:s}. Signature '
-            'mismatch.').format(self.NAME, display_name))
-
-    row = self._ConvertRowToUnicode(parser_mediator, row)
-
-    if not self.VerifyRow(parser_mediator, row):
-      display_name = parser_mediator.GetDisplayName()
-      raise errors.UnableToParseFile((
-          '[{0:s}] Unable to parse DSV file: {1:s}. Verification '
-          'failed.').format(self.NAME, display_name))
-
-    self.ParseRow(parser_mediator, row_offset, row)
-    row_offset = line_reader.tell()
-
-    for row in reader:
-      if parser_mediator.abort:
-        break
-      row = self._ConvertRowToUnicode(parser_mediator, row)
-      self.ParseRow(parser_mediator, row_offset, row)
-      row_offset = line_reader.tell()
-
-  @abc.abstractmethod
-  def ParseRow(self, parser_mediator, row_offset, row):
-    """Parses a line of the log file and produces events.
-
-    Args:
-      parser_mediator (ParserMediator): mediates interactions between parsers
-          and other components, such as storage and dfvfs.
-      row_offset (int): offset of the row.
-      row (dict[str, str]): fields of a single row, as specified in COLUMNS.
-    """
-
-  # pylint: disable=redundant-returns-doc
-  @abc.abstractmethod
-  def VerifyRow(self, parser_mediator, row):
-    """Verifies if a line of the file is in the expected format.
-
-    Args:
-      parser_mediator (ParserMediator): mediates interactions between parsers
-          and other components, such as storage and dfvfs.
-      row (dict[str, str]): fields of a single row, as specified in COLUMNS.
-
-    Returns:
-      bool: True if this is the correct parser, False otherwise.
-    """
+def _get_header():
+    return 'SET' if os.name == 'nt' else ''

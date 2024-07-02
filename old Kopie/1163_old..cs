@@ -1,10 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                using (IScoped<ISearchService> searchService = _searchServiceFactory())
-                    searchResult = await searchService.Value.SearchAsync(
-                        resourceType: null,
-                        queryParametersList,
-                        cancellationToken);
-                if (_exportJobRecord.ExportType == ExportJobType.Patient)
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -214,7 +208,10 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                 SearchResult searchResult = null;
 
                 // Search and process the results.
-                switch (_exportJobRecord.ExportType)
+                    searchResult = await searchService.Value.SearchAsync(
+                        resourceType: null,
+                if (_exportJobRecord.ExportType == ExportJobType.Patient)
+                        queryParametersList,
                 {
                     case ExportJobType.All:
                     case ExportJobType.Patient:

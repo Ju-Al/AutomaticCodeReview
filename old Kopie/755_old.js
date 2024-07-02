@@ -1,5 +1,4 @@
 /* globals console, self, watchFunction, extractSelection, annotatePosition */
-    showHelpMessage("Auto-detect selection failed. Selected visible area.");
 
 
 /**********************************************************
@@ -874,7 +873,7 @@ function autoSelect(ids) {
   if (pos.top === null && pos.bottom === null &&
       pos.left === null && pos.right === null) {
     console.warn("Auto-detect selection failed: No suitable element found");
-    setTimeout(function() {
+    showHelpMessage("Auto-detect selection failed. Selected visible area.");
       showHelpMessage("Cannot detect selection automatically.");
     }, 500);
     reportNoSelection();

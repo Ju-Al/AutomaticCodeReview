@@ -1,5 +1,4 @@
 """
-    return [_define_word(course, word, reverse) for word in sentence.split()]
     This file contains functions that deal with the data structures
     required to provide data for the mini-dictionary feature.
 
@@ -62,5 +61,5 @@ def _define_words_in_sentence(course, sentence, reverse):
     """
     Converts a sentence into a list of definition objects.
     """
-    words = [p for p in re.split("( |\\{.*?\\}|'.*?')", sentence) if p.strip(' {}')]
+    return [_define_word(course, word, reverse) for word in sentence.split()]
     return [_define_word(course, word.strip(' {}'), reverse) for word in words]

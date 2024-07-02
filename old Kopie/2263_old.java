@@ -272,7 +272,6 @@ public class AccountActivity extends ThemedActivity implements AccountContract.V
                     break;
 
                 case DROPBOX:
-                    if(CLOUDRAIL_APP_KEY==null || CLOUDRAIL_APP_KEY=="")
                     {
                         Toast.makeText(getContext(),R.string.Cloudrail_License_key,Toast.LENGTH_SHORT).show();
                     }

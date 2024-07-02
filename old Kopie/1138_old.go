@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-func TestEncodedAccountAssetsAllocationBound(t *testing.T) {
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,156 +14,102 @@ func TestEncodedAccountAssetsAllocationBound(t *testing.T) {
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package basics
+package transactions
 
 import (
-	"fmt"
-	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/stretchr/testify/require"
 )
 
-func TestEmptyEncoding(t *testing.T) {
-	var ub BalanceRecord
-	require.Equal(t, 1, len(protocol.Encode(&ub)))
+var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
+// mock balances that support looking up particular balance records
+type keyregTestBalances struct {
+	addrs   map[basics.Address]basics.BalanceRecord
+	version protocol.ConsensusVersion
 }
 
-func TestRewards(t *testing.T) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	accountAlgos := []MicroAlgos{MicroAlgos{Raw: 0}, MicroAlgos{Raw: 8000}, MicroAlgos{Raw: 13000}, MicroAlgos{Raw: 83000}}
-	for _, accountAlgo := range accountAlgos {
-		ad := AccountData{
-			Status:             Online,
-			MicroAlgos:         accountAlgo,
-			RewardsBase:        100,
-			RewardedMicroAlgos: MicroAlgos{Raw: 25},
-		}
-
-		levels := []uint64{uint64(0), uint64(1), uint64(30), uint64(3000)}
-		for _, level := range levels {
-			money, rewards := ad.Money(proto, ad.RewardsBase+level)
-			require.Equal(t, money.Raw, ad.MicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
-			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
-		}
-	}
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+	return balances.addrs[addr], nil
 }
 
-func TestWithUpdatedRewardsPanics(t *testing.T) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	t.Run("AlgoPanic", func(t *testing.T) {
-		paniced := false
-		func() {
-			defer func() {
-				if err := recover(); err != nil {
-					if strings.Contains(fmt.Sprintf("%v", err), "overflowed account balance when applying rewards") {
-						paniced = true
-					} else {
-						panic(err)
-					}
-				}
-			}()
-			a := AccountData{
-				Status:             Online,
-				MicroAlgos:         MicroAlgos{Raw: ^uint64(0)},
-				RewardedMicroAlgos: MicroAlgos{Raw: 0},
-				RewardsBase:        0,
-			}
-			a.WithUpdatedRewards(proto, 100)
-		}()
-		require.Equal(t, true, paniced)
-	})
-
-	t.Run("RewardsOverflow", func(t *testing.T) {
-		a := AccountData{
-			Status:             Online,
-			MicroAlgos:         MicroAlgos{Raw: 80000000},
-			RewardedMicroAlgos: MicroAlgos{Raw: ^uint64(0)},
-			RewardsBase:        0,
-		}
-		b := a.WithUpdatedRewards(proto, 100)
-		require.Equal(t, 100*a.MicroAlgos.RewardUnits(proto)-1, b.RewardedMicroAlgos.Raw)
-	})
+func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
 }
 
-func makeString(len int) string {
-	s := ""
-	for i := 0; i < len; i++ {
-		s += string(byte(i))
-	}
-	return s
+func (balances keyregTestBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+	return basics.Address{}, true, nil
 }
 
-func TestEncodedAccountDataSize(t *testing.T) {
-	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
+	return nil
+}
+
+func (balances keyregTestBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+	return nil
+}
+
+func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
+	return nil
+}
+
+func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
+	return config.Consensus[balances.version]
+}
+
+	return basics.Round(8675309)
+}
+
+func TestKeyregApply(t *testing.T) {
+	secretSrc := keypair()
+	src := basics.Address(secretSrc.SignatureVerifier)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	ad := AccountData{
-		Status:             NotParticipating,
-		MicroAlgos:         MicroAlgos{},
-		RewardsBase:        0x1234123412341234,
-		RewardedMicroAlgos: MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		VoteFirstValid:     Round(0x1234123412341234),
-		VoteLastValid:      Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
-		AssetParams:        make(map[AssetIndex]AssetParams),
-		Assets:             make(map[AssetIndex]AssetHolding),
-		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
-	}
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	secretParticipation := keypair()
 
-	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
-		ap := AssetParams{
-			Total:         0x1234123412341234,
-			Decimals:      0x12341234,
-			DefaultFrozen: true,
-			UnitName:      makeString(currentConsensusParams.MaxAssetUnitNameBytes),
-			AssetName:     makeString(currentConsensusParams.MaxAssetNameBytes),
-			URL:           makeString(currentConsensusParams.MaxAssetURLBytes),
-			Manager:       Address(crypto.Hash([]byte{1, byte(assetCreatorAssets)})),
-			Reserve:       Address(crypto.Hash([]byte{2, byte(assetCreatorAssets)})),
-			Freeze:        Address(crypto.Hash([]byte{3, byte(assetCreatorAssets)})),
-			Clawback:      Address(crypto.Hash([]byte{4, byte(assetCreatorAssets)})),
-		}
-		copy(ap.MetadataHash[:], makeString(32))
-		ad.AssetParams[AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
+	tx := Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: Header{
+			Sender:     src,
+			Fee:        basics.MicroAlgos{Raw: 1},
+			FirstValid: basics.Round(100),
+			LastValid:  basics.Round(1000),
+		},
+		KeyregTxnFields: KeyregTxnFields{
+			VotePK:      crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+			SelectionPK: vrfSecrets.PK,
+		},
 	}
-
-	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
-		ah := AssetHolding{
-			Amount: 0x1234123412341234,
-			Frozen: true,
-		}
-		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
-	}
-
-	encoded, err := ad.MarshalMsg(nil)
+	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
-	require.Equal(t, MaxEncodedAccountDataSize, len(encoded))
-}
 
-func TestEncodedAccountAllocationBounds(t *testing.T) {
-	// ensure that all the supported protocols have MaxAssetsPerAccount less or equal to the encodedMaxAssetsPerAccount.
-	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
-			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsCreated > encodedMaxAppParams {
-			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsOptedIn > encodedMaxAppLocalStates {
-			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
-		}
-		if proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		if proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
+	tx.Sender = feeSink
+	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	require.Error(t, err)
+
+	tx.Sender = src
+
+	mockBal := keyregTestBalances{make(map[basics.Address]basics.BalanceRecord), protocol.ConsensusCurrentVersion}
+
+	// Going from offline to online should be okay
+	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.Offline}}
+	_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	require.NoError(t, err)
+
+	// Going from online to nonparticipatory should be okay, if the protocol supports that
+	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+		tx.KeyregTxnFields = KeyregTxnFields{}
+		tx.KeyregTxnFields.Nonparticipation = true
+		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+		require.NoError(t, err)
+
+		// Nonparticipatory accounts should not be able to change status
+		mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
+		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+		require.Error(t, err)
 	}
 }

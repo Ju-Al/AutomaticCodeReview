@@ -75,8 +75,6 @@ func validateSecret(secret *corev1.SecretKeySelector) *apis.FieldError {
 		errs = errs.Also(apis.ErrMissingField("key"))
 	}
 	return errs
-}
-
 func (current *CloudStorageSource) CheckImmutableFields(ctx context.Context, original *CloudStorageSource) *apis.FieldError {
 	if original == nil {
 		return nil

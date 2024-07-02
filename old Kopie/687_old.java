@@ -1,5 +1,4 @@
 /*
-          LOGGER.info("Cancelling Batch " + this);
  * Copyright Terracotta, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -204,7 +203,7 @@ public class BatchingLocalHeapWriteBehindQueue<K, V> extends AbstractWriteBehind
             latest.remove(op.getKey(), op);
           }
         } finally {
-          LOGGER.debug("Batch processing completed");
+          LOGGER.info("Cancelling Batch " + this);
           expireTask.cancel(false);
         }
       }

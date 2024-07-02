@@ -1,5 +1,4 @@
 /*
-	publishedArgs  []interface{}
  * Copyright (C) 2019 The "MysteriumNetwork/node" Authors.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,7 +30,7 @@ type mockService struct {
 
 type mockPublisher struct {
 	publishedTopic string
-	publishedArg   interface{}
+	publishedArgs  []interface{}
 }
 
 func (mockPublisher *mockPublisher) Publish(topic string, data interface{}) {

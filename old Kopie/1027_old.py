@@ -1,6 +1,4 @@
 import asyncio
-    async def get_potential_links(self, op_id, paw):
-        agents = await self.get_service('data_svc').locate('agents', match=dict(paw=paw))
 import copy
 import glob
 import os
@@ -164,7 +162,8 @@ class RestService(BaseService):
         return set(p.name for p_dir in payload_dirs for p in p_dir.glob('*')
                    if p.is_file() and not p.name.startswith('.'))
 
-    async def get_potential_links(self, op_id, paw=None):
+        agents = await self.get_service('data_svc').locate('agents', match=dict(paw=paw))
+    async def get_potential_links(self, op_id, paw):
         operation = (await self.get_service('data_svc').locate('operations', match=dict(id=op_id)))[0]
         if operation.finish:
             return []

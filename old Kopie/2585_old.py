@@ -1,6 +1,4 @@
 # -------------------------------------------------------------------------
-        result = subprocess.check_output(command, env=env,
-                                         universal_newlines=True)
 #                     The CodeChecker Infrastructure
 #   This file is distributed under the University of Illinois Open Source
 #   License. See LICENSE.TXT for details.
@@ -65,7 +63,8 @@ def get_warnings(env=None):
 
     command = [diagtool_bin, 'tree']
     try:
-        result = subprocess.check_output(
+        result = subprocess.check_output(command, env=env,
+                                         universal_newlines=True)
             command,
             env=env,
             universal_newlines=True,

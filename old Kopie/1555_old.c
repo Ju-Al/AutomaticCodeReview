@@ -1,5 +1,4 @@
 /*
-    /* nothing to do, since we do not open new streams by ourselves */
  * Copyright (c) 2014-2016 DeNA Co., Ltd., Kazuho Oku, Fastly, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -868,7 +867,7 @@ static int handle_goaway_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame,
     if ((ret = h2o_http2_decode_goaway_payload(&payload, frame, err_desc)) != 0)
         return ret;
 
-    /* stop opening new push streams hereafter */
+    /* nothing to do, since we do not open new streams by ourselves */
     conn->push_stream_ids.max_open = INT32_MAX;
 
     return 0;

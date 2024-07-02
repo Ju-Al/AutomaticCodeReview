@@ -1,8 +1,5 @@
 <?php
 
-	if ( 'Avada' === $current_theme->get( 'Name' ) && ! empty( $avada_options['lazy_load'] ) ) {
-		return true;
-	return false;
 defined( 'ABSPATH' ) || exit;
 
 $current_theme = wp_get_theme(); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
@@ -41,7 +38,8 @@ function rocket_avada_maybe_disable_lazyload() {
 	$avada_options = get_option( 'fusion_options' );
 	$current_theme = wp_get_theme();
 
-	if  ( ( 'Avada' === $current_theme->get( 'Name' ) ) && ( empty( $avada_options['lazy_load'] ) || 'avada' !== $avada_options['lazy_load']  ) ) {
+	if ( 'Avada' === $current_theme->get( 'Name' ) && ! empty( $avada_options['lazy_load'] ) ) {
+	return false;
 		return false;
 	}
 

@@ -1,5 +1,4 @@
 import os
-
 import pprint
 import sys
 from time import sleep
@@ -102,7 +101,7 @@ def gen_app(config_path=None, debug=None):
 
     # Redis connection
     create_redis(app)
-    
+
     # Cache 
     if 'REDIS_HOST' in app.config and\
        'REDIS_PORT' in app.config and\

@@ -153,8 +153,6 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
 
     return NullUniValue;
 }
-
-UniValue importprivatekeys(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;

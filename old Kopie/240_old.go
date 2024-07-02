@@ -1,13 +1,5 @@
 package ingestion
 
-	switch resource := event.(type) {
-	case *messages.ExecutionStateSyncRequest:
-		return e.handleStateSyncRequest(originID, resource)
-	case *messages.ExecutionStateDelta:
-		return e.handleStateDeltaResponse(originID, resource)
-	default:
-		return fmt.Errorf("invalid event type (%T)", event)
-	}
 import (
 	"context"
 	"encoding/hex"
@@ -180,7 +172,14 @@ func (e *Engine) Process(originID flow.Identifier, event interface{}) error {
 }
 
 func (e *Engine) process(originID flow.Identifier, event interface{}) error {
-	return nil
+	switch resource := event.(type) {
+	case *messages.ExecutionStateSyncRequest:
+		return e.handleStateSyncRequest(originID, resource)
+	case *messages.ExecutionStateDelta:
+		return e.handleStateDeltaResponse(originID, resource)
+	default:
+		return fmt.Errorf("invalid event type (%T)", event)
+	}
 }
 
 func (e *Engine) finalizedUnexecutedBlocks(finalized protocol.Snapshot) ([]flow.Identifier, error) {

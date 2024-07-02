@@ -18,8 +18,6 @@ type Props = {
   ogDescription: string,
   canonicalUrl: string,
 };
-
-// only provide alternate links to pages in languages where 95-100% of core content has been translated
 // which is determined by status enum of 2
 const completeLanguages = languages.filter(language => {
   return language.status == 2;

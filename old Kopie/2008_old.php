@@ -1,6 +1,5 @@
 <?php
 
-        return $this->id;
 declare(strict_types=1);
 
 /*
@@ -34,6 +33,6 @@ class Context extends BaseContext
 
     public function getId()
     {
-        return $this->id ?? '';
+        return $this->id;
     }
 }

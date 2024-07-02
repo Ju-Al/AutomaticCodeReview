@@ -1,5 +1,4 @@
 import { handleActions } from 'redux-actions';
-    [actions.reset]: () => initialState
 import actions from '../actions/checkout';
 
 export const name = 'checkout';
@@ -178,7 +177,7 @@ const reducerMap = {
             orderError: payload
         };
     },
-    [actions.reset]: state => {
+    [actions.reset]: () => initialState
         const preservedState = {};
 
         // Avoid refetching countries.

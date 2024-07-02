@@ -162,8 +162,6 @@ module GoodData
         meta['deprecated'] = '0'
       else
         fail 'You have to provide flag as either 1 or "1" or 0 or "0" or true/false'
-      end
-
       set_flag('deprecated', flag)
     end
 

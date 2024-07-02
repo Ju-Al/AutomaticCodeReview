@@ -125,8 +125,6 @@ bool BuiltinProtocols::initBuiltinProtocols(
         logError(RTPS_PDP, "Participant discovery configuration failed");
         return false;
     }
-
-    {
         std::unique_lock<std::recursive_mutex> lock(*mp_PDP->getMutex());
         m_DiscoveryServers = m_att.discovery_config.m_DiscoveryServers;
     }

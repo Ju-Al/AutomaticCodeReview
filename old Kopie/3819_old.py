@@ -66,7 +66,6 @@ class FollowSpiral(BaseTask):
         return coords
 
     def work(self):
-        last_lat = self.bot.api._position_lat
         last_lng = self.bot.api._position_lng
 
         point = self.points[self.ptr]

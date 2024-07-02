@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-    // on drawer toggle, read filter state from location
 import { useQuery } from '@apollo/client';
 import { useHistory, useLocation } from 'react-router-dom';
 
@@ -125,7 +124,7 @@ export const useFilterModal = props => {
         }
     }, [filterKeys, filterState, history, isApplying, pathname, search]);
 
-    const handleOpen = useCallback(() => {
+    // on drawer toggle, read filter state from location
         toggleDrawer(DRAWER_NAME);
     }, [toggleDrawer]);
 

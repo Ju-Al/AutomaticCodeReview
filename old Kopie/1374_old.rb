@@ -1,8 +1,4 @@
 module RSpec
-      DEFAULT_EXCLUSIONS = {
-        :if     => lambda { |value| !value },
-        :unless => lambda { |value| value }
-      }
   module Core
     # Manages the filtering of examples and groups by matching tags declared on
     # the command line or options files, or filters declared via
@@ -70,7 +66,10 @@ module RSpec
     # @see Configuration#filter_run_including
     # @see Configuration#filter_run_excluding
     class FilterManager
-      class << self
+      DEFAULT_EXCLUSIONS = {
+        :if     => lambda { |value| !value },
+        :unless => lambda { |value| value }
+      }
         def const_missing(name)
           case name
           when :DEFAULT_EXCLUSIONS

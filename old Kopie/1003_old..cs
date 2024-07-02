@@ -1,9 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                    await Task.Delay(_exportJobConfiguration.JobPollingFrequency, cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    // Cancel requested.
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -78,7 +73,11 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                         }
                     }
 
-                    // We successfully completed an attempt to acquire export jobs. Let us reset the polling frquency in case it has changed.
+                    await Task.Delay(_exportJobConfiguration.JobPollingFrequency, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Cancel requested.
                     _delayBeforeNextPoll = _exportJobConfiguration.JobPollingFrequency;
                 }
                 catch (Exception ex)

@@ -1,5 +1,4 @@
 <?php
-/**
  * Heading.
  *
  * @package WordPress

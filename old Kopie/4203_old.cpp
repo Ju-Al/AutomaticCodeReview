@@ -1,11 +1,4 @@
 /***************************************************************************
-    for ( int32_t i = 0; i < count_h + 1; ++i ) {
-    srcrt.height = icnadv.height() - srcrt.y;
-        srcrt.x = 624;
-        srcrt.y = isEvilInterface ? 328 : 345;
-        srcrt.width = 3;
-        srcrt.height = isEvilInterface ? 15 : 20;
-        dstpt.y += 18;
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -216,8 +209,14 @@ void Interface::GameBorderRedraw( const bool viewWorldMode )
     srcrt.height = 255;
     dstpt.x = displayWidth - BORDERWIDTH;
     dstpt.y = srcrt.y;
+    for ( int32_t i = 0; i < count_h + 1; ++i ) {
     fheroes2::Blit( icnadv, srcrt.x, srcrt.y, display, dstpt.x, dstpt.y, srcrt.width, srcrt.height );
-
+    srcrt.height = icnadv.height() - srcrt.y;
+        srcrt.x = 624;
+        srcrt.y = isEvilInterface ? 328 : 345;
+        srcrt.width = 3;
+        srcrt.height = isEvilInterface ? 15 : 20;
+        dstpt.y += 18;
     srcrt.y = 255;
     srcrt.height = TILEWIDTH;
     dstpt.x = displayWidth - BORDERWIDTH;

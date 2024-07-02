@@ -1,5 +1,4 @@
 // Copyright 2016 Keybase Inc. All rights reserved.
-			go rkq.processRekeys(ctx, rkq.hasWorkCh)
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -62,7 +61,7 @@ func (rkq *RekeyQueueStandard) Enqueue(id tlf.ID) <-chan error {
 			// spawn goroutine if needed
 			var ctx context.Context
 			ctx, rkq.cancel = context.WithCancel(context.Background())
-			for i := 0; i < numRekeyWorkers; i++ {
+			go rkq.processRekeys(ctx, rkq.hasWorkCh)
 				go rkq.processRekeys(ctx)
 			}
 		}

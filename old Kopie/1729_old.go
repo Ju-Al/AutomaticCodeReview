@@ -65,7 +65,6 @@ done:
 	return name
 }
 
-// Unique returns a unique name for the given name. If given name not unique
 // the suffix is appended. It still not unique, a counter value is added to
 // the name until unique. The generated unique name is not added to the names
 // and counts hash.

@@ -1,5 +1,4 @@
 <?php
-/**
  * Secure session delegator factory
  *
  * Copyright (C) Villanova University 2018,

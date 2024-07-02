@@ -1,6 +1,5 @@
 package com.fsck.k9.activity;
 
-    private MessageBuilder createMessageBuilder(boolean isDraft) {
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -662,7 +661,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     }
 
     @Nullable
-    private MessageBuilder createMessageBuilder(boolean isDraft, ArrayList<Attachment> attachments) {
+    private MessageBuilder createMessageBuilder(boolean isDraft) {
         MessageBuilder builder;
 
         ComposeCryptoStatus cryptoStatus = recipientPresenter.getCurrentCachedCryptoStatus();

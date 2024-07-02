@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	services, err := o.store.ListServices(o.appName)
 // SPDX-License-Identifier: Apache-2.0
 
 // SPDX-License-Identifier: Apache-2.0
@@ -230,7 +229,7 @@ func (o *deleteSvcOpts) askSvcName() error {
 }
 
 func (o *deleteSvcOpts) serviceNames() ([]string, error) {
-	services, err := o.store.ListWorkloads(o.appName)
+	services, err := o.store.ListServices(o.appName)
 	if err != nil {
 		return nil, fmt.Errorf("list services for application %s: %w", o.appName, err)
 	}

@@ -34,7 +34,6 @@ public final class Baseline implements Plugin<Project> {
                     "com.palantir.baseline should be applied to the root project only, not '{}'",
                     project.getName());
         }
-        Preconditions.checkState(!project.getName().equals(project.getProjectDir().getName()),
                 "Root project name must specified in settings.gradle");
 
         rootProject.getPluginManager().apply(BaselineConfig.class);

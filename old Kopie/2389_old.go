@@ -1,5 +1,4 @@
 // Copyright 2015 Light Code Labs, LLC
-	var disabledMetricsSlice []string
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -393,7 +392,7 @@ func initTelemetry() error {
 	}
 
 	// parse and check the list of disabled metrics
-	var fixedDisabledMetrics []string
+	var disabledMetricsSlice []string
 	if len(disabledMetrics) > 0 {
 		if len(disabledMetrics) > 1024 {
 			// mitigate disk space exhaustion at the collection endpoint

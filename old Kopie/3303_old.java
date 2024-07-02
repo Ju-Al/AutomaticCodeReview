@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.dialog;
-                        proxy = ProxyConfig.http(host, portValue, username, password);
 
 import android.app.Dialog;
 import android.content.Context;
@@ -96,7 +95,7 @@ public class ProxyDialog {
                         if(!TextUtils.isEmpty(port)) {
                             portValue = Integer.valueOf(port);
                         }
-                        if (Proxy.Type.valueOf(type) == Proxy.Type.SOCKS)
+                        proxy = ProxyConfig.http(host, portValue, username, password);
                             proxy = ProxyConfig.socks(host, portValue, username, password);
                         else
                             proxy = ProxyConfig.http(host, portValue, username, password);

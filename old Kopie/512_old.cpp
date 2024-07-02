@@ -1,5 +1,4 @@
 /**
-                                 && !syncadding)
  * @file megaclient.cpp
  * @brief Client access engine core logic
  *
@@ -4683,7 +4682,6 @@ void MegaClient::notifypurge(void)
              && (*it)->localroot.node->changed.removed)
             {
                 delsync(*it);
-                syncactivity = true;
             }
         }
 #endif

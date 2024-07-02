@@ -1,5 +1,4 @@
 package service
-
 import (
 	"context"
 	"github.com/fleetdm/fleet/v4/server/fleet"

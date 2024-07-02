@@ -1,6 +1,4 @@
 //-----------------------------------------------------------------------------
-ConsoleMethod( LightBase, playAnimation, void, 2, 3, "( [LightAnimData anim] )\t"
-    if ( argc == 2 )
 // Copyright (c) 2012 GarageGames, LLC
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,466 +20,599 @@ ConsoleMethod( LightBase, playAnimation, void, 2, 3, "( [LightAnimData anim] )\t
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
-#include "platform/platform.h"
-#include "T3D/lightBase.h"
-
+#include "T3D/missionMarker.h"
 #include "console/consoleTypes.h"
-#include "console/typeValidators.h"
-#include "core/stream/bitStream.h"
-#include "sim/netConnection.h"
-#include "lighting/lightManager.h"
-#include "lighting/shadowMap/lightShadowMap.h"
-#include "scene/sceneRenderState.h"
-#include "renderInstance/renderPassManager.h"
+#include "core/color.h"
 #include "console/engineAPI.h"
-#include "gfx/gfxDrawUtil.h"
 
 extern bool gEditingMission;
+IMPLEMENT_CO_DATABLOCK_V1(MissionMarkerData);
 
-bool LightBase::smRenderViz = false;
+ConsoleDocClass( MissionMarkerData,
+   "@brief A very basic class containing information used by MissionMarker objects for rendering\n\n"
 
-IMPLEMENT_CONOBJECT( LightBase );
+   "MissionMarkerData, is an extremely barebones class derived from ShapeBaseData. It is solely used by "
+   "MissionMarker classes (such as SpawnSphere), so that you can see the object while editing a level.\n\n"
 
-ConsoleDocClass( LightBase,
-   "@brief This is the base class for light objects.\n\n"
+   "@tsexample\n"
+   "datablock MissionMarkerData(SpawnSphereMarker)\n"
+   "{\n"
+   "   category = \"Misc\";\n"
+   "   shapeFile = \"core/art/shapes/octahedron.dts\";\n"
+   "};\n"
+   "@endtsexample\n\n"
 
-   "It is *NOT* intended to be used directly in script, but exists to provide the base member variables "
-   "and generic functionality. You should be using the derived classes PointLight and SpotLight, which "
-   "can be declared in TorqueScript or added from the World Editor.\n\n"
-
-   "For this class, we only add basic lighting options that all lighting systems would use. "
-   "The specific lighting system options are injected at runtime by the lighting system itself.\n\n"
-
-   "@see PointLight\n\n"
-   "@see SpotLight\n\n"
-   "@ingroup Lighting\n"
+   "@see MissionMarker\n\n"
+   "@see SpawnSphere\n\n"
+   "@see WayPoint\n\n"
+   "@ingroup enviroMisc\n"
 );
 
-LightBase::LightBase()
-   :  mIsEnabled( true ),
-      mColor( ColorF::WHITE ),
-      mBrightness( 1.0f ),
-      mCastShadows( false ),
-      mPriority( 1.0f ),
-      mAnimationData( NULL ),      
-      mFlareData( NULL ),
-      mFlareScale( 1.0f )
+//------------------------------------------------------------------------------
+// Class: MissionMarker
+//------------------------------------------------------------------------------
+IMPLEMENT_CO_NETOBJECT_V1(MissionMarker);
+
+ConsoleDocClass( MissionMarker,
+   "@brief This is a base class for all \"marker\" related objets. It is a 3D representation of a point in the level.\n\n"
+
+   "The main use of a MissionMarker is to represent a point in 3D space with a mesh and basic ShapeBase information. "
+   "If you simply need to mark a spot in your level, with no overhead from additional fields, this is a useful object.\n\n"
+
+   "@tsexample\n"
+   "new MissionMarker()\n"
+   "{\n"
+   "   dataBlock = \"WayPointMarker\";\n"
+   "   position = \"295.699 -171.817 280.124\";\n"
+   "   rotation = \"0 0 -1 13.8204\";\n"
+   "   scale = \"1 1 1\";\n"
+   "   isRenderEnabled = \"true\";\n"
+   "   canSaveDynamicFields = \"1\";\n"
+   "   enabled = \"1\";\n"
+   "};\n"
+   "@endtsexample\n\n"
+
+   "@note MissionMarkers will not add themselves to the scene except when in the editor.\n\n"
+
+   "@see MissionMarkerData\n\n"
+   "@see SpawnSphere\n\n"
+   "@see WayPoint\n\n"
+   "@ingroup enviroMisc\n"
+);
+
+MissionMarker::MissionMarker()
 {
-   mNetFlags.set( Ghostable | ScopeAlways );
-   mTypeMask = EnvironmentObjectType | LightObjectType;
-
-   mLight = LightManager::createLightInfo();
-
-   mFlareState.clear();
+   mTypeMask |= StaticObjectType;
+   mDataBlock = 0;
+   mAddedToScene = false;
+   mNetFlags.set(Ghostable | ScopeAlways);
 }
 
-LightBase::~LightBase()
+bool MissionMarker::onAdd()
 {
-   SAFE_DELETE( mLight );
+   if(!Parent::onAdd() || !mDataBlock)
+      return(false);
+
+   if(gEditingMission)
+   {
+      addToScene();
+      mAddedToScene = true;
+   }
+
+   return(true);
 }
 
-void LightBase::initPersistFields()
+void MissionMarker::onRemove()
 {
-   // We only add the basic lighting options that all lighting
-   // systems would use... the specific lighting system options
-   // are injected at runtime by the lighting system itself.
+   if( mAddedToScene )
+   {
+      removeFromScene();
+      mAddedToScene = false;
+   }
 
-   addGroup( "Light" );
-      
-      addField( "isEnabled", TypeBool, Offset( mIsEnabled, LightBase ), "Enables/Disables the object rendering and functionality in the scene." );
-      addField( "color", TypeColorF, Offset( mColor, LightBase ), "Changes the base color hue of the light." );
-      addField( "brightness", TypeF32, Offset( mBrightness, LightBase ), "Adjusts the lights power, 0 being off completely." );      
-      addField( "castShadows", TypeBool, Offset( mCastShadows, LightBase ), "Enables/disabled shadow casts by this light." );
-      addField( "priority", TypeF32, Offset( mPriority, LightBase ), "Used for sorting of lights by the light manager. "
-		  "Priority determines if a light has a stronger effect than, those with a lower value" );
+   Parent::onRemove();
+}
 
-   endGroup( "Light" );
+void MissionMarker::inspectPostApply()
+{
+   Parent::inspectPostApply();
+   setMaskBits(PositionMask);
+}
 
-   addGroup( "Light Animation" );
+void MissionMarker::onEditorEnable()
+{
+   if(!mAddedToScene)
+   {
+      addToScene();
+      mAddedToScene = true;
+   }
+}
 
-      addField( "animate", TypeBool, Offset( mAnimState.active, LightBase ), "Toggles animation for the light on and off" );
-      addField( "animationType", TYPEID< LightAnimData >(), Offset( mAnimationData, LightBase ), "Datablock containing light animation information (LightAnimData)" );
-      addFieldV( "animationPeriod", TypeF32, Offset( mAnimState.animationPeriod, LightBase ), &CommonValidators::PositiveNonZeroFloat, "The length of time in seconds for a single playback of the light animation (must be > 0)" );
-      addField( "animationPhase", TypeF32, Offset( mAnimState.animationPhase, LightBase ), "The phase used to offset the animation start time to vary the animation of nearby lights." );      
+void MissionMarker::onEditorDisable()
+{
+   if(mAddedToScene)
+   {
+      removeFromScene();
+      mAddedToScene = false;
+   }
+}
 
-   endGroup( "Light Animation" );
+bool MissionMarker::onNewDataBlock( GameBaseData *dptr, bool reload )
+{
+   mDataBlock = dynamic_cast<MissionMarkerData*>( dptr );
+   if ( !mDataBlock || !Parent::onNewDataBlock( dptr, reload ) )
+      return(false);
+   scriptOnNewDataBlock();
+   return(true);
+}
 
-   addGroup( "Misc" );
+void MissionMarker::setTransform(const MatrixF& mat)
+{
+   Parent::setTransform(mat);
+   setMaskBits(PositionMask);
+}
 
-      addField( "flareType", TYPEID< LightFlareData >(), Offset( mFlareData, LightBase ), "Datablock containing light flare information (LightFlareData)" );
-      addField( "flareScale", TypeF32, Offset( mFlareScale, LightBase ), "Globally scales all features of the light flare" );
+U32 MissionMarker::packUpdate(NetConnection * con, U32 mask, BitStream * stream)
+{
+   U32 retMask = Parent::packUpdate(con, mask, stream);
+   if(stream->writeFlag(mask & PositionMask))
+   {
+      stream->writeAffineTransform(mObjToWorld);
+      mathWrite(*stream, mObjScale);
+   }
 
-   endGroup( "Misc" );
+   return(retMask);
+}
 
-   // Now inject any light manager specific fields.
-   LightManager::initLightFields();
+void MissionMarker::unpackUpdate(NetConnection * con, BitStream * stream)
+{
+   Parent::unpackUpdate(con, stream);
+   if(stream->readFlag())
+   {
+      MatrixF mat;
+      stream->readAffineTransform(&mat);
+      Parent::setTransform(mat);
 
-   // We do the parent fields at the end so that
-   // they show up that way in the inspector.
+      Point3F scale;
+      mathRead(*stream, &scale);
+      setScale(scale);
+   }
+}
+
+void MissionMarker::initPersistFields() {
    Parent::initPersistFields();
-
-   Con::addVariable( "$Light::renderViz", TypeBool, &smRenderViz,
-      "Toggles visualization of light object's radius or cone.\n"
-	   "@ingroup Lighting");
-
-   Con::addVariable( "$Light::renderLightFrustums", TypeBool, &LightShadowMap::smDebugRenderFrustums,
-      "Toggles rendering of light frustums when the light is selected in the editor.\n\n"
-      "@note Only works for shadow mapped lights.\n\n"
-      "@ingroup Lighting" );
 }
 
-bool LightBase::onAdd()
-{
-   if ( !Parent::onAdd() )
-      return false;
+//------------------------------------------------------------------------------
+// Class: WayPoint
+//------------------------------------------------------------------------------
+IMPLEMENT_CO_NETOBJECT_V1(WayPoint);
 
-   // Update the light parameters.
-   _conformLights();
-	addToScene();
+ConsoleDocClass( WayPoint,
+   "@brief Special type of marker, distinguished by a name and team ID number\n\n"
+
+   "The original Torque engines were built from a multi-player game called Tribes. "
+   "The Tribes series featured various team based game modes, such as capture the flag. "
+   "The WayPoint class survived the conversion from game (Tribes) to game engine (Torque).\n\n"
+
+   "Essentially, this is a MissionMarker with the addition of two variables: markerName and team. "
+   "Whenever a WayPoint is created, it is added to a unique global list called WayPointSet. "
+   "You can iterate through this set, seeking out specific markers determined by their markerName and team ID. "
+   "This avoids the overhead of constantly calling commandToClient and commandToServer to determine "
+   "a WayPoint object's name, unique ID, etc.\n\n"
+
+   "@note The <i>markerName<i> field was previously called <i>name</i>, but was changed "
+   "because this conflicted with the SimObject name field. Existing scripts that relied "
+   "on the WayPoint <i>name</i> field will need to be updated.\n\n"
+
+   "@tsexample\n"
+   "new WayPoint()\n"
+   "{\n"
+   "   team = \"1\";\n"
+   "   dataBlock = \"WayPointMarker\";\n"
+   "   position = \"-0.0224786 1.53471 2.93219\";\n"
+   "   rotation = \"1 0 0 0\";\n"
+   "   scale = \"1 1 1\";\n"
+   "   canSave = \"1\";\n"
+   "   canSaveDynamicFields = \"1\";\n"
+   "};\n"
+   "@endtsexample\n\n"
+
+   "@see MissionMarker\n\n"
+   "@see MissionMarkerData\n\n"
+   "@ingroup enviroMisc\n"
+);
+
+WayPointTeam::WayPointTeam()WayPoint::WayPoint()
+{
+   mName = StringTable->insert("");
+}
+
+void WayPoint::setHidden(bool hidden)
+{
+   // Skip ShapeBase::setHidden (only ever added to scene if in the editor)
+   ShapeBase::Parent::setHidden( hidden );
+   if(isServerObject())
+      setMaskBits(UpdateHiddenMask);
+}
+
+bool WayPoint::onAdd()
+{
+   if(!Parent::onAdd())
+      return(false);
+
+   //
+   if(isClientObject())
+      Sim::getWayPointSet()->addObject(this);
+   else
+   {
+      setMaskBits(UpdateNameMask|UpdateTeamMask);
+   }
+
+   return(true);
+}
+
+void WayPoint::inspectPostApply()
+{
+   Parent::inspectPostApply();
+   if(!mName || !mName[0])
+      mName = StringTable->insert("");
+   setMaskBits(UpdateNameMask|UpdateTeamMask);
+}
+
+U32 WayPoint::packUpdate(NetConnection * con, U32 mask, BitStream * stream)
+{
+   U32 retMask = Parent::packUpdate(con, mask, stream);
+   if(stream->writeFlag(mask & UpdateNameMask))
+      stream->writeString(mName);
+   if(stream->writeFlag(mask & UpdateHiddenMask))
+      stream->writeFlag(isHidden());
+   return(retMask);
+}
+
+void WayPoint::unpackUpdate(NetConnection * con, BitStream * stream)
+{
+   Parent::unpackUpdate(con, stream);
+   if(stream->readFlag())
+      mName = stream->readSTString(true);
+   if(stream->readFlag())
+      setHidden(stream->readFlag());
+}
+
+
+
+void WayPoint::initPersistFields()
+{
+   addGroup("Misc");	
+   addField("markerName", TypeCaseString, Offset(mName, WayPoint), "Unique name representing this waypoint");
+   endGroup("Misc");
+   Parent::initPersistFields();
+}
+
+//------------------------------------------------------------------------------
+// Class: SpawnSphere
+//------------------------------------------------------------------------------
+IMPLEMENT_CO_NETOBJECT_V1(SpawnSphere);
+
+ConsoleDocClass( SpawnSphere,
+   "@brief This class is used for creating any type of game object, assigning it a class, datablock, and other "
+   "properties when it is spawned.\n\n"
+
+   "Torque 3D uses a simple spawn system, which can be easily modified to spawn any kind of object (of any class). "
+   "Each new level already contains at least one SpawnSphere, which is represented by a green octahedron in stock Torque 3D. "
+   "The spawnClass field determines the object type, such as Player, AIPlayer, etc. The spawnDataBlock field applies the "
+   "pre-defined datablock to each spawned object instance. The really powerful feature of this class is provided by "
+   "the spawnScript field which allows you to define a simple script (multiple lines) that will be executed once the "
+   "object has been spawned.\n\n"
+
+   "@tsexample\n"
+   "// Define an SpawnSphere that essentially performs the following each time an object is spawned\n"
+   "//$SpawnObject = new Player()\n"
+   "//{\n"
+   "//   dataBlock = \"DefaultPlayerData\";\n"
+   "//   name = \"Bob\";\n"
+   "//   lifeTotal = 3;\n"
+   "//};\n"
+   "//echo(\"Spawned a Player: \" @ $SpawnObject);\n\n"
+   "new SpawnSphere(DefaultSpawnSphere)\n"
+   "{\n"
+   "   spawnClass = \"Player\";\n"
+   "   spawnDatablock = \"DefaultPlayerData\";\n"
+   "   spawnScript = \"echo(\\\"Spawned a Player: \\\" @ $SpawnObject);\"; // embedded quotes must be escaped with \\ \n"
+   "   spawnProperties = \"name = \\\"Bob\\\";lifeTotal = 3;\"; // embedded quotes must be escaped with \\ \n"
+   "   autoSpawn = \"1\";\n"
+   "   dataBlock = \"SpawnSphereMarker\";\n"
+   "   position = \"-0.77266 -19.882 17.8153\";\n"
+   "   rotation = \"1 0 0 0\";\n"
+   "   scale = \"1 1 1\";\n"
+   "   canSave = \"1\";\n"
+   "   canSaveDynamicFields = \"1\";\n"
+   "};\n\n"
+   "// Because autoSpawn is set to true in the above example, the following lines\n"
+   "// of code will execute AFTER the Player object has been spawned.\n"
+   "echo(\"Object Spawned\");\n"
+   "echo(\"Hello World\");\n\n"
+   "@endtsexample\n\n"
+
+   "@see MissionMarker\n\n"
+   "@see MissionMarkerData\n\n"
+   "@ingroup gameObjects\n"
+   "@ingroup enviroMisc\n"
+);
+
+SpawnSphere::SpawnSphere()
+{
+   mAutoSpawn = false;
+   mSpawnTransform = false;
+
+   mRadius = 100.f;
+   mSphereWeight = 100.f;
+   mIndoorWeight = 100.f;
+   mOutdoorWeight = 100.f;
+}
+
+IMPLEMENT_CALLBACK( SpawnSphere, onAdd, void, ( U32 objectId ), ( objectId ),
+   "Called when the SpawnSphere is being created.\n"
+   "@param objectId The unique SimObjectId generated when SpawnSphere is created (%%this in script)\n" );
+
+bool SpawnSphere::onAdd()
+{
+   if(!Parent::onAdd())
+      return(false);
+
+   if(!isClientObject())
+      setMaskBits(UpdateSphereMask);
+
+   if (!isGhost())
+   {
+	   onAdd_callback( getId());
+
+      if (mAutoSpawn)
+         spawnObject();
+   }
 
    return true;
 }
 
-void LightBase::onRemove()
+SimObject* SpawnSphere::spawnObject(String additionalProps)
 {
-   removeFromScene();
-   Parent::onRemove();
-}
+   SimObject* spawnObject = Sim::spawnObject(mSpawnClass, mSpawnDataBlock, mSpawnName,
+                                             mSpawnProperties + " " + additionalProps, mSpawnScript);
 
-void LightBase::submitLights( LightManager *lm, bool staticLighting )
-{
-   if ( !mIsEnabled || staticLighting )
-      return;
-
-   if (  mAnimState.active && 
-         mAnimState.animationPeriod > 0.0f &&
-         mAnimationData )
+   // If we have a spawnObject add it to the MissionCleanup group
+   if (spawnObject)
    {
-      mAnimState.brightness = mBrightness;
-      mAnimState.transform = getRenderTransform();
-      mAnimState.color = mColor;
+      if (mSpawnTransform)
+      {
+         if(SceneObject *s = dynamic_cast<SceneObject*>(spawnObject))
+            s->setTransform(getTransform());
+      }
 
-      mAnimationData->animate( mLight, &mAnimState );
+      SimObject* cleanup = Sim::findObject("MissionCleanup");
+
+      if (cleanup)
+      {
+         SimGroup* missionCleanup = dynamic_cast<SimGroup*>(cleanup);
+
+         missionCleanup->addObject(spawnObject);
+      }
    }
 
-   lm->registerGlobalLight( mLight, this );
+   return spawnObject;
 }
 
-void LightBase::inspectPostApply()
+void SpawnSphere::inspectPostApply()
 {
-   // We do not call the parent here as it 
-   // will call setScale() and screw up the 
-   // real sizing fields on the light.
-
-   // Ok fine... then we must set MountedMask ourself.
-
-   _conformLights();
-   setMaskBits( EnabledMask | UpdateMask | TransformMask | DatablockMask | MountedMask );
+   Parent::inspectPostApply();
+   setMaskBits(UpdateSphereMask);
 }
 
-void LightBase::setTransform( const MatrixF &mat )
+U32 SpawnSphere::packUpdate(NetConnection * con, U32 mask, BitStream * stream)
 {
-   setMaskBits( TransformMask );
-   Parent::setTransform( mat );
-}
+   U32 retMask = Parent::packUpdate(con, mask, stream);
 
-void LightBase::prepRenderImage( SceneRenderState *state )
-{
-   if ( mIsEnabled && mFlareData )
+   //
+   if(stream->writeFlag(mask & UpdateSphereMask))
    {
-      mFlareState.fullBrightness = mBrightness;
-      mFlareState.scale = mFlareScale;
-      mFlareState.lightInfo = mLight;
-      mFlareState.lightMat = getRenderTransform();
+      stream->writeFlag(mAutoSpawn);
+      stream->writeFlag(mSpawnTransform);
 
-      mFlareData->prepRender( state, &mFlareState );
+      stream->write(mSpawnClass);
+      stream->write(mSpawnDataBlock);
+      stream->write(mSpawnName);
+      stream->write(mSpawnProperties);
+      stream->write(mSpawnScript);
    }
+   return(retMask);
+}
 
-   if ( !state->isDiffusePass() )
-      return;
-
-   const bool isSelectedInEditor = ( gEditingMission && isSelected() );
-
-   // If the light is selected or light visualization
-   // is enabled then register the callback.
-   if ( smRenderViz || isSelectedInEditor )
+void SpawnSphere::unpackUpdate(NetConnection * con, BitStream * stream)
+{
+   Parent::unpackUpdate(con, stream);
+   if(stream->readFlag())
    {
-      ObjectRenderInst *ri = state->getRenderPass()->allocInst<ObjectRenderInst>();
-      ri->renderDelegate.bind( this, &LightBase::_onRenderViz );
-      ri->type = RenderPassManager::RIT_Editor;
-      state->getRenderPass()->addInst( ri );
+      mAutoSpawn = stream->readFlag();
+      mSpawnTransform = stream->readFlag();
+
+      stream->read(&mSpawnClass);
+      stream->read(&mSpawnDataBlock);
+      stream->read(&mSpawnName);
+      stream->read(&mSpawnProperties);
+      stream->read(&mSpawnScript);
    }
 }
 
-void LightBase::_onRenderViz( ObjectRenderInst *ri, 
-                              SceneRenderState *state, 
-                              BaseMatInstance *overrideMat )
+void SpawnSphere::processTick( const Move *move )
 {
-   if ( overrideMat )
-      return;
-   
-   _renderViz( state );
+   if ( isServerObject() && isMounted() )
+   {
+      MatrixF mat( true );
+      mMount.object->getRenderMountTransform( 0.f, mMount.node, mMount.xfm, &mat );
+      setTransform( mat );
+   }
 }
 
-void LightBase::_onSelected()
-{
-   #ifdef TORQUE_DEBUG
-   // Enable debug rendering on the light.
-   if( isClientObject() )
-      mLight->enableDebugRendering( true );
-   #endif
-
-   Parent::_onSelected();
-}
-
-void LightBase::_onUnselected()
-{
-   #ifdef TORQUE_DEBUG
-   // Disable debug rendering on the light.
-   if( isClientObject() )
-      mLight->enableDebugRendering( false );
-   #endif
-
-   Parent::_onUnselected();
-}
-
-void LightBase::interpolateTick( F32 delta )
-{
-}
-
-void LightBase::processTick()
-{
-}
-
-void LightBase::advanceTime( F32 timeDelta )
+void SpawnSphere::advanceTime( F32 timeDelta )
 {
    if ( isMounted() )
    {
       MatrixF mat( true );
       mMount.object->getRenderMountTransform( 0.f, mMount.node, mMount.xfm, &mat );
-      mLight->setTransform( mat );
-      Parent::setTransform( mat );
+      setTransform( mat );
    }
 }
 
-U32 LightBase::packUpdate( NetConnection *conn, U32 mask, BitStream *stream )
+void SpawnSphere::initPersistFields()
 {
-   U32 retMask = Parent::packUpdate( conn, mask, stream );
+   addGroup( "Spawn" );
+   addField( "spawnClass", TypeRealString, Offset(mSpawnClass, SpawnSphere),
+      "Object class to create (eg. Player, AIPlayer, Debris etc)" );
+   addField( "spawnDatablock", TypeRealString, Offset(mSpawnDataBlock, SpawnSphere),
+      "Predefined datablock assigned to the object when created" );
+   addField( "spawnProperties", TypeRealString, Offset(mSpawnProperties, SpawnSphere),
+      "String containing semicolon (;) delimited properties to set when the object is created." );
+   addField( "spawnScript", TypeCommand, Offset(mSpawnScript, SpawnSphere),
+      "Command to execute immediately after spawning an object. New object id is stored in $SpawnObject.  Max 255 characters." );
+   addField( "autoSpawn", TypeBool, Offset(mAutoSpawn, SpawnSphere),
+      "Flag to spawn object as soon as SpawnSphere is created, true to enable or false to disable." );
+   addField( "spawnTransform", TypeBool, Offset(mSpawnTransform, SpawnSphere),
+      "Flag to set the spawned object's transform to the SpawnSphere's transform." );
+   endGroup( "Spawn" );
 
-   stream->writeFlag( mIsEnabled );
+   addGroup( "Dimensions" );
+   addField( "radius", TypeF32, Offset(mRadius, SpawnSphere), "Deprecated" );
+   endGroup( "Dimensions" );
 
-   if ( stream->writeFlag( mask & TransformMask ) )
-      stream->writeAffineTransform( mObjToWorld );
+   addGroup( "Weight" );
+   addField( "sphereWeight", TypeF32, Offset(mSphereWeight, SpawnSphere), "Deprecated" );
+   addField( "indoorWeight", TypeF32, Offset(mIndoorWeight, SpawnSphere), "Deprecated" );
+   addField( "outdoorWeight", TypeF32, Offset(mOutdoorWeight, SpawnSphere), "Deprecated" );
+   endGroup( "Weight" );
 
-   if ( stream->writeFlag( mask & UpdateMask ) )
-   {
-      stream->write( mColor );
-      stream->write( mBrightness );
-
-      stream->writeFlag( mCastShadows );
-
-      stream->write( mPriority );      
-
-      mLight->packExtended( stream ); 
-
-      stream->writeFlag( mAnimState.active );
-      stream->write( mAnimState.animationPeriod );
-      stream->write( mAnimState.animationPhase );
-      stream->write( mFlareScale );
-   }
-
-   if ( stream->writeFlag( mask & DatablockMask ) )
-   {
-      if ( stream->writeFlag( mAnimationData ) )
-      {
-         stream->writeRangedU32( mAnimationData->getId(),
-                                 DataBlockObjectIdFirst, 
-                                 DataBlockObjectIdLast );
-      }
-
-      if ( stream->writeFlag( mFlareData ) )
-      {
-         stream->writeRangedU32( mFlareData->getId(),
-                                 DataBlockObjectIdFirst, 
-                                 DataBlockObjectIdLast );
-      }
-   }
-
-   return retMask;
+   Parent::initPersistFields();
 }
 
-void LightBase::unpackUpdate( NetConnection *conn, BitStream *stream )
-{
-   Parent::unpackUpdate( conn, stream );
-
-   mIsEnabled = stream->readFlag();
-
-   if ( stream->readFlag() ) // TransformMask
-      stream->readAffineTransform( &mObjToWorld );
-
-   if ( stream->readFlag() ) // UpdateMask
-   {   
-      stream->read( &mColor );
-      stream->read( &mBrightness );      
-      mCastShadows = stream->readFlag();
-
-      stream->read( &mPriority );      
-      
-      mLight->unpackExtended( stream );
-
-      mAnimState.active = stream->readFlag();
-      stream->read( &mAnimState.animationPeriod );
-      stream->read( &mAnimState.animationPhase );
-      stream->read( &mFlareScale );
-   }
-
-   if ( stream->readFlag() ) // DatablockMask
-   {
-      if ( stream->readFlag() )
-      {
-         SimObjectId id = stream->readRangedU32( DataBlockObjectIdFirst, DataBlockObjectIdLast );  
-         LightAnimData *datablock = NULL;
-         
-         if ( Sim::findObject( id, datablock ) )
-            mAnimationData = datablock;
-         else
-         {
-            conn->setLastError( "Light::unpackUpdate() - invalid LightAnimData!" );
-            mAnimationData = NULL;
-         }
-      }
-      else
-         mAnimationData = NULL;
-
-      if ( stream->readFlag() )
-      {
-         SimObjectId id = stream->readRangedU32( DataBlockObjectIdFirst, DataBlockObjectIdLast );  
-         LightFlareData *datablock = NULL;
-
-         if ( Sim::findObject( id, datablock ) )
-            mFlareData = datablock;
-         else
-         {
-            conn->setLastError( "Light::unpackUpdate() - invalid LightCoronaData!" );
-            mFlareData = NULL;
-         }
-      }
-      else
-         mFlareData = NULL;
-   }
-   
-   if ( isProperlyAdded() )
-      _conformLights();
-}
-
-void LightBase::setLightEnabled( bool enabled )
-{
-   if ( mIsEnabled != enabled )
-   {
-      mIsEnabled = enabled;
-      setMaskBits( EnabledMask );
-   }
-}
-
-DefineEngineMethod( LightBase, setLightEnabled, void, ( bool state ),,
-   "@brief Toggles the light on and off\n\n"
-   
-   "@param state Turns the light on (true) or off (false)\n"
-
+ConsoleDocFragment _SpawnSpherespawnObject1(
+   "@brief Dynamically create a new game object with a specified class, datablock, and optional properties.\n\n"
+   "This is called on the actual SpawnSphere, not to be confused with the Sim::spawnObject() "
+   "global function\n\n"
+   "@param additionalProps Optional set of semiconlon delimited parameters applied to the spawn object during creation.\n\n"
    "@tsexample\n"
-   "// Disable the light\n"
-   "CrystalLight.setLightEnabled(false);\n\n"
-   "// Renable the light\n"
-   "CrystalLight.setLightEnabled(true);\n"
-   
-   "@endtsexample\n\n"
-)
-{
-  object->setLightEnabled( state );
-}
-
-//ConsoleMethod( LightBase, setLightEnabled, void, 3, 3, "( bool enabled )\t"
-//   "Toggles the light on and off." )
-//{
-//   object->setLightEnabled( dAtob( argv[2] ) );
-//}
-
-static ConsoleDocFragment _lbplayAnimation1(
-	"@brief Plays the light animation assigned to this light with the existing LightAnimData datablock.\n\n"
-   
-   "@tsexample\n"
-   "// Play the animation assigned to this light\n"
-   "CrystalLight.playAnimation();\n"
+   "// Use the SpawnSphere::spawnObject function to create a game object\n"
+   "// No additional properties assigned\n"
+   "%player = DefaultSpawnSphere.spawnObject();\n\n"
    "@endtsexample\n\n",
-   "LightBase",
-   "void playAnimation();"
-);
-static ConsoleDocFragment _lbplayAnimation2(
-   "@brief Plays the light animation on this light using a new LightAnimData. If no LightAnimData "
-   "is passed the existing one is played.\n\n"
-   "@param anim Name of the LightAnimData datablock to be played\n\n"
-   "@tsexample\n"
-   "// Play the animation using a new LightAnimData datablock\n"
-   "CrystalLight.playAnimation(SubtlePulseLightAnim);\n"
-   "@endtsexample\n\n",
-   "LightBase",
-   "void playAnimation(LightAnimData anim);"
+   "SpawnSphere",
+   "bool spawnObject(string additionalProps);"
 );
 
-DefineConsoleMethod( LightBase, playAnimation, void, (const char * anim), (""), "( [LightAnimData anim] )\t"
-   "Plays a light animation on the light.  If no LightAnimData is passed the "
-   "existing one is played."
-   "@hide")
+//ConsoleMethod(SpawnSphere, spawnObject, S32, 2, 3,
+DefineConsoleMethod(SpawnSphere, spawnObject, S32, (String additionalProps), ,
+   "([string additionalProps]) Spawns the object based on the SpawnSphere's "
+   "class, datablock, properties, and script settings. Allows you to pass in "
+   "extra properties."
+   "@hide" )
 {
-    if ( anim == "" )
-    {
-        object->playAnimation();
-        return;
-    }
+   //String additionalProps;
 
-    LightAnimData *animData;
-    if ( !Sim::findObject( anim, animData ) )
-    {
-        Con::errorf( "LightBase::playAnimation() - Invalid LightAnimData '%s'.", anim );
-        return;
-    }
+   //if (argc == 3)
+   //   additionalProps = String(argv[2]);
 
-    // Play Animation.
-    object->playAnimation( animData );
+   SimObject* obj = object->spawnObject(additionalProps);
+
+   if (obj)
+      return obj->getId();
+
+   return -1;
 }
 
-void LightBase::playAnimation( void )
+
+//------------------------------------------------------------------------------
+// Class: CameraBookmark
+//------------------------------------------------------------------------------
+IMPLEMENT_CO_NETOBJECT_V1(CameraBookmark);
+
+ConsoleDocClass( CameraBookmark,
+   "@brief Special type of mission marker which allows a level editor's camera to jump to specific points.\n\n"
+   "For Torque 3D editors only, not for actual game development\n\n"
+   "@internal"
+);
+
+CameraBookmark::CameraBookmark()
 {
-    if ( !mAnimState.active )
-    {
-        mAnimState.active = true;
-        setMaskBits( UpdateMask );
-    }
+   mName = StringTable->insert("");
 }
 
-void LightBase::playAnimation( LightAnimData *animData )
+bool CameraBookmark::onAdd()
 {
-    // Play Animation.
-    playAnimation();
+   if(!Parent::onAdd())
+      return(false);
 
-    // Update Datablock?
-    if ( mAnimationData != animData )
-    {
-        mAnimationData = animData;
-        setMaskBits( DatablockMask );
-    }
+   //
+   if(!isClientObject())
+   {
+      setMaskBits(UpdateNameMask);
+   }
+
+   if( isServerObject() && isMethod("onAdd") )
+      Con::executef( this, "onAdd" );
+
+   return(true);
 }
 
-DefineConsoleMethod( LightBase, pauseAnimation, void, (), , "Stops the light animation." )
+void CameraBookmark::onRemove()
 {
-    object->pauseAnimation();
+   if( isServerObject() && isMethod("onRemove") )
+      Con::executef( this, "onRemove" );
+
+   Parent::onRemove();
 }
 
-void LightBase::pauseAnimation( void )
+void CameraBookmark::onGroupAdd()
 {
-    if ( mAnimState.active )
-    {
-        mAnimState.active = false;
-        setMaskBits( UpdateMask );
-    }
+   if( isServerObject() && isMethod("onGroupAdd") )
+      Con::executef( this, "onGroupAdd" );
+}
+
+void CameraBookmark::onGroupRemove()
+{
+   if( isServerObject() && isMethod("onGroupRemove") )
+      Con::executef( this, "onGroupRemove" );
+}
+
+void CameraBookmark::inspectPostApply()
+{
+   Parent::inspectPostApply();
+   if(!mName || !mName[0])
+      mName = StringTable->insert("");
+   setMaskBits(UpdateNameMask);
+
+   if( isMethod("onInspectPostApply") )
+      Con::executef( this, "onInspectPostApply" );
+}
+
+U32 CameraBookmark::packUpdate(NetConnection * con, U32 mask, BitStream * stream)
+{
+   U32 retMask = Parent::packUpdate(con, mask, stream);
+   if(stream->writeFlag(mask & UpdateNameMask))
+      stream->writeString(mName);
+   return(retMask);
+}
+
+void CameraBookmark::unpackUpdate(NetConnection * con, BitStream * stream)
+{
+   Parent::unpackUpdate(con, stream);
+   if(stream->readFlag())
+      mName = stream->readSTString(true);
+}
+
+void CameraBookmark::initPersistFields()
+{
+   //addGroup("Misc");	
+   //addField("name", TypeCaseString, Offset(mName, CameraBookmark));
+   //endGroup("Misc");
+
+   Parent::initPersistFields();
+
+   removeField("nameTag"); // From GameBase
 }

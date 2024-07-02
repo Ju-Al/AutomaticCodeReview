@@ -1,7 +1,6 @@
 # Copyright 2001 by Brad Chapman.  All rights reserved.
 # make files in this directory importable
 """A selection of genetic algorithm code."""
-# This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 """Genetic Algorithm library (DEPRECATED)."""

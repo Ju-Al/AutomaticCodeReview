@@ -1,5 +1,4 @@
 RSpec.describe "Partner management", type: :system, js: true do
-  before do
     sign_in(@user)
   end
   let!(:url_prefix) { "/#{@organization.to_param}" }

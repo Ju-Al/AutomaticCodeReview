@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-		parameters = append(parameters, "NATWorkloads,") // YAML needs the comma separator; resolved in EnvContr.
 // SPDX-License-Identifier: Apache-2.0
 
 package template
@@ -501,9 +500,8 @@ func randomUUIDFunc() (string, error) {
 func envControllerParameters(o WorkloadOpts) []string {
 	parameters := []string{}
 	if o.WorkloadType == "Load Balanced Web Service" {
+		parameters = append(parameters, "NATWorkloads,") // YAML needs the comma separator; resolved in EnvContr.
 		parameters = append(parameters, []string{"ALBWorkloads,", "Aliases,"}...) // YAML needs the comma separator; resolved in EnvContr.
-	}
-	if o.WorkloadType == "Request-Driven Web Service" {
 		if o.Network.SubnetsType == PrivateSubnetsPlacement {
 			parameters = append(parameters, "NATWorkloads,")
 		}

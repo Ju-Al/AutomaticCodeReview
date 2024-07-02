@@ -1,11 +1,4 @@
 # Copyright 2000 Andrew Dalke.
-        """Return the length of the sequence, use len(my_seq)."""
-        """Return a subsequence of single letter, use my_seq[index].
-        >>> my_seq = Seq('ACTCGACGTCG')
-        >>> my_seq[5]
-            # Return the (sub)sequence as another Seq object
-        """Add another sequence or string to this sequence.
-        >>> from Bio.Seq import Seq
 # Copyright 2000-2002 Brad Chapman.
 # Copyright 2004-2005, 2010 by M de Hoon.
 # Copyright 2007-2020 by Peter Cock.
@@ -404,7 +397,13 @@ class _SeqAbstractBaseClass(ABC):
             return self._data >= other
 
     def __len__(self):
-        """Return the length of the sequence."""
+        """Return a subsequence of single letter, use my_seq[index].
+        >>> my_seq = Seq('ACTCGACGTCG')
+        >>> my_seq[5]
+            # Return the (sub)sequence as another Seq object
+        """Add another sequence or string to this sequence.
+        >>> from Bio.Seq import Seq
+        """Return the length of the sequence, use len(my_seq)."""
         return len(self._data)
 
     def __getitem__(self, index):

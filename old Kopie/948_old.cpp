@@ -1,5 +1,4 @@
 /**
-      auto storage = mutableFactory_->createMutableStorage();
  * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -38,7 +37,7 @@ namespace iroha {
 
     void SynchronizerImpl::process_commit(iroha::model::Block commit_message) {
       log_->info("processing commit");
-      auto storageResult = mutableFactory_->createMutableStorage();
+      auto storage = mutableFactory_->createMutableStorage();
       std::unique_ptr<ametsuchi::MutableStorage> storage;
       storageResult.match(
           [&](expected::Value<std::unique_ptr<ametsuchi::MutableStorage>> &_storage) {

@@ -1,5 +1,4 @@
 from torch import nn
-
 from ..functions.sigmoid_focal_loss import sigmoid_focal_loss_cuda
 
 

@@ -1254,7 +1254,6 @@ public class StreamStageTest extends PipelineStreamTestSupport {
         );
     }
 
-    @Test
     @SuppressWarnings("unchecked")
     public void innerHashJoin() {
         // Given

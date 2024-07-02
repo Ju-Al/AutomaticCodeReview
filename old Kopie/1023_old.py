@@ -1,6 +1,4 @@
 #
-        assets = self.asset_finder.retrieve_all(self.open_orders.keys())
-        asset_dict = {asset.sid: asset for asset in assets}
 # Copyright 2015 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -247,8 +245,9 @@ class Blotter(object):
             parameters.  If there are no commission events (because, for
             example, Zipline models the commission cost into the fill price
             of the transaction), then this is None.
+        assets = self.asset_finder.retrieve_all(self.open_orders.keys())
+        asset_dict = {asset.sid: asset for asset in assets}
         """
-
         closed_orders = []
         transactions = []
 

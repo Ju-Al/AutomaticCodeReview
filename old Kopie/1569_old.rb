@@ -1,5 +1,4 @@
 # Copyright (C) 2019 MongoDB, Inc.
-      @key_vault_namespace = options[:key_vault_namespace]
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +35,7 @@ module Mongo
       validate_key_vault_namespace(options[:key_vault_namespace])
 
       @client = client
-      @key_vault_db, @key_vault_coll = options[:key_vault_namespace].split('.')
+      @key_vault_namespace = options[:key_vault_namespace]
 
       @crypt_handle = Crypt::Handle.new(options[:kms_providers])
     end

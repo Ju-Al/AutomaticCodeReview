@@ -1,5 +1,4 @@
 # Copyright 2010 by Eric Talevich. All rights reserved.
-    """Reads through whitespaces, returns the first non-whitespace line."""
 # Copyright 2012 by Wibowo Arindrarto. All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -37,7 +36,7 @@ def iterlen(items):
 
 
 def read_forward(handle):
-    """Read through whitespaces, returns the first non-whitespace line."""
+    """Reads through whitespaces, returns the first non-whitespace line."""
     while True:
         line = handle.readline()
         # if line is empty or line has characters and stripping does not remove

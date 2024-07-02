@@ -334,7 +334,6 @@ class LGBMModel(LGBMModelBase):
         """
         evals_result = {}
         params = self.get_params()
-        # sklearn interface has another naming convention
         params['seed'] = params.pop('seed', params.pop('random_state'))
         params.pop('random_state', None)  # Avoid unknown parameter error from `train`
         params['nthread'] = params.pop('nthread', params.pop('n_jobs'))

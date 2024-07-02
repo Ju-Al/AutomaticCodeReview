@@ -653,7 +653,6 @@ int s2n_verify_unique_ticket_key(struct s2n_config *config, uint8_t *hash, uint1
     *insert_index = low;
     return 0;
 }
-
 int s2n_config_add_key_in_sorted_array(struct s2n_config *config, struct s2n_ticket_key *key)
 {
     int low = 0;

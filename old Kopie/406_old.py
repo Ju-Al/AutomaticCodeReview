@@ -279,7 +279,6 @@ class MappedSearchStrategy(SearchStrategy):
                     raise
         reject()
 
-    @property
     def branches(self):
         branches = [
             MappedSearchStrategy(pack=self.pack, strategy=strategy)

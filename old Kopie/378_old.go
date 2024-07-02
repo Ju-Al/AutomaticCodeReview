@@ -68,7 +68,6 @@ type Handler interface {
 		resw ResponseWriter,
 	) error
 }
-
 // OnewayHandler handles a single, transport-level, oneway request.
 type OnewayHandler interface {
 	// Handle the given oneway request

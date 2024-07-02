@@ -1,5 +1,4 @@
 // 
-        }
 // Copyright (c) 2004-2011 Jaroslaw Kowalski <jaak@jkowalski.net>
 // 
 // All rights reserved.
@@ -1834,8 +1833,8 @@ namespace NLog.Targets
                 }
                 return targetFileName;
             }
+        }
 
-            private readonly Queue<string> fileQueue;
         }
 
         private sealed class FileNameTemplate

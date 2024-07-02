@@ -333,7 +333,6 @@ class ExtensionsConfig(object):
 
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
 
-    def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
             feature_name = gettext(find(required_feature, "Name"))
             feature_value = gettext(find(required_feature, "Value"))

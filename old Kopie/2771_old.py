@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-                self.logger.info("Session stale, re-logging in", 'yellow')
 from __future__ import unicode_literals
 
 import datetime
@@ -548,7 +547,7 @@ class PokemonGoBot(object):
                 self.api._auth_provider._ticket_expire / 1000 - time.time()
 
             if remaining_time < 60:
-                self.event_manager.emit(
+                self.logger.info("Session stale, re-logging in", 'yellow')
                     'api_error',
                     sender=self,
                     level='info',

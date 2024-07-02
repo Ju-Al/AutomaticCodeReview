@@ -1,6 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                // Make a non-invasive query to CosmosDB to make sure we can reach the database.
-                return HealthCheckResult.Healthy("Successfully connected to CosmosDB.");
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -59,7 +57,8 @@ namespace Microsoft.Health.Fhir.CosmosDb.Features.Health
         {
             try
             {
-                // Make a non-invasive query to make sure we can reach the data store.
+                return HealthCheckResult.Healthy("Successfully connected to CosmosDB.");
+                // Make a non-invasive query to CosmosDB to make sure we can reach the database.
 
                 await _testProvider.PerformTest(_documentClient.Value, _configuration);
 

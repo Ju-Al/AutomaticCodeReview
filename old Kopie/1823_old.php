@@ -1,11 +1,10 @@
 <?php
 /**
- * LibraryCards Controller
+ * Abstract authentication base class
  *
  * PHP version 7
  *
  * Copyright (C) Villanova University 2010.
- * Copyright (C) The National Library of Finland 2015-2019.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
@@ -21,368 +20,414 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  *
  * @category VuFind
- * @package  Controller
+ * @package  Authentication
+ * @author   Franck Borel <franck.borel@gbv.de>
  * @author   Demian Katz <demian.katz@villanova.edu>
- * @author   Ere Maijala <ere.maijala@helsinki.fi>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org Main Site
+ * @link     https://vufind.org Main Page
  */
-namespace VuFind\Controller;
+namespace VuFind\Auth;
 
-use VuFind\Exception\ILS as ILSException;
+use Laminas\Http\PhpEnvironment\Request;
+use VuFind\Db\Row\User;
+use VuFind\Exception\Auth as AuthException;
 
 /**
- * Controller for the library card functionality.
+ * Abstract authentication base class
  *
  * @category VuFind
- * @package  Controller
+ * @package  Authentication
+ * @author   Franck Borel <franck.borel@gbv.de>
  * @author   Demian Katz <demian.katz@villanova.edu>
- * @author   Ere Maijala <ere.maijala@helsinki.fi>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org Main Site
+ * @link     https://vufind.org Main Page
  */
-class LibraryCardsController extends AbstractBase
+abstract class AbstractBase implements \VuFind\Db\Table\DbTableAwareInterface,
+    \VuFind\I18n\Translator\TranslatorAwareInterface,
+    \Laminas\Log\LoggerAwareInterface
 {
+    use \VuFind\Db\Table\DbTableAwareTrait;
+    use \VuFind\I18n\Translator\TranslatorAwareTrait;
+    use \VuFind\Log\LoggerAwareTrait;
+
     /**
-     * Send user's library cards to the view
+     * Has the configuration been validated?
      *
-     * @return mixed
+     * @param bool
      */
-    public function homeAction()
+    protected $configValidated = false;
+
+    /**
+     * Configuration settings
+     *
+     * @param \Laminas\Config\Config
+     */
+    protected $config = null;
+
+    /**
+     * Get configuration (load automatically if not previously set).  Throw an
+     * exception if the configuration is invalid.
+     *
+     * @throws AuthException
+     * @return \Laminas\Config\Config
+     */
+    public function getConfig()
     {
-        if (!($user = $this->getUser())) {
-            return $this->forceLogin();
+        // Validate configuration if not already validated:
+        if (!$this->configValidated) {
+            $this->validateConfig();
+            $this->configValidated = true;
         }
 
-        // Check for "delete card" request; parameter may be in GET or POST depending
-        // on calling context.
-        $deleteId = $this->params()->fromPost(
-            'delete', $this->params()->fromQuery('delete')
-        );
-        if ($deleteId) {
-            // If the user already confirmed the operation, perform the delete now;
-            // otherwise prompt for confirmation:
-            $confirm = $this->params()->fromPost(
-                'confirm', $this->params()->fromQuery('confirm')
-            );
-            if ($confirm) {
-                $success = $this->performDeleteLibraryCard($deleteId);
-                if ($success !== true) {
-                    return $success;
-                }
-            } else {
-                return $this->confirmDeleteLibraryCard($deleteId);
-            }
+        return $this->config;
+    }
+
+    /**
+     * Inspect the user's request prior to processing a login request; this is
+     * essentially an event hook which most auth modules can ignore. See
+     * ChoiceAuth for a use case example.
+     *
+     * @param Request $request Request object.
+     *
+     * @throws AuthException
+     * @return void
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function preLoginCheck($request)
+    {
+        // By default, do no checking.
+    }
+
+    /**
+     * Reset any internal status; this is essentially an event hook which most auth
+     * modules can ignore. See ChoiceAuth for a use case example.
+     *
+     * @return void
+     */
+    public function resetState()
+    {
+        // By default, do no checking.
+    }
+
+    /**
+     * Set configuration.
+     *
+     * @param \Laminas\Config\Config $config Configuration to set
+     *
+     * @return void
+     */
+    public function setConfig($config)
+    {
+        $this->config = $config;
+        $this->configValidated = false;
+    }
+
+    /**
+     * Whether this authentication method needs CSRF checking for the request.
+     *
+     * @param Request $request Request object.
+     *
+     * @return bool
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function needsCsrfCheck($request)
+    {
+        // Enabled by default
+        return true;
+    }
+
+    /**
+     * Returns any authentication method this request should be delegated to.
+     *
+     * @param Request $request Request object.
+     *
+     * @return string|bool
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function getDelegateAuthMethod(Request $request)
+    {
+        // No delegate by default
+        return false;
+    }
+
+    /**
+     * Validate configuration parameters.  This is a support method for getConfig(),
+     * so the configuration MUST be accessed using $this->config; do not call
+     * $this->getConfig() from within this method!
+     *
+     * @throws AuthException
+     * @return void
+     */
+    protected function validateConfig()
+    {
+        // By default, do no checking.
+    }
+
+    /**
+     * Attempt to authenticate the current user.  Throws exception if login fails.
+     *
+     * @param Request $request Request object containing account credentials.
+     *
+     * @throws AuthException
+     * @return User Object representing logged-in user.
+     */
+    abstract public function authenticate($request);
+
+    /**
+     * Validate the credentials in the provided request, but do not change the state
+     * of the current logged-in user. Return true for valid credentials, false
+     * otherwise.
+     *
+     * @param Request $request Request object containing account credentials.
+     *
+     * @throws AuthException
+     * @return bool
+     */
+    public function validateCredentials($request)
+    {
+        try {
+            $user = $this->authenticate($request);
+        } catch (AuthException $e) {
+            return false;
         }
+        return isset($user) && $user instanceof User;
+    }
 
-        // Connect to the ILS for login drivers:
-        $catalog = $this->getILS();
+    /**
+     * Has the user's login expired?
+     *
+     * @return bool
+     */
+    public function isExpired()
+    {
+        // By default, logins do not expire:
+        return false;
+    }
 
-        $config = $this->getConfig();
-        $shibboleth = isset($config->Catalog->shibboleth_library_cards) &&
-            $config->Catalog->shibboleth_library_cards &&
-            ($this->getAuthManager()->getAuthMethod() == 'Shibboleth');
-        return $this->createViewModel(
-            [
-                'libraryCards' => $user->getLibraryCards(),
-                'multipleTargets' => $catalog->checkCapability('getLoginDrivers'),
-                'shibboleth' => $shibboleth,
-            ]
+    /**
+     * Create a new user account from the request.
+     *
+     * @param Request $request Request object containing new account details.
+     *
+     * @throws AuthException
+     * @return User New user row.
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    public function create($request)
+    {
+        throw new AuthException(
+            'Account creation not supported by ' . get_class($this)
         );
     }
 
     /**
-     * Send user's library card to the edit view
+     * Update a user's password from the request.
      *
-     * @return mixed
+     * @param Request $request Request object containing new account details.
+     *
+     * @throws AuthException
+     * @return User New user row.
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
-    public function editCardAction()
+    public function updatePassword($request)
     {
-        // User must be logged in to edit library cards:
-        $user = $this->getUser();
-        if ($user == false) {
-            return $this->forceLogin();
-        }
-
-        // Process email authentication:
-        if ($this->params()->fromQuery('auth_method') === 'Email'
-            && ($hash = $this->params()->fromQuery('hash'))
-        ) {
-            return $this->processEmailLink($user, $hash);
-        }
-
-        // Process form submission:
-        if ($this->formWasSubmitted('submit')) {
-            if ($redirect = $this->processEditLibraryCard($user)) {
-                return $redirect;
-            }
-        }
-
-        $id = $this->params()->fromRoute('id', $this->params()->fromQuery('id'));
-        $card = $user->getLibraryCard($id == 'NEW' ? null : $id);
-
-        $target = null;
-        $username = $card->cat_username;
-
-        $loginSettings = $this->getILSLoginSettings();
-        // Split target and username if multiple login targets are available:
-        if ($loginSettings['targets'] && strstr($username, '.')) {
-            list($target, $username) = explode('.', $username, 2);
-        }
-
-        $cardName = $this->params()->fromPost('card_name', $card->card_name);
-        $username = $this->params()->fromPost('username', $username);
-        $target = $this->params()->fromPost('target', $target);
-
-        // Send the card to the view:
-        return $this->createViewModel(
-            [
-                'card' => $card,
-                'cardName' => $cardName,
-                'target' => $target ?: $loginSettings['defaultTarget'],
-                'username' => $username,
-                'targets' => $loginSettings['targets'],
-                'defaultTarget' => $loginSettings['defaultTarget'],
-                'loginMethod' => $loginSettings['loginMethod'],
-                'loginMethods' => $loginSettings['loginMethods'],
-            ]
+        throw new AuthException(
+            'Account password updating not supported by ' . get_class($this)
         );
     }
 
     /**
-     * Creates a confirmation box to delete or not delete the current list
+     * Get the URL to establish a session (needed when the internal VuFind login
+     * form is inadequate).  Returns false when no session initiator is needed.
      *
-     * @return mixed
+     * @param string $target Full URL where external authentication method should
+     * send user after login (some drivers may override this).
+     *
+     * @return bool|string
+     *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      */
-    public function deleteCardAction()
+    public function getSessionInitiator($target)
     {
-        // User must be logged in to edit library cards:
-        $user = $this->getUser();
-        if ($user == false) {
-            return $this->forceLogin();
-        }
-
-        // Get requested library card ID:
-        $cardID = $this->params()
-            ->fromPost('cardID', $this->params()->fromQuery('cardID'));
-
-        // Have we confirmed this?
-        $confirm = $this->params()->fromPost(
-            'confirm', $this->params()->fromQuery('confirm')
-        );
-        if ($confirm) {
-            $user->deleteLibraryCard($cardID);
-
-            // Success Message
-            $this->flashMessenger()->addMessage('Library Card Deleted', 'success');
-            // Redirect to MyResearch library cards
-            return $this->redirect()->toRoute('librarycards-home');
-        }
-
-        // If we got this far, we must display a confirmation message:
-        return $this->confirm(
-            'confirm_delete_library_card_brief',
-            $this->url()->fromRoute('librarycards-deletecard'),
-            $this->url()->fromRoute('librarycards-home'),
-            'confirm_delete_library_card_text', ['cardID' => $cardID]
-        );
+        return false;
     }
 
     /**
-     * When redirecting after selecting a library card, adjust the URL to make
-     * sure it will work correctly.
+     * Perform cleanup at logout time.
      *
-     * @param string $url URL to adjust
+     * @param string $url URL to redirect user to after logging out.
+     *
+     * @return string     Redirect URL (usually same as $url, but modified in
+     * some authentication modules).
+     */
+    public function logout($url)
+    {
+        // No special cleanup or URL modification needed by default.
+        return $url;
+    }
+
+    /**
+     * Does this authentication method support account creation?
+     *
+     * @return bool
+     */
+    public function supportsCreation()
+    {
+        // By default, account creation is not supported.
+        return false;
+    }
+
+    /**
+     * Does this authentication method support password changing
+     *
+     * @return bool
+     */
+    public function supportsPasswordChange()
+    {
+        // By default, password changing is not supported.
+        return false;
+    }
+
+    /**
+     * Does this authentication method support password recovery
+     *
+     * @return bool
+     */
+    public function supportsPasswordRecovery()
+    {
+        // By default, password recovery is not supported.
+        return false;
+    }
+
+     * Does this authentication method support connecting library card of
+     * currently authenticated user?
+     *
+     * @return bool
+     */
+    public function supportsConnectingLibraryCard()
+    {
+        // By default, connecting library card of currently authenticated user
+        // is not supported.
+        return false;
+    }
+
+    /**
+     * Return a canned password policy hint when available
+     *
+     * @param string $pattern Current policy pattern
      *
      * @return string
      */
-    protected function adjustCardRedirectUrl($url)
+    protected function getCannedPasswordPolicyHint($pattern)
     {
-        // If there is pagination in the URL, reset it to page 1, since the
-        // new card may have a different number of pages of data:
-        return preg_replace('/([&?]page)=[0-9]+/', '$1=1', $url);
+        return (in_array($pattern, ['numeric', 'alphanumeric']))
+            ? 'password_only_' . $pattern : null;
     }
 
     /**
-     * Activates a library card
+     * Password policy for a new password (e.g. minLength, maxLength)
      *
-     * @return \Laminas\Http\Response
+     * @return array
      */
-    public function selectCardAction()
+    public function getPasswordPolicy()
     {
-        $user = $this->getUser();
-        if ($user == false) {
-            return $this->forceLogin();
+        $policy = [];
+        $config = $this->getConfig();
+        if (isset($config->Authentication->minimum_password_length)) {
+            $policy['minLength']
+                = $config->Authentication->minimum_password_length;
         }
-
-        $cardID = $this->params()->fromQuery('cardID');
-        if (null === $cardID) {
-            return $this->redirect()->toRoute('myresearch-home');
+        if (isset($config->Authentication->maximum_password_length)) {
+            $policy['maxLength']
+                = $config->Authentication->maximum_password_length;
         }
-        $user->activateLibraryCard($cardID);
-
-        // Connect to the ILS and check that the credentials are correct:
-        try {
-            $catalog = $this->getILS();
-            $patron = $catalog->patronLogin(
-                $user->cat_username,
-                $user->getCatPassword()
+        if (isset($config->Authentication->password_pattern)) {
+            $policy['pattern']
+                = $config->Authentication->password_pattern;
+        }
+        if (isset($config->Authentication->password_hint)) {
+            $policy['hint'] = $config->Authentication->password_hint;
+        } else {
+            $policy['hint'] = $this->getCannedPasswordPolicyHint(
+                $policy['pattern'] ?? null
             );
-            if (!$patron) {
-                $this->flashMessenger()
-                    ->addMessage('authentication_error_invalid', 'error');
-            }
-        } catch (ILSException $e) {
-            $this->flashMessenger()
-                ->addMessage('authentication_error_technical', 'error');
         }
-
-        $this->setFollowupUrlToReferer();
-        if ($url = $this->getFollowupUrl()) {
-            $this->clearFollowupUrl();
-            return $this->redirect()->toUrl($this->adjustCardRedirectUrl($url));
-        }
-        return $this->redirect()->toRoute('myresearch-home');
+        return $policy;
     }
 
     /**
-     * Redirects to Shibboleth authentication to connect a new library card
+     * Get access to the user table.
      *
-     * @return \Laminas\Http\Response
+     * @return \VuFind\Db\Table\User
      */
-    public function connectNewShibbolethCardAction()
+    public function getUserTable()
     {
-        $url = $this->getServerUrl('librarycards-connectshibbolethcard');
-        $redirectUrl = $this->getAuthManager()->getSessionInitiator($url);
-        if ($redirectUrl == null) {
-            $this->flashMessenger()
-                ->addMessage('authentication_error_technical', 'error');
-            $redirectUrl = '/LibraryCards/Home';
-        }
-        return $this->redirect()->toUrl($redirectUrl);
+        return $this->getDbTableManager()->get('User');
     }
 
     /**
-     * Connects a new library card for shibboleth authenticated user
+     * Verify that a password fulfills the password policy. Throws exception if
+     * the password is invalid.
      *
-     * @return \Laminas\Http\Response
+     * @param string $password Password to verify
+     *
+     * @return void
+     * @throws AuthException
      */
-    public function connectShibbolethCardAction()
+    protected function validatePasswordAgainstPolicy($password)
     {
-        if (!($user = $this->getUser())) {
-            return $this->forceLogin();
+        $policy = $this->getPasswordPolicy();
+        if (isset($policy['minLength'])
+            && strlen($password) < $policy['minLength']
+        ) {
+            throw new AuthException(
+                $this->translate(
+                    'password_minimum_length',
+                    ['%%minlength%%' => $policy['minLength']]
+                )
+            );
         }
-        try {
-            $this->getAuthManager()->connectUserCard($this->getRequest(), $user);
-        } catch (\Exception $ex) {
-            $this->flashMessenger()->setNamespace('error')
-                ->addMessage($ex->getMessage());
+        if (isset($policy['maxLength'])
+            && strlen($password) > $policy['maxLength']
+        ) {
+            throw new AuthException(
+                $this->translate(
+                    'password_maximum_length',
+                    ['%%maxlength%%' => $policy['maxLength']]
+                )
+            );
         }
-        return $this->redirect()->toUrl('/LibraryCards/Home');
-    }
-
-    /**
-     * Process the "edit library card" submission.
-     *
-     * @param \VuFind\Db\Row\User $user Logged in user
-     *
-     * @return object|bool        Response object if redirect is
-     * needed, false if form needs to be redisplayed.
-     */
-    protected function processEditLibraryCard($user)
-    {
-        $cardName = $this->params()->fromPost('card_name', '');
-        $target = $this->params()->fromPost('target', '');
-        $username = $this->params()->fromPost('username', '');
-        $password = $this->params()->fromPost('password', '');
-        $id = $this->params()->fromRoute('id', $this->params()->fromQuery('id'));
-
-        if (!$username) {
-            $this->flashMessenger()
-                ->addMessage('authentication_error_blank', 'error');
-            return false;
-        }
-
-        if ($target) {
-            $username = "$target.$username";
-        }
-
-        // Check the credentials if the username is changed or a new password is
-        // entered:
-        $card = $user->getLibraryCard($id == 'NEW' ? null : $id);
-        if ($card->cat_username !== $username || trim($password)) {
-            // Connect to the ILS and check that the credentials are correct:
-            $loginMethod = $this->getILSLoginMethod($target);
-            $catalog = $this->getILS();
-            try {
-                $patron = $catalog->patronLogin($username, $password);
-            } catch (ILSException $e) {
-                $this->flashMessenger()->addErrorMessage('ils_connection_failed');
-                return false;
-            }
-            if ('password' === $loginMethod && !$patron) {
-                $this->flashMessenger()
-                    ->addMessage('authentication_error_invalid', 'error');
-                return false;
-            }
-            if ('email' === $loginMethod) {
-                if ($patron) {
-                    $info = $patron;
-                    $info['cardID'] = $id;
-                    $info['cardName'] = $cardName;
-                    $emailAuthenticator = $this->serviceLocator
-                        ->get(\VuFind\Auth\EmailAuthenticator::class);
-                    $emailAuthenticator->sendAuthenticationLink(
-                        $info['email'],
-                        $info,
-                        ['auth_method' => 'Email'],
-                        'editLibraryCard'
+        if (!empty($policy['pattern'])) {
+            $valid = true;
+            if ($policy['pattern'] == 'numeric') {
+                if (!ctype_digit($password)) {
+                    $valid = false;
+                }
+            } elseif ($policy['pattern'] == 'alphanumeric') {
+                if (preg_match('/[^\da-zA-Z]/', $password)) {
+                    $valid = false;
+                }
+            } else {
+                $result = preg_match(
+                    "/({$policy['pattern']})/", $password, $matches
+                );
+                if ($result === false) {
+                    throw new \Exception(
+                        'Invalid regexp in password pattern: ' . $policy['pattern']
                     );
                 }
-                // Don't reveal the result
-                $this->flashMessenger()->addSuccessMessage('email_login_link_sent');
-                return $this->redirect()->toRoute('librarycards-home');
+                if (!$result || $matches[1] != $password) {
+                    $valid = false;
+                }
+            }
+            if (!$valid) {
+                throw new AuthException($this->translate('password_error_invalid'));
             }
         }
-
-        try {
-            $user->saveLibraryCard(
-                $id == 'NEW' ? null : $id, $cardName, $username, $password
-            );
-        } catch (\VuFind\Exception\LibraryCard $e) {
-            $this->flashMessenger()->addMessage($e->getMessage(), 'error');
-            return false;
-        }
-
-        return $this->redirect()->toRoute('librarycards-home');
-    }
-
-    /**
-     * Process library card addition via an email link
-     *
-     * @param User   $user User object
-     * @param string $hash Hash
-     *
-     * @return \Laminas\Http\Response Response object
-     */
-    protected function processEmailLink($user, $hash)
-    {
-        $emailAuthenticator = $this->serviceLocator
-            ->get(\VuFind\Auth\EmailAuthenticator::class);
-        try {
-            $info = $emailAuthenticator->authenticate($hash);
-            $user->saveLibraryCard(
-                'NEW' === $info['cardID'] ? null : $info['cardID'],
-                $info['cardName'],
-                $info['cat_username'],
-                ' '
-            );
-        } catch (\VuFind\Exception\Auth $e) {
-            $this->flashMessenger()->addErrorMessage($e->getMessage());
-        } catch (\VuFind\Exception\LibraryCard $e) {
-            $this->flashMessenger()->addErrorMessage($e->getMessage());
-        }
-
-        return $this->redirect()->toRoute('librarycards-home');
     }
 }

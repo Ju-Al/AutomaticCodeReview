@@ -1,8 +1,5 @@
 <?php
 
-		$alias = $this->getAlias($model);
-		$tempModel->origAlias = $tempModel->$alias;
-		$tempModel->$alias = $placeholder;
 /*
  * This file is part of Contao.
  *
@@ -131,7 +128,9 @@ EOT;
 			throw new \LogicException('No url_callback given');
 		}
 
-		$aliasField = $this->aliasField ?: 'alias';
+		$tempModel->origAlias = $tempModel->$alias;
+		$tempModel->$alias = $placeholder;
+		$alias = $this->getAlias($model);
 		$placeholder = bin2hex(random_bytes(10));
 
 		// Pass a detached clone with the alias set to the placeholder

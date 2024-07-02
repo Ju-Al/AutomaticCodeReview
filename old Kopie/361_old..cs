@@ -29,7 +29,6 @@ namespace Microsoft.Health.Fhir.Web
             services.AddControlPlaneCosmosDb(Configuration).AddDevelopmentIdentityProvider(Configuration);
 
             services.AddFhirServer(Configuration).AddFhirServerCosmosDb(Configuration);
-
             services.AddHealthChecks()
                 .AddCheck<FhirCosmosHealthCheck>(name: "FhirCosmosDb", failureStatus: HealthStatus.Unhealthy)
                 .AddCheck<ControlPlaneCosmosHealthCheck>(name: "ControlPlaneCosmosDb", failureStatus: HealthStatus.Unhealthy);

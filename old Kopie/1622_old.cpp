@@ -37,7 +37,6 @@ using namespace iroha::network;
 using namespace iroha::ametsuchi;
 using namespace framework::test_subscriber;
 using namespace shared_model::crypto;
-using namespace shared_model::validation;
 
 using testing::A;
 using testing::Return;

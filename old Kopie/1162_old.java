@@ -1,5 +1,4 @@
 /*
-      Path baseDir = new Path(tmp, getClass().getName());
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -93,7 +92,7 @@ public class ImportExportIT extends AccumuloClusterHarness {
       FileSystem fs = cluster.getFileSystem();
       Path tmp = cluster.getTemporaryPath();
       log.info("Using FileSystem: " + fs);
-      // Add Fs.defaultFS to baseDir so importDirectory has the full path for Standalone Instance
+      Path baseDir = new Path(tmp, getClass().getName());
       String defaultFS = fs.getConf().get(FileSystem.FS_DEFAULT_NAME_KEY);
       Path baseDir = new Path(defaultFS + tmp, getClass().getName());
       fs.deleteOnExit(baseDir);

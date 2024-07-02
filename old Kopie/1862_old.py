@@ -1,5 +1,4 @@
 import json
-    if not Locale.objects.filter(ms_translator_code=locale_code).exists():
 import logging
 import requests
 import xml.etree.ElementTree as ET
@@ -135,7 +134,7 @@ def microsoft_translator(request):
         )
 
     # Validate if locale exists in the database to avoid any potential XSS attacks.
-    if (
+    if not Locale.objects.filter(ms_translator_code=locale_code).exists():
         not locale_code
         or not Locale.objects.filter(ms_translator_code=locale_code).exists()
     ):

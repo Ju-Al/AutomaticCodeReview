@@ -48,7 +48,6 @@ class Body extends React.Component {
         <div id="shot-index">
           {children}
         </div>
-        <Footer>
           <a href="/delete-account">Disable account / delete all shots</a>
         </Footer>
       </reactruntime.BodyTemplate>

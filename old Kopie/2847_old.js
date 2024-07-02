@@ -171,10 +171,6 @@ test('returns error message with invalid request', () => {
         3,
         expect.objectContaining({
             shouldDisplayCardError: true
-        })
-    );
-});
-
 test('it runs the card balance query when checkGiftCardBalance() is called', () => {
     const checkCardBalance = jest.fn();
 

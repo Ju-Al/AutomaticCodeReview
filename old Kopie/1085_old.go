@@ -1,5 +1,4 @@
 package authenticate
-
 import (
 	"encoding/base64"
 	"encoding/json"

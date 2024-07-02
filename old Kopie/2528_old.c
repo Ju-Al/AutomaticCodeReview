@@ -249,8 +249,6 @@ int main(int argc, char **argv)
 
     EXPECT_SUCCESS(s2n_tls13_derive_application_secret(&secrets, &hash_state, &server_application_secret, S2N_SERVER));
     S2N_BLOB_EXPECT_EQUAL(expect_derived_server_application_traffic_secret, server_application_secret);
-
-    /* Update handshake hashes with Client Finished */
     EXPECT_SUCCESS(s2n_hash_update(&hash_state, client_finished.data, client_finished.size));
     
     /* Test session resumption secret */

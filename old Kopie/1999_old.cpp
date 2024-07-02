@@ -1,5 +1,4 @@
 /**
-    vote.signature = clone(TestSignatureBuilder().publicKey(*pubkey).build());
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -40,7 +39,7 @@ class FixedCryptoProvider : public MockYacCryptoProvider {
 
   VoteMessage getVote(YacHash hash) override {
     auto vote = MockYacCryptoProvider::getVote(hash);
-    auto signature = std::make_shared<MockSignature>();
+    vote.signature = clone(TestSignatureBuilder().publicKey(*pubkey).build());
     data = std::make_unique<shared_model::crypto::Signed>("");
     EXPECT_CALL(*signature, publicKey()).WillRepeatedly(testing::ReturnRef(*pubkey));
     EXPECT_CALL(*signature, signedData()).WillRepeatedly(testing::ReturnRef(*data));

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Oath Holdings Inc.
+ * Copyright 2016 Yahoo Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,177 +13,130 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.yahoo.athenz.zms.store;
 
-package com.yahoo.athenz.zms;
+import java.io.Closeable;
+import java.sql.Timestamp;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import com.yahoo.athenz.common.server.notification.Notification;
-import com.yahoo.athenz.common.server.notification.NotificationService;
-import com.yahoo.athenz.common.server.notification.NotificationServiceFactory;
-import com.yahoo.athenz.zms.store.AthenzDomain;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.yahoo.athenz.zms.*;
 
-import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+public interface ObjectStoreConnection extends Closeable {
+    
+    // Transaction commands
+    
+    void commitChanges();
+    void rollbackChanges();
+    void close();
+    void setOperationTimeout(int opTimout);
+    
+    // Domain commands
+    
+    Domain getDomain(String domainName);
+    boolean insertDomain(Domain domain);
+    boolean updateDomain(Domain domain);
+    boolean deleteDomain(String domainName);
+    long getDomainModTimestamp(String domainName);
+    boolean updateDomainModTimestamp(String domainName);
+    List<String> listDomains(String prefix, long modifiedSince);
+    String lookupDomainById(String account, int productId);
+    List<String> lookupDomainByRole(String roleMember, String roleName);
+    
+    AthenzDomain getAthenzDomain(String domainName);
+    DomainModifiedList listModifiedDomains(long modifiedSince);
 
-import static com.yahoo.athenz.common.server.notification.NotificationService.NOTIFICATION_TYPE_MEMBERSHIP_APPROVAL;
-import static com.yahoo.athenz.common.server.notification.NotificationService.NOTIFICATION_TYPE_MEMBERSHIP_APPROVAL_REMINDER;
+    // Principal commands
+    
+    boolean deletePrincipal(String principalName, boolean subDomains);
+    List<String> listPrincipals(String domainName);
+    List<PrincipalRole> listPrincipalRoles(String domainName, String principalName);
+    
+    // Template commands
+    
+    boolean insertDomainTemplate(String domainName, String templateName, String params);
+    boolean deleteDomainTemplate(String domainName, String templateName, String params);
+    List<String> listDomainTemplates(String domainName);
 
-public class NotificationManager {
+    // Role commands
+    
+    Role getRole(String domainName, String roleName);
+    boolean insertRole(String domainName, Role role);
+    boolean updateRole(String domainName, Role role);
+    boolean deleteRole(String domainName, String roleName);
+    boolean updateRoleModTimestamp(String domainName, String roleName);
+    List<String> listRoles(String domainName);
+    int countRoles(String domainName);
+    List<RoleAuditLog> listRoleAuditLogs(String domainName, String roleName);
+    
+    List<RoleMember> listRoleMembers(String domainName, String roleName, Boolean pending);
+    int countRoleMembers(String domainName, String roleName);
+    Membership getRoleMember(String domainName, String roleName, String member);
+    boolean insertRoleMember(String domainName, String roleName, RoleMember roleMember, String principal, String auditRef);
+    boolean deleteRoleMember(String domainName, String roleName, String member, String principal, String auditRef);
+    boolean confirmRoleMember(String domainName, String roleName, RoleMember roleMember, String principal, String auditRef);
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(NotificationManager.class);
+    DomainRoleMembers listDomainRoleMembers(String domainName);
 
-    private NotificationService notificationService;
-    private ScheduledExecutorService scheduledExecutor;
-    private final DBService dbService;
-    private final String userDomainPrefix;
-    private int pendingRoleMemberLifespan;
-    private String monitorIdentity;
+    // Policy commands
+    
+    Policy getPolicy(String domainName, String policyName);
+    boolean insertPolicy(String domainName, Policy policy);
+    boolean updatePolicy(String domainName, Policy policy);
+    boolean deletePolicy(String domainName, String policyName);
+    List<String> listPolicies(String domainName, String assertionRoleName);
+    int countPolicies(String domainName);
+    boolean updatePolicyModTimestamp(String domainName, String policyName);
+    
+    Assertion getAssertion(String domainName, String policyName, Long assertionId);
+    boolean insertAssertion(String domainName, String policyName, Assertion assertion);
+    boolean deleteAssertion(String domainName, String policyName, Long assertionId);
+    List<Assertion> listAssertions(String domainName, String policyName);
+    int countAssertions(String domainName, String policyName);
+    ResourceAccessList listResourceAccess(String principal, String action, String userDomain);
+    
+    // Service commands
 
-    NotificationManager(final DBService dbService, final String userDomainPrefix) {
-        this.dbService = dbService;
-        this.userDomainPrefix = userDomainPrefix;
-        String notificationServiceFactoryClass = System.getProperty(ZMSConsts.ZMS_PROP_NOTIFICATION_SERVICE_FACTORY_CLASS);
-        if (notificationServiceFactoryClass != null) {
-            NotificationServiceFactory notificationServiceFactory;
-            try {
-                notificationServiceFactory = (NotificationServiceFactory) Class.forName(notificationServiceFactoryClass).newInstance();
-                notificationService = notificationServiceFactory.create();
-                init();
-            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
-                LOGGER.error("Invalid NotificationServiceFactory class: " + notificationServiceFactoryClass + " error: " + e.getMessage());
-            }
-        }
-    }
+    ServiceIdentity getServiceIdentity(String domainName, String serviceName);
+    boolean insertServiceIdentity(String domainName, ServiceIdentity service);
+    boolean updateServiceIdentity(String domainName, ServiceIdentity service);
+    boolean deleteServiceIdentity(String domainName, String serviceName);
+    List<String> listServiceIdentities(String domainName);
+    int countServiceIdentities(String domainName);
+    boolean updateServiceIdentityModTimestamp(String domainName, String serviceName);
+    
+    PublicKeyEntry getPublicKeyEntry(String domainName, String serviceName, String keyId, boolean domainStateCheck);
+    boolean insertPublicKeyEntry(String domainName, String serviceName, PublicKeyEntry publicKey);
+    boolean updatePublicKeyEntry(String domainName, String serviceName, PublicKeyEntry publicKey);
+    boolean deletePublicKeyEntry(String domainName, String serviceName, String keyId);
+    List<PublicKeyEntry> listPublicKeys(String domainName, String serviceName);
+    int countPublicKeys(String domainName, String serviceName);
 
-    private void init() {
-        if (isNotificationFeatureAvailable()) {
-            scheduledExecutor = Executors.newScheduledThreadPool(1);
-            scheduledExecutor.scheduleAtFixedRate(new PendingMembershipApprovalReminder(), 0, 1, TimeUnit.DAYS);
-        }
-        pendingRoleMemberLifespan = Integer.parseInt(System.getProperty(ZMSConsts.ZMS_PROP_PENDING_ROLE_MEMBER_LIFESPAN, ZMSConsts.ZMS_PENDING_ROLE_MEMBER_LIFESPAN_DEFAULT));
-        monitorIdentity = System.getProperty(ZMSConsts.ZMS_PROP_MONITOR_IDENTITY, ZMSConsts.SYS_AUTH_MONITOR);
-    }
+    List<String> listServiceHosts(String domainName, String serviceName);
+    boolean insertServiceHost(String domainName, String serviceName, String hostName);
+    boolean deleteServiceHost(String domainName, String serviceName, String hostName);
+    
+    // Entity commands
 
-    NotificationManager(final DBService dbService, final NotificationServiceFactory notificationServiceFactory, final String userDomainPrefix) {
-        this.dbService = dbService;
-        this.userDomainPrefix = userDomainPrefix;
-        notificationService = notificationServiceFactory.create();
-        init();
-    }
+    Entity getEntity(String domainName, String entityName);
+    boolean insertEntity(String domainName, Entity entity);
+    boolean updateEntity(String domainName, Entity entity);
+    boolean deleteEntity(String domainName, String entityName);
+    List<String> listEntities(String domainName);
+    int countEntities(String domainName);
+    
+    // Quota commands
+    
+    Quota getQuota(String domainName);
+    boolean insertQuota(String domainName, Quota quota);
+    boolean updateQuota(String domainName, Quota quota);
+    boolean deleteQuota(String domainName);
 
-    void shutdown() {
-        if (scheduledExecutor != null) {
-            scheduledExecutor.shutdownNow();
-        }
-    }
+    Map<String, List<DomainRoleMember>> getPendingDomainRoleMembersList(String principal);
+    Set<String> getPendingMembershipApproverRoles(String server, Timestamp timestamp);
 
-    void generateAndSendPostPutMembershipNotification(final String domain, final String org,
-             Boolean auditEnabled, Boolean selfServe, Map<String, String> details) {
+    List<Map<String, String>> processExpiredPendingMembers(int pendingRoleMemberLifespan, String monitorIdentity);
 
-        if (!isNotificationFeatureAvailable()) {
-            return;
-        }
-
-        Set<String> recipients = new HashSet<>();
-        if (auditEnabled == Boolean.TRUE) {
-
-            //get recipient role(s) from audit domain
-
-            Role domainRole = dbService.getRole(ZMSConsts.SYS_AUTH_AUDIT_BY_DOMAIN,
-                    domain, false, true, false);
-            Role orgRole = dbService.getRole(ZMSConsts.SYS_AUTH_AUDIT_BY_ORG,
-                    org, false, true, false);
-            if (domainRole != null) {
-                recipients.addAll(domainRole.getRoleMembers().stream().filter(m -> m.getMemberName().startsWith(userDomainPrefix))
-                        .map(RoleMember::getMemberName).collect(Collectors.toSet()));
-            }
-            if (orgRole != null) {
-                recipients.addAll(orgRole.getRoleMembers().stream().filter(m -> m.getMemberName().startsWith(userDomainPrefix))
-                        .map(RoleMember::getMemberName).collect(Collectors.toSet()));
-            }
-        } else if (selfServe == Boolean.TRUE) {
-            // get admin role from the request domain
-            Role adminRole = dbService.getRole(domain, "admin", false, true, false);
-            recipients.addAll(adminRole.getRoleMembers().stream().filter(m -> m.getMemberName().startsWith(userDomainPrefix))
-                    .map(RoleMember::getMemberName).collect(Collectors.toSet()));
-        }
-        Notification notification = createNotification(NOTIFICATION_TYPE_MEMBERSHIP_APPROVAL,
-                recipients, details);
-        notificationService.notify(notification);
-    }
-
-    Notification createNotification(String notificationType, Set<String> recipients, Map<String,
-            String> details) {
-
-        String recDomain;
-        AthenzDomain domain;
-        Notification notification = new Notification(notificationType);
-        notification.setDetails(details);
-        int idx;
-        for (String recipient : recipients) {
-            idx = recipient.indexOf(":role.");
-            if (idx != -1) {
-                //recipient is of type role. Extract role members
-                recDomain = recipient.substring(0, idx);
-                domain = dbService.getAthenzDomain(recDomain, false);
-                for (Role role : domain.getRoles()) {
-                    if (role.getName().equals(recipient)) {
-                        notification.getRecipients().addAll(role.getRoleMembers().stream().filter(m -> m.getMemberName().startsWith(userDomainPrefix))
-                                .map(RoleMember::getMemberName).collect(Collectors.toSet()));
-                        break;
-                    }
-                }
-            } else if (recipient.startsWith(userDomainPrefix)) {
-                notification.addRecipient(recipient);
-            }
-        }
-        if (notification.getRecipients() == null || notification.getRecipients().isEmpty()) {
-            LOGGER.error("Notification requires at least 1 recipient.");
-            return null;
-        }
-        return notification;
-    }
-
-    void sendNotification(Notification notification) {
-        if (isNotificationFeatureAvailable()) {
-            notificationService.notify(notification);
-        }
-    }
-
-    private boolean isNotificationFeatureAvailable () {
-        return notificationService != null;
-    }
-
-    class PendingMembershipApprovalReminder implements Runnable {
-        @Override
-        public void run() {
-            System.out.println("started thread");
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("PendingMembershipApprovalReminder: Starting pending membership approval reminder thread...");
-            }
-            try {
-                // clean up expired pending members
-                dbService.processExpiredPendingMembers(pendingRoleMemberLifespan, monitorIdentity);
-                sendPendingMembershipApprovalReminders();
-            } catch (Throwable t) {
-                LOGGER.error("PendingMembershipApprovalReminder: unable to send pending membership approval reminders: {}",
-                        t.getMessage());
-            }
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("PendingMembershipApprovalReminder: Sent reminder for pending membership approvals.");
-            }
-
-        }
-
-        private void sendPendingMembershipApprovalReminders() {
-            dbService.updateLastNotifiedTimestamp(pendingRoleMemberLifespan);
-            Set<String> recipients = dbService.getPendingMembershipApproverRoles();
-            Notification notification = createNotification(NOTIFICATION_TYPE_MEMBERSHIP_APPROVAL_REMINDER, recipients, null);
-            notificationService.notify(notification);
-        }
-    }
+    boolean updateLastNotifiedTimestamp(String server, Timestamp timestamp);
 }

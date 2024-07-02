@@ -1,7 +1,6 @@
 import { checkPropTypes } from 'prop-types';
 import { getDisplayName } from './devtools/custom';
 import { options, toChildArray } from 'preact';
-import { ELEMENT_NODE, TEXT_NODE, DOCUMENT_NODE } from './constants';
 
 export function initDebug() {
 	/* eslint-disable no-console */

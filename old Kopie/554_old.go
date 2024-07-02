@@ -1,17 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-func (s *server) downloadHandler(
-	w http.ResponseWriter,
-	r *http.Request,
-	reference swarm.Address,
-	additionalHeaders http.Header,
-) {
-	ctx := r.Context()
-
-	toDecrypt := len(reference.Bytes()) == (swarm.HashSize + encryption.KeyLength)
-	j := joiner.NewSimpleJoiner(s.Storer)
-
-	// send the file data back in the response
-	dataSize, err := j.Size(ctx, reference)
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -354,7 +341,19 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadHandler contains common logic for dowloading Swarm file from API
-func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request, reference swarm.Address, additionalHeaders http.Header) {
+func (s *server) downloadHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	reference swarm.Address,
+	additionalHeaders http.Header,
+	ctx := r.Context()
+
+	toDecrypt := len(reference.Bytes()) == (swarm.HashSize + encryption.KeyLength)
+	j := joiner.NewSimpleJoiner(s.Storer)
+
+	// send the file data back in the response
+	dataSize, err := j.Size(ctx, reference)
+) {
 
 	targets := r.URL.Query().Get("targets")
 	r = r.WithContext(context.WithValue(r.Context(), targetsContextKey{}, targets))

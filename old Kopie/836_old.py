@@ -1,7 +1,4 @@
 # coding=utf-8
-    def save_buffer(self, buffer):
-            self.settings.database is not None and
-            self.database_key is not None
 #
 # This file is part of Hypothesis, which may be found at
 # https://github.com/HypothesisWorks/hypothesis-python
@@ -243,7 +240,9 @@ class ConjectureRunner(object):
         assert data.status == Status.VALID
         return True
 
-    def save_buffer(self, buffer, key=None):
+            self.settings.database is not None and
+            self.database_key is not None
+    def save_buffer(self, buffer):
         if (
             self.settings.database is not None
         ):

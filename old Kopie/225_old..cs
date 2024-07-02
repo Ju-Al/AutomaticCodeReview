@@ -1,12 +1,4 @@
 ﻿using System;
-                if (variable.IsValueType)
-                {
-                    worker.Append(worker.Create(OpCodes.Ldloca, 0));
-                }
-                else
-                {
-                    worker.Append(worker.Create(OpCodes.Ldloc, 0));
-                }
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -651,7 +643,14 @@ namespace Mirror.Weaver
                     continue;
 
                 // mismatched ldloca/ldloc for struct/class combinations is invalid IL, which causes crash at runtime
-                worker.Append(worker.Create(variable.IsValueType ? OpCodes.Ldloca : OpCodes.Ldloc, 0));
+                if (variable.IsValueType)
+                {
+                    worker.Append(worker.Create(OpCodes.Ldloca, 0));
+                }
+                else
+                {
+                    worker.Append(worker.Create(OpCodes.Ldloc, 0));
+                }
 
                 var readFunc = GetReadFunc(field.FieldType);
                 if (readFunc != null)

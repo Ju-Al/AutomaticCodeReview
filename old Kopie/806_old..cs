@@ -8,23 +8,20 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EnsureThat;
-using Hl7.Fhir.ElementModel;
-using Hl7.Fhir.Model;
-using MediatR;
-using Microsoft.Health.Fhir.Core.Extensions;
+using Microsoft.Extensions.Primitives;
+using Microsoft.Health.Fhir.Core.Exceptions;
 using Microsoft.Health.Fhir.Core.Features.Conformance;
 using Microsoft.Health.Fhir.Core.Features.Persistence;
+using Microsoft.Health.Fhir.Core.Features.Resources;
 using Microsoft.Health.Fhir.Core.Features.Search;
-using Microsoft.Health.Fhir.Core.Messages.Create;
-using Microsoft.Health.Fhir.Core.Messages.Upsert;
+using Microsoft.Health.Fhir.Core.Models;
+using static Hl7.Fhir.Model.Bundle;
 
-namespace Microsoft.Health.Fhir.Core.Features.Resources.Create
+namespace Microsoft.Health.Fhir.Api.Features.Resources.Bundle
 {
-    public class CreateResourceHandler : BaseConditionalHandler, IRequestHandler<CreateResourceRequest, UpsertResourceResponse>
+    public class TransactionBundleValidator : BaseConditionalHandler
     {
-        private readonly Dictionary<string, (string resourceId, string resourceType)> _referenceIdDictionary;
-
-        public CreateResourceHandler(
+        public TransactionBundleValidator(
             IFhirDataStore fhirDataStore,
             Lazy<IConformanceProvider> conformanceProvider,
             IResourceWrapperFactory resourceWrapperFactory,
@@ -32,34 +29,123 @@ namespace Microsoft.Health.Fhir.Core.Features.Resources.Create
             ResourceIdProvider resourceIdProvider)
             : base(fhirDataStore, searchService, conformanceProvider, resourceWrapperFactory, resourceIdProvider)
         {
-            _referenceIdDictionary = new Dictionary<string, (string resourceId, string resourceType)>();
         }
 
-        public async Task<UpsertResourceResponse> Handle(CreateResourceRequest message, CancellationToken cancellationToken)
+        /// <summary>
+        /// This method validates if transaction bundle contains multiple entries that are modifying the same resource.
+        /// It also validates if the request operations within a entry is a valid operation.
+        /// </summary>
+        /// <param name="bundle"> The input bundle</param>
+        /// <param name="cancellationToken"> The cancellation token</param>
+        public async Task ValidateBundle(Hl7.Fhir.Model.Bundle bundle, CancellationToken cancellationToken)
         {
-            EnsureArg.IsNotNull(message, nameof(message));
+            EnsureArg.IsNotNull(bundle, nameof(bundle));
 
-            var resource = message.Resource.Instance.ToPoco<Resource>();
+            var resourceIdList = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // If an Id is supplied on create it should be removed/ignored
-            resource.Id = null;
+            foreach (var entry in bundle.Entry)
+            {
+                if (ShouldValidateBundleEntry(entry))
+                {
+                    string resourceId = await GetResourceId(entry, cancellationToken);
+                    string conditionalCreateQuery = entry.Request.IfNoneExist;
 
-            await ResolveBundleReferencesAsync(resource, _referenceIdDictionary, resource.ResourceType.ToString(), cancellationToken);
+                    if (!string.IsNullOrEmpty(resourceId))
+                    {
+                        // Throw exception if resourceId is already present in the hashset.
+                        if (resourceIdList.Contains(resourceId))
+                        {
+                            string requestUrl = BuildRequestUrlForConditionalQueries(entry, conditionalCreateQuery);
+                            throw new RequestNotValidException(string.Format(Api.Resources.ResourcesMustBeUnique, requestUrl));
+                        }
 
-            ResourceWrapper resourceWrapper = CreateResourceWrapper(resource, deleted: false);
+                        resourceIdList.Add(resourceId);
+                    }
+                }
+            }
+        }
 
-            bool keepHistory = await ConformanceProvider.Value.CanKeepHistory(resource.TypeName, cancellationToken);
+        {
+            var requestUrl = (entry.Request != null) ? entry.Request.Url : null;
+            await ResolveBundleReferencesAsync(entry.Resource, referenceIdDictionary, requestUrl, cancellationToken);
+        }
 
-            UpsertOutcome result = await FhirDataStore.UpsertAsync(
-                resourceWrapper,
-                weakETag: null,
-                allowCreate: true,
-                keepHistory: keepHistory,
-                cancellationToken: cancellationToken);
+        private static string BuildRequestUrlForConditionalQueries(EntryComponent entry, string conditionalCreateQuery)
+        {
+            return string.IsNullOrWhiteSpace(conditionalCreateQuery) ? entry.Request.Url : entry.Request.Url + "?" + conditionalCreateQuery;
+        }
 
-            resource.VersionId = result.Wrapper.Version;
+        private async Task<string> GetResourceId(EntryComponent entry, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Request.IfNoneExist) && !entry.Request.Url.Contains("?", StringComparison.Ordinal))
+            {
+                if (entry.Request.Method == HTTPVerb.POST)
+                {
+                    return entry.FullUrl;
+                }
 
-            return new UpsertResourceResponse(new SaveOutcome(resource.ToResourceElement(), SaveOutcomeType.Created));
+                return entry.Request.Url;
+            }
+            else
+            {
+                string resourceType = null;
+                StringValues conditionalQueries;
+                HTTPVerb requestMethod = (HTTPVerb)entry.Request.Method;
+                bool conditionalCreate = requestMethod == HTTPVerb.POST;
+                bool condtionalUpdate = requestMethod == HTTPVerb.PUT;
+
+                if (condtionalUpdate)
+                {
+                    string[] conditinalUpdateParameters = entry.Request.Url.Split("?");
+                    resourceType = conditinalUpdateParameters[0];
+                    conditionalQueries = conditinalUpdateParameters[1];
+                }
+                else if (conditionalCreate)
+                {
+                    resourceType = entry.Request.Url;
+                    conditionalQueries = entry.Request.IfNoneExist;
+                }
+
+                SearchResultEntry[] matchedResults = await GetExistingResourceId(entry.Request.Url, resourceType, conditionalQueries, cancellationToken);
+                int? count = matchedResults?.Length;
+
+                if (count > 1)
+                {
+                    // Multiple matches: The server returns a 412 Precondition Failed error indicating the client's criteria were not selective enough
+                    throw new PreconditionFailedException(string.Format(Api.Resources.ConditionalOperationInBundleNotSelectiveEnough, conditionalQueries));
+                }
+
+                if (count == 1)
+                {
+                    return entry.Resource.TypeName + "/" + matchedResults[0].Resource.ResourceId;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool ShouldValidateBundleEntry(EntryComponent entry)
+        {
+            string requestUrl = entry.Request.Url;
+            HTTPVerb? requestMethod = entry.Request.Method;
+
+            // Search operations using _search and POST endpoint is not supported for bundle.
+            // Conditional Delete operation is also not currently not supported.
+            if ((requestMethod == HTTPVerb.POST && requestUrl.Contains("_search", StringComparison.OrdinalIgnoreCase))
+                || (requestMethod == HTTPVerb.DELETE && requestUrl.Contains("?", StringComparison.Ordinal)))
+            {
+                throw new RequestNotValidException(string.Format(Api.Resources.InvalidBundleEntry, entry.Request.Url, requestMethod));
+            }
+
+            // Resource type bundle is not supported.within a bundle.
+            if (entry.Resource?.ResourceType == Hl7.Fhir.Model.ResourceType.Bundle)
+            {
+                throw new RequestNotValidException(string.Format(Api.Resources.UnsupportedResourceType, KnownResourceTypes.Bundle));
+            }
+
+            // Check for duplicate resources within a bundle entry is skipped if the request within a entry is not modifying the resource.
+            return !(requestMethod == HTTPVerb.GET
+                    || requestUrl.Contains("$", StringComparison.InvariantCulture));
         }
     }
 }

@@ -1,7 +1,5 @@
 # Copyright (C) 2015 MongoDB, Inc.
 #
-        def initialize(command_name, database_name, address, request_id, operation_id, message, duration)
-          @command_name = command_name
 # Licensed under the Apache License, Version 2.0 (the 'License');
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -18,10 +16,11 @@ module Mongo
   class Monitoring
     module Event
 
-      # Event that is fired when a command operation fails.
+      # Event that is fired when a command operation succeeds.
       #
       # @since 2.1.0
-      class CommandFailed < Mongo::Event::Base
+      class CommandSucceeded < Mongo::Event::Base
+        include Secure
 
         # @return [ Server::Address ] address The server address.
         attr_reader :address
@@ -29,21 +28,16 @@ module Mongo
         # @return [ String ] command_name The name of the command.
         attr_reader :command_name
 
-        # @return [ String ] database_name The name of the database_name.
+        attr_reader :command
+
+        # @return [ BSON::Document ] reply The command reply.
+        attr_reader :reply
+
+        # @return [ String ] database_name The name of the database.
         attr_reader :database_name
 
-        # @return [ Float ] duration The duration of the command in seconds.
+        # @return [ Float ] duration The duration of the event.
         attr_reader :duration
-
-        # @return [ BSON::Document ] failure The error document, if present.
-        #   This will only be filled out for errors communicated by a
-        #   MongoDB server. In other situations, for example in case of
-        #   a network error, this attribute may be nil.
-        attr_reader :failure
-
-        # @return [ String ] message The error message. Unlike the error
-        #   document, the error message should always be present.
-        attr_reader :message
 
         # @return [ Integer ] operation_id The operation id.
         attr_reader :operation_id
@@ -56,52 +50,72 @@ module Mongo
         # @example Create the event.
         #
         # @param [ String ] command_name The name of the command.
-        # @param [ String ] database_name The database_name name.
+        # @param [ BSON::Document ] command The command arguments.
+        # @param [ String ] database_name The database name.
         # @param [ Server::Address ] address The server address.
         # @param [ Integer ] request_id The request id.
         # @param [ Integer ] operation_id The operation id.
-        # @param [ String ] message The error message.
-        # @param [ BSON::Document ] failure The error document, if any.
+        # @param [ BSON::Document ] reply The command reply.
         # @param [ Float ] duration The duration the command took in seconds.
         #
         # @since 2.1.0
-        def initialize(command_name, database_name, address, request_id, operation_id, message, failure, duration)
-          @command_name = command_name.to_s
+        def initialize(command_name, command, database_name, address, request_id, operation_id, reply, duration)
+          @command_name = command_name
+          @command = command
           @database_name = database_name
           @address = address
           @request_id = request_id
           @operation_id = operation_id
-          @message = message
-          @failure = failure
+          @reply = redacted(command_name, reply)
           @duration = duration
         end
 
         # Create the event from a wire protocol message payload.
         #
         # @example Create the event.
-        #   CommandFailed.generate(address, 1, payload, duration)
+        #   CommandSucceeded.generate(address, 1, command_payload, reply_payload, 0.5)
         #
         # @param [ Server::Address ] address The server address.
         # @param [ Integer ] operation_id The operation id.
-        # @param [ Hash ] payload The message payload.
-        # @param [ String ] message The error message.
-        # @param [ BSON::Document ] failure The error document, if any.
+        # @param [ Hash ] command_payload The command message payload.
+        # @param [ Hash ] reply_payload The reply message payload.
         # @param [ Float ] duration The duration of the command in seconds.
         #
-        # @return [ CommandFailed ] The event.
+        # @return [ CommandCompleted ] The event.
         #
         # @since 2.1.0
-        def self.generate(address, operation_id, payload, message, failure, duration)
+        def self.generate(address, operation_id, command_payload, reply_payload, duration)
           new(
-            payload[:command_name],
-            payload[:database_name],
+            command_payload[:command_name],
+            command_payload[:command],
+            command_payload[:database_name],
             address,
-            payload[:request_id],
+            command_payload[:request_id],
             operation_id,
-            message,
-            failure,
+            generate_reply(command_payload, reply_payload),
             duration
           )
+        end
+
+        private
+
+        def self.generate_reply(command_payload, reply_payload)
+          if reply_payload
+            reply = reply_payload[:reply]
+            if cursor = reply[:cursor]
+              if !cursor.key?(Collection::NS)
+                cursor.merge!(Collection::NS => namespace(command_payload))
+              end
+            end
+            reply
+          else
+            BSON::Document.new(Operation::Result::OK => 1)
+          end
+        end
+
+        def self.namespace(payload)
+          command = payload[:command]
+          "#{payload[:database_name]}.#{command[:collection] || command.values.first}"
         end
       end
     end

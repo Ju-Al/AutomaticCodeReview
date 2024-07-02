@@ -107,7 +107,6 @@ static int64_t factory_timeout = 0;
 
 struct batch_queue *queue = 0;
 
-static const char *mesos_master = NULL;
 static const char *mesos_path = NULL;
 static const char *mesos_preload = NULL;
 

@@ -16,7 +16,6 @@ export type RequestOptions = {
   },
 };
 
-const bytesToB16 = (bytes) => Buffer.from(bytes).toString('hex');
 const blake2b = (data) => blakejs.blake2b(data, null, 32);
 const encryptPasspharse = (passphrase) => bytesToB16(blake2b(passphrase));
 

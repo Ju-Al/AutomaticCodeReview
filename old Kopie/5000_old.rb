@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-    context "when documents are not created" do
 # encoding: utf-8
 
 require "spec_helper"
@@ -1452,9 +1451,8 @@ describe Mongoid::Association::Embedded::EmbedsMany::Proxy do
       end
       
       it "returns true" do
+    context "when documents are not created" do
         expect(person.addresses.any?).to be true
-      end
-
       it "block form iterates across all documents" do
         expect(person.addresses.any? {|a| a.street == "Upper" }).to be false
         expect(person.addresses.any? {|a| a.street == "Bond" }).to be true

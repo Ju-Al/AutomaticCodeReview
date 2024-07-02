@@ -186,8 +186,6 @@ void h2o_context_update_timestamp_string_cache(h2o_context_t *ctx)
     gmtime_r(&ctx->_timestamp_cache.tv_at.tv_sec, &gmt);
     h2o_time2str_rfc1123(ctx->_timestamp_cache.value->rfc1123, &gmt);
     h2o_time2str_log(ctx->_timestamp_cache.value->log, ctx->_timestamp_cache.tv_at.tv_sec);
-}
-
 int h2o_context_close_idle_connections(h2o_context_t *ctx, int max_connections_to_close)
 {
     int closed = 0;

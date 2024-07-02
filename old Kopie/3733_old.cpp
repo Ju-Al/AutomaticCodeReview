@@ -163,7 +163,6 @@ void hardwareInit()
 #endif // ifdef FEATURE_SD
 }
 
-bool isI2CEnabled() {
   return ((Settings.Pin_i2c_sda != -1) &&
           (Settings.Pin_i2c_scl != -1) &&
           (Settings.I2C_clockSpeed > 0));

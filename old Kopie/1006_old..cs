@@ -1,5 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-        private Socket _socket;
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
@@ -15,7 +14,7 @@ namespace System.IO.Pipelines.Networking.Sockets
     public class SocketListener : IDisposable
     {
         private readonly bool _ownsFactory;
-        public Socket _socket;
+        private Socket _socket;
         private Socket Socket => _socket;
         private PipelineFactory _factory;
         private PipelineFactory PipelineFactory => _factory;

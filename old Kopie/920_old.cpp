@@ -122,7 +122,6 @@ bool CacheChangePool::reserve_Cache(CacheChange_t** chan, uint32_t dataSize)
                 }
             }
             *chan = m_freeCaches.back();
-            m_freeCaches.pop_back();
             m_freeCaches.erase(m_freeCaches.end()-1);
 
             // TODO(Ricardo) Improve reallocation.

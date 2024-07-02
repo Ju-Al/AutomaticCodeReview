@@ -1,5 +1,4 @@
 /*     / \____  _    _  ____   ______  / \ ____  __    _______
-            T next = seed;
  *    /  /    \/ \  / \/    \ /  /\__\/  //    \/  \  //  /\__\   JΛVΛSLΛNG
  *  _/  /  /\  \  \/  /  /\  \\__\\  \  //  /\  \ /\\/ \ /__\ \   Copyright 2014-2016 Javaslang, http://javaslang.io
  * /___/\_/  \_/\____/\_/  \_/\__\/__/\__\_/  \_//  \__/\_____/   Licensed under the Apache License, Version 2.0
@@ -969,7 +968,7 @@ public interface Iterator<T> extends java.util.Iterator<T>, Traversable<T> {
     static <T> Iterator<T> iterate(T seed, Function<? super T, ? extends T> f) {
         Objects.requireNonNull(f, "f is null");
         return new AbstractIterator<T>() {
-            Function<? super T, ? extends T> nextFunc = (s) -> seed;
+            T next = seed;
             T previous = null;
 
             @Override

@@ -1,10 +1,4 @@
 /* Licensed under the Apache License, Version 2.0 (the "License");
-        assertNotNull(formDefinition);
-        assertEquals("form1", formDefinition.getKey());
-        assertEquals(2, formDefinition.getVersion());
-        assertEquals(1, formModel.getFields().size());
-        assertEquals("input2", formModel.getFields().get(0).getId());
-        assertEquals("Input2", formModel.getFields().get(0).getName());
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  * 
@@ -66,7 +60,12 @@ public class DeploymentTest extends AbstractFlowableFormTest {
                 .latestVersion()
                 .formDefinitionKey("form1")
                 .singleResult();
-        assertThat(formDefinition).isNotNull();
+        assertNotNull(formDefinition);
+        assertEquals("form1", formDefinition.getKey());
+        assertEquals(1, formModel.getFields().size());
+        assertEquals("input2", formModel.getFields().get(0).getId());
+        assertEquals("Input2", formModel.getFields().get(0).getName());
+        assertEquals(2, formDefinition.getVersion());
         assertThat(formDefinition.getKey()).isEqualTo("form1");
         assertThat(formDefinition.getVersion()).isEqualTo(2);
 

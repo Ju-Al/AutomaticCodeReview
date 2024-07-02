@@ -1,7 +1,4 @@
 require 'travis/build/addons/deploy/conditions'
-              case on[:tags]
-              when true  then '"$TRAVIS_TAG" != ""'
-              when false then '"$TRAVIS_TAG" = ""'
 require 'travis/build/addons/deploy/config'
 
 module Travis
@@ -114,7 +111,9 @@ module Travis
             end
 
             def tags_condition
-              if config[:provider] == 'releases'
+              case on[:tags]
+              when true  then '"$TRAVIS_TAG" != ""'
+              when false then '"$TRAVIS_TAG" = ""'
                 '"$TRAVIS_TAG" != ""'
               else
                 case on[:tags]

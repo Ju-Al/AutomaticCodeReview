@@ -1,5 +1,3 @@
-/**
- * @file
  * @brief pancake sort sorts a disordered stack of pancakes by flipping any number of pancakes using a spatula using minimum number of flips.
  *
  * @details
@@ -114,4 +112,3 @@ static void test() {
 int main() {
     test();
     return 0;
-}

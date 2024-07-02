@@ -1,5 +1,4 @@
 """A set of graph services of getting subgraphs from DistGraph"""
-        local_g, local_ids, etype_field, fan_out, edge_dir, prob, replace, _dist_training=True)
 from collections import namedtuple
 
 from .rpc import Request, Response, send_requests_to_machine, recv_responses
@@ -82,7 +81,7 @@ def _sample_etype_neighbors(local_g, partition_book, seed_nodes, etype_field,
     local_ids = F.astype(local_ids, local_g.idtype)
     # local_ids = self.seed_nodes
     sampled_graph = local_sample_etype_neighbors(
-        local_g, local_ids, etype_field, fan_out, edge_dir, prob, replace,
+        local_g, local_ids, etype_field, fan_out, edge_dir, prob, replace, _dist_training=True)
         etype_sorted=True, _dist_training=True)
     global_nid_mapping = local_g.ndata[NID]
     src, dst = sampled_graph.edges()

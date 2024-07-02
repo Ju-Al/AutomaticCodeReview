@@ -468,10 +468,6 @@ public class Transfer {
             }
             for (Value value : list) {
                 writeValue(value);
-            }
-            break;
-        }
-        case Value.ROW: {
             ValueRow va = (ValueRow) v;
             Value[] list = va.getList();
             int len = list.length;

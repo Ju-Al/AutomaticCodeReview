@@ -1,5 +1,3 @@
-/**
- * @file
  * @brief C++ Program for Modular Exponentiation Iteratively.
  * Calculate the value of an integer a raised to an integer exponent b 
  * under modulo c.

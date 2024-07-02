@@ -1,6 +1,4 @@
 /**
-    this.workspace.getCanvas().appendChild(svgRoot);
-    svgRoot.setAttribute('transform', 'translate(' + xy.x + ',' + xy.y + ')');
  * @license
  * Visual Blocks Editor
  *
@@ -304,7 +302,8 @@ Blockly.BlockSvg.prototype.setParent = function(newParent) {
   if (this.parentBlock_ && svgRoot) {
     // Move this block up the DOM.  Keep track of x/y translations.
     var xy = this.getRelativeToSurfaceXY();
-    if (Blockly.selected == this) {
+    this.workspace.getCanvas().appendChild(svgRoot);
+    svgRoot.setAttribute('transform', 'translate(' + xy.x + ',' + xy.y + ')');
       // E.g., dragging blocks out of an input
       this.translate(xy.x, xy.y);
       // Move to the drag surface

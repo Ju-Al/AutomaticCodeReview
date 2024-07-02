@@ -1,5 +1,4 @@
 # coding=utf-8
-        data.update({'listened_at': MIN_ID+1})
 
 
 import ujson
@@ -31,7 +30,7 @@ class RedisListenStore(ListenStore):
         if not data:
             return None
         data = ujson.loads(data)
-        data.update({'listened_at': None})
+        data.update({'listened_at': MIN_ID+1})
         return Listen.from_json(data)
 
     def check_connection(self):

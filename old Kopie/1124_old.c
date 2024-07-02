@@ -320,7 +320,6 @@ void debug_config_file (const char *path)
 void debug_config (const char *name)
 {
 	strncpy(debug_program_name, path_basename(name), sizeof(debug_program_name)-1);
-
 	if(!isatty(STDERR_FILENO)) {
 		if(terminal_f)
 			fclose(terminal_f);

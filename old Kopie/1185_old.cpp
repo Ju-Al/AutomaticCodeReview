@@ -1,195 +1,188 @@
-/**
-    boost::optional<iroha::keypair_t> keypair;
-    if (FLAGS_pass_phrase.size() != 0) {
-      keypair = manager.loadKeys(FLAGS_pass_phrase);
-    } else {
-      keypair = manager.loadKeys();
-    }
-          "keypair name: {}. Use --key_path to path to your keypair. \nMaybe wrong pass phrase (\"{}\")?",
- * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
- * http://soramitsu.co.jp
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY =KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/*
+//@HEADER
+// ************************************************************************
+//
+//                        Kokkos v. 2.0
+//              Copyright (2014) Sandia Corporation
+//
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+// 1. Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the Corporation nor the names of the
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY SANDIA CORPORATION "AS IS" AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL SANDIA CORPORATION OR THE
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Questions? Contact  H. Carter Edwards (hcedwar@sandia.gov)
+//
+// ************************************************************************
+//@HEADER
+*/
 
-#include <gflags/gflags.h>
-#include <boost/filesystem.hpp>
-#include <fstream>
-#include <iostream>
+#include <Kokkos_Macros.hpp>
+#if defined( KOKKOS_ENABLE_SERIAL )
 
-#include "client.hpp"
-#include "common/assert_config.hpp"
-#include "crypto/keys_manager_impl.hpp"
-#include "grpc_response_handler.hpp"
-#include "interactive/interactive_cli.hpp"
-#include "model/converters/json_block_factory.hpp"
-#include "model/converters/json_query_factory.hpp"
-#include "model/generators/block_generator.hpp"
-#include "model/model_crypto_provider_impl.hpp"
-#include "validators.hpp"
+#include <cstdlib>
+#include <sstream>
+#include <Kokkos_Serial.hpp>
+#include <impl/Kokkos_Traits.hpp>
+#include <impl/Kokkos_Error.hpp>
 
-// Account information
-DEFINE_bool(new_account,
-            false,
-            "Generate and save locally new public/private keys");
-DEFINE_string(account_name,
-              "",
-              "Name of the account. Must be unique in iroha network");
-DEFINE_string(pass_phrase, "", "Account pass-phrase");
-DEFINE_string(key_path, ".", "Path to user keys");
+#include <impl/Kokkos_SharedAlloc.hpp>
 
-// Iroha peer to connect with
-DEFINE_string(peer_ip, "0.0.0.0", "Address of the Iroha node");
-DEFINE_int32(torii_port, 50051, "Port of Iroha's Torii");
+/*--------------------------------------------------------------------------*/
 
-// Send already signed and formed transaction to Iroha peer
-DEFINE_string(json_transaction, "", "Transaction in json format");
-// Send already signed and formed query to Iroha peer
-DEFINE_string(json_query, "", "Query in json format");
+namespace Kokkos {
+namespace Impl {
+namespace {
 
-// Genesis block generator:
-DEFINE_bool(genesis_block,
-            false,
-            "Generate genesis block for new Iroha network");
-DEFINE_string(peers_address,
-              "",
-              "File with peers address for new Iroha network");
+HostThreadTeamData g_serial_thread_team_data ;
 
-// Run iroha-cli in interactive mode
-DEFINE_bool(interactive, true, "Run iroha-cli in interactive mode");
+bool g_serial_is_initialized = false;
 
-using namespace iroha::protocol;
-using namespace iroha::model::generators;
-using namespace iroha::model::converters;
-using namespace iroha_cli::interactive;
-namespace fs = boost::filesystem;
-
-int main(int argc, char *argv[]) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  gflags::ShutDownCommandLineFlags();
-  auto logger = logger::log("CLI-MAIN");
-  // Generate new genesis block now Iroha network
-  if (FLAGS_genesis_block) {
-    BlockGenerator generator;
-
-    if (FLAGS_peers_address.empty()) {
-      logger->error("--peers_address is empty");
-      return EXIT_FAILURE;
-    }
-    std::ifstream file(FLAGS_peers_address);
-    std::vector<std::string> peers_address;
-    std::copy(std::istream_iterator<std::string>(file),
-              std::istream_iterator<std::string>(),
-              std::back_inserter(peers_address));
-    // Generate genesis block
-    auto transaction = TransactionGenerator().generateGenesisTransaction(
-        0, std::move(peers_address));
-    auto block = generator.generateGenesisBlock(0, {transaction});
-    // Convert to json
-    JsonBlockFactory json_factory;
-    auto doc = json_factory.serialize(block);
-    std::ofstream output_file("genesis.block");
-    output_file << jsonToString(doc);
-    logger->info("File saved to genesis.block");
-  }
-  // Create new pub/priv key, register in Iroha Network
-  else if (FLAGS_new_account) {
-    auto keysManager = iroha::KeysManagerImpl(FLAGS_account_name);
-    if (not(FLAGS_pass_phrase.size() == 0
-                ? keysManager.createKeys()
-                : keysManager.createKeys(FLAGS_pass_phrase))) {
-      logger->error("Keys already exist");
-    } else {
-      logger->info(
-          "Public and private key has been generated in current directory");
-    }
-  }
-  // Send to Iroha Peer json transaction/query
-  else if (not FLAGS_json_transaction.empty() or not FLAGS_json_query.empty()) {
-    iroha_cli::CliClient client(FLAGS_peer_ip, FLAGS_torii_port);
-    iroha_cli::GrpcResponseHandler response_handler;
-    if (not FLAGS_json_transaction.empty()) {
-      logger->info(
-          "Send transaction to {}:{} ", FLAGS_peer_ip, FLAGS_torii_port);
-      // Read from file
-      std::ifstream file(FLAGS_json_transaction);
-      std::string str((std::istreambuf_iterator<char>(file)),
-                      std::istreambuf_iterator<char>());
-      iroha::model::converters::JsonTransactionFactory serializer;
-      auto doc = iroha::model::converters::stringToJson(str);
-      if (not doc) {
-        logger->error("Json has wrong format.");
-      }
-      auto tx_opt = serializer.deserialize(doc.value());
-      if (not tx_opt) {
-        logger->error("Json transaction has wrong format.");
-      } else {
-        response_handler.handle(client.sendTx(tx_opt.value()));
-      }
-    }
-    if (not FLAGS_json_query.empty()) {
-      logger->info("Send query to {}:{}", FLAGS_peer_ip, FLAGS_torii_port);
-      std::ifstream file(FLAGS_json_query);
-      std::string str((std::istreambuf_iterator<char>(file)),
-                      std::istreambuf_iterator<char>());
-      iroha::model::converters::JsonQueryFactory serializer;
-      auto query_opt = serializer.deserialize(std::move(str));
-      if (not query_opt) {
-        logger->error("Json has wrong format.");
-      } else {
-        response_handler.handle(client.sendQuery(query_opt.value()));
-      }
-    }
-  }
-  // Run iroha-cli in interactive mode
-  else if (FLAGS_interactive) {
-    if (FLAGS_account_name.empty()) {
-      logger->error("Specify your account name");
-      return EXIT_FAILURE;
-    }
-    fs::path path(FLAGS_key_path);
-    if (not fs::exists(path)) {
-      logger->error("Path {} not found.", path.string());
-      return EXIT_FAILURE;
-    }
-    iroha::KeysManagerImpl manager((path / FLAGS_account_name).string());
-    auto keypair = FLAGS_pass_phrase.size() != 0
-        ? manager.loadKeys(FLAGS_pass_phrase)
-        : manager.loadKeys();
-    if (not keypair) {
-      logger->error(
-          "Cannot load specified keypair, or keypair is invalid. Path: {}, "
-          "keypair name: {}. Use --key_path to path to your keypair. \n"
-          "Maybe wrong pass phrase (\"{}\")?",
-          path.string(),
-          FLAGS_account_name,
-          FLAGS_pass_phrase);
-      return EXIT_FAILURE;
-    }
-    // TODO 13/09/17 grimadas: Init counters from Iroha, or read from disk?
-    // IR-334
-    InteractiveCli interactiveCli(
-        FLAGS_account_name,
-        FLAGS_peer_ip,
-        FLAGS_torii_port,
-        0,
-        0,
-        std::make_shared<iroha::model::ModelCryptoProviderImpl>(
-            *std::unique_ptr<iroha::keypair_t>(keypair->makeOldModel())));
-    interactiveCli.run();
-  } else {
-    logger->error("Invalid flags");
-    return EXIT_FAILURE;
-  }
-  return 0;
 }
+
+// Resize thread team data scratch memory
+void serial_resize_thread_team_data( size_t pool_reduce_bytes
+                                   , size_t team_reduce_bytes
+                                   , size_t team_shared_bytes
+                                   , size_t thread_local_bytes )
+{
+  if ( pool_reduce_bytes < 512 ) pool_reduce_bytes = 512 ;
+  if ( team_reduce_bytes < 512 ) team_reduce_bytes = 512 ;
+
+  const size_t old_pool_reduce  = g_serial_thread_team_data.pool_reduce_bytes();
+  const size_t old_team_reduce  = g_serial_thread_team_data.team_reduce_bytes();
+  const size_t old_team_shared  = g_serial_thread_team_data.team_shared_bytes();
+  const size_t old_thread_local = g_serial_thread_team_data.thread_local_bytes();
+  const size_t old_alloc_bytes  = g_serial_thread_team_data.scratch_bytes();
+
+  // Allocate if any of the old allocation is tool small:
+
+  const bool allocate = ( old_pool_reduce  < pool_reduce_bytes ) ||
+                        ( old_team_reduce  < team_reduce_bytes ) ||
+                        ( old_team_shared  < team_shared_bytes ) ||
+                        ( old_thread_local < thread_local_bytes );
+
+  if ( allocate ) {
+
+    Kokkos::HostSpace space ;
+
+    if ( old_alloc_bytes ) {
+      g_serial_thread_team_data.disband_team();
+      g_serial_thread_team_data.disband_pool();
+
+      space.deallocate( g_serial_thread_team_data.scratch_buffer()
+                      , g_serial_thread_team_data.scratch_bytes() );
+    }
+
+    if ( pool_reduce_bytes < old_pool_reduce ) { pool_reduce_bytes = old_pool_reduce ; }
+    if ( team_reduce_bytes < old_team_reduce ) { team_reduce_bytes = old_team_reduce ; }
+    if ( team_shared_bytes < old_team_shared ) { team_shared_bytes = old_team_shared ; }
+    if ( thread_local_bytes < old_thread_local ) { thread_local_bytes = old_thread_local ; }
+
+    const size_t alloc_bytes =
+      HostThreadTeamData::scratch_size( pool_reduce_bytes
+                                      , team_reduce_bytes
+                                      , team_shared_bytes
+                                      , thread_local_bytes );
+
+    void * const ptr = space.allocate( alloc_bytes );
+
+    g_serial_thread_team_data.
+      scratch_assign( ((char *)ptr)
+                    , alloc_bytes
+                    , pool_reduce_bytes
+                    , team_reduce_bytes
+                    , team_shared_bytes
+                    , thread_local_bytes );
+
+    HostThreadTeamData * pool[1] = { & g_serial_thread_team_data };
+
+    g_serial_thread_team_data.organize_pool( pool , 1 );
+    g_serial_thread_team_data.organize_team(1);
+  }
+}
+
+HostThreadTeamData * serial_get_thread_team_data()
+{
+  return & g_serial_thread_team_data ;
+}
+
+} // namespace Impl
+} // namespace Kokkos
+
+/*--------------------------------------------------------------------------*/
+
+namespace Kokkos {
+
+bool Serial::is_initialized()
+{
+  return Impl::g_serial_is_initialized ;
+}
+
+void Serial::initialize( unsigned threads_count
+                       , unsigned use_numa_count
+                       , unsigned use_cores_per_numa
+                       , bool allow_asynchronous_threadpool )
+{
+  (void) threads_count;
+  (void) use_numa_count;
+  (void) use_cores_per_numa;
+  (void) allow_asynchronous_threadpool;
+
+  Impl::SharedAllocationRecord< void, void >::tracking_enable();
+
+  // Init the array of locks used for arbitrarily sized atomics
+  Impl::init_lock_array_host_space();
+
+  Impl::g_serial_is_initialized = true;
+}
+
+void Serial::finalize()
+{
+  if ( Impl::g_serial_thread_team_data.scratch_buffer() ) {
+    Impl::g_serial_thread_team_data.disband_team();
+    Impl::g_serial_thread_team_data.disband_pool();
+
+    Kokkos::HostSpace space ;
+
+    space.deallocate( Impl::g_serial_thread_team_data.scratch_buffer()
+                    , Impl::g_serial_thread_team_data.scratch_bytes() );
+
+    Impl::g_serial_thread_team_data.scratch_assign( (void*) 0, 0, 0, 0, 0, 0 );
+  }
+
+  #if defined(KOKKOS_ENABLE_PROFILING)  Impl::g_serial_is_initialized = false;
+}
+
+const char* Serial::name() { return "Serial"; }
+
+} // namespace Kokkos
+
+#else
+void KOKKOS_CORE_SRC_IMPL_SERIAL_PREVENT_LINK_ERROR() {}
+#endif // defined( KOKKOS_ENABLE_SERIAL )
+

@@ -1,5 +1,4 @@
 /*
-        return getStatisticsResourcePath(this.getCubeInstance().getName(), this.getUuid());
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -538,7 +537,7 @@ public class CubeSegment implements IBuildable, ISegment, Serializable {
     }
 
     public String getStatisticsResourcePath() {
-        return getStatisticsResourcePath(this.getCubeInstance().getName(), this.getUuid(), ".seq");
+        return getStatisticsResourcePath(this.getCubeInstance().getName(), this.getUuid());
     }
 
     public String getPreciseStatisticsResourcePath() {

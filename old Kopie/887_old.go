@@ -89,8 +89,6 @@ func generate(dialect string) {
 			fullV := (verVal * 1000) + v
 			if fullV > largestSchemaVersion {
 				largestSchemaVersion = fullV
-			}
-
 			cbts, err := ioutil.ReadFile(fmt.Sprintf("%s/%s/%s/%s", srcDir, dialect, ver, name))
 			if err != nil {
 				fmt.Printf("error opening file %s with dialect %s: %v", name, dialect, err)

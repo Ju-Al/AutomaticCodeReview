@@ -1,217 +1,174 @@
-// Copyright 2016 Keybase Inc. All rights reserved.
-// Type returns the type of TLF represented by this ID.
-//
-// Note that this function panics if the ID suffix is unknown, rather than
-// returning tlf.Unkonwn.
-func (id ID) Type() Type {
-// Use of this source code is governed by a BSD
-// license that can be found in the LICENSE file.
-
-package tlf
+package txbuilder
 
 import (
-	"encoding"
-	"encoding/hex"
-	"fmt"
+	"context"
+	stdjson "encoding/json"
+	"errors"
 
-	"github.com/keybase/client/go/protocol/keybase1"
-	"github.com/keybase/kbfs/kbfscrypto"
-	"github.com/pkg/errors"
+	"github.com/bytom/common"
+	"github.com/bytom/consensus"
+	"github.com/bytom/encoding/json"
+	"github.com/bytom/protocol/bc"
+	"github.com/bytom/protocol/bc/types"
+	"github.com/bytom/protocol/vm"
+	"github.com/bytom/protocol/vm/vmutil"
 )
 
-const (
-	// idByteLen is the number of bytes in a top-level folder ID
-	idByteLen = 16
-	// idStringLen is the number of characters in the string
-	// representation of a top-level folder ID
-	idStringLen = 2 * idByteLen
-	// idSuffix is the last byte of a private top-level folder ID
-	idSuffix = 0x16
-	// pubIDSuffix is the last byte of a public top-level folder ID
-	pubIDSuffix = 0x17
-	// singleTeamIDSuffix is the last byte of a single-team top-level
-	// folder ID
-	singleTeamIDSuffix = 0x26
-)
+var retirementProgram = []byte{byte(vm.OP_FAIL)}
 
-// Type is the type of TLF represented by a particular ID (e.g.,
-// public, private, etc.)
-type Type int
+// DecodeControlReceiverAction convert input data to action struct
+func DecodeControlReceiverAction(data []byte) (Action, error) {
+	a := new(controlReceiverAction)
+	err := stdjson.Unmarshal(data, a)
+	return a, err
+}
 
-const (
-	// Unknown is a placeholder type for when TLF type information is not
-	// available. It is the zero value of the type Type.
-	Unknown Type = iota
-	// Private represents a private TLF between one or more individual users.
-	Private
-	// Public represents a public TLF for one or more individual users.
-	Public
-	// SingleTeam represents a private TLF for a single Keybase team.
-	SingleTeam
-)
+type controlReceiverAction struct {
+	bc.AssetAmount
+	Receiver *Receiver `json:"receiver"`
+}
 
-func (t Type) String() string {
-	switch t {
-	case Private:
-		return "private"
-	case Public:
-		return "public"
-	case SingleTeam:
-		return "singleTeam"
+func (a *controlReceiverAction) Build(ctx context.Context, b *TemplateBuilder) error {
+	var missing []string
+	if a.Receiver == nil {
+		missing = append(missing, "receiver")
+	} else {
+		if len(a.Receiver.ControlProgram) == 0 {
+			missing = append(missing, "receiver.control_program")
+		}
+	}
+	if a.AssetId.IsZero() {
+		missing = append(missing, "asset_id")
+	}
+	if len(missing) > 0 {
+		return MissingFieldsError(missing...)
+	}
+
+	out := types.NewTxOutput(*a.AssetId, a.Amount, a.Receiver.ControlProgram)
+	return b.AddOutput(out)
+}
+
+// DecodeControlAddressAction convert input data to action struct
+func DecodeControlAddressAction(data []byte) (Action, error) {
+	a := new(controlAddressAction)
+	err := stdjson.Unmarshal(data, a)
+	return a, err
+}
+
+type controlAddressAction struct {
+	bc.AssetAmount
+	Address string `json:"address"`
+}
+
+func (a *controlAddressAction) Build(ctx context.Context, b *TemplateBuilder) error {
+	var missing []string
+	if a.Address == "" {
+		missing = append(missing, "address")
+	}
+	if a.AssetId.IsZero() {
+		missing = append(missing, "asset_id")
+	}
+	if len(missing) > 0 {
+		return MissingFieldsError(missing...)
+	}
+
+	address, err := common.DecodeAddress(a.Address, &consensus.ActiveNetParams)
+	if err != nil {
+		return err
+	}
+	redeemContract := address.ScriptAddress()
+	program := []byte{}
+
+	switch address.(type) {
+	case *common.AddressWitnessPubKeyHash:
+		program, err = vmutil.P2WPKHProgram(redeemContract)
+	case *common.AddressWitnessScriptHash:
+		program, err = vmutil.P2WSHProgram(redeemContract)
 	default:
-		return fmt.Sprintf("Unknown TLF type: %d", t)
+		return errors.New("unsupport address type")
 	}
+	if err != nil {
+		return err
+	}
+
+	out := types.NewTxOutput(*a.AssetId, a.Amount, program)
+	return b.AddOutput(out)
 }
 
-// FolderType returns the keybase1.FolderType corresponding to the
-// given TLF type.
-func (t Type) FolderType() keybase1.FolderType {
-	switch t {
-	case Private:
-		return keybase1.FolderType_PRIVATE
-	case Public:
-		return keybase1.FolderType_PUBLIC
-	case SingleTeam:
-		return keybase1.FolderType_TEAM
+// DecodeControlProgramAction convert input data to action struct
+func DecodeControlProgramAction(data []byte) (Action, error) {
+	a := new(controlProgramAction)
+	err := stdjson.Unmarshal(data, a)
+	return a, err
+}
+
+type controlProgramAction struct {
+	bc.AssetAmount
+	Program json.HexBytes `json:"control_program"`
+}
+
+func (a *controlProgramAction) Build(ctx context.Context, b *TemplateBuilder) error {
+	var missing []string
+	if len(a.Program) == 0 {
+		missing = append(missing, "control_program")
+	}
+	if a.AssetId.IsZero() {
+		missing = append(missing, "asset_id")
+	}
+	if len(missing) > 0 {
+		return MissingFieldsError(missing...)
+	}
+
+	out := types.NewTxOutput(*a.AssetId, a.Amount, a.Program)
+	return b.AddOutput(out)
+}
+
+// DecodeRetireAction convert input data to action struct
+func DecodeRetireAction(data []byte) (Action, error) {
+	a := new(retireAction)
+	err := stdjson.Unmarshal(data, a)
+	return a, err
+}
+
+type retireAction struct {
+	bc.AssetAmount
+	Address string `json:"address"`
+}
+
+func (a *retireAction) Build(ctx context.Context, b *TemplateBuilder) error {
+	var missing []string
+	if a.Address == "" {
+		missing = append(missing, "address")
+	}
+	if a.AssetId.IsZero() {
+		missing = append(missing, "asset_id")
+	}
+	if a.Amount == 0 {
+		missing = append(missing, "amount")
+	}
+	if len(missing) > 0 {
+		return MissingFieldsError(missing...)
+	}
+
+	address, err := common.DecodeAddress(a.Address, &consensus.ActiveNetParams)
+	if err != nil {
+		return err
+	}
+	redeemContract := address.ScriptAddress()
+	program := []byte{}
+
+	switch address.(type) {
+	case *common.AddressWitnessPubKeyHash:
+		program, err = vmutil.P2WPKHProgram(redeemContract)
+	case *common.AddressWitnessScriptHash:
+		program, err = vmutil.P2WSHProgram(redeemContract)
 	default:
-		return keybase1.FolderType_UNKNOWN
+		return errors.New("unsupport address type")
 	}
-}
-
-// ID is a top-level folder ID
-type ID struct {
-	id [idByteLen]byte
-}
-
-var _ encoding.BinaryMarshaler = ID{}
-var _ encoding.BinaryUnmarshaler = (*ID)(nil)
-
-var _ encoding.TextMarshaler = ID{}
-var _ encoding.TextUnmarshaler = (*ID)(nil)
-
-// NullID is an empty ID
-var NullID = ID{}
-
-// Bytes returns the bytes of the TLF ID.
-func (id ID) Bytes() []byte {
-	return id.id[:]
-}
-
-// String implements the fmt.Stringer interface for ID.
-func (id ID) String() string {
-	return hex.EncodeToString(id.id[:])
-}
-
-// MarshalBinary implements the encoding.BinaryMarshaler interface for ID.
-func (id ID) MarshalBinary() (data []byte, err error) {
-	suffix := id.id[idByteLen-1]
-	if suffix != idSuffix && suffix != pubIDSuffix &&
-		suffix != singleTeamIDSuffix {
-		return nil, errors.WithStack(InvalidIDError{id.String()})
-	}
-	return id.id[:], nil
-}
-
-// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface
-// for ID.
-func (id *ID) UnmarshalBinary(data []byte) error {
-	if len(data) != idByteLen {
-		return errors.WithStack(
-			InvalidIDError{hex.EncodeToString(data)})
-	}
-	suffix := data[idByteLen-1]
-	if suffix != idSuffix && suffix != pubIDSuffix &&
-		suffix != singleTeamIDSuffix {
-		return errors.WithStack(
-			InvalidIDError{hex.EncodeToString(data)})
-	}
-	copy(id.id[:], data)
-	return nil
-}
-
-// MarshalText implements the encoding.TextMarshaler interface for ID.
-func (id ID) MarshalText() ([]byte, error) {
-	bytes, err := id.MarshalBinary()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return []byte(hex.EncodeToString(bytes)), nil
-}
 
-// UnmarshalText implements the encoding.TextUnmarshaler interface for
-// ID.
-func (id *ID) UnmarshalText(buf []byte) error {
-	s := string(buf)
-	bytes, err := hex.DecodeString(s)
-	if err != nil {
-		return errors.WithStack(InvalidIDError{s})
-	}
-	return id.UnmarshalBinary(bytes)
-}
-
-// SafeType returns the type of TLF represented by this ID.  If the ID
-// isn't valid, it returns tlf.Unknown along with an error.
-func (id ID) SafeType() (Type, error) {
-	if len(id.id) == 0 {
-		return Unknown, errors.New("Invalid empty TLF ID")
-	}
-	switch id.id[idByteLen-1] {
-	case idSuffix:
-		return Private, nil
-	case pubIDSuffix:
-		return Public, nil
-	case singleTeamIDSuffix:
-		return SingleTeam, nil
-	default:
-		return Unknown, fmt.Errorf("Unknown ID suffix  %x", id.id[idByteLen-1])
-	}
-}
-
-// Type returns the type of TLF represented by this ID.
-//
-// Note that this function panics if the ID suffix is unknown, rather than
-// returning tlf.Unknown.
-func (id ID) Type() Type {
-	t, err := id.SafeType()
-	if err != nil {
-		panic(err)
-	}
-	return t
-}
-
-// ParseID parses a hex encoded ID. Returns NullID and an
-// InvalidIDError on failure.
-func ParseID(s string) (ID, error) {
-	var id ID
-	err := id.UnmarshalText([]byte(s))
-	if err != nil {
-		return ID{}, err
-	}
-	return id, nil
-}
-
-// MakeRandomID makes a random ID using a cryptographically secure
-// RNG. Returns NullID on failure.
-func MakeRandomID(t Type) (ID, error) {
-	var idBytes [idByteLen]byte
-	err := kbfscrypto.RandRead(idBytes[:])
-	if err != nil {
-		return NullID, err
-	}
-	switch t {
-	case Private:
-		idBytes[idByteLen-1] = idSuffix
-	case Public:
-		idBytes[idByteLen-1] = pubIDSuffix
-	case SingleTeam:
-		idBytes[idByteLen-1] = singleTeamIDSuffix
-	default:
-		panic(fmt.Sprintf("Unknown TLF type %d", t))
-	}
-	var id ID
-	err = id.UnmarshalBinary(idBytes[:])
-	if err != nil {
-		return NullID, err
-	}
-	return id, nil
+	out := types.NewTxOutput(*a.AssetId, a.Amount, program)
+	return b.AddOutput(out)
 }

@@ -1,29 +1,5 @@
 package message
-		pending: p.P(fmt.Sprintf(`
 
-				msg.contact_method_id,
-				msg.channel_id,
-				chan.type
-			where last_status = 'pending' and (not cm isnull or not chan isnull)
-			order by
-				msg.message_type,
-				(select max(sent_at) from outgoing_messages om where om.escalation_policy_id = msg.escalation_policy_id) nulls first,
-				(select max(sent_at) from outgoing_messages om where om.service_id = msg.service_id) nulls first,
-				(select max(sent_at) from outgoing_messages om where om.alert_id = msg.alert_id) nulls first,
-				channel_id,
-				(select max(sent_at) from outgoing_messages om where om.user_id = msg.user_id) nulls first,
-				(select max(sent_at) from outgoing_messages om where om.contact_method_id = msg.contact_method_id) nulls first,
-				msg.created_at,
-				msg.alert_id,
-				msg.alert_log_id,
-				msg.contact_method_id
-			limit %d
-		`, c.MaxMessagesPerCycle)),
-func (db *DB) getRows(ctx context.Context, tx *sql.Tx) ([]row, error) {
-	rows, err := tx.Stmt(db.pending).QueryContext(ctx)
-	var result []row
-	var r row
-		var cmID, cmType, chID, chType sql.NullString
 import (
 	"context"
 	"database/sql"
@@ -289,7 +265,30 @@ func NewDB(ctx context.Context, db *sql.DB, c *Config) (*DB, error) {
 				cm.id = msg.contact_method_id and
 				cm.disabled
 		`),
-
+				msg.contact_method_id,
+				msg.channel_id,
+				chan.type
+			where last_status = 'pending' and (not cm isnull or not chan isnull)
+			order by
+				msg.message_type,
+				(select max(sent_at) from outgoing_messages om where om.escalation_policy_id = msg.escalation_policy_id) nulls first,
+				(select max(sent_at) from outgoing_messages om where om.service_id = msg.service_id) nulls first,
+				(select max(sent_at) from outgoing_messages om where om.alert_id = msg.alert_id) nulls first,
+				channel_id,
+				(select max(sent_at) from outgoing_messages om where om.user_id = msg.user_id) nulls first,
+				(select max(sent_at) from outgoing_messages om where om.contact_method_id = msg.contact_method_id) nulls first,
+				msg.created_at,
+				msg.alert_id,
+				msg.alert_log_id,
+				msg.contact_method_id
+			limit %d
+		`, c.MaxMessagesPerCycle)),
+func (db *DB) getRows(ctx context.Context, tx *sql.Tx) ([]row, error) {
+	rows, err := tx.Stmt(db.pending).QueryContext(ctx)
+	var result []row
+	var r row
+		var cmID, cmType, chID, chType sql.NullString
+		pending: p.P(fmt.Sprintf(`
 		messages: p.P(`
 			select
 				msg.id,

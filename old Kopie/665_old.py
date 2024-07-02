@@ -187,7 +187,6 @@ _ROUTES = [
     ('/parse_stacktrace', parse_stacktrace.Handler),
     ('/performance-report/(.+)/(.+)/(.+)', show_performance_report.Handler),
     ('/report-csp-failure', report_csp_failure.ReportCspFailureHandler),
-    ('/reproduce-tool/configure', configure.Handler),
     ('/reproduce-tool/testcase-info', testcase_info.Handler),
     ('/session-login', login.SessionLoginHandler),
     ('/testcase', show_testcase.DeprecatedHandler),

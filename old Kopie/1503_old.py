@@ -1,6 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-            self.new_item(cat, name, desc)
 # Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -51,8 +50,8 @@ class CommandCompletionModel(base.BaseCompletionModel):
                 cmdlist.append((obj.name, obj.desc))
         for name, cmd in config.section('aliases').items():
             cmdlist.append((name, "Alias for '{}'".format(cmd)))
+            self.new_item(cat, name, desc)
         cat = self.new_category("Commands")
-
         # map each command to its bound keys and show these in the misc column
         keyconf = objreg.get('key-config')
         cmd_to_keys = defaultdict(list)

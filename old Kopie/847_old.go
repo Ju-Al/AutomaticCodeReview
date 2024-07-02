@@ -391,7 +391,6 @@ func (p *ControllerRegistor) InsertFilter(pattern string, pos int, filter Filter
 	if !RouterCaseSensitive {
 		pattern = strings.ToLower(pattern)
 	}
-	if params == nil {
 		mr.returnOnOutput = true
 	} else {
 		mr.returnOnOutput = params[0]

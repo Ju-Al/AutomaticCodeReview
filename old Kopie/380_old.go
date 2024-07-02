@@ -1,5 +1,4 @@
 package chunks
-
 import (
 	"github.com/onflow/flow-go/model/flow"
 )

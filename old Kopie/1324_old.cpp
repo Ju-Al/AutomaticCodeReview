@@ -1,8 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-                if ( (mp_listener != nullptr) && this->is_acked_by_all(change) )
-                {
-                    mp_listener->onWriterChangeReceivedByAll(this, change);
-                }
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -360,7 +356,10 @@ void StatefulWriter::unsent_change_added_to_history(
                     periodic_hb_event_->restart_timer(max_blocking_time);
                 }
 
-                check_acked_status();
+                if ( (mp_listener != nullptr) && this->is_acked_by_all(change) )
+                {
+                    mp_listener->onWriterChangeReceivedByAll(this, change);
+                }
 
                 if (disable_positive_acks_ && last_sequence_number_ == SequenceNumber_t())
                 {

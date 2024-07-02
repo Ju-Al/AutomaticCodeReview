@@ -1,5 +1,4 @@
 package marketplace
-
 import (
 	"errors"
 	"sync"

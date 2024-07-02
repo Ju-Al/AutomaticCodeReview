@@ -1,6 +1,5 @@
 # frozen_string_literal: true
-          # lazy-load expensive gem code
-          require 'docker'
+
 require 'logging'
 require 'bolt/node/errors'
 
@@ -8,7 +7,8 @@ module Bolt
   module Transport
     class Docker < Base
       class Connection
-        # Holds information about the Docker server per service-url
+          # lazy-load expensive gem code
+          require 'docker'        # Holds information about the Docker server per service-url
         # Hash[String, Hash]
         @@docker_server_information = {} # rubocop:disable Style/ClassVars This is acceptable
 

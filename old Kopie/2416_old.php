@@ -928,7 +928,6 @@ class DataAccessFunctions extends AbstractSmartyPlugin
             new SmartyPluginDescriptor('function', 'meta', $this, 'metaAccess'),
             new SmartyPluginDescriptor('function', 'module_config', $this, 'moduleConfigDataAccess'),
             new SmartyPluginDescriptor('function', 'coupon', $this, 'couponDataAccess'),
-            new SmartyPluginDescriptor('function', 'favicon', $this, 'faviconDataAccess'),
             new SmartyPluginDescriptor('function', 'logo', $this, 'logoDataAccess'),
         );
     }

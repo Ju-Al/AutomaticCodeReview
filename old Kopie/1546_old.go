@@ -111,7 +111,6 @@ func (w *Workload) Configure(client *client.Client) {
 	wep.Metadata.Workload = w.Name
 	wep.Metadata.Orchestrator = "felixfv"
 	wep.Metadata.Node = w.C.Hostname
-	wep.Metadata.Labels = map[string]string{"name": w.Name}
 	wep.Spec.IPNetworks = []net.IPNet{net.MustParseNetwork(w.IP + "/32")}
 	wep.Spec.InterfaceName = w.InterfaceName
 	wep.Spec.Profiles = []string{"default"}

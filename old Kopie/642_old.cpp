@@ -1370,7 +1370,6 @@ sc::result WaitingForTurnEndIdle::react(const SaveGameRequest& msg) {
     return transit<WaitingForSaveData>();
 }
 
-sc::result WaitingForTurnEndIdle::react(const Error& msg) {
     HandleErrorMessage(msg, Server());
     return discard_event();
 }

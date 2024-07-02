@@ -1,8 +1,4 @@
 import os
-    def test_delete_stack_across_regions(self):
-        domain_name = 'es-%s' % short_uid()
-
-        cloudformation = aws_stack.connect_to_service('cloudformation', region_name='eu-central-1')
 import json
 import time
 import unittest
@@ -1728,7 +1724,10 @@ class CloudFormationTest(unittest.TestCase):
         cloudformation.delete_stack(StackName='myteststack2')
         cloudformation.delete_stack(StackName='myteststack')
 
-    def test_globalindex_read_write_provisioned_throughput_dynamodb_table(self):
+    def test_delete_stack_across_regions(self):
+        domain_name = 'es-%s' % short_uid()
+
+        cloudformation = aws_stack.connect_to_service('cloudformation', region_name='eu-central-1')
         cf_client = aws_stack.connect_to_service('cloudformation')
         ddb_client = aws_stack.connect_to_service('dynamodb')
         stack_name = 'test_dynamodb'

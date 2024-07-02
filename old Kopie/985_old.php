@@ -1,9 +1,5 @@
 <?php
 
-        if ($event->getResponse()->isSuccessful()) {
-            $this->indexer->index($document);
-        } else {
-            $this->indexer->delete($document);
 declare(strict_types=1);
 
 /*
@@ -65,7 +61,9 @@ class SearchIndexListener
             return;
         }
 
-        try {
+        if ($event->getResponse()->isSuccessful()) {
+            $this->indexer->index($document);
+        } else {
             if ($event->getResponse()->isSuccessful()) {
                 $this->indexer->index($document);
             } else {

@@ -449,9 +449,6 @@ func (s *Service) SetAdminDarcIDs(rq *SetAdminDarcIDs) (*SetAdminDarcIDsReply,
 	}
 	s.storage.AdminDarcIDs = rq.NewAdminDarcIDs
 	return &SetAdminDarcIDsReply{}, s.save()
-}
-
-// EmailSetup uses the given DeviceURL to create a new device and stores the
 // configuration, if successful.
 func (s *Service) EmailSetup(rq *EmailSetup) (*EmailSetupReply, error) {
 	if err := rq.Verify(s.ServerIdentity().Public); err != nil {

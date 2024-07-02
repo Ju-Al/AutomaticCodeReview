@@ -95,7 +95,6 @@ class InteropServiceHelper {
 		return this.exportNoteTo_('printer', noteId, options);
 	}
 
-	static async defaultFilename(noteIds, fileExtension, folders = null) {
 		const note = await Note.load(noteIds[0]);
 		if (folders) {
 			const folder = Folder.byId(folders, note.parent_id);

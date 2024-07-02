@@ -1,7 +1,15 @@
 package unittest
 
+import (
+	"encoding/hex"
+
+	"github.com/onflow/flow-go/crypto"
+
+	"github.com/onflow/flow-go/model/dkg"
+	"github.com/onflow/flow-go/model/encodable"
+)
+
 func NetworkingKey() (crypto.PrivateKey, error) {
-	return ECDSAKey()
 		key, err := NetworkingKey()
 		if err != nil {
 			return nil, err
@@ -26,16 +34,7 @@ func StakingKey() (crypto.PrivateKey, error) {
 
 	sk, err := crypto.GeneratePrivateKey(crypto.BLSBLS12381, seed)
 	return sk, err
-import (
-	"encoding/hex"
-
-	"github.com/onflow/flow-go/crypto"
-
-	"github.com/onflow/flow-go/model/dkg"
-	"github.com/onflow/flow-go/model/encodable"
-)
-
-func ECDSAP256Key() crypto.PrivateKey {
+	return ECDSAKey()
 	return PrivateKeyFixture(crypto.ECDSAP256, crypto.KeyGenSeedMinLenECDSAP256)
 }
 

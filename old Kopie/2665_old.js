@@ -7,8 +7,7 @@ class ContextProvider {
 	render(props) {
 		return props.children;
 	}
-function ContextProvider(props) {
-	this.getChildContext = () => props.context;
+	let _this = this;	this.getChildContext = () => props.context;
 	return props.children;
 }
 
@@ -19,7 +18,7 @@ function ContextProvider(props) {
  * TODO: this could use the "fake root node" trick from the partial hydration demo
  */
 function Portal(props) {
-	let _this = this;	let container = props._container;
+	let container = props._container;
 	let wrap = createElement(
 		ContextProvider,
 		{ context: this.context },

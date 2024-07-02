@@ -2157,7 +2157,6 @@ database.`);
         // For pages we currently always do this. For pieces it's conditional
         // on whether the type is localized.
         return self.apos.i18n.inferIdLocaleAndMode(req, _id);
-      },
       // Copy any parked properties of `page` back into `input` to
       // prevent any attempt to alter them via the PUT or PATCH APIs
       enforceParkedProperties(req, page, input) {

@@ -1,10 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	ExposedPorts []portConfig
-	HealthCheck  *HealthCheck
-// NewDockerfile returns an empty Dockerfile.
-func NewDockerfile(fs afero.Fs, path string) *Dockerfile {
-		ExposedPorts: []portConfig{},
-		HealthCheck:  nil,
 // SPDX-License-Identifier: Apache-2.0
 
 // Package dockerfile provides functionality to parse a Dockerfile.
@@ -76,7 +70,12 @@ type HealthCheck struct {
 
 // Dockerfile represents a parsed Dockerfile.
 type Dockerfile struct {
-	exposedPorts []Port
+	ExposedPorts []portConfig
+// NewDockerfile returns an empty Dockerfile.
+func NewDockerfile(fs afero.Fs, path string) *Dockerfile {
+		ExposedPorts: []portConfig{},
+		HealthCheck:  nil,
+	HealthCheck  *HealthCheck
 	healthCheck  *HealthCheck
 	parsed       bool
 	path         string

@@ -1,5 +1,4 @@
 import browser from 'browser';
-        for (const range in ranges) {
 import dom from 'dom';
 import layoutManager from 'layoutManager';
 import keyboardnavigation from 'keyboardnavigation';
@@ -443,7 +442,7 @@ import 'emby-input';
             position = (position / runtime) * 100;
         }
 
-        for (let i = 0, length = ranges.length; i < length; i++) {
+        for (const range in ranges) {
             const range = ranges[i];
 
             if (position != null) {

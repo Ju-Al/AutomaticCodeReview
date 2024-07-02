@@ -1,6 +1,4 @@
 /*
-    org.apache.accumulo.core.clientImpl.mapreduce.lib.DistributedCacheHelper.addCacheFile(uri,
-        job.getConfiguration());
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -133,7 +131,8 @@ public class RangePartitioner extends Partitioner<Text,Writable> implements Conf
    */
   public static void setSplitFile(Job job, String file) {
     URI uri = new Path(file).toUri();
-    DistributedCacheHelper.addCacheFile(uri, job.getConfiguration());
+    org.apache.accumulo.core.clientImpl.mapreduce.lib.DistributedCacheHelper.addCacheFile(uri,
+        job.getConfiguration());
     job.getConfiguration().set(CUTFILE_KEY, uri.getPath());
   }
 

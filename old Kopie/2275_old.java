@@ -1,6 +1,5 @@
 package com.fsck.k9.ui;
 
-
 import android.content.AsyncQueryHandler;
 import android.content.ContentResolver;
 import android.content.Context;

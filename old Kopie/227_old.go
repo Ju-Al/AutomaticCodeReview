@@ -1,21 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-func expectMultiaddresessEventually(t *testing.T, exporter ab.Interface, wantMultiaddresses []ma.Multiaddr) {
-	for i := 0; i < 10; i++ {
-		var stringMultiaddresses []string
-		m, err := exporter.Multiaddresses()
-		for _, v := range m {
-			stringMultiaddresses = append(stringMultiaddresses, v.String())
-		}
-		var stringWantMultiAddresses []string
-		for _, v := range wantMultiaddresses {
-			stringWantMultiAddresses = append(stringWantMultiAddresses, v.String())
-		sort.Strings(stringMultiaddresses)
-		sort.Strings(stringWantMultiAddresses)
-		if reflect.DeepEqual(stringMultiaddresses, stringWantMultiAddresses) {
-			return
-		time.Sleep(50 * time.Millisecond)
-	m, err := exporter.Multiaddresses()
-	t.Errorf("Multiaddresses got %v, want %v", m, wantMultiaddresses)
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -221,7 +204,23 @@ func expectOverlaysEventually(t *testing.T, exporter ab.Interface, wantOverlays 
 	t.Errorf("Overlays got %v, want %v", o, wantOverlays)
 }
 
-func expectBzzAddresessEventually(t *testing.T, exporter ab.Interface, wantBzzAddresses []bzz.Address) {
+func expectMultiaddresessEventually(t *testing.T, exporter ab.Interface, wantMultiaddresses []ma.Multiaddr) {
+	for i := 0; i < 10; i++ {
+		var stringMultiaddresses []string
+		for _, v := range m {
+			stringMultiaddresses = append(stringMultiaddresses, v.String())
+		}
+		var stringWantMultiAddresses []string
+		for _, v := range wantMultiaddresses {
+			stringWantMultiAddresses = append(stringWantMultiAddresses, v.String())
+		sort.Strings(stringMultiaddresses)
+		sort.Strings(stringWantMultiAddresses)
+		if reflect.DeepEqual(stringMultiaddresses, stringWantMultiAddresses) {
+			return
+		time.Sleep(50 * time.Millisecond)
+	m, err := exporter.Multiaddresses()
+	t.Errorf("Multiaddresses got %v, want %v", m, wantMultiaddresses)
+		m, err := exporter.Multiaddresses()
 	for i := 0; i < 100; i++ {
 		time.Sleep(50 * time.Millisecond)
 		addresses, err := exporter.Addresses()

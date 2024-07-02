@@ -1,6 +1,5 @@
 /**
-      return wsv_;
- * Copyright Soramitsu Co., Ltd. 2018 All Rights Reserved.
+ * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,279 +15,206 @@
  * limitations under the License.
  */
 
-#include "ametsuchi/impl/storage_impl.hpp"
-#include <boost/format.hpp>
-#include "ametsuchi/impl/flat_file/flat_file.hpp"  // for FlatFile
-#include "ametsuchi/impl/mutable_storage_impl.hpp"
-#include "ametsuchi/impl/postgres_block_query.hpp"
 #include "ametsuchi/impl/postgres_wsv_query.hpp"
-#include "ametsuchi/impl/temporary_wsv_impl.hpp"
-#include "model/converters/json_common.hpp"
-#include "postgres_ordering_service_persistent_state.hpp"
-
-// TODO: 14-02-2018 Alexey Chernyshov remove this after relocation to
-// shared_model https://soramitsu.atlassian.net/browse/IR-887
-#include "backend/protobuf/from_old_model.hpp"
 
 namespace iroha {
   namespace ametsuchi {
 
-    const char *kCommandExecutorError = "Cannot create CommandExecutorFactory";
-    const char *kPsqlBroken = "Connection to PostgreSQL broken: %s";
-    const char *kTmpWsv = "TemporaryWsv";
+    using shared_model::interface::types::AccountIdType;
+    using shared_model::interface::types::AssetIdType;
+    using shared_model::interface::types::DomainIdType;
+    using shared_model::interface::types::JsonType;
+    using shared_model::interface::types::PermissionNameType;
+    using shared_model::interface::types::PubkeyType;
+    using shared_model::interface::types::RoleIdType;
 
-    ConnectionContext::ConnectionContext(
-        std::unique_ptr<FlatFile> block_store,
-        std::unique_ptr<pqxx::lazyconnection> pg_lazy,
-        std::unique_ptr<pqxx::nontransaction> pg_nontx)
-        : block_store(std::move(block_store)),
-          pg_lazy(std::move(pg_lazy)),
-          pg_nontx(std::move(pg_nontx)) {}
+    const std::string kRoleId = "role_id";
+    const char *kAccountNotFound = "Account {} not found";
+    const std::string kPublicKey = "public_key";
+    const std::string kAssetId = "asset_id";
+    const std::string kAccountId = "account_id";
+    const std::string kDomainId = "domain_id";
 
-    StorageImpl::~StorageImpl() {
-      wsv_transaction_->commit();
-      wsv_connection_->disconnect();
-      log_->info("PostgresQL connection closed");
+    PostgresWsvQuery::PostgresWsvQuery(pqxx::nontransaction &transaction)
+        : transaction_(transaction),
+          log_(logger::log("PostgresWsvQuery")),
+          execute_{makeExecuteOptional(transaction_, log_)} {}
+
+    bool PostgresWsvQuery::hasAccountGrantablePermission(
+        const AccountIdType &permitee_account_id,
+        const AccountIdType &account_id,
+        const PermissionNameType &permission_id) {
+      return execute_(
+                 "SELECT * FROM account_has_grantable_permissions WHERE "
+                 "permittee_account_id = "
+                 + transaction_.quote(permitee_account_id)
+                 + " AND account_id = " + transaction_.quote(account_id)
+                 + " AND permission_id = " + transaction_.quote(permission_id)
+                 + ";")
+          | [](const auto &result) { return result.size() == 1; };
     }
 
-    StorageImpl::StorageImpl(
-        std::string block_store_dir,
-        std::string postgres_options,
-        std::unique_ptr<FlatFile> block_store,
-        std::unique_ptr<pqxx::lazyconnection> wsv_connection,
-        std::unique_ptr<pqxx::nontransaction> wsv_transaction)
-        : block_store_dir_(std::move(block_store_dir)),
-          postgres_options_(std::move(postgres_options)),
-          block_store_(std::move(block_store)),
-          wsv_connection_(std::move(wsv_connection)),
-          wsv_transaction_(std::move(wsv_transaction)),
-          wsv_(std::make_shared<PostgresWsvQuery>(*wsv_transaction_)),
-          blocks_(std::make_shared<PostgresBlockQuery>(*wsv_transaction_,
-                                                       *block_store_)) {
-      log_ = logger::log("StorageImpl");
-
-      wsv_transaction_->exec(init_);
-      wsv_transaction_->exec(
-          "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY;");
+    boost::optional<std::vector<RoleIdType>> PostgresWsvQuery::getAccountRoles(
+        const AccountIdType &account_id) {
+      return execute_(
+                 "SELECT role_id FROM account_has_roles WHERE account_id = "
+                 + transaction_.quote(account_id) + ";")
+          | [&](const auto &result) {
+              return transform<std::string>(result, [](const auto &row) {
+                return row.at(kRoleId).c_str();
+              });
+            };
     }
 
-    expected::Result<std::unique_ptr<TemporaryWsv>, std::string>
-    StorageImpl::createTemporaryWsv() {
-      auto postgres_connection =
-          std::make_unique<pqxx::lazyconnection>(postgres_options_);
-      try {
-        postgres_connection->activate();
-      } catch (const pqxx::broken_connection &e) {
-        return expected::makeError(
-            (boost::format(kPsqlBroken) % e.what()).str());
-      }
-      auto wsv_transaction =
-          std::make_unique<pqxx::nontransaction>(*postgres_connection, kTmpWsv);
-
-      return expected::makeValue<std::unique_ptr<TemporaryWsv>>(
-          std::make_unique<TemporaryWsvImpl>(std::move(postgres_connection),
-                                             std::move(wsv_transaction)));
+    boost::optional<std::vector<PermissionNameType>>
+    PostgresWsvQuery::getRolePermissions(const RoleIdType &role_name) {
+      return execute_(
+                 "SELECT permission_id FROM role_has_permissions WHERE role_id "
+                 "= "
+                 + transaction_.quote(role_name) + ";")
+          | [&](const auto &result) {
+              return transform<std::string>(result, [](const auto &row) {
+                return row.at("permission_id").c_str();
+              });
+            };
     }
 
-    expected::Result<std::unique_ptr<MutableStorage>, std::string>
-    StorageImpl::createMutableStorage() {
-      auto postgres_connection =
-          std::make_unique<pqxx::lazyconnection>(postgres_options_);
-      try {
-        postgres_connection->activate();
-      } catch (const pqxx::broken_connection &e) {
-        return expected::makeError(
-            (boost::format(kPsqlBroken) % e.what()).str());
-      }
-      auto wsv_transaction =
-          std::make_unique<pqxx::nontransaction>(*postgres_connection, kTmpWsv);
-
-      boost::optional<shared_model::interface::types::HashType> top_hash;
-
-      blocks_->getTopBlocks(1)
-          .subscribe_on(rxcpp::observe_on_new_thread())
-          .as_blocking()
-          .subscribe([&top_hash](auto block) { top_hash = block->hash(); });
-
-      return expected::makeValue<std::unique_ptr<MutableStorage>>(
-          std::make_unique<MutableStorageImpl>(
-              top_hash.value_or(shared_model::interface::types::HashType("")),
-              std::move(postgres_connection),
-              std::move(wsv_transaction)));
+    boost::optional<std::vector<RoleIdType>> PostgresWsvQuery::getRoles() {
+      return execute_("SELECT role_id FROM role;") | [&](const auto &result) {
+        return transform<std::string>(
+            result, [](const auto &row) { return row.at(kRoleId).c_str(); });
+      };
     }
 
-    bool StorageImpl::insertBlock(const shared_model::interface::Block &block) {
-      log_->info("create mutable storage");
-      auto storageResult = createMutableStorage();
-      bool inserted = false;
-      storageResult.match(
-          [&](expected::Value<std::unique_ptr<ametsuchi::MutableStorage>>
-                  &storage) {
-            inserted =
-                storage.value->apply(block,
-                                     [](const auto &current_block,
-                                        auto &query,
-                                        const auto &top_hash) { return true; });
-            log_->info("block inserted: {}", inserted);
-            commit(std::move(storage.value));
-          },
-          [&](expected::Error<std::string> &error) {
-            log_->error(error.error);
-          });
+    boost::optional<std::shared_ptr<shared_model::interface::Account>>
+    PostgresWsvQuery::getAccount(const AccountIdType &account_id) {
+      return execute_("SELECT * FROM account WHERE account_id = "
+                      + transaction_.quote(account_id) + ";")
+                 | [&](const auto &result)
+                 -> boost::optional<
+                     std::shared_ptr<shared_model::interface::Account>> {
+        if (result.empty()) {
+          log_->info(kAccountNotFound, account_id);
+          return boost::none;
+        }
 
-      return inserted;
+        return fromResult(makeAccount(result.at(0)));
+      };
     }
 
-    bool StorageImpl::insertBlocks(
-        const std::vector<std::shared_ptr<shared_model::interface::Block>>
-            &blocks) {
-      log_->info("create mutable storage");
-      bool inserted = true;
-      auto storageResult = createMutableStorage();
-      storageResult.match(
-          [&](iroha::expected::Value<std::unique_ptr<MutableStorage>>
-                  &mutableStorage) {
-            std::for_each(blocks.begin(), blocks.end(), [&](auto block) {
-              inserted &= mutableStorage.value->apply(
-                  *block, [](const auto &block, auto &query, const auto &hash) {
-                    return true;
-                  });
-            });
-            commit(std::move(mutableStorage.value));
-          },
-          [&](iroha::expected::Error<std::string> &error) {
-            log_->error(error.error);
-            inserted = false;
-          });
+    boost::optional<std::string> PostgresWsvQuery::getAccountDetail(
+        const std::string &account_id) {
+      return execute_("SELECT data#>>" + transaction_.quote("{}")
+                      + " FROM account WHERE account_id = "
+                      + transaction_.quote(account_id) + ";")
+                 | [&](const auto &result) -> boost::optional<std::string> {
+        if (result.empty()) {
+          log_->info(kAccountNotFound, account_id);
+          return boost::none;
+        }
+        auto row = result.at(0);
+        std::string res;
+        row.at(0) >> res;
 
-      log_->info("insert blocks finished");
-      return inserted;
+        // if res is empty, then that key does not exist for this account
+        if (res.empty()) {
+          return boost::none;
+        }
+        return res;
+      };
     }
 
-    void StorageImpl::dropStorage() {
-      log_->info("Drop ledger");
-      auto drop = R"(
-DROP TABLE IF EXISTS account_has_signatory;
-DROP TABLE IF EXISTS account_has_asset;
-DROP TABLE IF EXISTS role_has_permissions;
-DROP TABLE IF EXISTS account_has_roles;
-DROP TABLE IF EXISTS account_has_grantable_permissions;
-DROP TABLE IF EXISTS account;
-DROP TABLE IF EXISTS asset;
-DROP TABLE IF EXISTS domain;
-DROP TABLE IF EXISTS signatory;
-DROP TABLE IF EXISTS peer;
-DROP TABLE IF EXISTS role;
-DROP TABLE IF EXISTS height_by_hash;
-DROP TABLE IF EXISTS height_by_account_set;
-DROP TABLE IF EXISTS index_by_creator_height;
-DROP TABLE IF EXISTS index_by_id_height_asset;
-)";
-
-      // erase db
-      log_->info("drop dp");
-      pqxx::connection connection(postgres_options_);
-      pqxx::work txn(connection);
-      txn.exec(drop);
-      txn.commit();
-
-      pqxx::work init_txn(connection);
-      init_txn.exec(init_);
-      init_txn.commit();
-
-      // erase blocks
-      log_->info("drop block store");
-      block_store_->dropAll();
+    boost::optional<std::vector<PubkeyType>> PostgresWsvQuery::getSignatories(
+        const AccountIdType &account_id) {
+      return execute_(
+                 "SELECT public_key FROM account_has_signatory WHERE "
+                 "account_id = "
+                 + transaction_.quote(account_id) + ";")
+          | [&](const auto &result) {
+              return transform<PubkeyType>(result, [&](const auto &row) {
+                pqxx::binarystring public_key_str(row.at(kPublicKey));
+                return PubkeyType(public_key_str.str());
+              });
+            };
     }
 
-    expected::Result<ConnectionContext, std::string>
-    StorageImpl::initConnections(std::string block_store_dir,
-                                 std::string postgres_options) {
-      auto log_ = logger::log("StorageImpl:initConnection");
-      log_->info("Start storage creation");
-
-      auto block_store = FlatFile::create(block_store_dir);
-      if (not block_store) {
-        return expected::makeError(
-            (boost::format("Cannot create block store in %s") % block_store_dir)
-                .str());
-      }
-      log_->info("block store created");
-
-      auto postgres_connection =
-          std::make_unique<pqxx::lazyconnection>(postgres_options);
-      try {
-        postgres_connection->activate();
-      } catch (const pqxx::broken_connection &e) {
-        return expected::makeError(
-            (boost::format(kPsqlBroken) % e.what()).str());
-      }
-      log_->info("connection to PostgreSQL completed");
-
-      auto wsv_transaction = std::make_unique<pqxx::nontransaction>(
-          *postgres_connection, "Storage");
-      log_->info("transaction to PostgreSQL initialized");
-
-      return expected::makeValue(
-          ConnectionContext(std::move(*block_store),
-                            std::move(postgres_connection),
-                            std::move(wsv_transaction)));
+    boost::optional<std::shared_ptr<shared_model::interface::Asset>>
+    PostgresWsvQuery::getAsset(const AssetIdType &asset_id) {
+      pqxx::result result;
+      return execute_("SELECT * FROM asset WHERE asset_id = "
+                      + transaction_.quote(asset_id) + ";")
+                 | [&](const auto &result)
+                 -> boost::optional<
+                     std::shared_ptr<shared_model::interface::Asset>> {
+        if (result.empty()) {
+          log_->info("Asset {} not found", asset_id);
+          return boost::none;
+        }
+        return fromResult(makeAsset(result.at(0)));
+      };
     }
 
-    expected::Result<std::shared_ptr<StorageImpl>, std::string>
-    StorageImpl::create(std::string block_store_dir,
-                        std::string postgres_options) {
-      auto ctx_result = initConnections(block_store_dir, postgres_options);
-      expected::Result<std::shared_ptr<StorageImpl>, std::string> storage;
-      ctx_result.match(
-          [&](expected::Value<ConnectionContext> &ctx) {
-            storage = expected::makeValue(std::shared_ptr<StorageImpl>(
-                new StorageImpl(block_store_dir,
-                                postgres_options,
-                                std::move(ctx.value.block_store),
-                                std::move(ctx.value.pg_lazy),
-                                std::move(ctx.value.pg_nontx))));
-          },
-          [&](expected::Error<std::string> &error) { storage = error; });
-      return storage;
+    boost::optional<std::shared_ptr<shared_model::interface::AccountAsset>>
+    PostgresWsvQuery::getAccountAsset(const AccountIdType &account_id,
+                                      const AssetIdType &asset_id) {
+      return execute_("SELECT * FROM account_has_asset WHERE account_id = "
+                      + transaction_.quote(account_id)
+                      + " AND asset_id = " + transaction_.quote(asset_id) + ";")
+                 | [&](const auto &result)
+                 -> boost::optional<
+                     std::shared_ptr<shared_model::interface::AccountAsset>> {
+        if (result.empty()) {
+          log_->info("Account {} does not have asset {}", account_id, asset_id);
+          return boost::none;
+        }
+
+        return fromResult(makeAccountAsset(result.at(0)));
+      };
     }
 
-    void StorageImpl::commit(std::unique_ptr<MutableStorage> mutableStorage) {
-      std::unique_lock<std::shared_timed_mutex> write(rw_lock_);
-      auto storage_ptr = std::move(mutableStorage);  // get ownership of storage
-      auto storage = static_cast<MutableStorageImpl *>(storage_ptr.get());
-      for (const auto &block : storage->block_store_) {
-        // TODO: rework to shared model converters once they are available
-        // IR-1084 Nikita Alekseev
-        auto old_block =
-            *std::unique_ptr<model::Block>(block.second->makeOldModel());
-        block_store_->add(block.first,
-                          stringToBytes(model::converters::jsonToString(
-                              serializer_.serialize(old_block))));
-      }
-
-      storage->transaction_->exec("COMMIT;");
-      storage->committed = true;
+    boost::optional<std::shared_ptr<shared_model::interface::Domain>>
+    PostgresWsvQuery::getDomain(const DomainIdType &domain_id) {
+      return execute_("SELECT * FROM domain WHERE domain_id = "
+                      + transaction_.quote(domain_id) + ";")
+                 | [&](const auto &result)
+                 -> boost::optional<
+                     std::shared_ptr<shared_model::interface::Domain>> {
+        if (result.empty()) {
+          log_->info("Domain {} not found", domain_id);
+          return boost::none;
+        }
+        return fromResult(makeDomain(result.at(0)));
+      };
     }
 
-    std::shared_ptr<WsvQuery> StorageImpl::getWsvQuery() const {
-      auto postgres_connection =
-          std::make_unique<pqxx::lazyconnection>(postgres_options_);
-      try {
-        postgres_connection->activate();
-      } catch (const pqxx::broken_connection &e) {
-        exit(1);
-        return wsv_;
-      }
-      auto wsv_transaction =
-          std::make_unique<pqxx::nontransaction>(*postgres_connection);
-
-      return std::make_shared<PostgresWsvQuery>(std::move(postgres_connection),
-                                                std::move(wsv_transaction));
+    boost::optional<std::vector<std::shared_ptr<shared_model::interface::Peer>>>
+    PostgresWsvQuery::getPeers() {
+      pqxx::result result;
+      return execute_("SELECT * FROM peer;") | [&](const auto &result)
+                 -> boost::optional<std::vector<
+                     std::shared_ptr<shared_model::interface::Peer>>> {
+        auto results = transform<shared_model::builder::BuilderResult<
+            shared_model::interface::Peer>>(result, makePeer);
+        std::vector<std::shared_ptr<shared_model::interface::Peer>> peers;
+        for (auto &r : results) {
+          r.match(
+              [&](expected::Value<
+                  std::shared_ptr<shared_model::interface::Peer>> &v) {
+                peers.push_back(v.value);
+              },
+              [&](expected::Error<std::shared_ptr<std::string>> &e) {
+                log_->info(*e.error);
+              });
+        }
+        return peers;
+      };
     }
-
-    std::shared_ptr<BlockQuery> StorageImpl::getBlockQuery() const {
-      return blocks_;
-    }
+        std::unique_ptr<pqxx::lazyconnection> connection,
+        std::unique_ptr<pqxx::nontransaction> transaction)
+        : connection_ptr_(std::move(connection)),
+          transaction_ptr_(std::move(transaction)),
+          transaction_(*transaction_ptr_),
+          log_(logger::log("PostgresWsvQuery")),
+          execute_{makeExecuteOptional(transaction_, log_)} {}
   }  // namespace ametsuchi
 }  // namespace iroha

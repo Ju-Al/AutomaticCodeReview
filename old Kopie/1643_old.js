@@ -797,7 +797,6 @@ export default class WalletsStore extends Store {
     }
   });
 
-  /**
    * Generates a rewards csv and saves it to the user selected file location.
    *
    * Using mobx flows: https://mobx.js.org/best/actions.html#flows

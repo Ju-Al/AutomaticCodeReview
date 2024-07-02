@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
-
 namespace BTCPayServer.Migrations
 {
     public partial class AddApiKeyLabel : Migration

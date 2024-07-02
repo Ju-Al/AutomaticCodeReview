@@ -127,7 +127,6 @@ HONGGFUZZ_ASAN_JOB = JobInfo(
     'address', ['honggfuzz', 'engine_asan'],
     minimize_job_override=LIBFUZZER_ASAN_JOB)
 
-SYZKALLER_KASAN_JOB = JobInfo('syzkaller_kasan_', 'syzkaller', 'address',
                               ['syzkaller', 'engine_kasan', 'prune'])
 
 JOB_MAP = {

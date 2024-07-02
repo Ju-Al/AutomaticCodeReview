@@ -19,180 +19,412 @@
 
 package com.netflix.iceberg;
 
-import com.netflix.iceberg.encryption.EncryptionManager;
-import com.netflix.iceberg.io.FileIO;
+import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableMap;
+import com.netflix.iceberg.avro.AvroSchemaUtil;
+import com.netflix.iceberg.encryption.EncryptionKeyMetadata;
+import com.netflix.iceberg.encryption.EncryptionKeyMetadatas;
+import com.netflix.iceberg.types.Type;
+import com.netflix.iceberg.types.Types;
+import com.netflix.iceberg.util.ByteBuffers;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.specific.SpecificData;
+import java.io.Serializable;
+import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 
-/**
- * Represents a table.
- */
-public interface Table {
+class GenericDataFile
+    implements DataFile, IndexedRecord, StructLike, SpecificData.SchemaConstructable, Serializable {
+  private static final Types.StructType EMPTY_STRUCT_TYPE = Types.StructType.of();
+  private static final PartitionData EMPTY_PARTITION_DATA = new PartitionData(EMPTY_STRUCT_TYPE) {
+    @Override
+    public PartitionData copy() {
+      return this; // this does not change
+    }
+  };
+
+  private int[] fromProjectionPos;
+  private Types.StructType partitionType;
+
+  private String filePath = null;
+  private FileFormat format = null;
+  private PartitionData partitionData = null;
+  private Long recordCount = null;
+  private long fileSizeInBytes = -1L;
+  private long blockSizeInBytes = -1L;
+
+  // optional fields
+  private Integer fileOrdinal = null; // boxed for nullability
+  private List<Integer> sortColumns = null;
+  private Map<Integer, Long> columnSizes = null;
+  private Map<Integer, Long> valueCounts = null;
+  private Map<Integer, Long> nullValueCounts = null;
+  private Map<Integer, ByteBuffer> lowerBounds = null;
+  private Map<Integer, ByteBuffer> upperBounds = null;
+  private EncryptionKeyMetadata keyMetadata = null;
+
+  // cached schema
+  private transient org.apache.avro.Schema avroSchema = null;
 
   /**
-   * Refresh the current table metadata.
+   * Used by Avro reflection to instantiate this class when reading manifest files.
    */
-  void refresh();
+  public GenericDataFile(org.apache.avro.Schema avroSchema) {
+    this.avroSchema = avroSchema;
 
-  /**
-   * Create a new {@link TableScan scan} for this table.
-   * <p>
-   * Once a table scan is created, it can be refined to project columns and filter data.
-   *
-   * @return a table scan for this table
-   */
-  TableScan newScan();
+    Types.StructType schema = AvroSchemaUtil.convert(avroSchema).asNestedType().asStructType();
 
-  /**
-   * Return the {@link Schema schema} for this table.
-   *
-   * @return this table's schema
-   */
-  Schema schema();
+    // partition type may be null if the field was not projected
+    Type partType = schema.fieldType("partition");
+    if (partType != null) {
+      this.partitionType = partType.asNestedType().asStructType();
+    } else {
+      this.partitionType = EMPTY_STRUCT_TYPE;
+    }
 
-  /**
-   * Return the {@link PartitionSpec partition spec} for this table.
-   *
-   * @return this table's partition spec
-   */
-  PartitionSpec spec();
+    List<Types.NestedField> fields = schema.fields();
+    List<Types.NestedField> allFields = DataFile.getType(partitionType).fields();
+    this.fromProjectionPos = new int[fields.size()];
+    for (int i = 0; i < fromProjectionPos.length; i += 1) {
+      boolean found = false;
+      for (int j = 0; j < allFields.size(); j += 1) {
+        if (fields.get(i).fieldId() == allFields.get(j).fieldId()) {
+          found = true;
+          fromProjectionPos[i] = j;
+        }
+      }
 
-  /**
-   * Return a map of string properties for this table.
-   *
-   * @return this table's properties map
-   */
-  Map<String, String> properties();
+      if (!found) {
+        throw new IllegalArgumentException("Cannot find projected field: " + fields.get(i));
+      }
+    }
 
-  /**
-   * Return the table's base location.
-   *
-   * @return this table's location
-   */
-  String location();
+    this.partitionData = new PartitionData(partitionType);
+  }
 
-  /**
-   * Get the current {@link Snapshot snapshot} for this table, or null if there are no snapshots.
-   *
-   * @return the current table Snapshot.
-   */
-  Snapshot currentSnapshot();
+  GenericDataFile(String filePath, FileFormat format, long recordCount,
+                  long fileSizeInBytes, long blockSizeInBytes) {
+    this.filePath = filePath;
+    this.format = format;
+    this.partitionData = EMPTY_PARTITION_DATA;
+    this.partitionType = EMPTY_PARTITION_DATA.getPartitionType();
+    this.recordCount = recordCount;
+    this.fileSizeInBytes = fileSizeInBytes;
+    this.blockSizeInBytes = blockSizeInBytes;
+    this.fileOrdinal = null;
+    this.sortColumns = null;
+    this.columnSizes = null;
+    this.valueCounts = null;
+    this.nullValueCounts = null;
+    this.lowerBounds = null;
+    this.upperBounds = null;
+    this.fromProjectionPos = null;
+  }
 
-  /**
-   * Get the {@link Snapshot snapshots} of this table.
-   *
-   * @return an Iterable of snapshots of this table.
-   */
-  Iterable<Snapshot> snapshots();
+  GenericDataFile(String filePath, FileFormat format, PartitionData partition,
+                  long recordCount, long fileSizeInBytes, long blockSizeInBytes) {
+    this.filePath = filePath;
+    this.format = format;
+    this.partitionData = partition;
+    this.partitionType = partition.getPartitionType();
+    this.recordCount = recordCount;
+    this.fileSizeInBytes = fileSizeInBytes;
+    this.blockSizeInBytes = blockSizeInBytes;
+    this.fileOrdinal = null;
+    this.sortColumns = null;
+    this.columnSizes = null;
+    this.valueCounts = null;
+    this.nullValueCounts = null;
+    this.lowerBounds = null;
+    this.upperBounds = null;
+    this.fromProjectionPos = null;
+  }
 
-  /**
-   * Create a new {@link UpdateSchema} to alter the columns of this table and commit the change.
-   *
-   * @return a new {@link UpdateSchema}
-   */
-  UpdateSchema updateSchema();
+  GenericDataFile(String filePath, FileFormat format, PartitionData partition,
+                  long fileSizeInBytes, long blockSizeInBytes, Metrics metrics) {
+    this.filePath = filePath;
+    this.format = format;
 
-  /**
-   * Create a new {@link UpdateProperties} to update table properties and commit the changes.
-   *
-   * @return a new {@link UpdateProperties}
-   */
-  UpdateProperties updateProperties();
+    // this constructor is used by DataFiles.Builder, which passes null for unpartitioned data
+    if (partition == null) {
+      this.partitionData = EMPTY_PARTITION_DATA;
+      this.partitionType = EMPTY_PARTITION_DATA.getPartitionType();
+    } else {
+      this.partitionData = partition;
+      this.partitionType = partition.getPartitionType();
+    }
 
-  /**
-   * Create a new {@link UpdateLocation} to update table location and commit the changes.
-   *
-   * @return a new {@link UpdateLocation}
-   */
-  UpdateLocation updateLocation();
+    // this will throw NPE if metrics.recordCount is null
+    this.recordCount = metrics.recordCount();
+    this.fileSizeInBytes = fileSizeInBytes;
+    this.blockSizeInBytes = blockSizeInBytes;
+    this.fileOrdinal = null;
+    this.sortColumns = null;
+    this.columnSizes = metrics.columnSizes();
+    this.valueCounts = metrics.valueCounts();
+    this.nullValueCounts = metrics.nullValueCounts();
+    this.lowerBounds = SerializableByteBufferMap.wrap(metrics.lowerBounds());
+    this.upperBounds = SerializableByteBufferMap.wrap(metrics.upperBounds());
+    this.fromProjectionPos = null;
+  }
 
-  /**
-   * Create a new {@link AppendFiles append API} to add files to this table and commit.
-   *
-   * @return a new {@link AppendFiles}
-   */
-  AppendFiles newAppend();
-
-  /**
-   * Create a new {@link AppendFiles append API} to add files to this table and commit.
-   * <p>
-   * Using this method signals to the underlying implementation that the append should not perform
-   * extra work in order to commit quickly. Fast appends are not recommended for normal writes
-   * because the fast commit may cause split planning to slow down over time.
-   * <p>
-   * Implementations may not support fast appends, in which case this will return the same appender
-   * as {@link #newAppend()}.
-   *
-   * @return a new {@link AppendFiles}
-   */
-  default AppendFiles newFastAppend() {
-    return newAppend();
+  GenericDataFile(String filePath, FileFormat format, PartitionData partition,
+                  long fileSizeInBytes, long blockSizeInBytes, Metrics metrics,
+                  EncryptionKeyMetadata keyMetadata) {
+    this(filePath, format, partition, fileSizeInBytes, blockSizeInBytes, metrics);
+    this.keyMetadata = keyMetadata;
   }
 
   /**
-   * Create a new {@link RewriteFiles rewrite API} to replace files in this table and commit.
+   * Copy constructor.
    *
-   * @return a new {@link RewriteFiles}
+   * @param toCopy a generic data file to copy.
    */
-  RewriteFiles newRewrite();
+  private GenericDataFile(GenericDataFile toCopy) {
+    this.filePath = toCopy.filePath;
+    this.format = toCopy.format;
+    this.partitionData = toCopy.partitionData.copy();
+    this.partitionType = toCopy.partitionType;
+    this.recordCount = toCopy.recordCount;
+    this.fileSizeInBytes = toCopy.fileSizeInBytes;
+    this.blockSizeInBytes = toCopy.blockSizeInBytes;
+    this.fileOrdinal = toCopy.fileOrdinal;
+    this.sortColumns = toCopy.sortColumns;
+    // TODO: support lazy conversion to/from map
+    this.columnSizes = toCopy.columnSizes;
+    this.valueCounts = toCopy.valueCounts;
+    this.nullValueCounts = toCopy.nullValueCounts;
+    this.lowerBounds = toCopy.lowerBounds;
+    this.upperBounds = toCopy.upperBounds;
+    this.fromProjectionPos = toCopy.fromProjectionPos;
+    this.keyMetadata = toCopy.keyMetadata == null ? null : toCopy.keyMetadata.copy();
+  }
 
   /**
-   * Create a new {@link OverwriteFiles overwrite API} to overwrite files by a filter expression.
-   *
-   * @return a new {@link OverwriteFiles}
+   * Constructor for Java serialization.
    */
-  OverwriteFiles newOverwrite();
+  GenericDataFile() {
+  }
 
-  /**
-   * Not recommended: Create a new {@link ReplacePartitions replace partitions API} to dynamically
-   * overwrite partitions in the table with new data.
-   * <p>
-   * This is provided to implement SQL compatible with Hive table operations but is not recommended.
-   * Instead, use the {@link OverwriteFiles overwrite API} to explicitly overwrite data.
-   *
-   * @return a new {@link ReplacePartitions}
-   */
-  ReplacePartitions newReplacePartitions();
+  @Override
+  public CharSequence path() {
+    return filePath;
+  }
 
-  /**
-   * Create a new {@link DeleteFiles delete API} to replace files in this table and commit.
-   *
-   * @return a new {@link DeleteFiles}
-   */
-  DeleteFiles newDelete();
+  @Override
+  public FileFormat format() {
+    return format;
+  }
 
-  /**
-   * Create a new {@link ExpireSnapshots expire API} to manage snapshots in this table and commit.
-   *
-   * @return a new {@link ExpireSnapshots}
-   */
-  ExpireSnapshots expireSnapshots();
+  @Override
+  public StructLike partition() {
+    return partitionData;
+  }
 
-  /**
-   * Create a new {@link Rollback rollback API} to roll back to a previous snapshot and commit.
-   *
-   * @return a new {@link Rollback}
-   */
-  Rollback rollback();
+  @Override
+  public long recordCount() {
+    return recordCount;
+  }
 
-  /**
-   * Create a new {@link Transaction transaction API} to commit multiple table operations at once.
-   *
-   * @return a new {@link Transaction}
-   */
-  Transaction newTransaction();
+  @Override
+  public long fileSizeInBytes() {
+    return fileSizeInBytes;
+  }
 
-  /**
-   * @return a {@link FileIO} to read and write table data and metadata files
-   */
-  FileIO io();
+  @Override
+  public long blockSizeInBytes() {
+    return blockSizeInBytes;
+  }
 
-  /**
-   * @return an {@link com.netflix.iceberg.encryption.EncryptionManager} to encrypt and decrypt
-   * data files.
-   */
-  default EncryptionManager encryption() {
-    // TODO coming soon
-    throw new UnsupportedOperationException("Encryption is a work in progress.");
+  @Override
+  public Integer fileOrdinal() {
+    return fileOrdinal;
+  }
+
+  @Override
+  public List<Integer> sortColumns() {
+    return sortColumns;
+  }
+
+  @Override
+  public Map<Integer, Long> columnSizes() {
+    return columnSizes;
+  }
+
+  @Override
+  public Map<Integer, Long> valueCounts() {
+    return valueCounts;
+  }
+
+  @Override
+  public Map<Integer, Long> nullValueCounts() {
+    return nullValueCounts;
+  }
+
+  @Override
+  public Map<Integer, ByteBuffer> lowerBounds() {
+    return lowerBounds;
+  }
+
+  @Override
+  public Map<Integer, ByteBuffer> upperBounds() {
+    return upperBounds;
+  }
+
+  @Override
+  public EncryptionKeyMetadata keyMetadata() {
+    return keyMetadata;
+  }
+
+  @Override
+  public org.apache.avro.Schema getSchema() {
+    if (avroSchema == null) {
+      this.avroSchema = getAvroSchema(partitionType);
+    }
+    return avroSchema;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public void put(int i, Object v) {
+    int pos = i;
+    // if the schema was projected, map the incoming ordinal to the expected one
+    if (fromProjectionPos != null) {
+      pos = fromProjectionPos[i];
+    }
+    switch (pos) {
+      case 0:
+        // always coerce to String for Serializable
+        this.filePath = v.toString();
+        return;
+      case 1:
+        this.format = FileFormat.valueOf(v.toString());
+        return;
+      case 2:
+        this.partitionData = (PartitionData) v;
+        return;
+      case 3:
+        this.recordCount = (Long) v;
+        return;
+      case 4:
+        this.fileSizeInBytes = (Long) v;
+        return;
+      case 5:
+        this.blockSizeInBytes = (Long) v;
+        return;
+      case 6:
+        this.fileOrdinal = (Integer) v;
+        return;
+      case 7:
+        this.sortColumns = (List<Integer>) v;
+        return;
+      case 8:
+        this.columnSizes = (Map<Integer, Long>) v;
+        return;
+      case 9:
+        this.valueCounts = (Map<Integer, Long>) v;
+        return;
+      case 10:
+        this.nullValueCounts = (Map<Integer, Long>) v;
+        return;
+      case 11:
+        this.lowerBounds = SerializableByteBufferMap.wrap((Map<Integer, ByteBuffer>) v);
+        return;
+      case 12:
+        this.upperBounds= SerializableByteBufferMap.wrap((Map<Integer, ByteBuffer>) v);
+        return;
+      case 13:
+        this.keyMetadata = v == null ? null
+            : EncryptionKeyMetadatas.of(ByteBuffers.copy((ByteBuffer) v));
+      default:
+        // ignore the object, it must be from a newer version of the format
+    }
+  }
+
+  @Override
+  public Object get(int i) {
+    int pos = i;
+    // if the schema was projected, map the incoming ordinal to the expected one
+    if (fromProjectionPos != null) {
+      pos = fromProjectionPos[i];
+    }
+    switch (pos) {
+      case 0:
+        return filePath;
+      case 1:
+        return format != null ? format.toString() : null;
+      case 2:
+        return partitionData;
+      case 3:
+        return recordCount;
+      case 4:
+        return fileSizeInBytes;
+      case 5:
+        return blockSizeInBytes;
+      case 6:
+        return fileOrdinal;
+      case 7:
+        return sortColumns;
+      case 8:
+        return columnSizes;
+      case 9:
+        return valueCounts;
+      case 10:
+        return nullValueCounts;
+      case 11:
+        return lowerBounds;
+      case 12:
+        return upperBounds;
+      case 13:
+        return keyMetadata == null ? null : keyMetadata.keyMetadata();
+      default:
+        throw new UnsupportedOperationException("Unknown field ordinal: " + pos);
+    }
+  }
+
+  private static org.apache.avro.Schema getAvroSchema(Types.StructType partitionType) {
+    Types.StructType type = DataFile.getType(partitionType);
+    return AvroSchemaUtil.convert(type, ImmutableMap.of(
+        type, GenericDataFile.class.getName(),
+        partitionType, PartitionData.class.getName()));
+  }
+
+  @Override
+  public int size() {
+    return 14;
+  }
+
+  @Override
+  public <T> T get(int pos, Class<T> javaClass) {
+    return javaClass.cast(get(pos));
+  }
+
+  @Override
+  public <T> void set(int pos, T value) {
+    put(pos, value);
+  }
+
+  @Override
+  public DataFile copy() {
+    return new GenericDataFile(this);
+  }
+
+  @Override
+  public String toString() {
+    return Objects.toStringHelper(this)
+        .add("file_path", filePath)
+        .add("file_format", format)
+        .add("partition", partitionData)
+        .add("record_count", recordCount)
+        .add("file_size_in_bytes", fileSizeInBytes)
+        .add("block_size_in_bytes", blockSizeInBytes)
+        .add("column_sizes", columnSizes)
+        .add("value_counts", valueCounts)
+        .add("null_value_counts", nullValueCounts)
+        .add("lower_bounds", lowerBounds)
+        .add("upper_bounds", upperBounds)
+        .toString();
   }
 
 }

@@ -1,5 +1,3 @@
-/**
- * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
 package net.sourceforge.pmd.lang.java.oom.visitor;
@@ -52,8 +50,5 @@ public abstract class Signature {
                     : node.isPackagePrivate() ? PACKAGE
                     : node.isProtected() ? PROTECTED
                     : node.isPrivate() ? PRIVATE : UNDEF;
-        }
     }
 
-
-}

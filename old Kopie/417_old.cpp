@@ -1,14 +1,4 @@
 /* -------------------------------------------------------------------------- *
-// Base class implementation of virtual method.
-void ModelComponent::generateDecorations
-    (bool                                        fixed, 
-    const ModelDisplayHints&                    hints,
-    const SimTK::State&                         state,
-    SimTK::Array_<SimTK::DecorativeGeometry>&   appendToThis) const 
-{
-    for(unsigned int i=0; i < _components.size(); i++){
-        ModelComponent *mc = dynamic_cast<ModelComponent*>(_components[i]);
-        mc->generateDecorations(fixed,hints,state,appendToThis);
  *                        OpenSim:  ModelComponent.cpp                        *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -106,7 +96,16 @@ void ModelComponent::connectToModel(Model& model)
     extendConnectToModel(model);
 }
 
-void ModelComponent::adoptGeometry(OpenSim::Geometry* geom) {
+// Base class implementation of virtual method.
+void ModelComponent::generateDecorations
+    (bool                                        fixed, 
+    const ModelDisplayHints&                    hints,
+    const SimTK::State&                         state,
+    SimTK::Array_<SimTK::DecorativeGeometry>&   appendToThis) const 
+{
+    for(unsigned int i=0; i < _components.size(); i++){
+        ModelComponent *mc = dynamic_cast<ModelComponent*>(_components[i]);
+        mc->generateDecorations(fixed,hints,state,appendToThis);
     // Check that name exists and is unique as it's used to form PathName
     if (geom->getName().empty()){
         bool nameFound = false;

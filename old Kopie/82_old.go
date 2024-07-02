@@ -1,7 +1,9 @@
 package main
 
+type MemoryPlugin struct{}
+func (MemoryPlugin) GenerateKeyPair(*keymanager.GenerateKeyPairRequest) (*keymanager.GenerateKeyPairResponse, error) {
+	return &keymanager.GenerateKeyPairResponse{}, nil
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/elliptic"
 	"crypto/x509"
@@ -12,13 +14,10 @@ import (
 	"github.com/spiffe/sri/pkg/agent/keymanager"
 )
 
-type MemoryPlugin struct{}
 type MemoryPlugin struct{
 	key *ecdsa.PrivateKey
 }
 
-func (MemoryPlugin) GenerateKeyPair(*keymanager.GenerateKeyPairRequest) (*keymanager.GenerateKeyPairResponse, error) {
-	return &keymanager.GenerateKeyPairResponse{}, nil
 func (m *MemoryPlugin) GenerateKeyPair(*keymanager.GenerateKeyPairRequest) (key *keymanager.GenerateKeyPairResponse, err error) {
 	m.key,err = ecdsa.GenerateKey(elliptic.P521(),rand.Reader)
 	privateKey,err := x509.MarshalECPrivateKey(m.key)

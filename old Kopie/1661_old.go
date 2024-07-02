@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	if len(svcEnvNames) == 1 {
 // SPDX-License-Identifier: Apache-2.0
 
 // Package selector provides functionality for users to select an application, environment, or service name.
@@ -250,7 +249,6 @@ func (s *DeploySelect) DeployedService(prompt, help string, app string, opts ...
 	}
 	// return if only one deployed service found
 	var deployedSvc DeployedService
-	if len(svcEnvNames) == 1 && s.svc == "" {
 		deployedSvc = svcEnvs[svcEnvNames[0]]
 		log.Infof("Only found one deployed service %s in environment %s\n", color.HighlightUserInput(deployedSvc.Svc), color.HighlightUserInput(deployedSvc.Env))
 	}

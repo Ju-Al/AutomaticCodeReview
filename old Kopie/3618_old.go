@@ -1,6 +1,5 @@
 package e2e
 
-	return uninstall.Uninstall(ctx, client, extensionsClient, veleroNamespace)
 import (
 	"bytes"
 	"context"
@@ -293,7 +292,7 @@ func VeleroInstall(ctx context.Context, veleroImage string, veleroNamespace stri
 }
 
 func VeleroUninstall(ctx context.Context, client *kubernetes.Clientset, extensionsClient *apiextensionsclient.Clientset, veleroNamespace string) error {
-	err := uninstall.Run(ctx, client, extensionsClient, veleroNamespace, true)
+	return uninstall.Uninstall(ctx, client, extensionsClient, veleroNamespace)
 	if err != nil {
 		return err
 	}

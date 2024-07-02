@@ -1,8 +1,4 @@
 from .torch_core import *
-        self.tfms,self.tfmargs = tfms,kwargs
-        self.tfm_y,self.tfms_y,self.tfmargs_y = tfm_y,tfms,kwargs
-        if tfms is None: self.tfms_y,self.tfmargs_y = self.tfms,{**self.tfmargs, **kwargs}
-        else:            self.tfms_y,self.tfmargs_y = tfms,kwargs
 from .basic_data import *
 from .layers import *
 from numbers import Integral
@@ -713,7 +709,10 @@ class LabelList(Dataset):
         _check_kwargs(self.x, tfms, **kwargs)
         if tfm_y is None: tfm_y = self.tfm_y
         if tfm_y: _check_kwargs(self.y, tfms, **kwargs)
-        self.tfms,  self.tfmargs   = tfms,kwargs
+        self.tfms,self.tfmargs = tfms,kwargs
+        if tfms is None: self.tfms_y,self.tfmargs_y = self.tfms,{**self.tfmargs, **kwargs}
+        else:            self.tfms_y,self.tfmargs_y = tfms,kwargs
+        self.tfm_y,self.tfms_y,self.tfmargs_y = tfm_y,tfms,kwargs
         self.tfm_y, self.tfmargs_y = tfm_y,kwargs
         self.tfms_y = None if tfms is None else list(filter(lambda t: t.use_on_y, tfms))
         return self

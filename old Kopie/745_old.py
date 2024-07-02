@@ -1174,8 +1174,6 @@ class Dataset(object):
             return ret.value
         else:
             raise LightGBMError("Cannot get num_feature before construct dataset")
-
-    def get_ref_chain(self, ref_limit = 100):
         '''
         Gets a chain of Dataset objects, starting with r, then going to r.reference if exists, 
             then to r.reference.reference, etc. until we hit ref_limit or a reference loop

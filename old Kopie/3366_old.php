@@ -45,7 +45,6 @@ class AdminSubscriber implements Subscriber_Interface {
 	public function add_defer_js_option( array $options ) : array {
 		return $this->defer_js->add_option( $options );
 	}
-
 	/**
 	 * Adds jQuery to defer JS exclusion field if safe mode was enabled before 3.8
 	 *

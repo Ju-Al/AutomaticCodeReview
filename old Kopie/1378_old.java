@@ -1,46 +1,4 @@
 /*
-  private static String getAndValidateNodeId(final Matcher matcher) {
-    final String invalidNodeIdErrorMsg =
-        "Enode URL contains an invalid node ID. Node ID must have 128 characters and shouldn't include the '0x' hex prefix.";
-    final String nodeId = matcher.group("nodeId");
-
-    checkArgument(nodeId.matches(HEX_STRING_PATTERN), invalidNodeIdErrorMsg);
-    checkArgument(nodeId.length() == 128, invalidNodeIdErrorMsg);
-
-    return nodeId;
-  }
-
-  private static InetAddress getAndValidateIp(final Matcher matcher) {
-    final String ipString = matcher.group("ip");
-
-    try {
-      return InetAddresses.forUriString(ipString);
-    } catch (IllegalArgumentException e) {
-      if (e.getMessage().contains("Not a valid URI IP literal: ")) {
-        throw new IllegalArgumentException("Invalid enode URL IP format.");
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  private static Integer getAndValidatePort(final Matcher matcher, final String portName) {
-    int port = Integer.valueOf(matcher.group(portName));
-    checkArgument(
-        NetworkUtility.isValidPort(port),
-        "Invalid " + portName + " port range. Port should be between 0 - 65535");
-    return port;
-  }
-
-  private static OptionalInt getAndValidateDiscoveryPort(final Matcher matcher) {
-    if (matcher.group("discovery") != null) {
-      return OptionalInt.of(getAndValidatePort(matcher, "discovery"));
-    } else {
-      return OptionalInt.empty();
-    }
-  }
-
-  public String getIp() {
  * Copyright 2019 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -180,11 +138,52 @@ public class EnodeURL {
     return fromString(url).toURI();
   }
 
+  private static String getAndValidateNodeId(final Matcher matcher) {
+    final String invalidNodeIdErrorMsg =
+        "Enode URL contains an invalid node ID. Node ID must have 128 characters and shouldn't include the '0x' hex prefix.";
+    final String nodeId = matcher.group("nodeId");
+
+    checkArgument(nodeId.matches(HEX_STRING_PATTERN), invalidNodeIdErrorMsg);
+    checkArgument(nodeId.length() == 128, invalidNodeIdErrorMsg);
+
+    return nodeId;
+  }
+
+  private static InetAddress getAndValidateIp(final Matcher matcher) {
+    final String ipString = matcher.group("ip");
+
+    try {
+      return InetAddresses.forUriString(ipString);
+    } catch (IllegalArgumentException e) {
+      if (e.getMessage().contains("Not a valid URI IP literal: ")) {
+        throw new IllegalArgumentException("Invalid enode URL IP format.");
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private static Integer getAndValidatePort(final Matcher matcher, final String portName) {
+    int port = Integer.valueOf(matcher.group(portName));
+    checkArgument(
+        NetworkUtility.isValidPort(port),
+        "Invalid " + portName + " port range. Port should be between 0 - 65535");
+    return port;
+  }
+
+  private static OptionalInt getAndValidateDiscoveryPort(final Matcher matcher) {
+    if (matcher.group("discovery") != null) {
+      return OptionalInt.of(getAndValidatePort(matcher, "discovery"));
+    } else {
+      return OptionalInt.empty();
+    }
+  }
+
   public BytesValue getNodeId() {
     return nodeId;
   }
 
-  public String getIpAsString() {
+  public String getIp() {
     return ip.getHostAddress();
   }
 

@@ -59,7 +59,6 @@ public class ByteBuffers {
     return ByteBuffer.wrap(copyArray);
   }
 
-  public static String encodeHexString(ByteBuffer buffer) {
     byte[] bytes = toByteArray(buffer.duplicate());
     return BaseEncoding.base16().encode(bytes);
   }

@@ -18,200 +18,49 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package yarpcgrpc
+package yarpctest
 
 import (
 	"context"
 	"fmt"
-	"math"
-	"sync"
 
-	"github.com/opentracing/opentracing-go"
-	"go.uber.org/multierr"
-	"go.uber.org/yarpc/v2"
-	"go.uber.org/yarpc/v2/yarpcbackoff"
-	"go.uber.org/yarpc/v2/yarpcpeer"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	yarpc "go.uber.org/yarpc/v2"
 )
 
-const (
-	// defensive programming: these are copied from grpc-go but we set them
-	// explicitly here in case these change in grpc-go so that YARPC stays
-	// consistent.
-	defaultClientMaxRecvMsgSize = 1024 * 1024 * 4
-	defaultClientMaxSendMsgSize = math.MaxInt32
-)
+// FakePeerChooserOption is an option for NewFakePeerChooser.
+type FakePeerChooserOption func(*FakePeerChooser)
 
-var _ yarpc.Dialer = (*Dialer)(nil)
-
-// Dialer keeps track of all gRPC peers.
-type Dialer struct {
-	// ClientMaxRecvMsgSize is the maximum message size the client can receive.
-	//
-	// The default is 4MB.
-	ClientMaxRecvMsgSize int
-	// ClientMaxSendMsgSize is the maximum message size the client can send.
-	//
-	// The default is math.MaxInt32.
-	ClientMaxSendMsgSize int
-
-	// Credentials specifies connection level security credentials (e.g.,
-	// TLS/SSL) for outbound connections.
-	Credentials credentials.TransportCredentials
-
-	// BackoffStrategy specifies the backoff strategy for delays between
-	// connection attempts for each peer.
-	//
-	// The default is exponential backoff starting with 10ms fully jittered,
-	// doubling each attempt, with a maximum interval of 30s.
-	Backoff yarpc.BackoffStrategy
-
-	// Tracer configures a logger for the dialer.
-	Logger *zap.Logger
-
-	// Tracer configures a tracer for the dialer.
-	Tracer opentracing.Tracer
-
-	internal *dialerInternals
-}
-
-type dialerInternals struct {
-	lock          sync.Mutex
-	addressToPeer map[string]*grpcPeer
-
-	dialOptions []grpc.DialOption
-	backoff     yarpc.BackoffStrategy
-
-	logger *zap.Logger
-	tracer opentracing.Tracer
-}
-
-// Name returns the gRPC dialer's name.
-func (d *Dialer) Name() string {
-	return "grpc"
-}
-
-// Start starts the gRPC dialer.
-func (d *Dialer) Start(context.Context) error {
-	d.internal = &dialerInternals{
-		addressToPeer: make(map[string]*grpcPeer),
-		backoff:       yarpcbackoff.DefaultExponential,
-		tracer:        opentracing.GlobalTracer(),
-		logger:        zap.NewNop(),
-	}
-
-	if d.Backoff != nil {
-		d.internal.backoff = d.Backoff
-	}
-	if d.Logger != nil {
-		d.internal.logger = d.Logger
-	}
-	if d.Tracer != nil {
-		d.internal.tracer = d.Tracer
-	}
-
-	d.setDialOptions()
-	return nil
-}
-
-func (d *Dialer) setDialOptions() {
-	credentialDialOption := grpc.WithInsecure()
-	if d.Credentials != nil {
-		credentialDialOption = grpc.WithTransportCredentials(d.Credentials)
-	}
-
-	defaultCallOptions := []grpc.CallOption{grpc.CallCustomCodec(customCodec{})}
-
-	clientMaxRecvMsgSize := defaultClientMaxRecvMsgSize
-	if d.ClientMaxRecvMsgSize != 0 {
-		clientMaxRecvMsgSize = d.ClientMaxRecvMsgSize
-	}
-	defaultCallOptions = append(defaultCallOptions, grpc.MaxCallRecvMsgSize(clientMaxRecvMsgSize))
-
-	clientMaxSendMsgSize := defaultClientMaxSendMsgSize
-	if d.ClientMaxSendMsgSize != 0 {
-		clientMaxSendMsgSize = d.ClientMaxSendMsgSize
-	}
-	defaultCallOptions = append(defaultCallOptions, grpc.MaxCallSendMsgSize(clientMaxSendMsgSize))
-
-	d.internal.dialOptions = []grpc.DialOption{
-		credentialDialOption,
-		grpc.WithUserAgent(UserAgent),
-		grpc.WithDefaultCallOptions(defaultCallOptions...),
+// ChooserNop is a fake option for NewFakePeerChooser that sets a nop var. It's fake.
+func ChooserNop(nop string) func(*FakePeerChooser) {
+	return func(u *FakePeerChooser) {
+		u.nop = nop
 	}
 }
 
-// Stop stops the gRPC dialer.
-func (d *Dialer) Stop(ctx context.Context) error {
-	return d.internal.stop(ctx)
+// FakePeerChooser is a fake peer chooser.
+type FakePeerChooser struct {
+	nop string
+	nop  string
 }
 
-func (d *dialerInternals) stop(context.Context) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	for _, grpcPeer := range d.addressToPeer {
-		grpcPeer.stop()
+// NewFakePeerChooser returns a fake peer list.
+func NewFakePeerChooser(name string, opts ...FakePeerChooserOption) *FakePeerChooser {
+	pl := &FakePeerChooser{name: name}
+	for _, opt := range opts {
+		opt(pl)
 	}
-	var err error
-	for _, grpcPeer := range d.addressToPeer {
-		err = multierr.Append(err, grpcPeer.wait())
-	}
-	return err
+	return pl
 }
 
-// RetainPeer retains the identified peer, passing dial options.
-func (d *Dialer) RetainPeer(id yarpc.Identifier, sub yarpc.Subscriber) (yarpc.Peer, error) {
-	if d.internal == nil {
-		return nil, fmt.Errorf("yarpcgrpc.Dialer.RetainPeer must be called after Start")
-	}
-	return d.internal.retainPeer(id, sub)
+// Name returns the fake Chooser's name.
+func (c *FakePeerChooser) Name() string { return c.name }
+
+// Choose pretends to choose a peer, but actually always returns an error. It's fake.
+func (c *FakePeerChooser) Choose(ctx context.Context, req *yarpc.Request) (yarpc.Peer, func(error), error) {
+	return nil, nil, fmt.Errorf(`fake peer chooser can't actually choose peers`)
 }
 
-func (d *dialerInternals) retainPeer(id yarpc.Identifier, sub yarpc.Subscriber) (yarpc.Peer, error) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	address := id.Identifier()
-	p, ok := d.addressToPeer[address]
-	if !ok {
-		var err error
-		p, err = d.newPeer(id)
-		if err != nil {
-			return nil, err
-		}
-		d.addressToPeer[address] = p
-	}
-	p.Subscribe(sub)
-	return p, nil
-}
-
-// ReleasePeer releases the identified peer.
-func (d *Dialer) ReleasePeer(id yarpc.Identifier, sub yarpc.Subscriber) error {
-	if d.internal == nil {
-		return fmt.Errorf("yarpcgrpc.Dialer.ReleasePeer must be called after Start")
-	}
-	return d.internal.releasePeer(id, sub)
-}
-
-func (d *dialerInternals) releasePeer(id yarpc.Identifier, sub yarpc.Subscriber) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	address := id.Identifier()
-	p, ok := d.addressToPeer[address]
-	if !ok {
-		return yarpcpeer.ErrDialerHasNoReferenceToPeer{
-			DialerName:     "grpc.Dialer",
-			PeerIdentifier: address,
-		}
-	}
-	if err := p.Unsubscribe(sub); err != nil {
-		return err
-	}
-	if p.NumSubscribers() == 0 {
-		delete(d.addressToPeer, address)
-		p.stop()
-		return p.wait()
-	}
-	return nil
+// Nop returns the Peer Chooser's nop variable.
+func (c *FakePeerChooser) Nop() string {
+	return c.nop
 }

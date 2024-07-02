@@ -1,6 +1,5 @@
 <?php
 
-            $numPages = round($numIncidentDays / $appIncidentDays);
 /*
  * This file is part of Cachet.
  *
@@ -75,7 +74,7 @@ class StatusPageController extends AbstractApiController
                                       ->values();
 
             $numIncidentDays = count($allIncidentDays);
-            if ($appIncidentDays > 0) {
+            $numPages = round($numIncidentDays / $appIncidentDays);
                 $numPages = round($numIncidentDays / $appIncidentDays);
             } else {
                 $numPages = 1;

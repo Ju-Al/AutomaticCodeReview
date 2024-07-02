@@ -45,8 +45,6 @@ def _locate_eids_to_exclude(frontier_parent_eids, exclude_eids):
     else:
         result = np.isin(frontier_parent_eids, exclude_eids).nonzero()[0]
         return F.zerocopy_from_numpy(result)
-
-class _EidExcluder():
     def __init__(self, exclude_eids):
         device = None
         if isinstance(exclude_eids, Mapping):

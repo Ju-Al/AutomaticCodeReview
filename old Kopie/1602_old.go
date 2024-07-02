@@ -37,7 +37,6 @@ const (
 	capabilityDockerPluginInfix                 = "docker-plugin."
 	attributeSeparator                          = "."
 	capabilityPrivateRegistryAuthASM            = "private-registry-authentication.secretsmanager"
-	capabilitySecretEnvSSM                      = "secrets-ssm-environment-variables"
 )
 
 // capabilities returns the supported capabilities of this agent / docker-client pair.

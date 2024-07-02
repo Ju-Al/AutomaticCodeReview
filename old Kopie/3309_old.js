@@ -1,5 +1,4 @@
 import { useCallback, useEffect } from 'react';
-        routeData = { isRedirect: true, relativeUrl: relative_url };
 import { useHistory, useLocation } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { useRootComponents } from '@magento/peregrine/lib/context/rootComponents';
@@ -49,7 +48,7 @@ export const useMagentoRoute = (props = {}) => {
         routeData = { hasError: true, routeError };
     } else if (redirect) {
         // REDIRECT
-        routeData = {
+        routeData = { isRedirect: true, relativeUrl: relative_url };
             isRedirect: true,
             relativeUrl: relative_url.startsWith('/') ? "/" + relative_url : relative_url
         };

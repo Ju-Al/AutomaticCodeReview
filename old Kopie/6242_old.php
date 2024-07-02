@@ -218,7 +218,6 @@ class AnnotationTest extends TestCase
      */
     public function providerValidCodeParse(): iterable
     {
-        $codebase = $this->project_analyzer->getCodebase();
         $codebase->reportUnusedVariables();
 
         return [

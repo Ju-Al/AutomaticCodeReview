@@ -17,7 +17,6 @@ try {
     markDepInvalid('hastily', e);
 }
 
-function IsWebpSupported(req) {
     return (
         typeof req.headers !== 'undefined' &&
         typeof req.headers['accept'] !== 'undefined' &&

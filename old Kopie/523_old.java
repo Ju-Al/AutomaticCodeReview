@@ -102,7 +102,6 @@ public enum JavaClassMetricKey implements MetricKey<ASTAnyTypeDeclaration> {
                 return metric.supports(node);
             }
 
-
             @Override
             public boolean equals(Object obj) {
                 return obj == this;

@@ -1,15 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-// MyConfig is a sample configuration struct.
-type MyConfig struct {
-	Server string
-	Port   int
-}
-
-	if _, err := f.Write([]byte(`{"Server": "foo.com", "Port": 80}`)); err != nil {
-	// Create a decoder for decoding JSON strings into MyConfig.
-	decoder := runtimevar.NewDecoder(MyConfig{}, runtimevar.JSONDecode)
-
-	v, err := filevar.OpenVariable(f.Name(), decoder, nil)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,13 +24,23 @@ import (
 	"gocloud.dev/runtimevar/filevar"
 )
 
+// MyConfig is a sample configuration struct.
+type MyConfig struct {
+	Server string
+	Port   int
+}
+
 func ExampleOpenVariable() {
 	// Create a temporary file to hold our config.
 	f, err := ioutil.TempFile("", "")
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err := f.Write([]byte("hello world")); err != nil {
+	// Create a decoder for decoding JSON strings into MyConfig.
+	decoder := runtimevar.NewDecoder(MyConfig{}, runtimevar.JSONDecode)
+
+	v, err := filevar.OpenVariable(f.Name(), decoder, nil)
+	if _, err := f.Write([]byte(`{"Server": "foo.com", "Port": 80}`)); err != nil {
 		log.Fatal(err)
 	}
 

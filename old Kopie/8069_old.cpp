@@ -279,7 +279,6 @@ void term(const char *fmt, ...)
   exit(1);
 }
 
-void warn_flush(void)
 {
   fflush(warnFile);
 }

@@ -2062,7 +2062,6 @@ class RequestsParser(object):
 
 
 class HierarchicHTTPRequest(HTTPRequest):
-    REDIRECT_FOLLOW = 'follow'
     REDIRECT_AUTOMATICALLY = 'auto'
     REDIRECT_IGNORE = 'ignore'
 

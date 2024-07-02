@@ -559,9 +559,6 @@ func TestSnippets(t *testing.T) {
 	if actual, expected := blocks[0].Tokens["errors"][1].Text, "stderr"; expected != actual {
 		t.Errorf("Expected argument to be '%s' but was '%s'", expected, actual)
 	}
-
-}
-
 func writeStringToTempFileOrDie(t *testing.T, str string) (pathToFile string) {
 	file, err := ioutil.TempFile("", t.Name())
 	if err != nil {

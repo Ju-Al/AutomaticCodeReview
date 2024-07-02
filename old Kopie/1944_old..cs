@@ -198,7 +198,6 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                 _exportJobRecord.FailureDetails = new JobFailureDetails(ex.Message, HttpStatusCode.BadRequest);
                 await CompleteJobAsync(OperationStatus.Failed, cancellationToken);
             }
-            catch (FailedToAnonymizeResourceException ex)
             {
                 _logger.LogError(ex, "Failed to anonymize resource. The job will be marked as failed.");
 

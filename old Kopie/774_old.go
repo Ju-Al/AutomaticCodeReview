@@ -1,5 +1,5 @@
 // Copyright 2018 The Go Cloud Authors
-	t.Run("TestErrorOnSendToClosedTopic", func(t *testing.T) {//
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -53,7 +53,7 @@ func RunConformanceTests(t *testing.T, newHarness HarnessMaker) {
 	t.Run("TestSendReceive", func(t *testing.T) {
 		testSendReceive(t, newHarness)
 	})
-	t.Run("TestCancelSendReceive", func(t *testing.T) {
+	t.Run("TestErrorOnSendToClosedTopic", func(t *testing.T) {	t.Run("TestCancelSendReceive", func(t *testing.T) {
 		testCancelSendReceive(t, newHarness)
 	})
 }

@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        quiet=False,
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -631,7 +630,7 @@ def rms_fit_trj(
         tol_mass=0.1,
         strict=False,
         force=True,
-        verbose=None,
+        quiet=False,
         quiet=None,
         in_memory=False,
         **kwargs):

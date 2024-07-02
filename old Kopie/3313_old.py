@@ -1,11 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-def debug_pyeval(s, quiet=False):
-    try:
-        r = eval(s)
-        out = repr(r)
-    except Exception:
-        out = traceback.format_exc()
 # Copyright 2014-2017 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -235,7 +229,12 @@ def debug_trace(expr=""):
 
 
 @cmdutils.register(maxsplit=0, debug=True, no_cmd_split=True)
-def debug_pyeval(s, file=False, quiet=False):
+    try:
+        r = eval(s)
+        out = repr(r)
+    except Exception:
+        out = traceback.format_exc()
+def debug_pyeval(s, quiet=False):
     """Evaluate a python string and display the results as a web page.
 
     Args:

@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
 
-            self.prepare_content_length(body)
-
-        if hasattr(body, 'seek') and hasattr(body, 'tell'):
-            curr_pos = body.tell()
-            body.seek(0, 2)
-            end_pos = body.tell()
-            self.headers['Content-Length'] = builtin_str(max(0, end_pos - curr_pos))
-            body.seek(curr_pos, 0)
-        elif body is not None:
-            l = super_len(body)
-            if l:
-                self.headers['Content-Length'] = builtin_str(l)
 """
 requests.models
 ~~~~~~~~~~~~~~~
@@ -455,11 +443,22 @@ class PreparedRequest(RequestEncodingMixin, RequestHooksMixin):
                     else:
                         content_type = 'application/x-www-form-urlencoded'
 
+            self.prepare_content_length(body)
+
             # Add content-type if it wasn't explicitly provided.
             if content_type and ('content-type' not in self.headers):
                 self.headers['Content-Type'] = content_type
 
-        self.prepare_content_length(body)
+        if hasattr(body, 'seek') and hasattr(body, 'tell'):
+            curr_pos = body.tell()
+            body.seek(0, 2)
+            end_pos = body.tell()
+            self.headers['Content-Length'] = builtin_str(max(0, end_pos - curr_pos))
+            body.seek(curr_pos, 0)
+        elif body is not None:
+            l = super_len(body)
+            if l:
+                self.headers['Content-Length'] = builtin_str(l)
         self.body = body
 
     def prepare_content_length(self, body):

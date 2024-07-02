@@ -1,7 +1,5 @@
 package db
 
-	// SearchWhere will search for all the resources it can find using a where clause with parameters
-	SearchWhere(ctx context.Context, resources interface{}, where string, args ...interface{}) error
 import (
 	"context"
 	"database/sql"
@@ -35,7 +33,8 @@ type Reader interface {
 	// LookupWhere will lookup and return the first resource using a where clause with parameters
 	LookupWhere(ctx context.Context, resource interface{}, where string, args ...interface{}) error
 
-	// SearchWhere will search for all the resources it can find using a where
+	// SearchWhere will search for all the resources it can find using a where clause with parameters
+	SearchWhere(ctx context.Context, resources interface{}, where string, args ...interface{}) error
 	// clause with parameters. Support the options of: WithDebug and WithLimit.  If
 	// WithLimit < 0, then unlimited results are returned.  If WithLimit == 0, then
 	// default limits are used for results.

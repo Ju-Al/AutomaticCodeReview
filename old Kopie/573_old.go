@@ -1,5 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-	tag.DoneSplit(tagr.Address)
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -198,7 +197,7 @@ func (s *server) doneSplit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tag.DoneSplit(tagr.Address)
+	tag.DoneSplit(tagr.Address)
 	if err != nil {
 		s.Logger.Debugf("done split: %v", err)
 		s.Logger.Error("done split: %v", err)

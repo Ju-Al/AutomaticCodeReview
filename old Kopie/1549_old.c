@@ -1,5 +1,4 @@
 /*
-    free(client);
  * Copyright (c) 2014 DeNA Co., Ltd.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -46,7 +45,7 @@ static void close_client(struct st_h2o_http1client_private_t *client)
         h2o_buffer_dispose(&client->_body_buf);
     if (client->_body_buf_in_flight != NULL)
         h2o_buffer_dispose(&client->_body_buf_in_flight);
-    h2o_mem_clear_pool(&client->pool);
+    free(client);
     free(common);
 }
 

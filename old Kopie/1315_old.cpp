@@ -1,5 +1,3 @@
-/**
- * @file
  * @brief Implementation to check whether a number is a power of 2 or not.
  *
  * @details
@@ -63,6 +61,4 @@ int main() {
     std::cout << "enter a number " << std::endl;
     std::cin >> n;
     /// function call with @param n
-    power_of_two(n);
     return 0;
-}

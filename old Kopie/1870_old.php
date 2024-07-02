@@ -1,5 +1,4 @@
 <?php
-        $this->initialize();
 namespace Neos\ContentRepository\Security\Authorization\Privilege\Node;
 
 /*
@@ -33,7 +32,7 @@ class EditNodePrivilege extends AbstractNodePrivilege
             throw new InvalidPrivilegeTypeException(sprintf('Privileges of type "%s" only support subjects of type "%s" or "%s", but we got a subject of type: "%s".', EditNodePrivilege::class, NodePrivilegeSubject::class, MethodPrivilegeSubject::class, get_class($subject)), 1417017239);
         }
 
-        $this->initializeMethodPrivilege();
+        $this->initialize();
         if ($subject instanceof MethodPrivilegeSubject === true) {
             if ($this->methodPrivilege->matchesSubject($subject) === false) {
                 return false;

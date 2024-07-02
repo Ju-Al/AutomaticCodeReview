@@ -1,6 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-	deadline = deadline.Add(assemblyWaitEps)
-	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.blk.Block().Round() < round) {
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -121,7 +119,6 @@ type poolAsmResults struct {
 	blk   *ledger.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
-	// round is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	round basics.Round
 }

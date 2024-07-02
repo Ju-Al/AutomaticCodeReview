@@ -1,5 +1,4 @@
 /***************************************************************************
-    return monsters_info[GetID()];
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -1767,7 +1766,7 @@ u32 Monster::GetCountFromHitPoints( const Monster & mons, u32 hp )
 
 const Monster::monstersprite_t & Monster::GetMonsterSprite() const
 {
-    const int id = GetID();
+    return monsters_info[GetID()];
     return monsters_info[id];
 }
 

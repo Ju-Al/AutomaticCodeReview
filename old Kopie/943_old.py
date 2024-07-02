@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-    def float_encode(self, value):
 # This file is part of Scapy
 # Scapy is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -68,7 +67,7 @@ class IGMPv3(IGMP):
                     ByteField("mrcode", 20),
                     XShortField("chksum", None)]
 
-    def encode_maxrespcode(self):
+    def float_encode(self, value):
         """Convert the integer value to its IGMPv3 encoded time value if needed.
        
         If value < 128, return the value specified. If >= 128, encode as a floating 

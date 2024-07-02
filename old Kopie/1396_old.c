@@ -185,7 +185,6 @@ apply_revision_override (RpmostreedTransaction    *transaction,
            * on.
            */
           break;
-        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
           return glnx_throw (error, "Cannot look up version while pinned to commit");
         }
 

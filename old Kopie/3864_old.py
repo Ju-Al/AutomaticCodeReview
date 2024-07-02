@@ -1,8 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-        fp = self._widget.focusProxy()
-        if fp is not None:
-            fp.installEventFilter(self._mouse_event_filter)
 # Copyright 2016-2018 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -771,7 +768,9 @@ class WebEngineTab(browsertab.AbstractTab):
             scripts.insert(new_script)
 
     def _install_event_filter(self):
-        self._widget.focusProxy().installEventFilter(self._mouse_event_filter)
+        fp = self._widget.focusProxy()
+        if fp is not None:
+            fp.installEventFilter(self._mouse_event_filter)
         self._child_event_filter = mouse.ChildEventFilter(
             eventfilter=self._mouse_event_filter, widget=self._widget,
             parent=self)

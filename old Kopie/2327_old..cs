@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-            DayOfMonth = config.DayOfMonth;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
@@ -43,7 +42,7 @@ namespace Microsoft.Recognizers.Text.DateTime.Spanish
             UpcomingPrefixRegex = new Regex(DateTimeDefinitions.UpcomingPrefixRegex, RegexFlags);
             PastPrefixRegex = new Regex(DateTimeDefinitions.PastPrefixRegex, RegexFlags);
 
-            DayOfMonth = DateTimeDefinitions.DayOfMonth.ToImmutableDictionary();
+            DayOfMonth = config.DayOfMonth;
             DayOfWeek = config.DayOfWeek;
             MonthOfYear = config.MonthOfYear;
             CardinalMap = config.CardinalMap;

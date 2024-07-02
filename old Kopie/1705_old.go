@@ -1,31 +1,5 @@
 package aws
 
-	// Parse HCL config payload into config struct
-	config := new(caws.SessionConfig)
-	if err := hcl.Decode(config, req.Configuration); err != nil {
-		return nil, iidError.New("unable to decode configuration: %v", err)
-	}
-
-	// Set defaults from the environment
-	if config.AccessKeyID == "" {
-		config.AccessKeyID = p.hooks.getenv(caws.AccessKeyIDVarName)
-	}
-	if config.SecretAccessKey == "" {
-		config.SecretAccessKey = p.hooks.getenv(caws.SecretAccessKeyVarName)
-	}
-
-	switch {
-	case config.AccessKeyID != "" && config.SecretAccessKey == "":
-		return nil, iidError.New("configuration missing secret access key, but has access key id")
-	case config.AccessKeyID == "" && config.SecretAccessKey != "":
-		return nil, iidError.New("configuration missing access key id, but has secret access key")
-	}
-
-	// set the AWS configuration and reset clients
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.config = config
-	p.clients = make(map[string]awsClient)
 import (
 	"context"
 
@@ -63,7 +37,32 @@ func (p *IIDResolverPlugin) SetLogger(log hclog.Logger) {
 
 // Configure configures the IIDResolverPlugin
 func (p *IIDResolverPlugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
-	p.log.Warn("Usage of deprecated plugin detected.",
+	// Parse HCL config payload into config struct
+	config := new(caws.SessionConfig)
+	if err := hcl.Decode(config, req.Configuration); err != nil {
+		return nil, iidError.New("unable to decode configuration: %v", err)
+	}
+
+	// Set defaults from the environment
+	if config.AccessKeyID == "" {
+		config.AccessKeyID = p.hooks.getenv(caws.AccessKeyIDVarName)
+	}
+	if config.SecretAccessKey == "" {
+		config.SecretAccessKey = p.hooks.getenv(caws.SecretAccessKeyVarName)
+	}
+
+	switch {
+	case config.AccessKeyID != "" && config.SecretAccessKey == "":
+		return nil, iidError.New("configuration missing secret access key, but has access key id")
+	case config.AccessKeyID == "" && config.SecretAccessKey != "":
+		return nil, iidError.New("configuration missing access key id, but has secret access key")
+	}
+
+	// set the AWS configuration and reset clients
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.config = config
+	p.clients = make(map[string]awsClient)
 		telemetry.PluginName, caws.PluginName,
 		telemetry.PluginType, noderesolver.Type)
 	return &spi.ConfigureResponse{}, nil

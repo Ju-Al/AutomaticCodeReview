@@ -1,6 +1,4 @@
 /*
-      metadata = newTableMetadata(ops, schema, spec, location, properties);
-  protected String defaultWarehouseLocation(Configuration conf,
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -102,7 +100,8 @@ public abstract class BaseMetastoreTables implements Tables {
       return BaseTransaction.replaceTableTransaction(ops, metadata);
     } else {
       String location = defaultWarehouseLocation(conf, database, table);
-      metadata = TableMetadata.newTableMetadata(ops, schema, spec, location, properties);
+  protected String defaultWarehouseLocation(Configuration conf,
+      metadata = newTableMetadata(ops, schema, spec, location, properties);
       return BaseTransaction.createTableTransaction(ops, metadata);
     }
   }

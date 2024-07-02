@@ -214,7 +214,6 @@ type Argument struct {
 
 // ClientTransaction is a slice of Instructions that will be applied in order.
 // If any of the instructions fails, none of them will be applied.
-// InstructionsHash must be the hash of all the instructions, this hash is what
 // every instruction must sign for the transaction to be valid.
 type ClientTransaction struct {
 	Instructions     Instructions

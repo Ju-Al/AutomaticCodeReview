@@ -1,5 +1,4 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-            raise TypeError("Angles should have rank 0 or 1.")
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -226,7 +225,7 @@ def angles_to_projective_transforms(angles,
         elif len(angle_or_angles.get_shape()) == 1:
             angles = angle_or_angles
         else:
-            raise ValueError("Angles should have rank 0 or 1.")
+            raise TypeError("Angles should have rank 0 or 1.")
         # yapf: disable
         x_offset = ((image_width - 1) -
                     (tf.math.cos(angles) * (image_width - 1) -

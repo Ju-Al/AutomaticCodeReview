@@ -1,5 +1,4 @@
 <?php
-            $stmt->getArgs()
 namespace Psalm\Internal\Analyzer\Statements\Expression\Call;
 
 use PhpParser;
@@ -838,7 +837,7 @@ class FunctionCallAnalyzer extends CallAnalyzer
         $fake_method_call = new VirtualMethodCall(
             $function_name,
             new VirtualIdentifier('__invoke', $function_name->getAttributes()),
-            $stmt->isFirstClassCallable() ? [new PhpParser\Node\VariadicPlaceholder()] : $stmt->getArgs()
+            $stmt->getArgs()
         );
 
         $suppressed_issues = $statements_analyzer->getSuppressedIssues();

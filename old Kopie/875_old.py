@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-        '/corpus', ['arg'], ['strategy_1', 'strategy_2'])
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1341,6 +1340,7 @@ component2')
     session.data_directory = '/data_dir'
 
     os.environ['FUZZ_TARGET'] = 'test_target'
+        '/corpus', ['arg'], ['strategy_1', 'strategy_2'])
     os.environ['APP_REVISION'] = '1'
 
     expected_crashes = [engine.Crash('/input', 'stack', ['args'], 1.0)]

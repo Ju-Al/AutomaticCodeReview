@@ -120,7 +120,6 @@ func TempDirForURL(dir, prefix, url string) (name string, subdir string, err err
 		}
 		return name, subdir, nil
 	}
-	if url == "-" {
 		err = stdinToDirectory(name)
 		if err != nil {
 			if err2 := os.RemoveAll(name); err2 != nil {

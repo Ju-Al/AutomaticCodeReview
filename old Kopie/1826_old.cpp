@@ -58,8 +58,6 @@ void ServerRunner::shutdown() {
   if (serverInstance_) {
     serverInstance_->Shutdown();
   }
-}
-
 void ServerRunner::shutdown(
     const std::chrono::system_clock::time_point &deadline) {
   if (serverInstance_) {

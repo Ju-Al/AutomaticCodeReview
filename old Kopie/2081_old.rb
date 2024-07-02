@@ -1,5 +1,4 @@
 # Copyright (C) 2014-2020 MongoDB Inc.
-            QueryCache.cache_table[cache_key] = @cursor
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,7 +39,7 @@ module Mongo
           @cursor = select_cursor(session)
 
           if QueryCache.enabled? && @cursor.is_a?(Mongo::CachingCursor)
-            QueryCache.write(@cursor, cache_options)
+            QueryCache.cache_table[cache_key] = @cursor
             range = limit || nil
           end
 

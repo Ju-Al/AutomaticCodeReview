@@ -1,5 +1,4 @@
 /***************************************************************************
-            if ( _cache[newIndex]._cost && monsters.empty() ) {
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -454,7 +453,7 @@ int AIWorldPathfinder::getNeareastTileToMove( const Heroes & hero )
                 continue;
 
             const MapsIndexes & monsters = Maps::GetTilesUnderProtection( newIndex );
-            if ( monsters.empty() && world.getPath( hero, newIndex ).size() == 1 && world.GetTiles( newIndex ).isClearGround() ) {
+            if ( _cache[newIndex]._cost && monsters.empty() ) {
                 return newIndex;
             }
         }

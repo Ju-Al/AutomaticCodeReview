@@ -1,9 +1,4 @@
 /*
-
-	// tty
-	ftty = orig_fopen("/dev/tty", "w");
-	ftty = stderr;
-	tprintf(ftty, "=== tracelib init() === \n");
  * Copyright (C) 2014-2019 Firejail Authors
  *
  * This file is part of firejail project
@@ -72,7 +67,11 @@ void init(void) {
 		return;
 
 	orig_fopen = (orig_fopen_t)dlsym(RTLD_NEXT, "fopen");
-	orig_access = (orig_access_t)dlsym(RTLD_NEXT, "access");
+
+	ftty = orig_fopen("/dev/tty", "w");
+	ftty = stderr;
+	tprintf(ftty, "=== tracelib init() === \n");
+	// tty
 
 	// allow environment variable to override defaults
 	char *logfile = getenv("FIREJAIL_TRACEFILE");

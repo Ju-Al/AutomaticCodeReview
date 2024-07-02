@@ -72,8 +72,6 @@ func TestPlanSpec_BottomUpWalk(t *testing.T) {
 	if !cmp.Equal(want, got) {
 		t.Errorf("Did not get expected node traversal, -want/+got:\n%v", cmp.Diff(want, got))
 	}
-}
-
 func TestPlanSpec_TopDownWalk(t *testing.T) {
 	dag := plantest.DAG{
 		//  0 1 2  additional edge (3->2)

@@ -1,6 +1,4 @@
 // 
-                this.file.Close();
-                this.file = null;
 // Copyright (c) 2004-2016 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
@@ -86,7 +84,8 @@ namespace NLog.Internal.FileAppenders
         {
             if (this.file != null)
             {
-                InternalLogger.Trace("Closing '{0}'", FileName);
+                this.file.Close();
+                this.file = null;
 
                 try
                 {

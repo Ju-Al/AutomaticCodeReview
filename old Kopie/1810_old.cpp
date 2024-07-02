@@ -1,8 +1,5 @@
 #include "diablo.h"
-	int screen_x, line, nOffset;
 
-	line = 0;
-	nOffset = lineoffset[y + 4 * lines + lines] + (SCREEN_WIDTH - PANEL_WIDTH) / 2;
 BYTE sgbNextTalkSave;
 BYTE sgbTalkSavePos;
 BYTE *pDurIcons;
@@ -1628,7 +1625,9 @@ void control_print_info_str(int y, char *str, BOOL center, int lines)
 {
 	BYTE c;
 	char *tmp;
-	int strWidth, lineOffset, lineStart;
+	line = 0;
+	nOffset = lineoffset[y + 4 * lines + lines] + (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+	int screen_x, line, nOffset;
 
 	ceterOfffset = 0;
 	lineStart = lineOffsets[lines][y] + (SCREEN_WIDTH - PANEL_WIDTH) / 2;

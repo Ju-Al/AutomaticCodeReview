@@ -1,10 +1,6 @@
 /***************************************************************************
-    for ( std::string::iterator it = v.begin(); it != v.end(); ++it )
-        *it = get8();
- *   Copyright (C) 2012 by Andrey Afletdinov <fheroes2@gmail.com>          *
- *                                                                         *
- *   Part of the Free Heroes2 Engine:                                      *
- *   http://sourceforge.net/projects/fheroes2                              *
+ *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
+ *   Copyright (C) 2020                                                    *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -21,622 +17,220 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
+#include "pal.h"
 
-#include <algorithm>
+#include <cassert>
 #include <cstring>
-#include <string>
 
-#include "logging.h"
-#include "serialize.h"
-
-#define MINCAPACITY 1024
-
-void StreamBase::setconstbuf( bool f )
+namespace
 {
-    if ( f )
-        flags |= 0x00001000;
-    else
-        flags &= ~0x00001000;
-}
+    const size_t paletteSize = 256;
 
-bool StreamBase::isconstbuf( void ) const
-{
-    return ( flags & 0x00001000 ) != 0;
-}
+    const uint8_t yellow_text_table[paletteSize]
+        = { 0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 114, 115, 115, 116, 117, 117, 118, 119, 119, 120, 121, 121, 122, 123, 123, 124, 125, 125, 126, 127, 127, 128,
+            129, 129, 130, 130, 130, 0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+            0,   0,   0,   0,   0,   0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 };
 
-bool StreamBase::bigendian( void ) const
-{
-    return ( flags & 0x80000000 ) != 0;
-}
+    const uint8_t white_text_table[paletteSize]
+        = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0 };
 
-void StreamBase::setbigendian( bool f )
-{
-    if ( f )
-        flags |= 0x80000000;
-    else
-        flags &= ~0x80000000;
-}
+    const uint8_t gray_text_table[paletteSize]
+        = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 36, 36, 36, 36, 36, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0, 0 };
 
-void StreamBase::setfail( bool f )
-{
-    if ( f )
-        flags |= 0x00000001;
-    else
-        flags &= ~0x00000001;
-}
+    const uint8_t tan_table[paletteSize]
+        = { 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 200, 201, 203, 204, 206, 207,
+            208, 209, 210, 211, 213, 213, 213, 213, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 199, 200, 201, 203, 204, 205, 207,
+            207, 209, 210, 211, 212, 198, 198, 198, 198, 198, 201, 203, 205, 207, 208, 210, 210, 211, 212, 212, 213, 213, 213, 213, 213, 213, 213, 198, 198,
+            198, 199, 201, 203, 204, 206, 207, 208, 209, 210, 211, 212, 213, 213, 213, 213, 213, 213, 213, 213, 213, 198, 198, 198, 198, 198, 198, 198, 198,
+            198, 198, 198, 198, 198, 198, 198, 198, 198, 200, 201, 203, 204, 206, 207, 198, 198, 198, 198, 198, 198, 198, 198, 198, 200, 201, 203, 204, 206,
+            207, 208, 209, 210, 212, 213, 213, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 199, 201, 203, 204, 206, 207, 208, 209, 211, 212,
+            213, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 199, 201, 202, 204, 206, 207, 198, 198, 198, 198, 198,
+            198, 198, 198, 198, 198, 198, 198, 198, 199, 202, 205, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 200, 203, 204, 207, 208, 209, 201,
+            203, 207, 209, 206, 209, 208, 198, 198, 207, 213, 198, 201, 206, 208, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213 };
 
-bool StreamBase::fail( void ) const
-{
-    return flags & 0x00000001;
-}
+    const uint8_t no_cycle_table[paletteSize]
+        = { 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,
+            29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,
+            58,  59,  60,  61,  62,  63,  64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,
+            87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+            116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144,
+            145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173,
+            174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202,
+            203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 188, 188, 188, 188, 118, 118, 118, 118, 222, 223, 224, 225, 226, 227, 228, 229, 230, 69,
+            69,  69,  69,  69,  69,  69,  69,  69,  69,  69,  242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255 };
 
-u16 StreamBase::get16()
-{
-    return bigendian() ? getBE16() : getLE16();
-}
+    const uint8_t gray_table[paletteSize]
+        = { 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+            10, 11, 12, 12, 13, 14, 15, 16, 17, 18, 18, 19, 20, 20, 21, 22, 22, 23, 24, 25, 26, 26, 27, 28, 29, 31, 14, 16, 17, 18, 20, 21, 22, 24, 25, 26, 28,
+            28, 29, 30, 31, 32, 32, 33, 33, 33, 34, 34, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 32, 33, 34, 35, 35, 36, 36, 36, 11, 11, 11,
+            11, 11, 12, 12, 12, 13, 13, 14, 15, 16, 17, 18, 19, 20, 21, 21, 22, 23, 24, 25, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 24, 24, 25, 26, 27, 28, 29,
+            31, 32, 32, 33, 11, 12, 12, 13, 14, 14, 16, 16, 17, 18, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 32, 10, 11, 11, 12, 12, 12, 13, 13, 14, 14,
+            15, 15, 16, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 10, 10, 11, 11, 11, 12, 12, 12, 12, 14, 16, 17, 18, 20, 22, 24, 17, 10, 12, 15, 19, 10, 10, 15,
+            17, 18, 20, 21, 22, 23, 25, 26, 27, 27, 24, 21, 22, 26, 26, 27, 36, 12, 18, 25, 19, 21, 24, 26, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36 };
 
-u32 StreamBase::get32()
-{
-    return bigendian() ? getBE32() : getLE32();
-}
+    const uint8_t red_table[paletteSize]
+        = { 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 180, 182, 184, 186, 208, 209, 210, 210, 211, 211, 212, 213, 213, 196, 197, 197, 197, 197, 197,
+            197, 197, 197, 197, 197, 197, 197, 197, 180, 180, 182, 182, 184, 186, 208, 209, 209, 210, 210, 210, 211, 211, 193, 212, 212, 213, 213, 196, 197,
+            197, 197, 197, 197, 197, 208, 209, 210, 211, 193, 212, 213, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 209, 210,
+            210, 211, 212, 212, 213, 196, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 180, 180, 180, 180, 180, 182, 182, 183,
+            184, 185, 208, 188, 189, 190, 210, 191, 211, 193, 193, 194, 195, 196, 197, 182, 184, 208, 209, 209, 210, 211, 211, 212, 213, 213, 196, 197, 197,
+            197, 197, 197, 197, 197, 197, 197, 209, 209, 210, 210, 211, 211, 193, 212, 213, 213, 213, 196, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197,
+            197, 180, 180, 180, 182, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202,
+            203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 187, 211, 180, 180, 215, 191, 192, 193, 194, 213, 197, 197, 197, 197,
+            197, 197, 197, 197, 197, 197, 197, 197, 211, 197, 211, 212, 196, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197, 197 };
 
-StreamBase & StreamBase::operator>>( bool & v )
-{
-    v = ( get8() != 0 );
-    return *this;
-}
+    const uint8_t brown_table[paletteSize]
+        = { 50, 42, 42, 42, 42, 50, 50, 50, 50, 53, 42, 43, 43, 44, 44, 45, 46, 46, 47, 47, 48, 49, 50, 51, 52, 52, 53, 54, 55, 56, 57, 58, 60, 62, 62, 62, 62,
+            37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 45, 46, 47, 48, 50, 51, 52, 54, 55, 56, 58,
+            58, 59, 60, 60, 61, 62, 62, 62, 62, 62, 62, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 58, 60, 60, 62, 62, 62, 62, 62, 62, 62, 62, 62, 43, 43, 44,
+            44, 44, 45, 45, 45, 46, 47, 48, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 44, 44, 45, 46, 46, 47, 48, 49, 50, 51, 52, 53, 53, 54, 55, 56, 57,
+            58, 60, 62, 62, 43, 43, 44, 44, 45, 45, 46, 47, 47, 48, 49, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 43, 44, 46, 47, 48, 49, 50, 52, 53, 54,
+            55, 57, 58, 60, 60, 62, 62, 62, 62, 62, 62, 62, 62, 44, 44, 45, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55, 57, 58, 59, 54, 58, 62, 62, 42, 45, 49, 55,
+            47, 49, 50, 51, 52, 53, 55, 56, 58, 51, 52, 55, 57, 54, 57, 56, 44, 48, 54, 62, 49, 51, 54, 57, 50, 50, 50, 50, 50, 50, 50, 50, 50, 42 };
 
-StreamBase & StreamBase::operator>>( char & v )
-{
-    v = get8();
-    return *this;
-}
+    // this palette was modified as it was containing 238, 238, 239, 240 values instead of 238, 239, 240, 241
+    const uint8_t mirror_image_table[paletteSize]
+        = { 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  10,  10,  10,  10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
+            25,  26,  27,  28,  29,  30,  31,  32,  37,  37,  37,  37,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,
+            54,  55,  56,  57,  58,  63,  63,  63,  63,  63,  64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  85,  85,
+            85,  85,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 108, 108, 108, 108, 108, 109, 110, 111,
+            112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 131, 131, 131, 131, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
+            141, 142, 143, 144, 145, 146, 147, 152, 152, 152, 152, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169,
+            170, 175, 175, 175, 175, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 198, 198, 198, 198, 198,
+            199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 214, 215, 216, 217, 218, 219, 220, 221, 222, 222, 223, 224, 225, 226, 227, 228, 229, 231,
+            232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 242, 243, 244, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255 };
 
-StreamBase & StreamBase::operator>>( u8 & v )
-{
-    v = get8();
-    return *this;
-}
+    const uint8_t darkeningTable[paletteSize]
+        = { 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,
+            35,  36,  36,  36,  36,  36,  36,  36,  43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  62,
+            62,  62,  62,  62,  62,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  84,  84,  84,  84,  84,  91,  92,
+            93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 107, 107, 107, 107, 107, 107, 114, 115, 116, 117, 118, 119, 120, 121,
+            122, 123, 124, 125, 126, 127, 128, 129, 130, 130, 130, 130, 130, 130, 130, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149,
+            150, 151, 151, 151, 151, 151, 151, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 174, 174, 174, 174, 174,
+            174, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 197, 197, 197, 197, 197, 202, 203, 204, 205, 206,
+            207, 208, 209, 210, 211, 212, 213, 213, 213, 213, 213, 214, 215, 216, 217, 218, 219, 220, 221, 225, 226, 227, 228, 229, 230, 230, 230, 230, 73,
+            75,  77,  79,  81,  76,  78,  74,  76,  78,  80,  244, 245, 245, 245, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0 };
 
-StreamBase & StreamBase::operator>>( u16 & v )
-{
-    v = get16();
-    return *this;
-}
+    struct CyclingColorSet
+    {
+        uint8_t start;
+        uint8_t length;
+        bool forward;
+    };
 
-StreamBase & StreamBase::operator>>( int16_t & v )
-{
-    v = get16();
-    return *this;
-}
-
-StreamBase & StreamBase::operator>>( u32 & v )
-{
-    v = get32();
-    return *this;
-}
-
-StreamBase & StreamBase::operator>>( s32 & v )
-{
-    v = get32();
-    return *this;
-}
-
-StreamBase & StreamBase::operator>>( std::string & v )
-{
-    u32 size = get32();
-    v.resize( size );
-
-    for ( char & chr : v )
-        chr = get8();
-
-    return *this;
-}
-
-StreamBase & StreamBase::operator>>( fheroes2::Point & point_ )
-{
-    return *this >> point_.x >> point_.y;
-}
-
-void StreamBase::put16( u16 v )
-{
-    bigendian() ? putBE16( v ) : putLE16( v );
-}
-
-void StreamBase::put32( u32 v )
-{
-    bigendian() ? putBE32( v ) : putLE32( v );
-}
-
-StreamBase & StreamBase::operator<<( const bool v )
-{
-    put8( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const char v )
-{
-    put8( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const u8 v )
-{
-    put8( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const u16 v )
-{
-    put16( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const int16_t v )
-{
-    put16( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const s32 v )
-{
-    put32( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const u32 v )
-{
-    put32( v );
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const std::string & v )
-{
-    put32( static_cast<uint32_t>( v.size() ) );
-
-    for ( char it : v )
-        put8( it );
-
-    return *this;
-}
-
-StreamBase & StreamBase::operator<<( const fheroes2::Point & point_ )
-{
-    return *this << point_.x << point_.y;
-}
-
-StreamBuf::StreamBuf( size_t sz )
-    : itbeg( nullptr )
-    , itget( nullptr )
-    , itput( nullptr )
-    , itend( nullptr )
-{
-    if ( sz )
-        reallocbuf( sz );
-    setbigendian( IS_BIGENDIAN ); /* default: hardware endian */
-}
-
-StreamBuf::~StreamBuf()
-{
-    if ( itbeg && !isconstbuf() )
-        delete[] itbeg;
-}
-
-StreamBuf::StreamBuf( const StreamBuf & st )
-    : itbeg( nullptr )
-    , itget( nullptr )
-    , itput( nullptr )
-    , itend( nullptr )
-{
-    copy( st );
-}
-
-StreamBuf::StreamBuf( const std::vector<u8> & buf )
-    : itbeg( nullptr )
-    , itget( nullptr )
-    , itput( nullptr )
-    , itend( nullptr )
-{
-    itbeg = (u8 *)&buf[0];
-    itend = itbeg + buf.size();
-    itget = itbeg;
-    itput = itend;
-    setconstbuf( true );
-    setbigendian( IS_BIGENDIAN ); /* default: hardware endian */
-}
-
-StreamBuf::StreamBuf( const u8 * buf, size_t bufsz )
-    : itbeg( nullptr )
-    , itget( nullptr )
-    , itput( nullptr )
-    , itend( nullptr )
-{
-    itbeg = const_cast<u8 *>( buf );
-    itend = itbeg + bufsz;
-    itget = itbeg;
-    itput = itend;
-    setconstbuf( true );
-    setbigendian( IS_BIGENDIAN ); /* default: hardware endian */
-}
-
-StreamBuf & StreamBuf::operator=( const StreamBuf & st )
-{
-    if ( &st != this )
-        copy( st );
-    return *this;
-}
-
-size_t StreamBuf::capacity( void ) const
-{
-    return itend - itbeg;
-}
-
-const u8 * StreamBuf::data( void ) const
-{
-    return itget;
-}
-
-size_t StreamBuf::size( void ) const
-{
-    return sizeg();
-}
-
-void StreamBuf::reset( void )
-{
-    itput = itbeg;
-    itget = itbeg;
-}
-
-size_t StreamBuf::tellg( void ) const
-{
-    return itget - itbeg;
-}
-
-size_t StreamBuf::tellp( void ) const
-{
-    return itput - itbeg;
-}
-
-size_t StreamBuf::sizeg( void ) const
-{
-    return itput - itget;
-}
-
-size_t StreamBuf::sizep( void ) const
-{
-    return itend - itput;
-}
-
-void StreamBuf::reallocbuf( size_t sz )
-{
-    setconstbuf( false );
-
-    if ( !itbeg ) {
-        if ( sz < MINCAPACITY )
-            sz = MINCAPACITY;
-
-        itbeg = new u8[sz];
-        itend = itbeg + sz;
-        std::fill( itbeg, itend, 0 );
-
-        reset();
-    }
-    else if ( sizep() < sz ) {
-        if ( sz < MINCAPACITY )
-            sz = MINCAPACITY;
-
-        u8 * ptr = new u8[sz];
-
-        std::fill( ptr, ptr + sz, 0 );
-        std::copy( itbeg, itput, ptr );
-
-        itput = ptr + tellp();
-        itget = ptr + tellg();
-
-        delete[] itbeg;
-
-        itbeg = ptr;
-        itend = itbeg + sz;
+    const std::vector<CyclingColorSet> & GetCyclingColors()
+    {
+        static const std::vector<CyclingColorSet> cycleSet = {{0xD6, 4, false}, {0xDA, 4, false}, {0xE7, 5, true}, {0xEE, 4, false}};
+        return cycleSet;
     }
 }
 
-void StreamBuf::copy( const StreamBuf & sb )
+std::vector<uint8_t> PAL::GetCyclingPalette( int stepId )
 {
-    if ( capacity() < sb.size() )
-        reallocbuf( sb.size() );
+    std::vector<uint8_t> palette = PAL::GetPalette( PaletteType::STANDARD );
 
-    std::copy( sb.itget, sb.itput, itbeg );
-
-    itput = itbeg + sb.tellp();
-    itget = itbeg + sb.tellg();
-    flags = 0;
-
-    setbigendian( sb.bigendian() );
-}
-
-void StreamBuf::put8( const uint8_t v )
-{
-    if ( sizep() == 0 )
-        reallocbuf( capacity() + capacity() / 2 );
-
-    if ( sizep() > 0 )
-        *itput++ = v;
-}
-
-u8 StreamBuf::get8()
-{
-    if ( sizeg() )
-        return *itget++;
-    else
-        return 0u;
-}
-
-u16 StreamBuf::getBE16()
-{
-    u16 result = ( get8() << 8 );
-    result |= get8();
-
-    return result;
-}
-
-u16 StreamBuf::getLE16()
-{
-    u16 result = get8();
-    result |= ( get8() << 8 );
-
-    return result;
-}
-
-u32 StreamBuf::getBE32()
-{
-    u32 result = ( get8() << 24 );
-    result |= ( get8() << 16 );
-    result |= ( get8() << 8 );
-    result |= get8();
-
-    return result;
-}
-
-u32 StreamBuf::getLE32()
-{
-    u32 result = get8();
-    result |= ( get8() << 8 );
-    result |= ( get8() << 16 );
-    result |= ( get8() << 24 );
-
-    return result;
-}
-
-void StreamBuf::putBE16( u16 v )
-{
-    put8( v >> 8 );
-    put8( v & 0xFF );
-}
-
-void StreamBuf::putLE16( u16 v )
-{
-    put8( v & 0xFF );
-    put8( v >> 8 );
-}
-
-void StreamBuf::putBE32( u32 v )
-{
-    put8( v >> 24 );
-    put8( ( v >> 16 ) & 0xFF );
-    put8( ( v >> 8 ) & 0xFF );
-    put8( v & 0xFF );
-}
-
-void StreamBuf::putLE32( u32 v )
-{
-    put8( v & 0xFF );
-    put8( ( v >> 8 ) & 0xFF );
-    put8( ( v >> 16 ) & 0xFF );
-    put8( v >> 24 );
-}
-
-std::vector<u8> StreamBuf::getRaw( size_t sz )
-{
-    const size_t remainSize = sizeg();
-    const size_t dataSize = sz > 0 ? sz : remainSize;
-
-    std::vector<uint8_t> v( dataSize, 0 );
-    const size_t copySize = dataSize < remainSize ? dataSize : remainSize;
-    memcpy( v.data(), itget, copySize );
-
-    itget += copySize;
-
-    return v;
-}
-
-void StreamBuf::putRaw( const char * ptr, size_t sz )
-{
-    for ( size_t it = 0; it < sz; ++it )
-        *this << ptr[it];
-}
-
-std::string StreamBuf::toString( size_t sz )
-{
-    u8 * it1 = itget;
-    u8 * it2 = itget + ( sz ? sz : sizeg() );
-    it2 = std::find( it1, it2, 0 );
-    itget = it1 + ( sz ? sz : sizeg() );
-    return std::string( it1, it2 );
-}
-
-void StreamBuf::skip( size_t sz )
-{
-    itget += sz <= sizeg() ? sz : sizeg();
-}
-
-void StreamBuf::seek( size_t sz )
-{
-    itget = itbeg + sz < itend ? itbeg + sz : itend;
-}
-
-StreamFile::StreamFile()
-    : _file( nullptr )
-{}
-
-StreamFile::~StreamFile()
-{
-    close();
-}
-
-bool StreamFile::open( const std::string & fn, const std::string & mode )
-{
-    _file = std::fopen( fn.c_str(), mode.c_str() );
-    if ( !_file )
-        ERROR_LOG( fn );
-    return _file != nullptr;
-}
-
-void StreamFile::close( void )
-{
-    if ( _file ) {
-        std::fclose( _file );
-        _file = nullptr;
+    const std::vector<CyclingColorSet> & set = GetCyclingColors();
+    for ( std::vector<CyclingColorSet>::const_iterator it = set.begin(); it != set.end(); ++it ) {
+        for ( int id = 0; id < it->length; ++id ) {
+            const int lastColorID = it->length - 1;
+            const uint8_t newColorID = it->forward ? it->start + ( id + stepId ) % it->length : it->start + lastColorID - ( lastColorID + stepId - id ) % it->length;
+            palette[it->start + id] = newColorID;
+        }
     }
+
+    return palette;
 }
 
-size_t StreamFile::size( void ) const
+const std::vector<uint8_t> & PAL::GetPalette( const PaletteType type )
 {
-    if ( !_file )
-        return 0;
-    const long pos = std::ftell( _file );
-    std::fseek( _file, 0, SEEK_END );
-    const long len = std::ftell( _file );
-    std::fseek( _file, pos, SEEK_SET );
-    return static_cast<size_t>( len );
+    switch ( type ) {
+    case PaletteType::YELLOW_TEXT: {
+        static const std::vector<uint8_t> palette( yellow_text_table, yellow_text_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::WHITE_TEXT: {
+        static const std::vector<uint8_t> palette( white_text_table, white_text_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::GRAY_TEXT: {
+        static const std::vector<uint8_t> palette( gray_text_table, gray_text_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::RED: {
+        static const std::vector<uint8_t> palette( red_table, red_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::GRAY: {
+        static const std::vector<uint8_t> palette( gray_table, gray_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::BROWN: {
+        static const std::vector<uint8_t> palette( brown_table, brown_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::TAN: {
+        static const std::vector<uint8_t> palette( tan_table, tan_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::NO_CYCLE: {
+        static const std::vector<uint8_t> palette( no_cycle_table, no_cycle_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::MIRROR_IMAGE: {
+        static const std::vector<uint8_t> palette( mirror_image_table, mirror_image_table + paletteSize );
+        return palette;
+    }
+    case PaletteType::DARKENING: {
+        static const std::vector<uint8_t> palette( darkeningTable, darkeningTable + paletteSize );
+        return palette;
+    }
+    case PaletteType::CUSTOM:
+        assert( 0 );
+        break;
+    case PaletteType::STANDARD:
+        break;
+    default:
+        // Some new palette?
+        assert( 0 );
+        break;
+    }
+
+    static std::vector<uint8_t> standard;
+    if ( standard.empty() ) {
+        standard.resize( paletteSize, 0 );
+        for ( size_t i = 0; i < paletteSize; ++i ) {
+            standard[i] = static_cast<uint8_t>( i );
+        }
+    }
+
+    return standard;
 }
 
-size_t StreamFile::tell( void ) const
+std::vector<uint8_t> PAL::CombinePalettes( const std::vector<uint8_t> & first, const std::vector<uint8_t> & second )
 {
-    return tellg();
-}
-
-void StreamFile::seek( size_t pos )
-{
-    if ( _file )
-        std::fseek( _file, static_cast<long>( pos ), SEEK_SET );
-}
-
-size_t StreamFile::sizeg( void ) const
-{
-    if ( !_file )
-        return 0;
-    const long pos = std::ftell( _file );
-    std::fseek( _file, 0, SEEK_END );
-    const long len = std::ftell( _file );
-    std::fseek( _file, pos, SEEK_SET );
-    return static_cast<size_t>( len - pos );
-}
-
-size_t StreamFile::tellg( void ) const
-{
-    return _file ? static_cast<size_t>( std::ftell( _file ) ) : 0;
-}
-
-size_t StreamFile::sizep( void ) const
-{
-    return sizeg();
-}
-
-size_t StreamFile::tellp( void ) const
-{
-    return tellg();
-}
-
-void StreamFile::skip( size_t pos )
-{
-    if ( _file )
-        std::fseek( _file, static_cast<long int>( pos ), SEEK_CUR );
-}
-
-u8 StreamFile::get8()
-{
-    return getUint<uint8_t>();
-}
-
-void StreamFile::put8( const uint8_t v )
-{
-    putUint<uint8_t>( v );
-}
-
-uint16_t StreamFile::getBE16()
-{
-    return be16toh( getUint<uint16_t>() );
-}
-
-uint16_t StreamFile::getLE16()
-{
-    return le16toh( getUint<uint16_t>() );
-}
-
-uint32_t StreamFile::getBE32()
-{
-    return be32toh( getUint<uint32_t>() );
-}
-
-uint32_t StreamFile::getLE32()
-{
-    return le32toh( getUint<uint32_t>() );
-}
-
-void StreamFile::putBE16( uint16_t val )
-{
-    putUint<uint16_t>( htobe16( val ) );
-}
-
-void StreamFile::putLE16( uint16_t val )
-{
-    putUint<uint16_t>( htole16( val ) );
-}
-
-void StreamFile::putBE32( uint32_t val )
-{
-    putUint<uint32_t>( htobe32( val ) );
-}
-
-void StreamFile::putLE32( uint32_t val )
-{
-    putUint<uint32_t>( htole32( val ) );
-}
-
-std::vector<uint8_t> StreamFile::getRaw( size_t sz )
-{
-    const size_t chunkSize = sz > 0 ? sz : sizeg();
-    if ( chunkSize == 0 || !_file ) {
+    if ( first.size() != paletteSize || second.size() != paletteSize )
         return std::vector<uint8_t>();
+
+    std::vector<uint8_t> combined( paletteSize, 0 );
+
+    for ( size_t i = 0; i < paletteSize; ++i ) {
+        combined[i] = second[first[i]];
     }
 
-    std::vector<uint8_t> v( sz ? sz : sizeg() );
-    const size_t count = std::fread( &v[0], chunkSize, 1, _file );
-    if ( count != 1 ) {
-        setfail( true );
-        v.clear();
-    }
-
-    return v;
-}
-
-void StreamFile::putRaw( const char * ptr, size_t sz )
-{
-    if ( _file )
-        std::fwrite( ptr, sz, 1, _file );
-}
-
-StreamBuf StreamFile::toStreamBuf( size_t sz )
-{
-    StreamBuf sb;
-    std::vector<uint8_t> buf = getRaw( sz );
-    sb.putRaw( reinterpret_cast<const char *>( &buf[0] ), buf.size() );
-    return sb;
-}
-
-std::string StreamFile::toString( size_t sz )
-{
-    const std::vector<uint8_t> buf = getRaw( sz );
-    std::vector<uint8_t>::const_iterator itend = std::find( buf.begin(), buf.end(), 0 );
-    return std::string( buf.begin(), itend != buf.end() ? itend : buf.end() );
+    return combined;
 }

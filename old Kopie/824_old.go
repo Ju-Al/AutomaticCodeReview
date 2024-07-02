@@ -1,9 +1,5 @@
 package validator
 
-	if configuration.LogLevel == "" {
-		configuration.LogLevel = defaultLogLevel
-	}
-
 import (
 	"fmt"
 	"net/url"
@@ -24,13 +20,15 @@ func Validate(configuration *schema.Configuration, validator *schema.StructValid
 		configuration.Port = defaultPort
 	}
 
+	if configuration.LogLevel == "" {
+		configuration.LogLevel = defaultLogLevel
+	}
+
 	if configuration.TLSKey != "" && configuration.TLSCert == "" {
 		validator.Push(fmt.Errorf("No TLS certificate provided, please check the \"tls_cert\" which has been configured"))
 	} else if configuration.TLSKey == "" && configuration.TLSCert != "" {
 		validator.Push(fmt.Errorf("No TLS key provided, please check the \"tls_key\" which has been configured"))
 	}
-
-	if configuration.LogLevel == "" {
 		configuration.LogLevel = defaultLogLevel
 	}
 

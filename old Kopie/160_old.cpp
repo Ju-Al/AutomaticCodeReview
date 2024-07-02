@@ -10232,10 +10232,6 @@ bool FileInputStream::read(byte *buffer, unsigned size)
 }
 
 FileInputStream::~FileInputStream()
-{
-
-}
-
 
 MegaFolderUploadController::MegaFolderUploadController(MegaApiImpl *megaApi, MegaTransferPrivate *transfer)
 {

@@ -1,5 +1,4 @@
 <?php
-			$message = apply_filters( 'sensei_couse_access_permission_message', $message, $post->ID );
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -223,7 +222,7 @@ class Sensei_Course {
 	private static function add_course_access_permission_message( $message ) {
 		global $post;
 		if ( Sensei()->settings->get( 'access_permission' ) ) {
-			$message = apply_filters_deprecated(
+			$message = apply_filters( 'sensei_couse_access_permission_message', $message, $post->ID );
 				'sensei_couse_access_permission_message',
 				[ $message, $post->ID ],
 				'3.0.0'

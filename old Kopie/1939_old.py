@@ -72,7 +72,6 @@ class WebView(QWebView):
 
         page = webpage.BrowserPage(self.win_id, self._tab_id, tab.data,
                                    parent=self)
-
         if qtutils.version_check('5.2'):
             page.setVisibilityState(
                 page.VisibilityStateVisible if self.isVisible()

@@ -1,6 +1,4 @@
 package app
-	sharedInformerFactory := informers.NewFilteredSharedInformerFactory(intcl, time.Second*30, opts.Namespace, nil)
-	kubeSharedInformerFactory := kubeinformers.NewFilteredSharedInformerFactory(cl, time.Second*30, opts.Namespace, nil)
 
 import (
 	"fmt"
@@ -126,7 +124,8 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 	// If it is specified, all operations relating to ClusterIssuer resources
 	// should be disabled and thus we don't need to also create factories for
 	// the --cluster-resource-namespace.
-	sharedInformerFactory := informers.NewFilteredSharedInformerFactory(intcl, time.Second*30, defaultNamespace, nil)
+	sharedInformerFactory := informers.NewFilteredSharedInformerFactory(intcl, time.Second*30, opts.Namespace, nil)
+	kubeSharedInformerFactory := kubeinformers.NewFilteredSharedInformerFactory(cl, time.Second*30, opts.Namespace, nil)
 	kubeSharedInformerFactory := kubeinformers.NewFilteredSharedInformerFactory(cl, time.Second*30, defaultNamespace, nil)
 	return &controller.Context{
 		Client:                    cl,

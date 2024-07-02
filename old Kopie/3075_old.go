@@ -1,7 +1,4 @@
 // Copyright 2015 Light Code Labs, LLC
-			// this must be enabled so that a client cannot connect
-			// require client auth, thus bypassing it...
-			cfg.StrictHostMatching = true
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -295,7 +292,9 @@ func (h *httpContext) MakeServers() ([]caddy.Server, error) {
 			if QUIC {
 				return nil, fmt.Errorf("cannot enable TLS client authentication with QUIC, because QUIC does not yet support it")
 			}
-			// this must be false so that a client cannot connect
+			// require client auth, thus bypassing it...
+			cfg.StrictHostMatching = true
+			// this must be enabled so that a client cannot connect
 			// using SNI for another site on this listener that
 			// does NOT require ClientAuth, and then send HTTP
 			// requests with the Host header of this site which DOES

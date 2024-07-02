@@ -63,7 +63,6 @@ def create_data_portal(env, tempdir, sim_params, sids):
             asset_finder=env.asset_finder
         )
 
-
 def create_data_portal_from_trade_history(
         tempdir, trades_by_sid, sim_params, env):
     if sim_params.data_frequency == "daily":

@@ -1,5 +1,4 @@
 /******************************************************************************
-
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -459,7 +458,7 @@ std::map<std::string, ComponentChange> uncreatableComponents = {
 
     // SofaEngine was pluginized in #1603
     { "BoxROI", Pluginized("v20.12", "SofaEngine") },
-    
+
     /***********************/
     // REMOVED SINCE v20.12
     { "DynamicSparseGridTopologyAlgorithms", Removed("v20.12", "v20.12") },

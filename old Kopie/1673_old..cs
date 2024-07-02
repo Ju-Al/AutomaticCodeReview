@@ -1,5 +1,4 @@
 ﻿using System;
-        public async Task<IActionResult> ListInvoices(string searchTerm = null, int skip = 0, int count = 50, int timezoneOffset = 0)
 using System.Collections.Generic;
 using System.Configuration;
 using System.Globalization;
@@ -586,7 +585,7 @@ namespace BTCPayServer.Controllers
         [Route("invoices")]
         [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie)]
         [BitpayAPIConstraint(false)]
-        public async Task<IActionResult> ListInvoices(string searchTerm = null, int skip = 0, int count = 50, int timezoneOffset = 0, bool unfiltered = false)
+        public async Task<IActionResult> ListInvoices(string searchTerm = null, int skip = 0, int count = 50, int timezoneOffset = 0)
         {
             if (!unfiltered && searchTerm == null && timezoneOffset == 0 &&
                 Request.Cookies.TryGetValue(_lastQueryCookieName, out var cookieValue))

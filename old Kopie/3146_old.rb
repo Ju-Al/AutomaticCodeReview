@@ -327,8 +327,6 @@ module Pod
         end
       end
     end
-
-    def verify_no_duplicate_framework_names
       aggregate_targets.each do |aggregate_target|
         aggregate_target.user_build_configurations.keys.each do |config|
           pod_targets = aggregate_target.pod_targets_for_build_configuration(config)

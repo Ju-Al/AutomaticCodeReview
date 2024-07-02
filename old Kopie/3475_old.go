@@ -75,8 +75,6 @@ func (a *ResticRestoreAction) Execute(input *velero.RestoreItemActionExecuteInpu
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(input.Item.UnstructuredContent(), &pod); err != nil {
 		return nil, errors.Wrap(err, "unable to convert pod from runtime.Unstructured")
 	}
-
-	var sourcePod corev1.Pod
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(input.ItemFromBackup.UnstructuredContent(), &sourcePod); err != nil {
 		return nil, errors.Wrap(err, "unable to convert source pod from runtime.Unstructured")
 	}

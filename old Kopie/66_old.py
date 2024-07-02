@@ -243,8 +243,6 @@ class RiskMetricsBase(object):
 
         return ((self.algorithm_period_returns - self.treasury_period_return) /
                 self.algorithm_volatility)
-
-    def calculate_sortino(self, mar=None):
         """
         http://en.wikipedia.org/wiki/Sortino_ratio
         """

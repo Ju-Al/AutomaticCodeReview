@@ -1,157 +1,257 @@
-# Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-            with ops.control_dependencies([self.layer.g.assign(
-                    self._init_norm(self.layer.v))]):
-                self._compute_weights()
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# =============================================================================
+import sys
+import urllib2
+import json
+import socket
+from flask import Blueprint, request, current_app, jsonify
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
+from kafka import SimpleProducer
+from webserver.kafka_connection import _kafka
+from webserver.decorators import crossdomain
+import webserver
+import db.user
 
-import tensorflow as tf
+api_bp = Blueprint('api_v1', __name__)
 
-from tensorflow import name_scope
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import nn_impl
-from tensorflow.python.ops import variables as tf_variables
-from tensorflow.python.ops.nn import moments
-from tensorflow.python.ops.math_ops import sqrt
-from tensorflow.python.ops.linalg_ops import norm
+MAX_LISTEN_SIZE = 10240    # overall listen size, to prevent egregious spamming
+MAX_TAGS_PER_LISTEN = 50
+MAX_TAG_SIZE = 64
 
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras.engine.base_layer import Layer, InputSpec
-from tensorflow.python.keras.layers import Wrapper
-from tensorflow.python.keras.utils import generic_utils
+MAX_ITEMS_PER_GET = 100
+DEFAULT_ITEMS_PER_GET = 25
 
+@api_bp.route("/1/submit-listens", methods=["POST", "OPTIONS"])
+@crossdomain(headers="Authorization, Content-Type")
+def submit_listen():
+    """Endpoint for submitting a listen to ListenBrainz.
 
-class WeightNormalization(Wrapper):
-    """ This wrapper reparameterizes a layer by decoupling the weight's
-    magnitude and direction. This speeds up convergence by improving the
-    conditioning of the optimization problem.
-    Weight Normalization: A Simple Reparameterization to Accelerate
-    Training of Deep Neural Networks: https://arxiv.org/abs/1602.07868
-    Tim Salimans, Diederik P. Kingma (2016)
-    WeightNormalization wrapper works for keras and tf layers.
-    ```python
-      net = WeightNormalization(tf.keras.layers.Conv2D(2, 2, activation='relu'),
-             input_shape=(32, 32, 3), data_init=True)(x)
-      net = WeightNormalization(tf.keras.layers.Conv2D(16, 5, activation='relu'),
-                       data_init=True)(net)
-      net = WeightNormalization(tf.keras.layers.Dense(120, activation='relu'),
-                       data_init=True)(net)
-      net = WeightNormalization(tf.keras.layers.Dense(n_classes),
-                       data_init=True)(net)
-    ```
-    Arguments:
-      layer: a layer instance.
-      data_init: If `True` use data dependent variable initialization
-    Raises:
-      ValueError: If not initialized with a `Layer` instance.
-      ValueError: If `Layer` does not contain a `kernel` of weights
-      NotImplementedError: If `data_init` is True and running graph execution
+    Sanity check listen and then pass on to Kafka.
     """
-    def __init__(self, layer, data_init=True, **kwargs):
-        if not isinstance(layer, Layer):
-            raise ValueError(
-                'Please initialize `WeightNormalization` layer with a '
-                '`Layer` instance. You passed: {input}'.format(input=layer))
+    user_id = _validate_auth_header()
 
-        self.initialized = True
-        if data_init:
-            self.initialized = False
+    raw_data = request.get_data()
+    try:
+        data = json.loads(raw_data.decode("utf-8"))
+    except ValueError as e:
+        _log_raise_400("Cannot parse JSON document: %s" % e, raw_data)
 
-        super(WeightNormalization, self).__init__(layer, **kwargs)
-        self._track_checkpointable(layer, name='layer')
+    try:
+        payload = data['payload']
+        if len(payload) == 0:
+            _log_raise_400("JSON document does not contain any listens.", payload)
 
-    def _compute_weights(self):
-        """Generate weights by combining the direction of weight vector
-         with its norm """
-        with name_scope('compute_weights'):
-            self.layer.kernel = nn_impl.l2_normalize(
-                self.layer.v, axis=self.kernel_norm_axes) * self.layer.g
+        if len(raw_data) > len(payload) * MAX_LISTEN_SIZE:
+            _log_raise_400("JSON document is too large. In aggregate, listens may not "
+                           "be larger than %d characters." % MAX_LISTEN_SIZE, payload)
 
-    def _init_norm(self, weights):
-        """Set the norm of the weight vector"""
-        with name_scope('init_norm'):
-            flat = array_ops.reshape(weights, [-1, self.layer_depth])
-            return array_ops.reshape(norm(flat, axis=0), (self.layer_depth,))
+        if data['listen_type'] not in ('playing_now', 'single', 'import'):
+            _log_raise_400("JSON document requires a valid listen_type key.", payload)
 
-    def _data_dep_init(self, inputs):
-        """Data dependent initialization"""
+        if (data['listen_type'] == "single" or data['listen_type'] == 'playing_now') and len(payload) > 1:
+            _log_raise_400("JSON document contains more than listen for a single/playing_now. "
+                           "It should contain only one.", payload)
+    except KeyError:
+        _log_raise_400("Invalid JSON document submitted.", raw_data)
 
-        with name_scope('data_dep_init'):
-            # Generate data dependent init values
-            activation = self.layer.activation
-            self.layer.activation = None
-            x_init = self.layer.call(inputs)
-            data_norm_axes = list(range(x_init.shape.rank - 1))
-            m_init, v_init = moments(x_init, data_norm_axes)
-            scale_init = 1. / sqrt(v_init + 1e-10)
+    producer = SimpleProducer(_kafka)
+    for i, listen in enumerate(payload):
+        _validate_listen(listen)
+        listen['user_id'] = user_id
 
-        # Assign data dependent init values
-        self.layer.g = self.layer.g * scale_init
-        self.layer.bias = (-m_init * scale_init)
-        self.layer.activation = activation
-        self.initialized = True
+        try:
+            messybrainz_resp = get_messybrainz_data(listen)
+        except MessyBrainzException:
+            messybrainz_resp = None
 
-    def build(self, input_shape):
-        """Build `Layer`"""
-        input_shape = tensor_shape.TensorShape(input_shape).as_list()
-        self.input_spec = InputSpec(shape=input_shape)
+        if messybrainz_resp:
+            messybrainz_resp = messybrainz_resp['ids']
 
-        if not self.layer.built:
-            self.layer.build(input_shape)
-            self.layer.built = False
+            if 'additional_info' not in listen['track_metadata']:
+                listen['track_metadata']['additional_info'] = {}
 
-            if not hasattr(self.layer, 'kernel'):
-                raise ValueError(
-                    '`WeightNormalization` must wrap a layer that'
-                    ' contains a `kernel` for weights'
-                )
+            try:
+                listen['recording_msid'] = messybrainz_resp['recording_msid']
+                listen['track_metadata']['additional_info']['artist_msid'] = messybrainz_resp['artist_msid']
+            except KeyError:
+                current_app.logger.error("MessyBrainz did not return a proper set of ids")
+                raise InternalServerError
 
-            # The kernel's filter or unit dimension is -1
-            self.layer_depth = int(self.layer.kernel.shape[-1])
-            self.kernel_norm_axes = list(range(self.layer.kernel.shape.rank - 1))
+            try:
+                listen['track_metadata']['additional_info']['release_msid'] = messybrainz_resp['release_msid']
+            except KeyError:
+                pass
 
-            self.layer.v = self.layer.kernel
-            self.layer.g = self.layer.add_variable(
-                name="g",
-                shape=(self.layer_depth,),
-                initializer=initializers.get('ones'),
-                dtype=self.layer.kernel.dtype,
-                trainable=True,
-                aggregation=tf_variables.VariableAggregation.MEAN)
+            artist_mbids = messybrainz_resp.get('artist_mbids', [])
+            release_mbid = messybrainz_resp.get('release_mbid', None)
+            recording_mbid = messybrainz_resp.get('recording_mbid', None)
 
-            self.layer.g.assign(self._init_norm(self.layer.v))
-            self._compute_weights()
+            if 'artist_mbids'    not in listen['track_metadata']['additional_info'] and \
+               'release_mbid'   not in listen['track_metadata']['additional_info'] and \
+               'recording_mbid' not in listen['track_metadata']['additional_info']:
 
-            self.layer.built = True
+                if len(artist_mbids) > 0 and release_mbid and recording_mbid:
+                    listen['track_metadata']['additional_info']['artist_id'] = artist_mbid
+                    listen['track_metadata']['additional_info']['release_mbid'] = release_mbid
+                    listen['track_metadata']['additional_info']['recording_mbid'] = recording_mbid
 
-        super(WeightNormalization, self).build()
-        self.built = True
+        if data['listen_type'] == 'playing_now':
+            try:
+                producer.send_messages(b'playing_now', json.dumps(listen).encode('utf-8'))
+            except:
+                current_app.logger.error("Kafka playing_now write error: " + str(sys.exc_info()[0]))
+                raise InternalServerError("Cannot record playing_now at this time.")
+        else:
+            try:
+                producer.send_messages(b'listens', json.dumps(listen).encode('utf-8'))
+            except:
+                current_app.logger.error("Kafka listens write error: " + str(sys.exc_info()[0]))
+                raise InternalServerError("Cannot record listen at this time.")
 
-    @tf.function
-    def call(self, inputs):
-        """Call `Layer`"""
-        if not self.initialized:
-            self._data_dep_init(inputs)
-
-        self._compute_weights()  # Recompute weights for each forward pass
-        output = self.layer.call(inputs)
-        return output
-
-    def compute_output_shape(self, input_shape):
-        return tensor_shape.TensorShape(
-            self.layer.compute_output_shape(input_shape).as_list())
+    return "success"
 
 
-generic_utils._GLOBAL_CUSTOM_OBJECTS['WeightNormalization'] = WeightNormalization
+@api_bp.route("/1/user/<user_id>/listens")
+def get_listens(user_id):
+    cassandra = webserver.create_cassandra()
+    listens = cassandra.fetch_listens(
+        user_id,
+        limit=min(_parse_int_arg("count", DEFAULT_ITEMS_PER_GET), MAX_ITEMS_PER_GET),
+        from_id=_parse_int_arg("max_ts"),
+        to_id=_parse_int_arg("min_ts"),
+        order=request.args.get("order", "desc"),
+    )
+    listen_data = []
+    for listen in listens:
+        listen_data.append({ "track_metadata" : listen.data, "listened_at" : listen.timestamp })
+
+    return jsonify({'payload': {
+        'user_id': user_id,
+        'count': len(listen_data),
+        'listens': listen_data,
+    }})
+
+
+def _parse_int_arg(name, default=None):
+    value = request.args.get(name)
+    if value:
+        try:
+            return int(value)
+        except ValueError:
+            raise BadRequest("Invalid %s argument: %s" % (name, value))
+    else:
+        return default
+
+
+def _validate_auth_header():
+    auth_token = request.headers.get('Authorization')
+    if not auth_token:
+        raise Unauthorized("You need to provide an Authorization header.")
+    try:
+        auth_token = auth_token.split(" ")[1]
+    except IndexError:
+        raise Unauthorized("Provided Authorization header is invalid.")
+
+    user = db.user.get_by_token(auth_token)
+    if user is None:
+        raise Unauthorized("Invalid authorization token.")
+
+    return user['musicbrainz_id']
+
+def get_messybrainz_data(listen):
+    messy_dict = {
+        'artist': listen['track_metadata']['artist_name'],
+        'title': listen['track_metadata']['track_name'],
+    }
+    if 'release_name' in listen['track_metadata']:
+        messy_dict['release'] = listen['track_metadata']['release_name']
+
+    if 'additional_info' in listen['track_metadata']:
+        ai = listen['track_metadata']['additional_info']
+        if 'artist_mbids' in ai and type(ai['artist_mbids']) == list:
+            messy_dict['artist_mbids'] = ai['artist_mbids'] 
+        if 'release_mbid' in ai:
+            messy_dict['release_mbid'] = ai['release_mbid'] 
+        if 'recording_mbid' in ai:
+            messy_dict['recording_mbid'] = ai['recording_mbid'] 
+        if 'track_number' in ai:
+            messy_dict['track_number'] = ai['track_number'] 
+        if 'spotify_id' in ai:
+            messy_dict['spotify_id'] = ai['spotify_id'] 
+
+    messy_data = json.dumps(messy_dict)
+    req = urllib2.Request(current_app.config['MESSYBRAINZ_SUBMIT_URL'], messy_data, {
+        'Content-Type': 'application/json',
+        'Content-Length': len(messy_data),
+    })
+
+    try:
+        f = urllib2.urlopen(req, timeout=current_app.config['MESSYBRAINZ_TIMEOUT'])
+        response = f.read()
+        f.close()
+    except urllib2.URLError as e:
+        current_app.logger.error("Error calling MessyBrainz:" + str(e))
+        raise MessyBrainzException
+    except socket.timeout:
+        current_app.logger.error("Timeout calling MessyBrainz.")
+        raise MessyBrainzException
+
+    try:
+        messy_response = json.loads(response)
+    except ValueError as e:
+        current_app.logger.error("MessyBrainz parse error: " + str(e))
+        raise InternalServerError
+
+    return messy_response
+
+
+def _validate_listen(listen):
+    """Make sure that required keys are present, filled out and not too large."""
+    if not 'listened_at' in listen:
+        _log_raise_400("JSON document must contain the key listened_at at the top level.", listen)
+        
+    if type(listen['listened_at']) != int:
+        _log_raise_400("JSON document must contain an int value for listened_at.", listen)
+
+    if 'listened_at' in listen and 'track_metadata' in listen and len(listen) > 2:
+        _log_raise_400("JSON document may only contain listened_at and "
+                       "track_metadata top level keys", listen)
+
+    # Basic metadata
+    try:
+        if not listen['track_metadata']['track_name']:
+            _log_raise_400("JSON document does not contain required "
+                           "track_metadata.track_name.", listen)
+        if not listen['track_metadata']['artist_name']:
+            _log_raise_400("JSON document does not contain required "
+                           "track_metadata.artist_name.", listen)
+    except KeyError:
+        _log_raise_400("JSON document does not contain a valid metadata.track_name "
+                       "and/or track_metadata.artist_name.", listen)
+
+    # Tags
+    if 'additional_info' in listen['track_metadata']:
+        if 'tags' in listen['track_metadata']['additional_info']:
+            tags = listen['track_metadata']['additional_info']['tags']
+            if len(tags) > MAX_TAGS_PER_LISTEN:
+                _log_raise_400("JSON document may not contain more than %d items in "
+                               "track_metadata.additional_info.tags." % MAX_TAGS_PER_LISTEN, listen)
+            for tag in tags:
+                if len(tag) > MAX_TAG_SIZE:
+                    _log_raise_400("JSON document may not contain track_metadata.additional_info.tags "
+                                   "longer than %d characters." % MAX_TAG_SIZE, listen)
+
+
+def _log_raise_400(msg, data):
+    """Helper function for logging issues with request data and showing error page.
+
+    Logs the message and data, raises BadRequest exception which shows 400 Bad
+    Request to the user.
+    """
+
+    if type(data) == dict:
+        data = json.dumps(data)
+
+    current_app.logger.debug("BadRequest: %s\nJSON: %s" % (msg, data))
+    raise BadRequest(msg)
+
+class MessyBrainzException(Exception):
+    pass

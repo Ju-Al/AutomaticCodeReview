@@ -456,7 +456,6 @@ func toProto(ctx context.Context, in *static.Host, hostSets []*static.HostSet, o
 			out.HostSetIds = append(out.HostSetIds, hs.GetPublicId())
 		}
 	}
-	if outputFields.Has(globals.HostAddressField) {
 		out.Address = in.Address
 	}
 	if outputFields.Has(globals.AttributesField) {

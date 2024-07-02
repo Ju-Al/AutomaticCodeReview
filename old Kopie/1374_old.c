@@ -1,5 +1,4 @@
 #include "batch_job.h"
-	specify_files(t, extra_input_files, extra_output_files, caching_flag);
 #include "batch_job_internal.h"
 #include "work_queue.h"
 #include "work_queue_internal.h" /* EVIL */
@@ -86,7 +85,7 @@ static batch_job_id_t batch_job_wq_submit (struct batch_queue * q, const char *c
 
 	t = work_queue_task_create(cmd);
 
-	if(specify_files(t, extra_input_files, extra_output_files, caching_flag))
+	specify_files(t, extra_input_files, extra_output_files, caching_flag);
 		return -1;
 	specify_envlist(t,envlist);
 

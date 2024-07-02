@@ -1,5 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-                        var handle = buffer.Pin();
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Buffers;
@@ -125,7 +124,7 @@ namespace System.IO.Pipelines.Compression
 
                     unsafe
                     {
-                        var handle = buffer.Retain(true);
+                        var handle = buffer.Pin();
                         handles.Add(handle);
                         _deflater.SetInput((IntPtr)handle.PinnedPointer, buffer.Length);
                     }

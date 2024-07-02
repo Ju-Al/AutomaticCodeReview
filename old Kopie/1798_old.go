@@ -1,477 +1,344 @@
-// Copyright The OpenTelemetry Authors
-	driverTraces := &stubProtocolDriver{}
-	driverMetrics := &stubProtocolDriver{}
-	config := otlp.SplitConfig{
-		ForMetrics: driverMetrics,
-		ForTraces:  driverTraces,
-	}
-	driver := otlp.NewSplitDriver(config)
-	ctx := context.Background()
-	assert.NoError(t, driver.Start(ctx))
-	assert.Equal(t, 1, driverTraces.started)
-	assert.Equal(t, 1, driverMetrics.started)
-	assert.Equal(t, 0, driverTraces.stopped)
-	assert.Equal(t, 0, driverMetrics.stopped)
-	assert.Equal(t, 0, driverTraces.tracesExported)
-	assert.Equal(t, 0, driverTraces.metricsExported)
-	assert.Equal(t, 0, driverMetrics.tracesExported)
-	assert.Equal(t, 0, driverMetrics.metricsExported)
-
-	recordCount := 5
-	spanCount := 7
-	assert.NoError(t, driver.ExportMetrics(ctx, stubCheckpointSet{recordCount}, metricsdk.StatelessExportKindSelector()))
-	assert.NoError(t, driver.ExportTraces(ctx, stubSpanSnapshot(spanCount)))
-	assert.Len(t, driverTraces.rm, 0)
-	assert.Len(t, driverTraces.rs, spanCount)
-	assert.Len(t, driverMetrics.rm, recordCount)
-	assert.Len(t, driverMetrics.rs, 0)
-	assert.Equal(t, 1, driverTraces.tracesExported)
-	assert.Equal(t, 0, driverTraces.metricsExported)
-	assert.Equal(t, 0, driverMetrics.tracesExported)
-	assert.Equal(t, 1, driverMetrics.metricsExported)
-
-	assert.NoError(t, driver.Stop(ctx))
-	assert.Equal(t, 1, driverTraces.started)
-	assert.Equal(t, 1, driverMetrics.started)
-	assert.Equal(t, 1, driverTraces.stopped)
-	assert.Equal(t, 1, driverMetrics.stopped)
-	assert.Equal(t, 1, driverTraces.tracesExported)
-	assert.Equal(t, 0, driverTraces.metricsExported)
-	assert.Equal(t, 0, driverMetrics.tracesExported)
-	assert.Equal(t, 1, driverMetrics.metricsExported)
+// Copyright (c) 2019 Uber Technologies, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
-package otlp_test
+package tchannel
 
 import (
 	"context"
-	"errors"
-	"sync"
-	"testing"
+	"fmt"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp"
-	"go.opentelemetry.io/otel/exporters/otlp/internal/transform"
-	metricsdk "go.opentelemetry.io/otel/sdk/export/metric"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-	metricpb "go.opentelemetry.io/proto/otlp/metrics/v1"
-	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/tchannel-go"
+	"go.uber.org/multierr"
+	"go.uber.org/yarpc/api/transport"
+	"go.uber.org/yarpc/internal/bufferpool"
+	"go.uber.org/yarpc/pkg/errors"
+	"go.uber.org/yarpc/yarpcerrors"
+	"go.uber.org/zap"
+	ncontext "golang.org/x/net/context"
 )
 
-func stubSpanSnapshot(count int) []*tracesdk.SpanSnapshot {
-	spans := make([]*tracesdk.SpanSnapshot, 0, count)
-	for i := 0; i < count; i++ {
-		spans = append(spans, new(tracesdk.SpanSnapshot))
+// inboundCall provides an interface similar tchannel.InboundCall.
+//
+// We use it instead of *tchannel.InboundCall because tchannel.InboundCall is
+// not an interface, so we have little control over its behavior in tests.
+type inboundCall interface {
+	ServiceName() string
+	CallerName() string
+	MethodString() string
+	ShardKey() string
+	RoutingKey() string
+	RoutingDelegate() string
+
+	Format() tchannel.Format
+
+	Arg2Reader() (tchannel.ArgReader, error)
+	Arg3Reader() (tchannel.ArgReader, error)
+
+	Response() inboundCallResponse
+}
+
+// inboundCallResponse provides an interface similar to
+// tchannel.InboundCallResponse.
+//
+// Its purpose is the same as inboundCall: Make it easier to test functions
+// that consume InboundCallResponse without having control of
+// InboundCallResponse's behavior.
+type inboundCallResponse interface {
+	Arg2Writer() (tchannel.ArgWriter, error)
+	Arg3Writer() (tchannel.ArgWriter, error)
+	Blackhole()
+	SendSystemError(err error) error
+	SetApplicationError() error
+}
+
+// responseWriter provides an interface similar to handlerWriter.
+//
+// It allows us to control handlerWriter during testing.
+type responseWriter interface {
+	AddHeaders(h transport.Headers)
+	AddHeader(key string, value string)
+	Close() error
+	ReleaseBuffer()
+	IsApplicationError() bool
+	SetApplicationError()
+	Write(s []byte) (int, error)
+}
+
+// tchannelCall wraps a TChannel InboundCall into an inboundCall.
+//
+// We need to do this so that we can change the return type of call.Response()
+// to match inboundCall's Response().
+type tchannelCall struct{ *tchannel.InboundCall }
+
+func (c tchannelCall) Response() inboundCallResponse {
+	return c.InboundCall.Response()
+}
+
+// handler wraps a transport.UnaryHandler into a TChannel Handler.
+type handler struct {
+	existing          map[string]tchannel.Handler
+	router            transport.Router
+	tracer            opentracing.Tracer
+	headerCase        headerCase
+	logger            *zap.Logger
+	newResponseWriter func(inboundCallResponse, tchannel.Format, headerCase) responseWriter
+}
+
+func (h handler) Handle(ctx ncontext.Context, call *tchannel.InboundCall) {
+	h.handle(ctx, tchannelCall{call})
+}
+
+func (h handler) handle(ctx context.Context, call inboundCall) {
+	// you MUST close the responseWriter no matter what unless you have a tchannel.SystemError
+	responseWriter := h.newResponseWriter(call.Response(), call.Format(), h.headerCase)
+
+	// echo accepted rpc-service in response header
+	responseWriter.AddHeader(ServiceHeaderKey, call.ServiceName())
+
+	err := h.callHandler(ctx, call, responseWriter)
+
+	// black-hole requests on resource exhausted errors
+	if yarpcerrors.FromError(err).Code() == yarpcerrors.CodeResourceExhausted {
+		// all TChannel clients will time out instead of receiving an error
+		call.Response().Blackhole()
+		return
 	}
-	return spans
-}
-
-type stubCheckpointSet struct {
-	limit int
-}
-
-var _ metricsdk.CheckpointSet = stubCheckpointSet{}
-
-func (s stubCheckpointSet) ForEach(kindSelector metricsdk.ExportKindSelector, recordFunc func(metricsdk.Record) error) error {
-	for i := 0; i < s.limit; i++ {
-		if err := recordFunc(metricsdk.Record{}); err != nil {
-			return err
+	if err != nil && !responseWriter.IsApplicationError() {
+		if err := call.Response().SendSystemError(getSystemError(err)); err != nil {
+			h.logger.Error("SendSystemError failed", zap.Error(err))
+		}
+		h.logger.Error("handler failed", zap.Error(err))
+		responseWriter.ReleaseBuffer()
+		return
+	}
+	if err != nil && responseWriter.IsApplicationError() {
+		// we have an error, so we're going to propagate it as a yarpc error,
+		// regardless of whether or not it is a system error.
+		status := yarpcerrors.FromError(errors.WrapHandlerError(err, call.ServiceName(), call.MethodString()))
+		// TODO: what to do with error? we could have a whole complicated scheme to
+		// return a SystemError here, might want to do that
+		text, _ := status.Code().MarshalText()
+		responseWriter.AddHeader(ErrorCodeHeaderKey, string(text))
+		if status.Name() != "" {
+			responseWriter.AddHeader(ErrorNameHeaderKey, status.Name())
+		}
+		if status.Message() != "" {
+			responseWriter.AddHeader(ErrorMessageHeaderKey, status.Message())
 		}
 	}
-	return nil
-}
-
-func (stubCheckpointSet) Lock()    {}
-func (stubCheckpointSet) Unlock()  {}
-func (stubCheckpointSet) RLock()   {}
-func (stubCheckpointSet) RUnlock() {}
-
-type stubProtocolDriver struct {
-	started         int
-	stopped         int
-	tracesExported  int
-	metricsExported int
-
-	injectedStartError error
-	injectedStopError  error
-
-	rm []metricsdk.Record
-	rs []tracesdk.SpanSnapshot
-}
-
-var _ otlp.ProtocolDriver = (*stubProtocolDriver)(nil)
-
-func (m *stubProtocolDriver) Start(ctx context.Context) error {
-	m.started++
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return m.injectedStartError
-	}
-}
-
-func (m *stubProtocolDriver) Stop(ctx context.Context) error {
-	m.stopped++
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return m.injectedStopError
-	}
-}
-
-func (m *stubProtocolDriver) ExportMetrics(parent context.Context, cps metricsdk.CheckpointSet, selector metricsdk.ExportKindSelector) error {
-	m.metricsExported++
-	return cps.ForEach(selector, func(record metricsdk.Record) error {
-		m.rm = append(m.rm, record)
-		return nil
-	})
-}
-
-func (m *stubProtocolDriver) ExportTraces(ctx context.Context, ss []*tracesdk.SpanSnapshot) error {
-	m.tracesExported++
-	for _, rs := range ss {
-		if rs == nil {
-			continue
+	if err := responseWriter.Close(); err != nil {
+		if err := call.Response().SendSystemError(getSystemError(err)); err != nil {
+			h.logger.Error("SendSystemError failed", zap.Error(err))
 		}
-		m.rs = append(m.rs, *rs)
+		h.logger.Error("responseWriter failed to close", zap.Error(err))
 	}
-	return nil
 }
 
-type stubTransformingProtocolDriver struct {
-	rm []*metricpb.ResourceMetrics
-	rs []*tracepb.ResourceSpans
-}
+func (h handler) callHandler(ctx context.Context, call inboundCall, responseWriter responseWriter) error {
+	start := time.Now()
+	_, ok := ctx.Deadline()
+	if !ok {
+		return tchannel.ErrTimeoutRequired
+	}
 
-var _ otlp.ProtocolDriver = (*stubTransformingProtocolDriver)(nil)
+	treq := &transport.Request{
+		Caller:          call.CallerName(),
+		Service:         call.ServiceName(),
+		Encoding:        transport.Encoding(call.Format()),
+		Transport:       transportName,
+		Procedure:       call.MethodString(),
+		ShardKey:        call.ShardKey(),
+		RoutingKey:      call.RoutingKey(),
+		RoutingDelegate: call.RoutingDelegate(),
+	}
 
-func (m *stubTransformingProtocolDriver) Start(ctx context.Context) error {
-	return nil
-}
+	ctx, headers, err := readRequestHeaders(ctx, call.Format(), call.Arg2Reader)
+	if err != nil {
+		return errors.RequestHeadersDecodeError(treq, err)
+	}
+	treq.Headers = headers
 
-func (m *stubTransformingProtocolDriver) Stop(ctx context.Context) error {
-	return nil
-}
+	if tcall, ok := call.(tchannelCall); ok {
+		tracer := h.tracer
+		ctx = tchannel.ExtractInboundSpan(ctx, tcall.InboundCall, headers.Items(), tracer)
+	}
 
-func (m *stubTransformingProtocolDriver) ExportMetrics(parent context.Context, cps metricsdk.CheckpointSet, selector metricsdk.ExportKindSelector) error {
-	rms, err := transform.CheckpointSet(parent, selector, cps, 1)
+	body, err := call.Arg3Reader()
 	if err != nil {
 		return err
 	}
-	for _, rm := range rms {
-		if rm == nil {
-			continue
-		}
-		m.rm = append(m.rm, rm)
-	}
-	return nil
-}
+	defer body.Close()
+	treq.Body = body
 
-func (m *stubTransformingProtocolDriver) ExportTraces(ctx context.Context, ss []*tracesdk.SpanSnapshot) error {
-	for _, rs := range transform.SpanData(ss) {
-		if rs == nil {
-			continue
-		}
-		m.rs = append(m.rs, rs)
-	}
-	return nil
-}
-
-func (m *stubTransformingProtocolDriver) Reset() {
-	m.rm = nil
-	m.rs = nil
-}
-
-func newExporter(t *testing.T, opts ...otlp.ExporterOption) (*otlp.Exporter, *stubTransformingProtocolDriver) {
-	driver := &stubTransformingProtocolDriver{}
-	exp, err := otlp.NewExporter(context.Background(), driver, opts...)
-	require.NoError(t, err)
-	return exp, driver
-}
-
-func TestExporterShutdownHonorsTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	e := otlp.NewUnstartedExporter(&stubProtocolDriver{})
-	if err := e.Start(ctx); err != nil {
-		t.Fatalf("failed to start exporter: %v", err)
+	if err := transport.ValidateRequest(treq); err != nil {
+		return err
 	}
 
-	innerCtx, innerCancel := context.WithTimeout(ctx, time.Microsecond)
-	<-time.After(time.Second)
-	if err := e.Shutdown(innerCtx); err == nil {
-		t.Error("expected context DeadlineExceeded error, got nil")
-	} else if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected context DeadlineExceeded error, got %v", err)
-	}
-	innerCancel()
-}
-
-func TestExporterShutdownHonorsCancel(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	e := otlp.NewUnstartedExporter(&stubProtocolDriver{})
-	if err := e.Start(ctx); err != nil {
-		t.Fatalf("failed to start exporter: %v", err)
-	}
-
-	var innerCancel context.CancelFunc
-	ctx, innerCancel = context.WithCancel(ctx)
-	innerCancel()
-	if err := e.Shutdown(ctx); err == nil {
-		t.Error("expected context canceled error, got nil")
-	} else if !errors.Is(err, context.Canceled) {
-		t.Errorf("expected context canceled error, got %v", err)
-	}
-}
-
-func TestExporterShutdownNoError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	e := otlp.NewUnstartedExporter(&stubProtocolDriver{})
-	if err := e.Start(ctx); err != nil {
-		t.Fatalf("failed to start exporter: %v", err)
-	}
-
-	if err := e.Shutdown(ctx); err != nil {
-		t.Errorf("shutdown errored: expected nil, got %v", err)
-	}
-}
-
-func TestExporterShutdownManyTimes(t *testing.T) {
-	ctx := context.Background()
-	e, err := otlp.NewExporter(ctx, &stubProtocolDriver{})
+	spec, err := h.router.Choose(ctx, treq)
 	if err != nil {
-		t.Fatalf("failed to start an exporter: %v", err)
-	}
-	ch := make(chan struct{})
-	wg := sync.WaitGroup{}
-	const num int = 20
-	wg.Add(num)
-	errs := make([]error, num)
-	for i := 0; i < num; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			<-ch
-			errs[idx] = e.Shutdown(ctx)
-		}(i)
-	}
-	close(ch)
-	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
-			t.Fatalf("failed to shutdown exporter: %v", err)
+		if yarpcerrors.FromError(err).Code() != yarpcerrors.CodeUnimplemented {
+			return err
 		}
-	}
-}
-
-func TestInstallNewPipeline(t *testing.T) {
-	ctx := context.Background()
-	_, _, _, err := otlp.InstallNewPipeline(ctx, &stubProtocolDriver{})
-	assert.NoError(t, err)
-	assert.IsType(t, &tracesdk.TracerProvider{}, otel.GetTracerProvider())
-}
-
-func TestNewExportPipeline(t *testing.T) {
-	testCases := []struct {
-		name             string
-		expOpts          []otlp.ExporterOption
-		testSpanSampling bool
-	}{
-		{
-			name: "simple pipeline",
-		},
+		if tcall, ok := call.(tchannelCall); !ok {
+			if m, ok := h.existing[call.MethodString()]; ok {
+				m.Handle(ctx, tcall.InboundCall)
+				return nil
+			}
+		}
+		return err
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, tp, _, err := otlp.NewExportPipeline(
-				context.Background(),
-				&stubProtocolDriver{},
-				tc.expOpts...,
-			)
-
-			assert.NoError(t, err)
-			assert.NotEqual(t, tp, otel.GetTracerProvider())
-
-			_, span := tp.Tracer("otlp test").Start(context.Background(), tc.name)
-			spanCtx := span.SpanContext()
-			assert.Equal(t, true, spanCtx.IsSampled())
-			span.End()
+	if err := transport.ValidateRequestContext(ctx); err != nil {
+		return err
+	}
+	switch spec.Type() {
+	case transport.Unary:
+		return transport.InvokeUnaryHandler(transport.UnaryInvokeRequest{
+			Context:        ctx,
+			StartTime:      start,
+			Request:        treq,
+			ResponseWriter: responseWriter,
+			Handler:        spec.Unary(),
+			Logger:         h.logger,
 		})
+
+	default:
+		return yarpcerrors.Newf(yarpcerrors.CodeUnimplemented, "transport tchannel does not handle %s handlers", spec.Type().String())
 	}
 }
 
-func TestSplitDriver(t *testing.T) {
-	t.Run("with metric/trace drivers configured", func(t *testing.T) {
-		driverTraces := &stubProtocolDriver{}
-		driverMetrics := &stubProtocolDriver{}
-
-		driver := otlp.NewSplitDriver(otlp.WithMetricDriver(driverMetrics), otlp.WithTraceDriver(driverTraces))
-		ctx := context.Background()
-		assert.NoError(t, driver.Start(ctx))
-		assert.Equal(t, 1, driverTraces.started)
-		assert.Equal(t, 1, driverMetrics.started)
-		assert.Equal(t, 0, driverTraces.stopped)
-		assert.Equal(t, 0, driverMetrics.stopped)
-		assert.Equal(t, 0, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 0, driverMetrics.metricsExported)
-
-		recordCount := 5
-		spanCount := 7
-		assert.NoError(t, driver.ExportMetrics(ctx, stubCheckpointSet{recordCount}, metricsdk.StatelessExportKindSelector()))
-		assert.NoError(t, driver.ExportTraces(ctx, stubSpanSnapshot(spanCount)))
-		assert.Len(t, driverTraces.rm, 0)
-		assert.Len(t, driverTraces.rs, spanCount)
-		assert.Len(t, driverMetrics.rm, recordCount)
-		assert.Len(t, driverMetrics.rs, 0)
-		assert.Equal(t, 1, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 1, driverMetrics.metricsExported)
-
-		assert.NoError(t, driver.Stop(ctx))
-		assert.Equal(t, 1, driverTraces.started)
-		assert.Equal(t, 1, driverMetrics.started)
-		assert.Equal(t, 1, driverTraces.stopped)
-		assert.Equal(t, 1, driverMetrics.stopped)
-		assert.Equal(t, 1, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 1, driverMetrics.metricsExported)
-	})
-
-	t.Run("with just metric driver", func(t *testing.T) {
-		driverMetrics := &stubProtocolDriver{}
-
-		driver := otlp.NewSplitDriver(otlp.WithMetricDriver(driverMetrics))
-		ctx := context.Background()
-		assert.NoError(t, driver.Start(ctx))
-
-		assert.Equal(t, 1, driverMetrics.started)
-		assert.Equal(t, 0, driverMetrics.stopped)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 0, driverMetrics.metricsExported)
-
-		recordCount := 5
-		assert.NoError(t, driver.ExportMetrics(ctx, stubCheckpointSet{recordCount}, metricsdk.StatelessExportKindSelector()))
-		assert.NoError(t, driver.ExportTraces(ctx, nil))
-		assert.Len(t, driverMetrics.rm, recordCount)
-		assert.Len(t, driverMetrics.rs, 0)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 1, driverMetrics.metricsExported)
-
-		assert.NoError(t, driver.Stop(ctx))
-		assert.Equal(t, 1, driverMetrics.started)
-		assert.Equal(t, 1, driverMetrics.stopped)
-		assert.Equal(t, 0, driverMetrics.tracesExported)
-		assert.Equal(t, 1, driverMetrics.metricsExported)
-	})
-
-	t.Run("with just trace driver", func(t *testing.T) {
-		driverTraces := &stubProtocolDriver{}
-
-		driver := otlp.NewSplitDriver(otlp.WithTraceDriver(driverTraces))
-		ctx := context.Background()
-		assert.NoError(t, driver.Start(ctx))
-		assert.Equal(t, 1, driverTraces.started)
-		assert.Equal(t, 0, driverTraces.stopped)
-		assert.Equal(t, 0, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-
-		spanCount := 7
-		assert.NoError(t, driver.ExportMetrics(ctx, nil, nil))
-		assert.NoError(t, driver.ExportTraces(ctx, stubSpanSnapshot(spanCount)))
-		assert.Len(t, driverTraces.rm, 0)
-		assert.Len(t, driverTraces.rs, spanCount)
-		assert.Equal(t, 1, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-
-		assert.NoError(t, driver.Stop(ctx))
-		assert.Equal(t, 1, driverTraces.started)
-		assert.Equal(t, 1, driverTraces.stopped)
-		assert.Equal(t, 1, driverTraces.tracesExported)
-		assert.Equal(t, 0, driverTraces.metricsExported)
-	})
-
-	t.Run("with no drivers configured", func(t *testing.T) {
-
-		driver := otlp.NewSplitDriver()
-		ctx := context.Background()
-		assert.NoError(t, driver.Start(ctx))
-
-		assert.NoError(t, driver.ExportMetrics(ctx, nil, nil))
-		assert.NoError(t, driver.ExportTraces(ctx, nil))
-		assert.NoError(t, driver.Stop(ctx))
-	})
+type handlerWriter struct {
+	failedWith       error
+	format           tchannel.Format
+	headers          transport.Headers
+	buffer           *bufferpool.Buffer
+	response         inboundCallResponse
+	applicationError bool
+	headerCase       headerCase
 }
 
-func TestSplitDriverFail(t *testing.T) {
-	ctx := context.Background()
-	for i := 0; i < 16; i++ {
-		var (
-			errStartMetric error
-			errStartTrace  error
-			errStopMetric  error
-			errStopTrace   error
-		)
-		if (i & 1) != 0 {
-			errStartTrace = errors.New("trace start failed")
-		}
-		if (i & 2) != 0 {
-			errStopTrace = errors.New("trace stop failed")
-		}
-		if (i & 4) != 0 {
-			errStartMetric = errors.New("metric start failed")
-		}
-		if (i & 8) != 0 {
-			errStopMetric = errors.New("metric stop failed")
-		}
-		shouldStartFail := errStartTrace != nil || errStartMetric != nil
-		shouldStopFail := errStopTrace != nil || errStopMetric != nil
+func newHandlerWriter(response inboundCallResponse, format tchannel.Format, headerCase headerCase) responseWriter {
+	return &handlerWriter{
+		response:   response,
+		format:     format,
+		headerCase: headerCase,
+	}
+}
 
-		driverTraces := &stubProtocolDriver{
-			injectedStartError: errStartTrace,
-			injectedStopError:  errStopTrace,
+func (hw *handlerWriter) AddHeaders(h transport.Headers) {
+	for k, v := range h.OriginalItems() {
+		// TODO: is this considered a breaking change?
+		if isReservedHeaderKey(k) {
+			hw.failedWith = appendError(hw.failedWith, fmt.Errorf("cannot use reserved header key: %s", k))
+			return
 		}
-		driverMetrics := &stubProtocolDriver{
-			injectedStartError: errStartMetric,
-			injectedStopError:  errStopMetric,
-		}
-		driver := otlp.NewSplitDriver(otlp.WithMetricDriver(driverMetrics), otlp.WithTraceDriver(driverTraces))
-		errStart := driver.Start(ctx)
-		if shouldStartFail {
-			assert.Error(t, errStart)
-		} else {
-			assert.NoError(t, errStart)
-		}
-		errStop := driver.Stop(ctx)
-		if shouldStopFail {
-			assert.Error(t, errStop)
-		} else {
-			assert.NoError(t, errStop)
+		hw.AddHeader(k, v)
+	}
+}
+
+func (hw *handlerWriter) AddHeader(key string, value string) {
+	hw.headers = hw.headers.With(key, value)
+}
+
+func (hw *handlerWriter) SetApplicationError() {
+	hw.applicationError = true
+}
+
+func (hw *handlerWriter) IsApplicationError() bool {
+	return hw.applicationError
+}
+
+func (hw *handlerWriter) Write(s []byte) (int, error) {
+	if hw.failedWith != nil {
+		return 0, hw.failedWith
+	}
+
+	if hw.buffer == nil {
+		hw.buffer = bufferpool.Get()
+	}
+
+	n, err := hw.buffer.Write(s)
+	if err != nil {
+		hw.failedWith = appendError(hw.failedWith, err)
+	}
+	return n, err
+}
+
+func (hw *handlerWriter) Close() error {
+	retErr := hw.failedWith
+	if hw.IsApplicationError() {
+		if err := hw.response.SetApplicationError(); err != nil {
+			retErr = appendError(retErr, fmt.Errorf("SetApplicationError() failed: %v", err))
 		}
 	}
+
+	headers := headerMap(hw.headers, hw.headerCase)
+	retErr = appendError(retErr, writeHeaders(hw.format, headers, nil, hw.response.Arg2Writer))
+
+	// Arg3Writer must be opened and closed regardless of if there is data
+	// However, if there is a system error, we do not want to do this
+	bodyWriter, err := hw.response.Arg3Writer()
+	if err != nil {
+		hw.ReleaseBuffer()
+		return appendError(retErr, err)
+	}
+	defer func() { retErr = appendError(retErr, bodyWriter.Close()) }()
+	if hw.buffer != nil {
+		defer bufferpool.Put(hw.buffer)
+		if _, err := hw.buffer.WriteTo(bodyWriter); err != nil {
+			return appendError(retErr, err)
+		}
+	}
+
+	return retErr
+}
+
+func (hw *handlerWriter) ReleaseBuffer() {
+	if hw.buffer != nil {
+		bufferpool.Put(hw.buffer)
+	}
+}
+
+func getSystemError(err error) error {
+	if _, ok := err.(tchannel.SystemError); ok {
+		return err
+	}
+	if !yarpcerrors.IsStatus(err) {
+		return tchannel.NewSystemError(tchannel.ErrCodeUnexpected, err.Error())
+	}
+	status := yarpcerrors.FromError(err)
+	tchannelCode, ok := _codeToTChannelCode[status.Code()]
+	if !ok {
+		tchannelCode = tchannel.ErrCodeUnexpected
+	}
+	return tchannel.NewSystemError(tchannelCode, status.Message())
+}
+
+func appendError(left error, right error) error {
+	if _, ok := left.(tchannel.SystemError); ok {
+		return left
+	}
+	if _, ok := right.(tchannel.SystemError); ok {
+		return right
+	}
+	return multierr.Append(left, right)
 }

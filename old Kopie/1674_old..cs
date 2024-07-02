@@ -1,23 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-            if (other.Segment == Segment)
-            {
-                return other.Index <= Index;
-            }
-            return IsReachable(other);
-        }
-
-        internal bool IsReachable(ReadCursor other)
-        {
-            var current = other.Segment;
-            while (current != null)
-            {
-                if (current == Segment)
-                {
-                    return true;
-                }
-                current = current.Next;
-            }
-            return false;
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Runtime.CompilerServices;
@@ -306,7 +287,25 @@ namespace System.IO.Pipelines
 
         internal bool GreaterOrEqual(ReadCursor other)
         {
-            return other.Segment.RunningLength + other.Index <= Segment.RunningLength + Index;
+            if (other.Segment == Segment)
+            {
+                return other.Index <= Index;
+            }
+            return IsReachable(other);
+        }
+
+        internal bool IsReachable(ReadCursor other)
+        {
+            var current = other.Segment;
+            while (current != null)
+            {
+                if (current == Segment)
+                {
+                    return true;
+                }
+                current = current.Next;
+            }
+            return false;
         }
     }
 }

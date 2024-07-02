@@ -1,5 +1,4 @@
 # Licensed to Modin Development Team under one or more contributor license agreements.
-    """A indexer for ray_df.loc[] functionality"""
 # See the NOTICE file distributed with this work for additional information regarding
 # copyright ownership.  The Modin Development Team licenses this file to you under the
 # Apache License, Version 2.0 (the "License"); you may not use this file except in
@@ -211,7 +210,7 @@ class _LocationIndexerBase(object):
 
 
 class _LocIndexer(_LocationIndexerBase):
-    """A indexer for modin_df.loc[] functionality"""
+    """A indexer for ray_df.loc[] functionality"""
 
     def __getitem__(self, key):
         row_loc, col_loc, ndim, self.row_scaler, self.col_scaler = _parse_tuple(key)

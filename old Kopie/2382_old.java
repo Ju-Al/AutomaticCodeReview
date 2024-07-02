@@ -1,133 +1,168 @@
 /*
- * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
+ * Copyright (c) 2008-2020, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package net.sourceforge.pmd.lang.rule.xpath.internal;
+package com.hazelcast.jet.pipeline.test;
 
-import java.util.Collections;
-import java.util.Comparator;
+import com.hazelcast.jet.aggregate.AggregateOperations;
+import com.hazelcast.jet.pipeline.PipelineTestSupport;
+import com.hazelcast.jet.pipeline.WindowDefinition;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
-import net.sourceforge.pmd.lang.ast.Node;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
-import net.sf.saxon.Configuration;
-import net.sf.saxon.expr.AxisExpression;
-import net.sf.saxon.expr.Expression;
-import net.sf.saxon.expr.FilterExpression;
-import net.sf.saxon.expr.LazyExpression;
-import net.sf.saxon.expr.PathExpression;
-import net.sf.saxon.expr.RootExpression;
-import net.sf.saxon.om.Axis;
-import net.sf.saxon.pattern.NameTest;
-import net.sf.saxon.sort.DocumentSorter;
-import net.sf.saxon.type.Type;
+import static com.hazelcast.jet.pipeline.test.Assertions.assertCollectedEventually;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-/**
- * Analyzes the xpath expression to find the root path selector for a element. If found,
- * the element name is available via {@link RuleChainAnalyzer#getRootElement()} and the
- * expression is rewritten to start at "node::self()" instead.
- *
- * <p>It uses a visitor to visit all the different expressions.
- *
- * <p>Example: The XPath expression <code>//A[condition()]/B</code> results the rootElement "A"
- * and the expression is rewritten to be <code>self::node[condition()]/B</code>.
- *
- * <p>DocumentSorter expression is removed. The sorting of the resulting nodes needs to be done
- * after all (sub)expressions have been executed.
- */
-public class RuleChainAnalyzer extends Visitor {
-    private final Configuration configuration;
-    private String rootElement;
-    private boolean rootElementReplaced;
-    private boolean insideLazyExpression;
-    private boolean foundPathInsideLazy;
+public class TestSourcesTest extends PipelineTestSupport {
 
-    public RuleChainAnalyzer(Configuration currentConfiguration) {
-        this.configuration = currentConfiguration;
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
+
+    @Test
+    public void test_items() {
+        Object[] input = IntStream.range(0, 10_000).boxed().toArray();
+
+        List<Object> expected = Arrays.asList(input);
+
+        p.readFrom(TestSources.items(input))
+                .apply(Assertions.assertOrdered(expected));
+
+        jet().newJob(p).join();
     }
 
-    public String getRootElement() {
-        if (!foundPathInsideLazy && rootElementReplaced) {
-            return rootElement;
-        }
-        return null;
+    @Test
+    public void test_long_batch_range() {
+        int upperValueRange = 10_000;
+        Long[] input = LongStream.range(0, upperValueRange).boxed().toArray(Long[]::new);
+        List<Long> expected = Arrays.asList(input);
+
+        TestSources.batchStageForLongRange(p, upperValueRange, 10)
+                .apply(
+                        Assertions.assertAnyOrder(expected)
+                );
+
+        jet().newJob(p).join();
     }
 
-    @Override
-    public Expression visit(DocumentSorter e) {
-        DocumentSorter result = (DocumentSorter) super.visit(e);
-        // sorting of the nodes must be done after all nodes have been found
-        return result.getBaseExpression();
-    }
+    @Test
+    public void test_long_stream_range() throws Throwable {
+        int upperValueRange = 10_000;
+        Long[] input = LongStream.range(0, upperValueRange).boxed().toArray(Long[]::new);
+        int itemsPerSecond = 10;
+        int timeout = 10;
+        int numberOfExpectedValues = timeout * itemsPerSecond;
+        Long[] input = LongStream.range(0, numberOfExpectedValues).boxed().toArray(Long[]::new);
+        List<Long> expected = Arrays.asList(input);
 
-    @Override
-    public Expression visit(PathExpression e) {
-        if (!insideLazyExpression && rootElement == null) {
-            Expression result = super.visit(e);
-            if (rootElement != null && !rootElementReplaced) {
-                if (result instanceof PathExpression) {
-                    PathExpression newPath = (PathExpression) result;
-                    if (newPath.getStepExpression() instanceof FilterExpression) {
-                        FilterExpression filterExpression = (FilterExpression) newPath.getStepExpression();
-                        result = new FilterExpression(new AxisExpression(Axis.SELF, null), filterExpression.getFilter());
-                        rootElementReplaced = true;
-                    } else if (newPath.getStepExpression() instanceof AxisExpression) {
-                        if (newPath.getStartExpression() instanceof RootExpression) {
-                            result = new AxisExpression(Axis.SELF, null);
-                        } else {
-                            result = new PathExpression(newPath.getStartExpression(), new AxisExpression(Axis.SELF, null));
-                        }
-                        rootElementReplaced = true;
+        p.readFrom(TestSources.longStreamSource(itemsPerSecond, 0)).
+                withIngestionTimestamps().
+                apply(assertCollectedEventually(timeout, items -> {
+                    assertTrue("list should contain at least " + numberOfExpectedValues + " items",
+                            items.size() >= numberOfExpectedValues);
+                    assertTrue("list should contain less than " + 2 * numberOfExpectedValues + " items",
+                            items.size() < 2 * numberOfExpectedValues);
+                    for (Long value : items) {
+                        assertTrue(expected.contains(value));
                     }
-                } else {
-                    result = new AxisExpression(Axis.DESCENDANT_OR_SELF, null);
-                    rootElementReplaced = true;
-                }
-            }
-            return result;
-        } else {
-            if (insideLazyExpression) {
-                foundPathInsideLazy = true;
-            }
-            return super.visit(e);
-        }
+                }));
+
+        expectedException.expectMessage(AssertionCompletedException.class.getName());
+        executeAndPeel();
     }
 
-    @Override
-    public Expression visit(AxisExpression e) {
-        if (rootElement == null && e.getNodeTest() instanceof NameTest) {
-            NameTest test = (NameTest) e.getNodeTest();
-            if (test.getPrimitiveType() == Type.ELEMENT && e.getAxis() == Axis.DESCENDANT) {
-                rootElement = configuration.getNamePool().getClarkName(test.getFingerprint());
-            } else if (test.getPrimitiveType() == Type.ELEMENT && e.getAxis() == Axis.CHILD) {
-                rootElement = configuration.getNamePool().getClarkName(test.getFingerprint());
-            }
-        }
-        return super.visit(e);
+    @Test
+    public void test_itemStream() throws Throwable {
+        int expectedItemCount = 20;
+
+        p.readFrom(TestSources.itemStream(10))
+         .withoutTimestamps()
+         .apply(assertCollectedEventually(10, items -> {
+             assertTrue("list should contain at least " + expectedItemCount + " items", items.size() > expectedItemCount);
+             for (int i = 0; i < items.size(); i++) {
+                 assertEquals(i, items.get(i).sequence());
+             }
+         }));
+
+        expectedException.expectMessage(AssertionCompletedException.class.getName());
+        executeAndPeel();
+
     }
 
-    @Override
-    public Expression visit(LazyExpression e) {
-        insideLazyExpression = true;
-        Expression result = super.visit(e);
-        insideLazyExpression = false;
-        return result;
-    }
+    @Test
+    public void test_itemStream_withWindowing() throws Throwable {
+        int itemsPerSecond = 10;
 
-    public static Comparator<Node> documentOrderComparator() {
-        return net.sourceforge.pmd.lang.rule.xpath.internal.DocumentSorter.INSTANCE;
+        p.readFrom(TestSources.itemStream(itemsPerSecond))
+         .withNativeTimestamps(0)
+         .window(WindowDefinition.tumbling(1000))
+         .aggregate(AggregateOperations.counting())
+         .apply(assertCollectedEventually(60, windowResults -> {
+             //look at last 5 windows at most, always ignore first
+             int windowsToConsider = Math.min(5, Math.max(windowResults.size() - 1, 0));
+
+             //count the total no. of items emitted in those windows
+             int totalItems = windowResults.stream()
+                     .skip(windowResults.size() - windowsToConsider)
+                     .mapToInt(r -> r.result().intValue())
+                     .sum();
+
+             //compute their average
+             double avgItems = (double) totalItems / windowsToConsider;
+
+             //compute how far the actual average is from the desired one
+             double deviationFromTarget = Math.abs(avgItems - itemsPerSecond);
+
+             assertTrue(String.format("Average items per second (%.2f) too far from target (%d)",
+                     avgItems, itemsPerSecond), deviationFromTarget <= 0.1d);
+         }));
+
+        expectedException.expectMessage(AssertionCompletedException.class.getName());
+        executeAndPeel();
     }
 
     /**
-     * Split union expressions into their components.
+     * Emitted items from itemStream method are not 100% accurate (due to rounding) for numbers which does not satisfy
+     * "1_000_000_000 % itemsPerSecond = 0". Goal of this test is to validate that the number of emitted items is in range
+     * <0.5*expected,2*expected>, i.e. whether number of emitted items in not completely incorrect.
      */
-    public static Iterable<Expression> splitUnions(Expression expr) {
-        SplitUnions unions = new SplitUnions();
-        unions.visit(expr);
-        if (unions.getExpressions().isEmpty()) {
-            return Collections.singletonList(expr);
-        } else {
-            return unions.getExpressions();
-        }
+    @Test
+    public void test_itemStream_in_expected_range() throws Throwable {
+        int itemsPerSecond = 5327;
+
+        p.readFrom(TestSources.itemStream(itemsPerSecond))
+                .withNativeTimestamps(0)
+                .window(WindowDefinition.tumbling(1000))
+                .aggregate(AggregateOperations.counting())
+                .apply(assertCollectedEventually(10, windowResults -> {
+                    // first window may be incomplete
+                    assertTrue("sink list should contain some items", windowResults.size() > 1);
+                    assertTrue("emitted items is more than twice lower then expected itemsPerSecond",
+                            (long) windowResults.get(1).result() > itemsPerSecond / 2);
+                    assertTrue("emitted items is more than twice higher then expected itemsPerSecond",
+                            (long) windowResults.get(1).result() < itemsPerSecond * 2);
+                }));
+
+        expectedException.expectMessage(AssertionCompletedException.class.getName());
+        executeAndPeel();
     }
 
 }

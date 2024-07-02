@@ -1,675 +1,366 @@
+using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using UnityEngine;
 
 namespace Mirror
 {
-    public class ClientScene
+    public class NetworkClient
     {
-        static NetworkIdentity s_LocalPlayer;
-        static NetworkConnection s_ReadyConnection;
-        static Dictionary<NetworkSceneId, NetworkIdentity> s_SpawnableObjects;
+        Type m_NetworkConnectionClass = typeof(NetworkConnection);
 
-        static bool s_IsReady;
-        static bool s_IsSpawnFinished;
-        static NetworkScene s_NetworkScene = new NetworkScene();
+        static List<NetworkClient> s_Clients = new List<NetworkClient>();
+        static bool s_IsActive;
 
-        internal static void SetNotReady()
+        public static List<NetworkClient> allClients { get { return s_Clients; } }
+        public static bool active { get { return s_IsActive; } }
+
+        public static bool pauseMessageHandling;
+        // used to calculate network time and RTT
+        public float pingFrequency = 2.0f;
+        // average out the last few results from Ping
+        public int pingWindowSize = 10;
+
+        private double lastPing = 0;
+
+        int m_HostPort;
+
+        string m_ServerIp = "";
+        int m_ServerPort;
+        int m_ClientId = -1;
+
+        Dictionary<short, NetworkMessageDelegate> m_MessageHandlers = new Dictionary<short, NetworkMessageDelegate>();
+        protected NetworkConnection m_Connection;
+
+        protected enum ConnectState
         {
-            s_IsReady = false;
+            None,
+            Connecting,
+            Connected,
+            Disconnected,
+        }
+        protected ConnectState connectState = ConnectState.None;
+
+        internal void SetHandlers(NetworkConnection conn)
+        {
+            conn.SetHandlers(m_MessageHandlers);
         }
 
-        static List<NetworkInstanceId> s_PendingOwnerIds = new List<NetworkInstanceId>();
+        public string serverIp { get { return m_ServerIp; } }
+        public int serverPort { get { return m_ServerPort; } }
+        public NetworkConnection connection { get { return m_Connection; } }
 
-        public static NetworkIdentity localPlayer { get { return s_LocalPlayer; } }
-        public static bool ready { get { return s_IsReady; } }
-        public static NetworkConnection readyConnection { get { return s_ReadyConnection; }}
-
-        //NOTE: spawn handlers, prefabs and local objects now live in NetworkScene
-        public static Dictionary<NetworkInstanceId, NetworkIdentity> objects { get { return s_NetworkScene.localObjects; } }
-        public static Dictionary<NetworkHash128, GameObject> prefabs { get { return NetworkScene.guidToPrefab; } }
-        public static Dictionary<NetworkSceneId, NetworkIdentity> spawnableObjects { get { return s_SpawnableObjects; } }
-
-        internal static void Shutdown()
+        public Dictionary<short, NetworkMessageDelegate> handlers { get { return m_MessageHandlers; } }
+        public int hostPort
         {
-            s_NetworkScene.Shutdown();
-            s_PendingOwnerIds = new List<NetworkInstanceId>();
-            s_SpawnableObjects = null;
-            s_ReadyConnection = null;
-            s_IsReady = false;
-            s_IsSpawnFinished = false;
-
-            Transport.layer.ClientDisconnect();
-        }
-
-        // this is called from message handler for Owner message
-        internal static void InternalAddPlayer(NetworkIdentity view)
-        {
-            if (LogFilter.logDebug) { Debug.LogWarning("ClientScene::InternalAddPlayer"); }
-
-            // NOTE: It can be "normal" when changing scenes for the player to be destroyed and recreated.
-            // But, the player structures are not cleaned up, we'll just replace the old player
-            s_LocalPlayer = view;
-            if (s_ReadyConnection == null)
+            get { return m_HostPort; }
+            set
             {
-                if (LogFilter.logWarn) { Debug.LogWarning("No ready connection found for setting player controller during InternalAddPlayer"); }
-            }
-            else
-            {
-                s_ReadyConnection.SetPlayerController(view);
+                if (value < 0)
+                    throw new ArgumentException("Port must not be a negative number.");
+
+                if (value > 65535)
+                    throw new ArgumentException("Port must not be greater than 65535.");
+
+                m_HostPort = value;
             }
         }
 
-        // use this if already ready
-        public static bool AddPlayer()
+        public bool isConnected { get { return connectState == ConnectState.Connected; } }
+
+        public Type networkConnectionClass { get { return m_NetworkConnectionClass; } }
+
+        public void SetNetworkConnectionClass<T>() where T : NetworkConnection
         {
-            return AddPlayer(null);
+            m_NetworkConnectionClass = typeof(T);
         }
 
-        // use this to implicitly become ready
-        public static bool AddPlayer(NetworkConnection readyConn)
+        public NetworkClient()
         {
-            return AddPlayer(readyConn, null);
+            if (LogFilter.logDev) { Debug.Log("Client created version " + Version.Current); }
+            AddClient(this);
         }
 
-        // use this to implicitly become ready
-        public static bool AddPlayer(NetworkConnection readyConn, MessageBase extraMessage)
+        public NetworkClient(NetworkConnection conn)
         {
-            // ensure valid ready connection
-            if (readyConn != null)
+            if (LogFilter.logDev) { Debug.Log("Client created version " + Version.Current); }
+            AddClient(this);
+
+            SetActive(true);
+            m_Connection = conn;
+            connectState = ConnectState.Connected;
+            conn.SetHandlers(m_MessageHandlers);
+            RegisterSystemHandlers(false);
+        }
+
+        public void Connect(string serverIp, int serverPort)
+        {
+            PrepareForConnect();
+
+            if (LogFilter.logDebug) { Debug.Log("Client Connect: " + serverIp + ":" + serverPort); }
+
+            string hostnameOrIp = serverIp;
+            m_ServerPort = serverPort;
+            m_ServerIp = hostnameOrIp;
+
+            connectState = ConnectState.Connecting;
+            Transport.layer.ClientConnect(serverIp, serverPort);
+
+            // setup all the handlers
+            m_Connection = (NetworkConnection)Activator.CreateInstance(m_NetworkConnectionClass);
+            m_Connection.SetHandlers(m_MessageHandlers);
+            m_Connection.Initialize(m_ServerIp, m_ClientId, 0);
+        }
+
+        void PrepareForConnect()
+        {
+            SetActive(true);
+            RegisterSystemHandlers(false);
+            m_ClientId = 0;
+        }
+
+        public virtual void Disconnect()
+        {
+            connectState = ConnectState.Disconnected;
+            ClientScene.HandleClientDisconnect(m_Connection);
+            if (m_Connection != null)
             {
-                s_IsReady = true;
-                s_ReadyConnection = readyConn;
+                m_Connection.Disconnect();
+                m_Connection.Dispose();
+                m_Connection = null;
+                m_ClientId = -1;
+            }
+        }
+
+        public bool Send(short msgType, MessageBase msg)
+        {
+            if (m_Connection != null)
+            {
+                if (connectState != ConnectState.Connected)
+                {
+                    if (LogFilter.logError) { Debug.LogError("NetworkClient Send when not connected to a server"); }
+                    return false;
+                }
+                return m_Connection.Send(msgType, msg);
+            }
+            if (LogFilter.logError) { Debug.LogError("NetworkClient Send with no connection"); }
+            return false;
+        }
+
+        public void Shutdown()
+        {
+            if (LogFilter.logDebug) Debug.Log("Shutting down client " + m_ClientId);
+            m_ClientId = -1;
+            RemoveClient(this);
+            if (s_Clients.Count == 0)
+            {
+                SetActive(false);
+            }
+        }
+
+        internal virtual void Update()
+        {
+            if (m_ClientId == -1)
+            {
+                return;
             }
 
-            if (!s_IsReady)
+            // don't do anything if we aren't fully connected
+            // -> we don't check Client.Connected because then we wouldn't
+            //    process the last disconnect message.
+            if (connectState != ConnectState.Connecting &&
+                connectState != ConnectState.Connected)
             {
-                if (LogFilter.logError) { Debug.LogError("Must call AddPlayer() with a connection the first time to become ready."); }
-                return false;
+                return;
             }
 
-            if (s_ReadyConnection.playerController != null)
+            // pause message handling while a scene load is in progress
+            //
+            // problem:
+            //   if we handle packets (calling the msgDelegates) while a
+            //   scene load is in progress, then all the handled data and state
+            //   will be lost as soon as the scene load is finished, causing
+            //   state bugs.
+            //
+            // solution:
+            //   don't handle messages until scene load is finished. the
+            //   transport layer will queue it automatically.
+            if (pauseMessageHandling)
             {
-                if (LogFilter.logError) { Debug.LogError("ClientScene::AddPlayer: a PlayerController was already added. Did you call AddPlayer twice?"); }
-                return false;
+                Debug.Log("NetworkClient.Update paused during scene load...");
+                return;
             }
 
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::AddPlayer() called with connection [" + s_ReadyConnection + "]"); }
-
-            AddPlayerMessage msg = new AddPlayerMessage();
-            if (extraMessage != null)
+            if (connectState == ConnectState.Connected && Time.time - lastPing > pingFrequency)
             {
+                NetworkPingMessage pingMessage = NetworkTime.GetPing();
+                Send((short)MsgType.Ping, pingMessage);
+                lastPing = Time.time;
+            }
+
+            // any new message?
+            // -> calling it once per frame is okay, but really why not just
+            //    process all messages and make it empty..
+            TransportEvent transportEvent;
+            byte[] data;
+            while (Transport.layer.ClientGetNextMessage(out transportEvent, out data))
+            {
+                switch (transportEvent)
+                {
+                    case TransportEvent.Connected:
+                        //Debug.Log("NetworkClient loop: Connected");
+
+                        if (m_Connection != null)
+                        {
+                            // reset network time stats
+                            NetworkTime.Reset(pingWindowSize);
+
+                            // the handler may want to send messages to the client
+                            // thus we should set the connected state before calling the handler
+                            connectState = ConnectState.Connected;
+                            m_Connection.InvokeHandlerNoData((short) MsgType.Connect);
+                        }
+                        else Debug.LogError("Skipped Connect message handling because m_Connection is null.");
+
+                        break;
+                    case TransportEvent.Data:
+                        //Debug.Log("NetworkClient loop: Data: " + BitConverter.ToString(data));
+
+                        if (m_Connection != null)
+                        {
+                            m_Connection.TransportReceive(data);
+                        }
+                        else Debug.LogError("Skipped Data message handling because m_Connection is null.");
+
+                        break;
+                    case TransportEvent.Disconnected:
+                        //Debug.Log("NetworkClient loop: Disconnected");
+                        connectState = ConnectState.Disconnected;
+
+                        //GenerateDisconnectError(error); TODO which one?
+                        ClientScene.HandleClientDisconnect(m_Connection);
+                        if (m_Connection != null)
+                        {
+                            m_Connection.InvokeHandlerNoData((short)MsgType.Disconnect);
+                        }
+                        break;
+                }
+            }
+        }
+
+        void GenerateConnectError(byte error)
+        {
+            if (LogFilter.logError) { Debug.LogError("UNet Client Error Connect Error: " + error); }
+            GenerateError(error);
+        }
+
+        /* TODO use or remove
+        void GenerateDataError(byte error)
+        {
+            NetworkError dataError = (NetworkError)error;
+            if (LogFilter.logError) { Debug.LogError("UNet Client Data Error: " + dataError); }
+            GenerateError(error);
+        }
+
+        void GenerateDisconnectError(byte error)
+        {
+            NetworkError disconnectError = (NetworkError)error;
+            if (LogFilter.logError) { Debug.LogError("UNet Client Disconnect Error: " + disconnectError); }
+            GenerateError(error);
+        }
+        */
+
+        void GenerateError(byte error)
+        {
+            NetworkMessageDelegate msgDelegate;
+            if (m_MessageHandlers.TryGetValue((short)MsgType.Error, out msgDelegate))
+            {
+                ErrorMessage msg = new ErrorMessage();
+                msg.errorCode = error;
+
+                // write the message to a local buffer
                 NetworkWriter writer = new NetworkWriter();
-                extraMessage.Serialize(writer);
-                msg.msgData = writer.ToArray();
+                msg.Serialize(writer);
+
+                NetworkMessage netMsg = new NetworkMessage();
+                netMsg.msgType = (short)MsgType.Error;
+                netMsg.reader = new NetworkReader(writer.ToArray());
+                netMsg.conn = m_Connection;
+                msgDelegate(netMsg);
             }
-            s_ReadyConnection.Send((short)MsgType.AddPlayer, msg);
-            return true;
         }
 
-        public static bool RemovePlayer()
+        public float GetRTT()
         {
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::RemovePlayer() called with connection [" + s_ReadyConnection + "]"); }
-
-            if (s_ReadyConnection.playerController != null)
-            {
-                RemovePlayerMessage msg = new RemovePlayerMessage();
-                s_ReadyConnection.Send((short)MsgType.RemovePlayer, msg);
-
-                s_ReadyConnection.RemovePlayerController();
-                s_LocalPlayer = null;
-
-                Object.Destroy(s_ReadyConnection.playerController.gameObject);
-                return true;
-            }
-            return false;
+            return (float)NetworkTime.rtt;
         }
 
-        public static bool Ready(NetworkConnection conn)
+        internal void RegisterSystemHandlers(bool localClient)
         {
-            if (s_IsReady)
-            {
-                if (LogFilter.logError) { Debug.LogError("A connection has already been set as ready. There can only be one."); }
-                return false;
-            }
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::Ready() called with connection [" + conn + "]"); }
-
-            if (conn != null)
-            {
-                var msg = new ReadyMessage();
-                conn.Send((short)MsgType.Ready, msg);
-                s_IsReady = true;
-                s_ReadyConnection = conn;
-                s_ReadyConnection.isReady = true;
-                return true;
-            }
-            if (LogFilter.logError) { Debug.LogError("Ready() called with invalid connection object: conn=null"); }
-            return false;
+            ClientScene.RegisterSystemHandlers(this, localClient);
         }
 
-        public static NetworkClient ConnectLocalServer()
+        public void RegisterHandler(short msgType, NetworkMessageDelegate handler)
         {
-            var newClient = new LocalClient();
-            NetworkServer.ActivateLocalClientScene();
-            newClient.InternalConnectLocalServer(true);
-            return newClient;
+            if (m_MessageHandlers.ContainsKey(msgType))
+            {
+                if (LogFilter.logDebug) { Debug.Log("NetworkClient.RegisterHandler replacing " + msgType); }
+            }
+            m_MessageHandlers[msgType] = handler;
         }
 
-        internal static void HandleClientDisconnect(NetworkConnection conn)
+        public void RegisterHandler(MsgType msgType, NetworkMessageDelegate handler)
         {
-            if (s_ReadyConnection == conn && s_IsReady)
-            {
-                s_IsReady = false;
-                s_ReadyConnection = null;
-            }
+            RegisterHandler((short)msgType, handler);
         }
 
-        internal static void PrepareToSpawnSceneObjects()
+        public void UnregisterHandler(short msgType)
         {
-            //NOTE: what is there are already objects in this dict?! should we merge with them?
-            s_SpawnableObjects = new Dictionary<NetworkSceneId, NetworkIdentity>();
-            var uvs = Resources.FindObjectsOfTypeAll<NetworkIdentity>();
-            for (int i = 0; i < uvs.Length; i++)
-            {
-                var uv = uvs[i];
-                // not spawned yet etc.?
-                if (!uv.gameObject.activeSelf &&
-                    uv.gameObject.hideFlags != HideFlags.NotEditable && uv.gameObject.hideFlags != HideFlags.HideAndDontSave &&
-                    !uv.sceneId.IsEmpty())
-                {
-                    s_SpawnableObjects[uv.sceneId] = uv;
-                    if (LogFilter.logDebug) { Debug.Log("ClientScene::PrepareSpawnObjects sceneId:" + uv.sceneId); }
-                }
-            }
+            m_MessageHandlers.Remove(msgType);
         }
 
-        internal static NetworkIdentity SpawnSceneObject(NetworkSceneId sceneId)
+        public void UnregisterHandler(MsgType msgType)
         {
-            if (s_SpawnableObjects.ContainsKey(sceneId))
-            {
-                NetworkIdentity foundId = s_SpawnableObjects[sceneId];
-                s_SpawnableObjects.Remove(sceneId);
-                return foundId;
-            }
-            return null;
+            UnregisterHandler((short)msgType);
         }
 
-        internal static void RegisterSystemHandlers(NetworkClient client, bool localClient)
+        internal static void AddClient(NetworkClient client)
         {
-            if (localClient)
-            {
-                client.RegisterHandler(MsgType.ObjectDestroy, OnLocalClientObjectDestroy);
-                client.RegisterHandler(MsgType.ObjectHide, OnLocalClientObjectHide);
-                client.RegisterHandler(MsgType.SpawnPrefab, OnLocalClientSpawnPrefab);
-                client.RegisterHandler(MsgType.SpawnSceneObject, OnLocalClientSpawnSceneObject);
-                client.RegisterHandler(MsgType.LocalClientAuthority, OnClientAuthority);
-            }
-            else
-            {
-                // LocalClient shares the sim/scene with the server, no need for these events
-                client.RegisterHandler(MsgType.SpawnPrefab, OnSpawnPrefab);
-                client.RegisterHandler(MsgType.SpawnSceneObject, OnSpawnSceneObject);
-                client.RegisterHandler(MsgType.SpawnFinished, OnObjectSpawnFinished);
-                client.RegisterHandler(MsgType.ObjectDestroy, OnObjectDestroy);
-                client.RegisterHandler(MsgType.ObjectHide, OnObjectDestroy);
-                client.RegisterHandler(MsgType.UpdateVars, OnUpdateVarsMessage);
-                client.RegisterHandler(MsgType.Owner, OnOwnerMessage);
-                client.RegisterHandler(MsgType.SyncList, OnSyncListMessage);
-                client.RegisterHandler(MsgType.Animation, NetworkAnimator.OnAnimationClientMessage);
-                client.RegisterHandler(MsgType.AnimationParameters, NetworkAnimator.OnAnimationParametersClientMessage);
-                client.RegisterHandler(MsgType.LocalClientAuthority, OnClientAuthority);
-                client.RegisterHandler((short)MsgType.Pong, NetworkTime.OnClientPong);
-            }
-
-            client.RegisterHandler(MsgType.Rpc, OnRPCMessage);
-            client.RegisterHandler(MsgType.SyncEvent, OnSyncEventMessage);
-            client.RegisterHandler(MsgType.AnimationTrigger, NetworkAnimator.OnAnimationTriggerClientMessage);
+            s_Clients.Add(client);
         }
 
-        // ------------------------ NetworkScene pass-throughs ---------------------
-
-        internal static string GetStringForAssetId(NetworkHash128 assetId)
+        internal static bool RemoveClient(NetworkClient client)
         {
-            GameObject prefab;
-            if (NetworkScene.GetPrefab(assetId, out prefab))
-            {
-                return prefab.name;
-            }
-
-            SpawnDelegate handler;
-            if (NetworkScene.GetSpawnHandler(assetId, out handler))
-            {
-                return handler.GetMethodName();
-            }
-
-            return "unknown";
+            return s_Clients.Remove(client);
         }
 
-        // this assigns the newAssetId to the prefab. This is for registering dynamically created game objects for already know assetIds.
-        public static void RegisterPrefab(GameObject prefab, NetworkHash128 newAssetId)
+        internal static void UpdateClients()
         {
-            NetworkScene.RegisterPrefab(prefab, newAssetId);
+            // remove null clients first
+            s_Clients.RemoveAll(cl => cl == null);
+
+            // now update valid clients
+            for (int i = 0; i < s_Clients.Count; ++i)
+            {
+                s_Clients[i].Update();
+            }
         }
 
-        public static void RegisterPrefab(GameObject prefab)
+        public static void ShutdownAll()
         {
-            NetworkScene.RegisterPrefab(prefab);
+            while (s_Clients.Count != 0)
+            {
+                s_Clients[0].Shutdown();
+            }
+            s_Clients = new List<NetworkClient>();
+            s_IsActive = false;
+            ClientScene.Shutdown();
         }
 
-        public static void RegisterPrefab(GameObject prefab, SpawnDelegate spawnHandler, UnSpawnDelegate unspawnHandler)
+        internal static void SetActive(bool state)
         {
-            NetworkScene.RegisterPrefab(prefab, spawnHandler, unspawnHandler);
+            s_IsActive = state;
         }
-
-        public static void UnregisterPrefab(GameObject prefab)
-        {
-            NetworkScene.UnregisterPrefab(prefab);
-        }
-
-        public static void RegisterSpawnHandler(NetworkHash128 assetId, SpawnDelegate spawnHandler, UnSpawnDelegate unspawnHandler)
-        {
-            NetworkScene.RegisterSpawnHandler(assetId, spawnHandler, unspawnHandler);
-        }
-
-        public static void UnregisterSpawnHandler(NetworkHash128 assetId)
-        {
-            NetworkScene.UnregisterSpawnHandler(assetId);
-        }
-
-        public static void ClearSpawners()
-        {
-            NetworkScene.ClearSpawners();
-        }
-
-        public static void DestroyAllClientObjects()
-        {
-            s_NetworkScene.DestroyAllClientObjects();
-        }
-
-        public static void SetLocalObject(NetworkInstanceId netId, GameObject obj)
-        {
-            // if still receiving initial state, dont set isClient
-            s_NetworkScene.SetLocalObject(netId, obj, s_IsSpawnFinished, false);
-        }
-
-        public static GameObject FindLocalObject(NetworkInstanceId netId)
-        {
-            return s_NetworkScene.FindLocalObject(netId);
-        }
-
-        static void ApplySpawnPayload(NetworkIdentity uv, Vector3 position, byte[] payload, NetworkInstanceId netId, GameObject newGameObject)
-        {
-            if (!uv.gameObject.activeSelf)
-            {
-                uv.gameObject.SetActive(true);
-            }
-            uv.transform.position = position;
-            if (payload != null && payload.Length > 0)
-            {
-                var payloadReader = new NetworkReader(payload);
-                uv.OnUpdateVars(payloadReader, true);
-            }
-            if (newGameObject == null)
-            {
-                return;
-            }
-
-            newGameObject.SetActive(true);
-            uv.SetNetworkInstanceId(netId);
-            SetLocalObject(netId, newGameObject);
-
-            // objects spawned as part of initial state are started on a second pass
-            if (s_IsSpawnFinished)
-            {
-                uv.OnStartClient();
-                CheckForOwner(uv);
-            }
-        }
-
-        static void OnSpawnPrefab(NetworkMessage netMsg)
-        {
-            SpawnPrefabMessage msg = new SpawnPrefabMessage();
-            netMsg.ReadMessage(msg);
-
-            if (!msg.assetId.IsValid())
-            {
-                if (LogFilter.logError) { Debug.LogError("OnObjSpawn netId: " + msg.netId + " has invalid asset Id"); }
-                return;
-            }
-            if (LogFilter.logDebug) { Debug.Log("Client spawn handler instantiating [netId:" + msg.netId + " asset ID:" + msg.assetId + " pos:" + msg.position + "]"); }
-
-            NetworkIdentity localNetworkIdentity;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localNetworkIdentity))
-            {
-                // this object already exists (was in the scene), just apply the update to existing object
-                localNetworkIdentity.Reset();
-                ApplySpawnPayload(localNetworkIdentity, msg.position, msg.payload, msg.netId, null);
-                return;
-            }
-
-            GameObject prefab;
-            SpawnDelegate handler;
-            if (NetworkScene.GetPrefab(msg.assetId, out prefab))
-            {
-                var obj = (GameObject)Object.Instantiate(prefab, msg.position, msg.rotation);
-                if (LogFilter.logDebug)
-                {
-                    Debug.Log("Client spawn handler instantiating [netId:" + msg.netId + " asset ID:" + msg.assetId + " pos:" + msg.position + " rotation: " + msg.rotation + "]");
-                }
-
-                localNetworkIdentity = obj.GetComponent<NetworkIdentity>();
-                if (localNetworkIdentity == null)
-                {
-                    if (LogFilter.logError) { Debug.LogError("Client object spawned for " + msg.assetId + " does not have a NetworkIdentity"); }
-                    return;
-                }
-                localNetworkIdentity.Reset();
-                ApplySpawnPayload(localNetworkIdentity, msg.position, msg.payload, msg.netId, obj);
-            }
-            // lookup registered factory for type:
-            else if (NetworkScene.GetSpawnHandler(msg.assetId, out handler))
-            {
-                GameObject obj = handler(msg.position, msg.assetId);
-                if (obj == null)
-                {
-                    if (LogFilter.logWarn) { Debug.LogWarning("Client spawn handler for " + msg.assetId + " returned null"); }
-                    return;
-                }
-                localNetworkIdentity = obj.GetComponent<NetworkIdentity>();
-                if (localNetworkIdentity == null)
-                {
-                    if (LogFilter.logError) { Debug.LogError("Client object spawned for " + msg.assetId + " does not have a network identity"); }
-                    return;
-                }
-                localNetworkIdentity.Reset();
-                localNetworkIdentity.SetDynamicAssetId(msg.assetId);
-                ApplySpawnPayload(localNetworkIdentity, msg.position, msg.payload, msg.netId, obj);
-            }
-            else
-            {
-                if (LogFilter.logError) { Debug.LogError("Failed to spawn server object, did you forget to add it to the NetworkManager? assetId=" + msg.assetId + " netId=" + msg.netId); }
-            }
-        }
-
-        static void OnSpawnSceneObject(NetworkMessage netMsg)
-        {
-            SpawnSceneObjectMessage msg = new SpawnSceneObjectMessage();
-            netMsg.ReadMessage(msg);
-
-            if (LogFilter.logDebug) { Debug.Log("Client spawn scene handler instantiating [netId:" + msg.netId + " sceneId:" + msg.sceneId + " pos:" + msg.position); }
-
-            NetworkIdentity localNetworkIdentity;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localNetworkIdentity))
-            {
-                // this object already exists (was in the scene)
-                localNetworkIdentity.Reset();
-                ApplySpawnPayload(localNetworkIdentity, msg.position, msg.payload, msg.netId, localNetworkIdentity.gameObject);
-                return;
-            }
-
-            NetworkIdentity spawnedId = SpawnSceneObject(msg.sceneId);
-            if (spawnedId == null)
-            {
-                if (LogFilter.logError)
-                {
-                    Debug.LogError("Spawn scene object not found for " + msg.sceneId + " SpawnableObjects.Count=" + s_SpawnableObjects.Count);
-                    // dump the whole spawnable objects dict for easier debugging
-                    foreach (var kvp in s_SpawnableObjects)
-                        Debug.Log("Spawnable: SceneId=" + kvp.Key + " name=" + kvp.Value.name);
-                }
-                return;
-            }
-
-            if (LogFilter.logDebug) { Debug.Log("Client spawn for [netId:" + msg.netId + "] [sceneId:" + msg.sceneId + "] obj:" + spawnedId.gameObject.name); }
-            spawnedId.Reset();
-            ApplySpawnPayload(spawnedId, msg.position, msg.payload, msg.netId, spawnedId.gameObject);
-        }
-
-        static void OnObjectSpawnFinished(NetworkMessage netMsg)
-        {
-            ObjectSpawnFinishedMessage msg = new ObjectSpawnFinishedMessage();
-            netMsg.ReadMessage(msg);
-            if (LogFilter.logDebug) { Debug.Log("SpawnFinished:" + msg.state); }
-
-            if (msg.state == 0)
-            {
-                PrepareToSpawnSceneObjects();
-                s_IsSpawnFinished = false;
-                return;
-            }
-
-            foreach (var uv in objects.Values)
-            {
-                if (!uv.isClient)
-                {
-                    uv.OnStartClient();
-                    CheckForOwner(uv);
-                }
-            }
-            s_IsSpawnFinished = true;
-        }
-
-        static void OnObjectDestroy(NetworkMessage netMsg)
-        {
-            ObjectDestroyMessage msg = new ObjectDestroyMessage();
-            netMsg.ReadMessage(msg);
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnObjDestroy netId:" + msg.netId); }
-
-            NetworkIdentity localObject;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localObject))
-            {
-                localObject.OnNetworkDestroy();
-
-                if (!NetworkScene.InvokeUnSpawnHandler(localObject.assetId, localObject.gameObject))
-                {
-                    // default handling
-                    if (localObject.sceneId.IsEmpty())
-                    {
-                        Object.Destroy(localObject.gameObject);
-                    }
-                    else
-                    {
-                        // scene object.. disable it in scene instead of destroying
-                        localObject.gameObject.SetActive(false);
-                        s_SpawnableObjects[localObject.sceneId] = localObject;
-                    }
-                }
-                s_NetworkScene.RemoveLocalObject(msg.netId);
-                localObject.MarkForReset();
-            }
-            else
-            {
-                if (LogFilter.logDebug) { Debug.LogWarning("Did not find target for destroy message for " + msg.netId); }
-            }
-        }
-
-        static void OnLocalClientObjectDestroy(NetworkMessage netMsg)
-        {
-            ObjectDestroyMessage msg = new ObjectDestroyMessage();
-            netMsg.ReadMessage(msg);
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnLocalObjectObjDestroy netId:" + msg.netId); }
-
-            s_NetworkScene.RemoveLocalObject(msg.netId);
-        }
-
-        static void OnLocalClientObjectHide(NetworkMessage netMsg)
-        {
-            ObjectDestroyMessage msg = new ObjectDestroyMessage();
-            netMsg.ReadMessage(msg);
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnLocalObjectObjHide netId:" + msg.netId); }
-
-            NetworkIdentity localObject;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localObject))
-            {
-                localObject.OnSetLocalVisibility(false);
-            }
-        }
-
-        static void OnLocalClientSpawnPrefab(NetworkMessage netMsg)
-        {
-            SpawnPrefabMessage msg = new SpawnPrefabMessage();
-            netMsg.ReadMessage(msg);
-
-            NetworkIdentity localObject;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localObject))
-            {
-                localObject.OnSetLocalVisibility(true);
-            }
-        }
-
-        static void OnLocalClientSpawnSceneObject(NetworkMessage netMsg)
-        {
-            SpawnSceneObjectMessage msg = new SpawnSceneObjectMessage();
-            netMsg.ReadMessage(msg);
-
-            NetworkIdentity localObject;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localObject))
-            {
-                localObject.OnSetLocalVisibility(true);
-            }
-        }
-
-        static void OnUpdateVarsMessage(NetworkMessage netMsg)
-        {
-            UpdateVarsMessage message = netMsg.ReadMessage<UpdateVarsMessage>();
-
-            if (LogFilter.logDev) { Debug.Log("ClientScene::OnUpdateVarsMessage " + message.netId); }
-
-            NetworkIdentity localObject;
-            if (s_NetworkScene.GetNetworkIdentity(message.netId, out localObject))
-            {
-                localObject.OnUpdateVars(new NetworkReader(message.payload), false);
-            }
-            else
-            {
-                if (LogFilter.logWarn) { Debug.LogWarning("Did not find target for sync message for " + message.netId + " . Note: this can be completely normal because UDP messages may arrive out of order, so this message might have arrived after a Destroy message."); }
-            }
-        }
-
-        static void OnRPCMessage(NetworkMessage netMsg)
-        {
-            RpcMessage message = netMsg.ReadMessage<RpcMessage>();
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnRPCMessage hash:" + message.rpcHash + " netId:" + message.netId); }
-
-            NetworkIdentity uv;
-            if (s_NetworkScene.GetNetworkIdentity(message.netId, out uv))
-            {
-                uv.HandleRPC(message.rpcHash, new NetworkReader(message.payload));
-            }
-            else
-            {
-                if (LogFilter.logWarn)
-                {
-                    string errorRpcName = NetworkBehaviour.GetCmdHashHandlerName(message.rpcHash);
-                    Debug.LogWarningFormat("Could not find target object with netId:{0} for RPC call {1}", message.netId, errorRpcName);
-                }
-            }
-        }
-
-        static void OnSyncEventMessage(NetworkMessage netMsg)
-        {
-            SyncEventMessage message = netMsg.ReadMessage<SyncEventMessage>();
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnSyncEventMessage " + message.netId); }
-
-            NetworkIdentity uv;
-            if (s_NetworkScene.GetNetworkIdentity(message.netId, out uv))
-            {
-                uv.HandleSyncEvent(message.eventHash, new NetworkReader(message.payload));
-            }
-            else
-            {
-                if (LogFilter.logWarn) { Debug.LogWarning("Did not find target for SyncEvent message for " + message.netId); }
-            }
-        }
-
-        static void OnSyncListMessage(NetworkMessage netMsg)
-        {
-            SyncListMessage message = netMsg.ReadMessage<SyncListMessage>();
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnSyncListMessage " + message.netId); }
-
-            NetworkIdentity uv;
-            if (s_NetworkScene.GetNetworkIdentity(message.netId, out uv))
-            {
-                uv.HandleSyncList(message.syncListHash, new NetworkReader(message.payload));
-            }
-            else
-            {
-                if (LogFilter.logWarn) { Debug.LogWarning("Did not find target for SyncList message for " + message.netId); }
-            }
-        }
-
-        static void OnClientAuthority(NetworkMessage netMsg)
-        {
-            ClientAuthorityMessage msg = new ClientAuthorityMessage();
-            netMsg.ReadMessage(msg);
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnClientAuthority for  connectionId=" + netMsg.conn.connectionId + " netId: " + msg.netId); }
-
-            NetworkIdentity uv;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out uv))
-            {
-                uv.HandleClientAuthority(msg.authority);
-            }
-        }
-
-        // OnClientAddedPlayer?
-        static void OnOwnerMessage(NetworkMessage netMsg)
-        {
-            OwnerMessage msg = new OwnerMessage();
-            netMsg.ReadMessage(msg);
-
-            if (LogFilter.logDebug) { Debug.Log("ClientScene::OnOwnerMessage - connectionId=" + netMsg.conn.connectionId + " netId: " + msg.netId); }
-
-
-            // is there already an owner that is a different object??
-            if (netMsg.conn.playerController != null)
-            {
-                netMsg.conn.playerController.SetNotLocalPlayer();
-            }
-
-            NetworkIdentity localNetworkIdentity;
-            if (s_NetworkScene.GetNetworkIdentity(msg.netId, out localNetworkIdentity))
-            {
-                // this object already exists
-                localNetworkIdentity.SetConnectionToServer(netMsg.conn);
-                localNetworkIdentity.SetLocalPlayer();
-                InternalAddPlayer(localNetworkIdentity);
-            }
-            else
-            {
-                s_PendingOwnerIds.Add(msg.netId);
-            }
-        }
-
-        static void CheckForOwner(NetworkIdentity uv)
-        {
-            for (int i = 0; i < s_PendingOwnerIds.Count; i++)
-            {
-                NetworkInstanceId pendingOwner = s_PendingOwnerIds[i];
-
-                if (pendingOwner == uv.netId)
-                {
-                    // found owner, turn into a local player
-
-                    // Set isLocalPlayer to true on this NetworkIdentity and trigger OnStartLocalPlayer in all scripts on the same GO
-                    uv.SetConnectionToServer(s_ReadyConnection);
-                    uv.SetLocalPlayer();
-
-                    if (LogFilter.logDev) { Debug.Log("ClientScene::OnOwnerMessage - player=" + uv.gameObject.name); }
-                    if (s_ReadyConnection.connectionId < 0)
-                    {
-                        if (LogFilter.logError) { Debug.LogError("Owner message received on a local client."); }
-                        return;
-                    }
-                    InternalAddPlayer(uv);
-
-                    s_PendingOwnerIds.RemoveAt(i);
-                    break;
-                }
-            }
-        }
-    }
+    };
 }

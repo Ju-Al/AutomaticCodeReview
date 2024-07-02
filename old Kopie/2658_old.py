@@ -892,7 +892,6 @@ class PMALayer(nn.Module):
     def __init__(self, k, d_model, num_heads, d_head, d_ff, dropouth=0., dropouta=0.):
         super(PMALayer, self).__init__()
         self.k = k
-        if k == 1:
             dgl_warning("if k is set to 1, W_q and W_k would not be updated during training.")
         self.d_model = d_model
         self.seed_vectors = nn.Parameter(

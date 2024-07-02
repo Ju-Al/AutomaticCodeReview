@@ -1,77 +1,4 @@
 /*
-
-    hipError_t e = hipSuccess;
-
-    stream = ihipSyncAndResolveStream(stream);
-
-    e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
-
-    return ihipLogStatus(e);
-};
-
-    hipError_t e = hipSuccess;
-
-    stream = ihipSyncAndResolveStream(stream);
-
-    e = ihipMemset(dst, value, count, stream, ihipMemsetDataTypeInt);
-
-    return ihipLogStatus(e);
-};
-
-    hipError_t e = hipSuccess;
-
-    hipStream_t stream = hipStreamNull;
-    stream =  ihipSyncAndResolveStream(stream);
-    if (stream) {
-        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
-        stream->locked_wait();
-    } else {
-        e = hipErrorInvalidValue;
-    }
-    return ihipLogStatus(e);
-
-    hipError_t e = hipSuccess;
-
-    hipStream_t stream = hipStreamNull;
-    stream = ihipSyncAndResolveStream(stream);
-    if (stream) {
-        size_t sizeBytes = pitch * height;
-        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
-        stream->locked_wait();
-    } else {
-        e = hipErrorInvalidValue;
-    }
-
-    return ihipLogStatus(e);
-hipError_t hipMemset2DAsync(void* dst, size_t pitch, int value, size_t width, size_t height, hipStream_t stream )
-{
-
-    hipError_t e = hipSuccess;
-
-    stream =  ihipSyncAndResolveStream(stream);
-
-    if (stream) {
-        size_t sizeBytes = pitch * height;
-        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
-    } else {
-        e = hipErrorInvalidValue;
-    }
-
-    return ihipLogStatus(e);
-};
-
-    hipError_t e = hipSuccess;
-
-    hipStream_t stream = hipStreamNull;
-    stream = ihipSyncAndResolveStream(stream);
-    if (stream) {
-        e = ihipMemset(dst, value, count, stream, ihipMemsetDataTypeChar);
-        stream->locked_wait();
-    } else {
-        e = hipErrorInvalidValue;
-    }
-    return ihipLogStatus(e);
-
 Copyright (c) 2015 - present Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2096,7 +2023,79 @@ hipError_t hipMemcpy2DFromArrayAsync( void* dst, size_t dpitch, hipArray_const_t
         return ihipLogStatus(hipErrorInvalidValue);
     }
     return ihipLogStatus(ihip2dOffsetMemcpy(dst, dpitch, src->data, src->width*byteSize, width, height, wOffset, hOffset, 0, 0, kind, stream, true));
-}
+
+    hipError_t e = hipSuccess;
+
+    stream = ihipSyncAndResolveStream(stream);
+
+    e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
+
+    return ihipLogStatus(e);
+
+    hipError_t e = hipSuccess;
+
+    stream = ihipSyncAndResolveStream(stream);
+
+    e = ihipMemset(dst, value, count, stream, ihipMemsetDataTypeInt);
+
+    return ihipLogStatus(e);
+};
+
+    hipError_t e = hipSuccess;
+
+    hipStream_t stream = hipStreamNull;
+    stream =  ihipSyncAndResolveStream(stream);
+    if (stream) {
+        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
+        stream->locked_wait();
+    } else {
+        e = hipErrorInvalidValue;
+    }
+    return ihipLogStatus(e);
+
+    hipError_t e = hipSuccess;
+
+    hipStream_t stream = hipStreamNull;
+    stream = ihipSyncAndResolveStream(stream);
+    if (stream) {
+        size_t sizeBytes = pitch * height;
+        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
+        stream->locked_wait();
+    } else {
+        e = hipErrorInvalidValue;
+    }
+
+    return ihipLogStatus(e);
+hipError_t hipMemset2DAsync(void* dst, size_t pitch, int value, size_t width, size_t height, hipStream_t stream )
+{
+
+    hipError_t e = hipSuccess;
+
+    stream =  ihipSyncAndResolveStream(stream);
+
+    if (stream) {
+        size_t sizeBytes = pitch * height;
+        e = ihipMemset(dst, value, sizeBytes, stream, ihipMemsetDataTypeChar);
+    } else {
+        e = hipErrorInvalidValue;
+    }
+
+    return ihipLogStatus(e);
+};
+
+    hipError_t e = hipSuccess;
+
+    hipStream_t stream = hipStreamNull;
+    stream = ihipSyncAndResolveStream(stream);
+    if (stream) {
+        e = ihipMemset(dst, value, count, stream, ihipMemsetDataTypeChar);
+        stream->locked_wait();
+    } else {
+        e = hipErrorInvalidValue;
+    }
+    return ihipLogStatus(e);
+
+};
 
 // TODO-sync: function is async unless target is pinned host memory - then these are fully sync.
 hipError_t hipMemsetAsync(void* dst, int value, size_t sizeBytes, hipStream_t stream) {

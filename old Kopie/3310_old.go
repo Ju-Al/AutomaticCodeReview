@@ -1,13 +1,5 @@
 package handlers
 
-	// Check if user trying to login has enough privileges to login
-	httpStatus, errMsg, detailedError := business.VerifyOpenIdUserAccess(openIdParams.IdToken)
-	if detailedError != nil {
-		RespondWithDetailedError(w, httpStatus, errMsg, detailedError.Error())
-		return true
-	} else if httpStatus != http.StatusOK {
-		RespondWithError(w, httpStatus, errMsg)
-		return true
 import (
 	"context"
 	"crypto/aes"
@@ -721,7 +713,13 @@ func OpenIdCodeFlowHandler(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	if conf.Auth.OpenId.DisableRBAC {
+	// Check if user trying to login has enough privileges to login
+	httpStatus, errMsg, detailedError := business.VerifyOpenIdUserAccess(openIdParams.IdToken)
+	if detailedError != nil {
+		RespondWithDetailedError(w, httpStatus, errMsg, detailedError.Error())
+		return true
+	} else if httpStatus != http.StatusOK {
+		RespondWithError(w, httpStatus, errMsg)
 		// When RBAC is on, we delegate some validations to the Kubernetes cluster. However, if RBAC is off
 		// the token must be fully validated, as we no longer pass the OpenId token to the cluster API server.
 		// Since the configuration indicates RBAC is off, we do the validations:

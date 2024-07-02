@@ -151,7 +151,6 @@ type ControllerInterface interface {
 	CheckXSRFCookie() bool
 	HandlerFunc(fn string) bool
 	URLMapping()
-	Bind(obj interface{}) error
 	BindJson(obj interface{}) error
 	BindXML(obj interface{}) error
 	BindForm(obj interface{}) error

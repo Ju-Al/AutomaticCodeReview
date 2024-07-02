@@ -1,5 +1,4 @@
 <?php
-	 * analysis_headers outputs analysis general headers
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -382,7 +381,7 @@ class Sensei_Analysis {
 	}
 
 	/**
-	 * Analysis_headers outputs analysis general headers.
+	 * analysis_headers outputs analysis general headers
 	 *
 	 * @deprecated 3.11.0
 	 * @since  1.2.0

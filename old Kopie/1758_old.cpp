@@ -1,5 +1,4 @@
 /******************************************************************************
-            msg_error("BaseGUI") << "Created directory: " << path;
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -164,7 +163,7 @@ static void setDirectoryPath(std::string& outputVariable, const std::string& pat
         if (!pathExists)
         {
             FileSystem::createDirectory(path);
-            msg_warning("BaseGUI") << "Created directory: " << path;
+            msg_error("BaseGUI") << "Created directory: " << path;
         }
         outputVariable = path;
     }

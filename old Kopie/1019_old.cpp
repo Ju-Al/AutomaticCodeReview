@@ -1,5 +1,4 @@
 /******************************************************************************
-        Vec3d world_pos_tool = positionDevs[i].getCenter();
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -224,7 +223,7 @@ HDCallbackCode HDCALLBACK stateCallback(void * userData)
         /// COMPUTATION OF THE vituralTool 6D POSITION IN THE World COORDINATES
         sofa::defaulttype::SolidTypes<double>::Transform baseOmni_H_endOmni((autreOmniDriver[i]->data.servoDeviceData.pos)* autreOmniDriver[i]->data.scale, autreOmniDriver[i]->data.servoDeviceData.quat);
 
-        //Vec3d world_pos_tool = positionDevs[i].getCenter();
+        Vec3d world_pos_tool = positionDevs[i].getCenter();
         Quat world_quat_tool = positionDevs[i].getOrientation();
 
         // we compute its value in the current Tool frame:

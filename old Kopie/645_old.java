@@ -1,11 +1,4 @@
 /*
-  private static int trueCount(final Boolean... b) {
-    return (int) Arrays.stream(b).filter(bool -> bool).count();
-  }
-
-          .ethNetworkConfig(ethNetworkConfig())
-          .syncWithOttoman(syncWithOttoman)
-          .devMode(isDevMode)
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -594,12 +587,18 @@ public class PantheonCommand implements DefaultCommandValues, Runnable {
     }
   }
 
+  private static int trueCount(final Boolean... b) {
+    return (int) Arrays.stream(b).filter(bool -> bool).count();
+  }
+
   PantheonController<?> buildController() {
     try {
       return controllerBuilder
           .synchronizerConfiguration(buildSyncConfig())
           .homePath(dataDir())
-          .ethNetworkConfig(ethNetworkConfig(network))
+          .ethNetworkConfig(ethNetworkConfig())
+          .devMode(isDevMode)
+          .syncWithOttoman(syncWithOttoman)
           .syncWithOttoman(NetworkName.OTTOMAN.equals(network))
           .miningParameters(
               new MiningParameters(coinbase, minTransactionGasPrice, extraData, isMiningEnabled))

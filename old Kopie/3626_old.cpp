@@ -1,5 +1,4 @@
 /***************************************************************************
-                if ( heroStrength < regionStats.highestThreat )
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -298,7 +297,7 @@ namespace AI
                         value += valueStorage.value( pair );
                 }
                 const RegionStats & regionStats = _regions[world.GetTiles( node.first ).GetRegion()];
-
+                if ( heroStrength < regionStats.highestThreat )
                 const Castle * castle = world.GetCastle( Maps::GetPoint( node.first ) );
                 if ( node.second == MP2::OBJ_CASTLE && ( castle && ( castle->GetActualArmy().GetStrength() <= 0 || castle->GetColor() == hero.GetColor() ) ) )
                     value -= dangerousTaskPenalty / 2;

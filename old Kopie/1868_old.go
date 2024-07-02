@@ -602,7 +602,6 @@ func TestPrefetcherForSyncedTLF(t *testing.T) {
 		dirBfileDptrs[1].BlockPointer, dirBfileDblock2, FinishedPrefetch,
 		TransientEntry)
 
-	t.Log("Waiting for prefetcher to signal completion")
 	select {
 	case <-waitCh:
 	case <-ctx.Done():

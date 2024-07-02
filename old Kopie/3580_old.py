@@ -1,7 +1,4 @@
 # Licensed to Modin Development Team under one or more contributor license agreements.
-                getattr(pandas.Series("", index=self.index[:1]), apply_func)(
-                    func, *args, **kwargs
-                )
 # See the NOTICE file distributed with this work for additional information regarding
 # copyright ownership.  The Modin Development Team licenses this file to you under the
 # Apache License, Version 2.0 (the "License"); you may not use this file except in
@@ -684,7 +681,9 @@ class Series(BasePandasDataset):
         # the return type.
         try:
             return_type = type(
-                getattr(
+                getattr(pandas.Series("", index=self.index[:1]), apply_func)(
+                    func, *args, **kwargs
+                )
                     pandas.Series(self.values[:1], index=self.index[:1]), apply_func
                 )(func, *args, **kwargs)
             ).__name__

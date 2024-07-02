@@ -303,7 +303,6 @@ void usage()
     fprintf(stderr, "  -n\n");
     fprintf(stderr, "  --negotiate\n");
     fprintf(stderr, "    Only perform tls handshake and then shutdown the connection\n");
-    fprintf(stderr, "  --parallelize\n");
     fprintf(stderr, "    Create a new Connection handler thread for each new connection. Useful for tests with lots of connections.\n");
     fprintf(stderr, "  --prefer-low-latency\n");
     fprintf(stderr, "    Prefer low latency by clamping maximum outgoing record size at 1500.\n");

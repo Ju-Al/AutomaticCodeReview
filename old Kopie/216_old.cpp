@@ -190,7 +190,6 @@ Visitor::Result AnimateVisitor::processNodeTopDown(simulation::Node* node)
             end(node, node->solver[i], t0);
         }
 
-        MechanicalProjectPositionAndVelocityVisitor(&m_mparams, nextTime,
             sofa::core::VecCoordId::position(), sofa::core::VecDerivId::velocity()
         ).execute( node );
         MechanicalPropagatePositionAndVelocityVisitor(&m_mparams, nextTime,VecCoordId::position(),VecDerivId::velocity(),

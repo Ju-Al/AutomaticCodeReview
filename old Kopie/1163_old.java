@@ -1,7 +1,4 @@
 /*
-        if (Shell.isDebuggingEnabled())
-          for (ConstraintViolationSummary cvs : e.getConstraintViolationSummaries())
-            log.trace(cvs.toString());
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -59,7 +56,9 @@ public class DeleterFormatter extends DefaultFormatter {
         writer.close();
       } catch (MutationsRejectedException e) {
         log.error(e.toString());
-        for (ConstraintViolationSummary cvs : e.getConstraintViolationSummaries()) {
+        if (Shell.isDebuggingEnabled())
+          for (ConstraintViolationSummary cvs : e.getConstraintViolationSummaries())
+            log.trace(cvs.toString());
           log.trace(cvs.toString());
         }
       }

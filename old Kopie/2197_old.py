@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        ts.dimensions = top.unit_cell
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -80,7 +79,7 @@ class MMTFReader(base.SingleFrameReaderBase):
         ts._pos[:, 0] = top.x_coord_list
         ts._pos[:, 1] = top.y_coord_list
         ts._pos[:, 2] = top.z_coord_list
-        if not top.unit_cell is None:
+        ts.dimensions = top.unit_cell
             # optional field
             ts.dimensions = top.unit_cell
 

@@ -198,8 +198,6 @@ int main()
             break;
         cout << res << "\n";
     }
-   
-    // Test Property's toString() and toStringForDisplay() functionality
     cout << "Testing toString() and toStringForDisplay()" << endl;
     cout << "Input:  std::to_string() SimTK::writeUnformatted() Property::toString()" << endl;
 

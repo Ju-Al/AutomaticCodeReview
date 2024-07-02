@@ -1,5 +1,4 @@
 package retrymiddleware
-
 import (
 	"github.com/sethvargo/go-retry"
 	"sync"

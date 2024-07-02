@@ -24,7 +24,6 @@ func TestMain(m *testing.M) {
 	log.MainTest(m)
 }
 
-func svc(t *testing.T, local *onet.LocalTest, n int) *Service {
 	servers := local.GenServers(n)
 	services := local.GetServices(servers, serviceID)
 	if services[0] == nil {

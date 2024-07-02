@@ -1,5 +1,4 @@
 // Copyright 2021 The Swarm Authors. All rights reserved.
-func NewRecovery(dir string, shardCnt int, shardSize uint32, datasize int) (*Recovery, error) {
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -20,7 +19,7 @@ type Recovery struct {
 	shards []*slots
 }
 
-func NewRecovery(dir string, shardCnt int, datasize int) (*Recovery, error) {
+func NewRecovery(dir string, shardCnt int, shardSize uint32, datasize int) (*Recovery, error) {
 	shards := make([]*slots, shardCnt)
 	for i := 0; i < shardCnt; i++ {
 		file, err := os.OpenFile(path.Join(dir, fmt.Sprintf("shard_%03d", i)), os.O_RDWR|os.O_CREATE, 0666)

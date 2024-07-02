@@ -1,8 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
-        if tensorflow_minor_version() == '14':
-            options.experimental_optimization.autotune = False
-        elif tensorflow_minor_version() == '13':
-            options.experimental_autotune = False    
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -109,7 +105,10 @@ def _dataset_options():
     try:
         options.experimental_optimization.apply_default_optimizations = False
 
-        if StrictVersion(tf.__version__) == StrictVersion('1.13.1'):
+        if tensorflow_minor_version() == '14':
+            options.experimental_optimization.autotune = False
+        elif tensorflow_minor_version() == '13':
+            options.experimental_autotune = False    
             options.experimental_autotune = False 
         else:
             options.experimental_optimization.autotune = False   

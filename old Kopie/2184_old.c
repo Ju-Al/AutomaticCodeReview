@@ -1,6 +1,4 @@
 /*
-						// ignore when inside a function
-						if(cxxScopeGetType() == CXXScopeTypeFunction)
 *   Copyright (c) 2016, Szymon Tomasz Stefanek
 *
 *   This source code is released for free distribution under the terms of the
@@ -487,7 +485,8 @@ process_token:
 						cxxParserNewStatement();
 					break;
 					case CXXKeywordTHROW:
-						// We ignore whole "throw expressions" as they contain nothing useful
+						// ignore when inside a function
+						if(cxxScopeGetType() == CXXScopeTypeFunction)
 						// and may confuse us. We keep "throw" when used as exception specification,
 						// and this is certainly outside of a function and when the token chain
 						// already contains at least a type, an identifier and a parenthesis.

@@ -132,7 +132,6 @@ int main(int argc, char *argv[]) {
   // Configuring iroha daemon
   Irohad irohad(config[mbr::BlockStorePath].GetString(),
                 config[mbr::PgOpt].GetString(),
-                kListenIP, // TODO add a param in config?
                 config[mbr::ToriiPort].GetUint(),
                 config[mbr::InternalPort].GetUint(),
                 config[mbr::MaxProposalSize].GetUint(),

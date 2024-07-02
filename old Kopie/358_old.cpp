@@ -1,5 +1,4 @@
 /******************************************************************************
-          return slice.error(); // ... or an error occured.
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -79,7 +78,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
         if (!slice) {
           if (!slice.error())   // Either we are done ...
             break;
-          // ... or an error occured.
+          return slice.error(); // ... or an error occured.
           return {done_atom::value, slice.error()};
         }
         using receiver_type = caf::typed_actor<caf::reacts_to<table_slice_ptr>>;

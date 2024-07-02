@@ -1776,10 +1776,6 @@ static void MiterJoin(JoinParams *jpp) {
 	VASSERT(intersects);
 	SplineSetLineTo(cur, ixy);
 	SplineSetLineTo(cur, jpp->oxy);
-    }
-}
-
-static void ArcsJoin(JoinParams *jpp) {
     bigreal t, K_fm, K_to, fsw_fm, fsw_to, fsw_avg, r_fm, r_to, i_dist;
     bigreal jlim, r_clip, clip_ratio, start_angle, end_angle;
     bigreal angle_diff, max_angle_diff, bevel_angle_diff;

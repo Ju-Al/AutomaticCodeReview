@@ -165,7 +165,6 @@ const Header = ({location}: {location: Location}) => (
             to="/versions">
             v{version}
           </Link>
-          <Link
             css={{
               padding: '5px 10px',
               whiteSpace: 'nowrap',

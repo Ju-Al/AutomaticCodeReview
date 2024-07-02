@@ -1,9 +1,5 @@
 package provider
 
-	// sends requested chunk data pack to the requester
-	err = e.chunksConduit.Unicast(response, originID)
-	if err != nil {
-		return fmt.Errorf("could not send requested chunk data pack to (%s): %w", origin, err)
 import (
 	"context"
 	"errors"
@@ -192,7 +188,10 @@ func (e *Engine) onChunkDataRequest(
 		Collection:    collection,
 	}
 
-	sinceProcess := time.Since(processStart)
+	// sends requested chunk data pack to the requester
+	err = e.chunksConduit.Unicast(response, originID)
+	if err != nil {
+		return fmt.Errorf("could not send requested chunk data pack to (%s): %w", origin, err)
 
 	log = log.With().Dur("sinceProcess", sinceProcess).Logger()
 

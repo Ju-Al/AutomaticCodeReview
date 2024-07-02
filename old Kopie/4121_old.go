@@ -1,5 +1,4 @@
 /*
-var ingressGVK = networkingv1beta1.SchemeGroupVersion.WithKind("Ingress")
 Copyright 2020 The cert-manager Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +47,7 @@ const (
 	reasonDeleteCertificate = "DeleteCertificate"
 )
 
-var ingressGVK = networkingv1beta1.SchemeGroupVersion.WithKind("IngressOrGateway")
+var ingressGVK = networkingv1beta1.SchemeGroupVersion.WithKind("Ingress")
 var gatewayGVK = gatewayapi.SchemeGroupVersion.WithKind("Gateway")
 
 func (c *controller) Sync(ctx context.Context, obj runtime.Object) error {

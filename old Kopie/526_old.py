@@ -1,5 +1,4 @@
 import os
-        self.proxy.init_ndata(ndata_name, shape, dtype)
 import time
 import scipy
 from xmlrpc.server import SimpleXMLRPCServer
@@ -561,7 +560,7 @@ class SharedMemoryDGLGraph(DGLGraph):
             The data type of the node embedding. The currently supported data types
             are "float32" and "int32".
         """
-        init = self._node_frame.get_initializer(ndata_name)
+        self.proxy.init_ndata(ndata_name, shape, dtype)
         if init is None:
             self._node_frame._frame._warn_and_set_initializer()
         init = self._node_frame.get_initializer(ndata_name)

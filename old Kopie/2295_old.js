@@ -1,18 +1,4 @@
 var express = require('express');
-    ws.send(logs[term.pid]);
-    // string message buffering
-    function buffer(socket, timeout) {
-        if (!sender) {
-            socket.send(s);
-    // binary message buffering
-    function bufferUtf8(socket, timeout) {
-        if (!sender) {
-            socket.send(Buffer.concat(buffer, length));
-    const send = USE_BINARY_UTF8 ? bufferUtf8(ws, 5) : buffer(ws, 5);
-      try {
-        send(data);
-      } catch (ex) {
-        // The WebSocket is not open, ignore
 var expressWs = require('express-ws');
 var os = require('os');
 var pty = require('node-pty');
@@ -102,8 +88,21 @@ function startServer() {
   app.ws('/terminals/:pid', function (ws, req) {
     var term = terminals[parseInt(req.params.pid)];
     console.log('Connected to terminal ' + term.pid);
+    ws.send(logs[term.pid]);
 
-    const _send = data => {
+    // string message buffering
+        if (!sender) {
+            socket.send(s);
+    // binary message buffering
+    function bufferUtf8(socket, timeout) {
+        if (!sender) {
+            socket.send(Buffer.concat(buffer, length));
+    const send = USE_BINARY_UTF8 ? bufferUtf8(ws, 5) : buffer(ws, 5);
+      try {
+        send(data);
+      } catch (ex) {
+        // The WebSocket is not open, ignore
+    function buffer(socket, timeout) {
       // handle only 'open' websocket state
       if (ws.readyState === 1) {
         // test high latency

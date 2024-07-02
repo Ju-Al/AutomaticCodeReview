@@ -61,7 +61,6 @@ func (s *PluginSuite) SetupSuite() {
 
 	s.cacert, _, err = testutil.LoadCAFixture()
 	s.Require().NoError(err)
-
 }
 
 func (s *PluginSuite) SetupTest() {

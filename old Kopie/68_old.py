@@ -275,8 +275,6 @@ class TestFinanceTransforms(TestCase):
         assert tnfm_prices == expected_prices
         assert tnfm_volumes == expected_volumes
 
-    def test_exponential_moving_average(self):
-
         emavg = ExponentialMovingAverage(
             market_aware=False,
             fields=['price', 'volume'],

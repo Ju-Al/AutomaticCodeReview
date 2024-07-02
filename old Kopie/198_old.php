@@ -2429,8 +2429,6 @@ class remotecontrol_handle
         return new BigFile($sTempFile, true, 'base64');
 
     }
-
-    /**
      * RPC Routine to delete responses of particular token in a survey.
      * Returns array
      *

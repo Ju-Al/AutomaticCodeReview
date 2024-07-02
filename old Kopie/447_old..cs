@@ -1,6 +1,4 @@
 using System;
-            AddClient(this);
-        public NetworkClient(NetworkConnection conn)
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -39,7 +37,8 @@ namespace Mirror
         public NetworkClient()
         {
             if (LogFilter.Debug) { Debug.Log("Client created version " + Version.Current); }
-
+        public NetworkClient(NetworkConnection conn)
+            AddClient(this);
             if (singleton != null)
             {
                 Debug.LogError("NetworkClient: can only create one!");

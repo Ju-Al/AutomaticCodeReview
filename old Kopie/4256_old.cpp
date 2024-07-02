@@ -1,9 +1,4 @@
 /*!
-  SEXP feature_importance_type,
-  SEXP buffer_len,
-  SEXP actual_len,
-  LGBM_SE out_str) {
-  int64_t buf_len = static_cast<int64_t>(Rf_asInteger(buffer_len));
  * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
@@ -611,7 +606,11 @@ SEXP LGBM_BoosterSaveModel_R(LGBM_SE handle,
 
 SEXP LGBM_BoosterSaveModelToString_R(LGBM_SE handle,
   SEXP num_iteration,
-  SEXP feature_importance_type) {
+  SEXP feature_importance_type,
+  SEXP buffer_len,
+  SEXP actual_len,
+  int64_t buf_len = static_cast<int64_t>(Rf_asInteger(buffer_len));
+  LGBM_SE out_str) {
   SEXP model_str;
   R_API_BEGIN();
   int64_t out_len = 0;

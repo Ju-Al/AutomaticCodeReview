@@ -1,11 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-		if volume.EFS.FileSystemID == nil {
-		if volume.EFS.AuthConfig != nil {
-			accessPointID = volume.EFS.AuthConfig.AccessPointID
-			FilesystemID:  volume.EFS.FileSystemID,
-func convertVolumes(input map[string]manifest.Volume) ([]*template.Volume, error) {
-	if len(input) == 0 {
-		return nil, nil
 // SPDX-License-Identifier: Apache-2.0
 
 package stack
@@ -266,9 +259,14 @@ func convertEFSPermissions(input map[string]manifest.Volume) ([]*template.EFSPer
 	var output []*template.EFSPermission
 	for _, volume := range input {
 		if volume.EFS == nil {
+		if volume.EFS.FileSystemID == nil {
+		if volume.EFS.AuthConfig != nil {
+			accessPointID = volume.EFS.AuthConfig.AccessPointID
+			FilesystemID:  volume.EFS.FileSystemID,
+func convertVolumes(input map[string]manifest.Volume) ([]*template.Volume, error) {
+	if len(input) == 0 {
+		return nil, nil
 			continue
-		}
-		if volume.EFS.UseManagedFS() {
 			continue
 		}
 		// Write defaults to false.

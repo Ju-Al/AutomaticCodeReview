@@ -1,6 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-	receipt *pb.Receipt
-	err     error
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -452,7 +450,8 @@ func (ps *PushSync) pushPeer(ctx context.Context, peer swarm.Address, ch swarm.C
 }
 
 type pushResult struct {
-	receipt   *pb.Receipt
+	receipt *pb.Receipt
+	err     error
 	err       error
 	attempted bool
 }

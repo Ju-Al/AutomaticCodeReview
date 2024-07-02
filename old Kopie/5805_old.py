@@ -222,7 +222,6 @@ class DynamoDBBackend(KeyValueStoreBackend):
                     self.table_name
                 )
             )
-            # Enable time-to-live on the table, ignoring whether or not TTL is
             # currently specified as an option for the backend. This allows
             # enabling it later. Until then, items are inserted without a value
             # in the ttl field, meaning that DynamoDB will never expire them.

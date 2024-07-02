@@ -179,7 +179,6 @@ public class ClientWorker implements Closeable {
             copy.remove(groupKey);
             cacheMap.set(copy);
         }
-        remakeCacheDataTaskId();
         LOGGER.info("[{}] [unsubscribe] {}", agent.getName(), groupKey);
         
         MetricsMonitor.getListenConfigCountMonitor().set(cacheMap.get().size());

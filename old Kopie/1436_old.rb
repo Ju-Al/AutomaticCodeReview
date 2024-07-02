@@ -21,7 +21,6 @@ class PhotosController < ApplicationController
     @id = params[:id]
 
     @photo = Photo.new
-    item_class = Growstuff::Constants::PhotoModels.get_item(params[:type])
     @item = item_class.find_by!(id: params[:id], owner_id: current_member.id)
     retrieve_from_flickr
     respond_with @photo

@@ -1,5 +1,4 @@
 <?php
-				static::$arrStaticObjects[$strKey] = new $strClass();
 
 /*
  * This file is part of Contao.
@@ -276,8 +275,6 @@ abstract class System
 				static::$arrStaticObjects[$strKey] = static::$arrSingletons[$strClass] = \call_user_func(array($strClass, 'getInstance'));
 			}
 			else
-			{
-				try
 				{
 					static::$arrStaticObjects[$strKey] = new $strClass();
 				}

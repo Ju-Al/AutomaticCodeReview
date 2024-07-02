@@ -130,7 +130,6 @@ func (m *Mutator) Extend(block *cluster.Block) error {
 		// do this by tracing back until we see a parent block that is the
 		// latest finalized block, or reach height below the finalized boundary
 
-		m.state.tracer.FinishSpan(blockID, trace.COLClusterStateMutatorExtendSetup)
 		m.state.tracer.StartSpan(blockID, trace.COLClusterStateMutatorExtendCheckAncestry)
 
 		// start with the extending block's parent

@@ -1,5 +1,4 @@
 <?php
-
 namespace phpunit\tests\hooks;
 
 use MockAction;

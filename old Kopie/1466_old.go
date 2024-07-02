@@ -135,7 +135,6 @@ func runHook(ctx *context.Context, opts builders.Options, buildEnv []string, hoo
 			return err
 		}
 
-		// shell commands need to have backslashes escaped under Windows
 		if "windows" == runtime.GOOS {
 			sh = strings.ReplaceAll(sh, "\\", "\\\\")
 		}

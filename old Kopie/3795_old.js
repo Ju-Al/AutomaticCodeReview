@@ -31,7 +31,6 @@ this.startBackground = (function() {
   // Maximum milliseconds to wait before checking for migration possibility
   const CHECK_MIGRATION_DELAY = 2000;
 
-  browser.tabs.onUpdated.addListener((id, changeInfo, tab) => {
     browser.pageAction.show(tab.id);
   });
 

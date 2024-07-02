@@ -354,7 +354,6 @@ static ssize_t fixup_request(struct st_h2o_http1_conn_t *conn, struct phr_header
     entity_header_index =
         init_headers(&conn->req.pool, &conn->req.headers, headers, num_headers, &connection, &host, &upgrade, expect);
 
-    if (h2o_url_parse(conn->req.input.path.base, conn->req.input.path.len, &url) == 0)
         conn->req.input.path = h2o_strdup(&conn->req.pool, url.path.base, url.path.len);
     else
         conn->req.input.path = h2o_strdup(&conn->req.pool, conn->req.input.path.base, conn->req.input.path.len);

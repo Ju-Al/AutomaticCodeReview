@@ -1,5 +1,4 @@
 /*
-          throw new RuntimeException("Unlikely", ex);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -770,7 +769,7 @@ public class Master
         try {
           info.write(out);
         } catch (IOException ex) {
-          throw new UncheckedIOException("Unlikely", ex);
+          throw new RuntimeException("Unlikely", ex);
         }
         context.getZooReaderWriter().putPersistentData(path, out.getData(),
             state.equals(MergeState.STARTED) ? ZooUtil.NodeExistsPolicy.FAIL

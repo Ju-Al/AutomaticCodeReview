@@ -1,194 +1,220 @@
-import pytest
-from unittest.mock import patch
-from unittest import mock
-from pymongo.database import Database
+#!/usr/bin/env python
+#
+# Microsoft Azure Linux Agent setup.py
+#
+# Copyright 2013 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-pytestmark = pytest.mark.bdb
+import os
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+    AGENT_DESCRIPTION, \
+    DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
+from azurelinuxagent.common.osutil import get_osutil
+import setuptools
+from setuptools import find_packages
+from setuptools.command.install import install as  _install
+import sys
 
-def test_init_creates_db_tables_and_indexes():
-    import bigchaindb
-    from bigchaindb import backend
-    from bigchaindb.backend.schema import init_database
-
-    conn = backend.connect()
-    dbname = bigchaindb.config['database']['name']
-
-    # the db is set up by the fixture so we need to remove it
-    conn.conn.drop_database(dbname)
-
-    init_database()
-
-    collection_names = conn.conn[dbname].collection_names()
-    assert sorted(collection_names) == ['backlog', 'bigchain', 'votes']
-
-    indexes = conn.conn[dbname]['bigchain'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'asset_id', 'block_timestamp',
-                               'transaction_id']
-
-    indexes = conn.conn[dbname]['backlog'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'assignee__transaction_timestamp',
-                               'transaction_id']
-
-    indexes = conn.conn[dbname]['votes'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'block_and_voter']
+root_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(root_dir)
 
 
-def test_init_database_fails_if_db_exists():
-    import bigchaindb
-    from bigchaindb import backend
-    from bigchaindb.backend.schema import init_database
-    from bigchaindb.common import exceptions
-
-    conn = backend.connect()
-    dbname = bigchaindb.config['database']['name']
-
-    # The db is set up by the fixtures
-    assert dbname in conn.conn.database_names()
-
-    with pytest.raises(exceptions.DatabaseAlreadyExists):
-        init_database()
+def set_files(data_files, dest=None, src=None):
+    data_files.append((dest, src))
 
 
-def test_create_tables():
-    import bigchaindb
-    from bigchaindb import backend
-    from bigchaindb.backend import schema
-
-    conn = backend.connect()
-    dbname = bigchaindb.config['database']['name']
-
-    # The db is set up by the fixtures so we need to remove it
-    conn.conn.drop_database(dbname)
-    schema.create_database(conn, dbname)
-    schema.create_tables(conn, dbname)
-
-    collection_names = conn.conn[dbname].collection_names()
-    assert sorted(collection_names) == ['backlog', 'bigchain', 'votes']
+def set_bin_files(data_files, dest="/usr/sbin",
+                  src=["bin/waagent", "bin/waagent2.0"]):
+    data_files.append((dest, src))
 
 
-def test_create_secondary_indexes():
-    import bigchaindb
-    from bigchaindb import backend
-    from bigchaindb.backend import schema
-
-    conn = backend.connect()
-    dbname = bigchaindb.config['database']['name']
-
-    # The db is set up by the fixtures so we need to remove it
-    conn.conn.drop_database(dbname)
-    schema.create_database(conn, dbname)
-    schema.create_tables(conn, dbname)
-    schema.create_indexes(conn, dbname)
-
-    # Bigchain table
-    indexes = conn.conn[dbname]['bigchain'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'asset_id', 'block_timestamp',
-                               'transaction_id']
-
-    # Backlog table
-    indexes = conn.conn[dbname]['backlog'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'assignee__transaction_timestamp',
-                               'transaction_id']
-
-    # Votes table
-    indexes = conn.conn[dbname]['votes'].index_information().keys()
-    assert sorted(indexes) == ['_id_', 'block_and_voter']
+def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
+    data_files.append((dest, src))
 
 
-def test_drop(dummy_db):
-    from bigchaindb import backend
-    from bigchaindb.backend import schema
-
-    conn = backend.connect()
-    assert dummy_db in conn.conn.database_names()
-    schema.drop_database(conn, dummy_db)
-    assert dummy_db not in conn.conn.database_names()
+def set_logrotate_files(data_files, dest="/etc/logrotate.d",
+                        src=["config/waagent.logrotate"]):
+    data_files.append((dest, src))
 
 
-def test_get_replica_set_name_not_enabled():
-    from bigchaindb import backend
-    from bigchaindb.backend.mongodb.schema import _get_replica_set_name
-    from bigchaindb.common.exceptions import ConfigurationError
-
-    conn = backend.connect()
-
-    # no replSet option set
-    cmd_line_opts = {'argv': ['mongod', '--dbpath=/data'],
-                     'ok': 1.0,
-                     'parsed': {'storage': {'dbPath': '/data'}}}
-    with mock.patch.object(Database, 'command', return_value=cmd_line_opts):
-        with pytest.raises(ConfigurationError):
-            _get_replica_set_name(conn)
+def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]):
+    data_files.append((dest, src))
 
 
-def test_get_replica_set_name_command_line():
-    from bigchaindb import backend
-    from bigchaindb.backend.mongodb.schema import _get_replica_set_name
-
-    conn = backend.connect()
-
-    # replSet option set through the command line
-    cmd_line_opts = {'argv': ['mongod', '--dbpath=/data', '--replSet=rs0'],
-                     'ok': 1.0,
-                     'parsed': {'replication': {'replSet': 'rs0'},
-                                'storage': {'dbPath': '/data'}}}
-    with mock.patch.object(Database, 'command', return_value=cmd_line_opts):
-        assert _get_replica_set_name(conn) == 'rs0'
+def set_systemd_files(data_files, dest="/lib/systemd/system",
+                      src=["init/waagent.service"]):
+    data_files.append((dest, src))
 
 
-def test_get_replica_set_name_config_file():
-    from bigchaindb import backend
-    from bigchaindb.backend.mongodb.schema import _get_replica_set_name
-
-    conn = backend.connect()
-
-    # replSet option set through the config file
-    cmd_line_opts = {'argv': ['mongod', '--dbpath=/data', '--replSet=rs0'],
-                     'ok': 1.0,
-                     'parsed': {'replication': {'replSetName': 'rs0'},
-                                'storage': {'dbPath': '/data'}}}
-    with mock.patch.object(Database, 'command', return_value=cmd_line_opts):
-        assert _get_replica_set_name(conn) == 'rs0'
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+    data_files.append((dest, src))
 
 
-def test_wait_for_replica_set_initialization():
-    from bigchaindb.backend.mongodb.schema import _wait_for_replica_set_initialization  # noqa
-    from bigchaindb.backend import connect
-    conn = connect()
-
-    with mock.patch.object(Database, 'command') as mock_command:
-        mock_command.side_effect = [
-            {'log': ['a line']},
-            {'log': ['database writes are now permitted']},
-        ]
-
-        # check that it returns
-        assert _wait_for_replica_set_initialization(conn) is None
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/openbsd/waagent"]):
+    data_files.append((dest, src))
 
 
-def test_initialize_replica_set():
-    from pymongo.errors import OperationFailure
-    from bigchaindb.backend.mongodb.schema import initialize_replica_set
-    from bigchaindb.backend import connect
-    conn = connect()
+def set_udev_files(data_files, dest="/etc/udev/rules.d/",
+                   src=["config/66-azure-storage.rules",
+                        "config/99-azure-product-uuid.rules"]):
+    data_files.append((dest, src))
 
-    with mock.patch.object(Database, 'command') as mock_command:
-        mock_command.side_effect = [
-            mock.DEFAULT,
-            None,
-            {'log': ['database writes are now permitted']},
-        ]
 
-        # check that it returns
-        assert initialize_replica_set(conn) is None
+def get_data_files(name, version, fullname):
+    """
+    Determine data_files according to distro name, version and init system type
+    """
+    data_files = []
 
-    # test it raises OperationError if anything wrong
-    with mock.patch.object(Database, 'command') as mock_command:
-        mock_command.side_effect = [
-            mock.DEFAULT,
-            OperationFailure(None, details={'codeName': ''})
-        ]
+    if name == 'redhat' or name == 'centos':
+        set_bin_files(data_files)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        if version.startswith("6"):
+            set_sysv_files(data_files)
+        else:
+            # redhat7.0+ use systemd
+            set_systemd_files(data_files, dest="/usr/lib/systemd/system")
+            if version.startswith("7.1"):
+                # TODO this is a mitigation to systemctl bug on 7.1
+                set_sysv_files(data_files)
 
-        with pytest.raises(OperationFailure):
-            initialize_replica_set(conn)
+    elif name == 'arch':
+        set_bin_files(data_files, dest="/usr/bin")
+        set_conf_files(data_files, src=["config/arch/waagent.conf"])
+        set_udev_files(data_files)
+        set_systemd_files(data_files, dest='/usr/lib/systemd/system',
+                          src=["init/arch/waagent.service"])
+    elif name == 'coreos':
+        set_bin_files(data_files, dest="/usr/share/oem/bin")
+        set_conf_files(data_files, dest="/usr/share/oem",
+                       src=["config/coreos/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_files(data_files, dest="/usr/share/oem",
+                  src=["init/coreos/cloud-config.yml"])
+    elif name == 'clear linux os for intel architecture' \
+            or name == 'clear linux software for intel architecture':
+        set_bin_files(data_files, dest="/usr/bin")
+        set_conf_files(data_files, dest="/usr/share/defaults/waagent",
+                       src=["config/clearlinux/waagent.conf"])
+        set_systemd_files(data_files, dest='/usr/lib/systemd/system',
+                          src=["init/clearlinux/waagent.service"])
+    elif name == 'ubuntu':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        if version.startswith("12") or version.startswith("14"):
+            # Ubuntu12.04/14.04 - uses upstart
+            set_files(data_files, dest="/etc/init",
+                      src=["init/ubuntu/walinuxagent.conf"])
+            set_files(data_files, dest='/etc/default',
+                      src=['init/ubuntu/walinuxagent'])
+        elif fullname == 'Snappy Ubuntu Core':
+            set_files(data_files, dest="<TODO>",
+                      src=["init/ubuntu/snappy/walinuxagent.yml"])
+        else:
+            # Ubuntu15.04+ uses systemd
+            set_systemd_files(data_files,
+                              src=["init/ubuntu/walinuxagent.service"])
+    elif name == 'suse' or name == 'opensuse':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/suse/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        if fullname == 'SUSE Linux Enterprise Server' and \
+                version.startswith('11') or \
+                                fullname == 'openSUSE' and version.startswith(
+                    '13.1'):
+            set_sysv_files(data_files, dest='/etc/init.d',
+                           src=["init/suse/waagent"])
+        else:
+            # sles 12+ and openSUSE 13.2+ use systemd
+            set_systemd_files(data_files, dest='/usr/lib/systemd/system')
+    elif name == 'freebsd':
+        set_bin_files(data_files, dest="/usr/local/sbin")
+        set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
+        set_freebsd_rc_files(data_files)
+    elif name == 'openbsd':
+        set_bin_files(data_files, dest="/usr/local/sbin")
+        set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
+        set_openbsd_rc_files(data_files)
+    else:
+        # Use default setting
+        set_bin_files(data_files)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_sysv_files(data_files)
+    return data_files
+
+
+class install(_install):
+    user_options = _install.user_options + [
+        ('lnx-distro=', None, 'target Linux distribution'),
+        ('lnx-distro-version=', None, 'target Linux distribution version'),
+        ('lnx-distro-fullname=', None, 'target Linux distribution full name'),
+        ('register-service', None, 'register as startup service and start'),
+        ('skip-data-files', None, 'skip data files installation'),
+    ]
+
+    def initialize_options(self):
+        _install.initialize_options(self)
+        self.lnx_distro = DISTRO_NAME
+        self.lnx_distro_version = DISTRO_VERSION
+        self.lnx_distro_fullname = DISTRO_FULL_NAME
+        self.register_service = False
+        self.skip_data_files = False
+
+    def finalize_options(self):
+        _install.finalize_options(self)
+        if self.skip_data_files:
+            return
+
+        data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
+                                    self.lnx_distro_fullname)
+        self.distribution.data_files = data_files
+        self.distribution.reinitialize_command('install_data', True)
+
+    def run(self):
+        _install.run(self)
+        if self.register_service:
+            osutil = get_osutil()
+            osutil.register_agent_service()
+            osutil.stop_agent_service()
+            osutil.start_agent_service()
+
+if float(sys.version[:3]) >= 3.5:
+    requires = ['distro']
+
+setuptools.setup(
+    name=AGENT_NAME,
+    version=AGENT_VERSION,
+    long_description=AGENT_DESCRIPTION,
+    author='Microsoft Corporation',
+    author_email='walinuxagent@microsoft.com',
+    platforms='Linux',
+    url='https://github.com/Azure/WALinuxAgent',
+    license='Apache License Version 2.0',
+    packages=find_packages(exclude=["tests"]),
+    install_requires=requires,
+    py_modules=["__main__"],
+    cmdclass={
+        'install': install
+    }
+)

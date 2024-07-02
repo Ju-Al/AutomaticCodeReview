@@ -1,6 +1,5 @@
 package main
 
-	testRun.save(resultReader.getResultsFileName())
 import (
 	"bufio"
 	"encoding/json"
@@ -118,7 +117,6 @@ func processTestRun(resultReader ResultReader) TestRun {
 	postProcessTestRun(packageResultMap)
 
 	testRun := finalizeTestRun(packageResultMap)
-
 	if resultReader.saveFiles() {
 		testRun.save(resultReader.getResultsFileName())
 	}

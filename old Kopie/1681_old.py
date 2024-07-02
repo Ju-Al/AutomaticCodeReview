@@ -1925,9 +1925,6 @@ class GsuiteMemberIterator(ResourceIterator):
                 yield FACTORIES['gsuite_user_member'].create_new(data)
             elif data['type'] == 'GROUP':
                 yield FACTORIES['gsuite_group_member'].create_new(data)
-
-
-class ProjectSinkIterator(ResourceIterator):
     """The Resource iterator implementation for Project Sink"""
 
     def iter(self):

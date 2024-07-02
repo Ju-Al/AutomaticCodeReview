@@ -1,9 +1,5 @@
 iD.ui.Commit = function(context) {
-            .attr('class', 'action col3 button')
-            .on('click.save', function() {
-                var comment = commentField.node().value;
-                localStorage.comment = comment;
-                event.save({    var event = d3.dispatch('cancel', 'save', 'fix'),
+    var event = d3.dispatch('cancel', 'save', 'fix'),
         presets = context.presets();
 
     function zipSame(d) {
@@ -94,7 +90,11 @@ iD.ui.Commit = function(context) {
 
         // Confirm Button
         var saveButton = saveSection.append('button')
-            .attr('class', 'action col3 button');
+            .attr('class', 'action col3 button')
+            .on('click.save', function() {
+                var comment = commentField.node().value;
+                localStorage.comment = comment;
+                event.save({            .attr('class', 'action col3 button');
 
         saveButton.append('span')
             .attr('class', 'label')

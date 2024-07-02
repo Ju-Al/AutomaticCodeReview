@@ -1,12 +1,4 @@
 #include <LightGBM/tree.h>
-    ss << "\"split_feature\":" << split_feature_real_.data()[index] << "," << std::endl;
-    ss << "\"split_gain\":" << split_gain_.data()[index] << "," << std::endl;
-    ss << "\"threshold\":" << threshold_.data()[index] << "," << std::endl;
-    ss << "\"internal_value\":" << internal_value_.data()[index] << "," << std::endl;
-    ss << "\"left_child\":" << NodeToJSON(left_child_.data()[index]) << "," << std::endl;
-    ss << "\"right_child\":" << NodeToJSON(right_child_.data()[index]) << std::endl;
-    ss << "\"leaf_parent\":" << leaf_parent_.data()[index] << "," << std::endl;
-    ss << "\"leaf_value\":" << leaf_value_.data()[index] << std::endl;
 
 #include <LightGBM/utils/threading.h>
 #include <LightGBM/utils/common.h>
@@ -174,7 +166,14 @@ std::string Tree::NodeToJSON(int index) {
     // non-leaf
     ss << "{" << std::endl;
     ss << "\"split_index\":" << index << "," << std::endl;
-    ss << "\"split_feature\":" << split_feature_real_[index] << "," << std::endl;
+    ss << "\"split_feature\":" << split_feature_real_.data()[index] << "," << std::endl;
+    ss << "\"split_gain\":" << split_gain_.data()[index] << "," << std::endl;
+    ss << "\"threshold\":" << threshold_.data()[index] << "," << std::endl;
+    ss << "\"internal_value\":" << internal_value_.data()[index] << "," << std::endl;
+    ss << "\"left_child\":" << NodeToJSON(left_child_.data()[index]) << "," << std::endl;
+    ss << "\"leaf_parent\":" << leaf_parent_.data()[index] << "," << std::endl;
+    ss << "\"leaf_value\":" << leaf_value_.data()[index] << std::endl;
+    ss << "\"right_child\":" << NodeToJSON(right_child_.data()[index]) << std::endl;
     ss << "\"split_gain\":" << split_gain_[index] << "," << std::endl;
     ss << "\"threshold\":" << threshold_[index] << "," << std::endl;
     ss << "\"decision_type\":\"" << Tree::GetDecisionTypeName(decision_type_[index]) << "\"," << std::endl;

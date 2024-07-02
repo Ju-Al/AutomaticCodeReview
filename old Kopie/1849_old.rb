@@ -27,7 +27,6 @@ module Travis
 
       def checkout
         disable_interactive_auth
-        enable_longpaths
         install_ssh_key if install_ssh_key?
         write_netrc if write_netrc?
         sh.newline

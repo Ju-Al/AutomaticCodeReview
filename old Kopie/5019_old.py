@@ -884,7 +884,6 @@ def dag_longest_path(G, weight="weight", default_weight=1, topo_order=None):
     NetworkXNotImplemented
         If `G` is not directed
 
-    Examples
     --------
     >>> DG = nx.DiGraph([(1, 2), (2, 3)])
     >>> nx.dag_longest_path(DG)

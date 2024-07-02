@@ -1,5 +1,4 @@
 <div class="card-main">
-  <%= form_for(resource, as: resource_name, url: session_path(resource_name), class: "auth-form" ) do |form| %>
 
     <div class="auth-form__section">
       <span class="fa fa-envelope auth-form__icon"></span>

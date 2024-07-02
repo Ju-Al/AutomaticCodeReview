@@ -1,5 +1,4 @@
 # Copyright 2017 Google Inc.
-            raise api_errors.ApiExecutionError('backend_services', e)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -141,7 +140,7 @@ class ComputeClient(_base_client.BaseClient):
                     previous_request=list_request,
                     previous_response=response)
         except (HttpError, HttpLib2Error) as e:
-            raise api_errors.ApiExecutionError(resource_name, e)
+            raise api_errors.ApiExecutionError('backend_services', e)
 
     def get_backend_services(self, project_id):
         """Get the backend services for a project.

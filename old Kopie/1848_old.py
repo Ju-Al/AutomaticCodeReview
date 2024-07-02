@@ -1,468 +1,602 @@
 # -*- coding: utf-8 -*-
+"""
+Minimum cost flow algorithms on directed connected graphs.
+"""
 
+__author__ = """Loïc Séguin-C. <loicseguin@gmail.com>"""
+# Copyright (C) 2010 Loïc Séguin-C. <loicseguin@gmail.com>
+# All rights reserved.
+# BSD license.
+
+__all__ = ['network_simplex']
+
+from itertools import chain, islice, repeat
+from math import ceil, sqrt
 import networkx as nx
-from nose.tools import assert_equal, assert_raises, assert_almost_equal
-import os
+from networkx.utils import not_implemented_for
 
-class TestMinCostFlow:
-    def test_simple_digraph(self):
-        G = nx.DiGraph()
-        G.add_node('a', demand = -5)
-        G.add_node('d', demand = 5)
-        G.add_edge('a', 'b', weight = 3, capacity = 4)
-        G.add_edge('a', 'c', weight = 6, capacity = 10)
-        G.add_edge('b', 'd', weight = 1, capacity = 9)
-        G.add_edge('c', 'd', weight = 2, capacity = 5)
-        flowCost, H = nx.network_simplex(G)
-        soln = {'a': {'b': 4, 'c': 1},
-                'b': {'d': 4},
-                'c': {'d': 1},
-                'd': {}}
-        assert_equal(flowCost, 24)
-        assert_equal(nx.min_cost_flow_cost(G), 24)
-        assert_equal(H, soln)
-        assert_equal(nx.min_cost_flow(G), soln)
-        assert_equal(nx.cost_of_flow(G, H), 24)
+try:
+    from itertools import izip as zip
+except ImportError:
+    pass
+try:
+    range = xrange
+except NameError:
+    pass
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 24)
-        assert_equal(nx.cost_of_flow(G, H), 24)
-        assert_equal(H, soln)
 
-    def test_floats_digraph(self):
-        G = nx.Graph()
-        G.add_nodes_from(['i', 'j', 'k', 'l'])
-        G.node['i']['demand'] = -1
-        G.node['j']['demand'] = 1. / 3
-        G.node['k']['demand'] = 1. / 3
-        G.node['l']['demand'] = 1. / 3
-        G.add_edge('i','j', {'weight': 1})
-        G.add_edge('j','k', {'weight': 11})
-        G.add_edge('k','l', {'weight': 21})
-        soln = {'i': {'j': 1.0},
-                'k': {'j': 0, 'l': 0.3333333333333333},
-                'j': {'i': 0, 'k': 0.6666666666666666},
-                'l': {'k': 0}}
-        cost, H = nx.network_simplex(G.to_directed())
-        assert_almost_equal(cost, 15.3333333333)
-        assert_equal(H, soln)
+@not_implemented_for('undirected')
+def network_simplex(G, demand='demand', capacity='capacity', weight='weight',
+                    tolerance=1e-7):
+    r"""Find a minimum cost flow satisfying all demands in digraph G.
 
-    def test_negcycle_infcap(self):
-        G = nx.DiGraph()
-        G.add_node('s', demand = -5)
-        G.add_node('t', demand = 5)
-        G.add_edge('s', 'a', weight = 1, capacity = 3)
-        G.add_edge('a', 'b', weight = 3)
-        G.add_edge('c', 'a', weight = -6)
-        G.add_edge('b', 'd', weight = 1)
-        G.add_edge('d', 'c', weight = -2)
-        G.add_edge('d', 't', weight = 1, capacity = 3)
-        assert_raises(nx.NetworkXUnfeasible, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnbounded, nx.capacity_scaling, G)
+    This is a primal network simplex algorithm that uses the leaving
+    arc rule to prevent cycling.
 
-    def test_sum_demands_not_zero(self):
-        G = nx.DiGraph()
-        G.add_node('s', demand = -5)
-        G.add_node('t', demand = 4)
-        G.add_edge('s', 'a', weight = 1, capacity = 3)
-        G.add_edge('a', 'b', weight = 3)
-        G.add_edge('a', 'c', weight = -6)
-        G.add_edge('b', 'd', weight = 1)
-        G.add_edge('c', 'd', weight = -2)
-        G.add_edge('d', 't', weight = 1, capacity = 3)
-        assert_raises(nx.NetworkXUnfeasible, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
+    G is a digraph with edge costs and capacities and in which nodes
+    have demand, i.e., they want to send or receive some amount of
+    flow. A negative demand means that the node wants to send flow, a
+    positive demand means that the node want to receive flow. A flow on
+    the digraph G satisfies all demand if the net flow into each node
+    is equal to the demand of that node.
 
-    def test_no_flow_satisfying_demands(self):
-        G = nx.DiGraph()
-        G.add_node('s', demand = -5)
-        G.add_node('t', demand = 5)
-        G.add_edge('s', 'a', weight = 1, capacity = 3)
-        G.add_edge('a', 'b', weight = 3)
-        G.add_edge('a', 'c', weight = -6)
-        G.add_edge('b', 'd', weight = 1)
-        G.add_edge('c', 'd', weight = -2)
-        G.add_edge('d', 't', weight = 1, capacity = 3)
-        assert_raises(nx.NetworkXUnfeasible, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
+    Parameters
+    ----------
+    G : NetworkX graph
+        DiGraph on which a minimum cost flow satisfying all demands is
+        to be found.
 
-    def test_transshipment(self):
-        G = nx.DiGraph()
-        G.add_node('a', demand = 1)
-        G.add_node('b', demand = -2)
-        G.add_node('c', demand = -2)
-        G.add_node('d', demand = 3)
-        G.add_node('e', demand = -4)
-        G.add_node('f', demand = -4)
-        G.add_node('g', demand = 3)
-        G.add_node('h', demand = 2)
-        G.add_node('r', demand = 3)
-        G.add_edge('a', 'c', weight = 3)
-        G.add_edge('r', 'a', weight = 2)
-        G.add_edge('b', 'a', weight = 9)
-        G.add_edge('r', 'c', weight = 0)
-        G.add_edge('b', 'r', weight = -6)
-        G.add_edge('c', 'd', weight = 5)
-        G.add_edge('e', 'r', weight = 4)
-        G.add_edge('e', 'f', weight = 3)
-        G.add_edge('h', 'b', weight = 4)
-        G.add_edge('f', 'd', weight = 7)
-        G.add_edge('f', 'h', weight = 12)
-        G.add_edge('g', 'd', weight = 12)
-        G.add_edge('f', 'g', weight = -1)
-        G.add_edge('h', 'g', weight = -10)
-        flowCost, H = nx.network_simplex(G)
-        soln = {'a': {'c': 0},
-                'b': {'a': 0, 'r': 2},
-                'c': {'d': 3},
-                'd': {},
-                'e': {'r': 3, 'f': 1},
-                'f': {'d': 0, 'g': 3, 'h': 2},
-                'g': {'d': 0},
-                'h': {'b': 0, 'g': 0},
-                'r': {'a': 1, 'c': 1}}
-        assert_equal(flowCost, 41)
-        assert_equal(nx.min_cost_flow_cost(G), 41)
-        assert_equal(H, soln)
-        assert_equal(nx.min_cost_flow(G), soln)
-        assert_equal(nx.cost_of_flow(G, H), 41)
+    demand : string
+        Nodes of the graph G are expected to have an attribute demand
+        that indicates how much flow a node wants to send (negative
+        demand) or receive (positive demand). Note that the sum of the
+        demands should be 0 otherwise the problem in not feasible. If
+        this attribute is not present, a node is considered to have 0
+        demand. Default value: 'demand'.
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 41)
-        assert_equal(nx.cost_of_flow(G, H), 41)
-        assert_equal(H, soln)
+    capacity : string
+        Edges of the graph G are expected to have an attribute capacity
+        that indicates how much flow the edge can support. If this
+        attribute is not present, the edge is considered to have
+        infinite capacity. Default value: 'capacity'.
 
-    def test_max_flow_min_cost(self):
-        G = nx.DiGraph()
-        G.add_edge('s', 'a', bandwidth = 6)
-        G.add_edge('s', 'c', bandwidth = 10, cost = 10)
-        G.add_edge('a', 'b', cost = 6)
-        G.add_edge('b', 'd', bandwidth = 8, cost = 7)
-        G.add_edge('c', 'd', cost = 10)
-        G.add_edge('d', 't', bandwidth = 5, cost = 5)
-        soln = {'s': {'a': 5, 'c': 0},
-                'a': {'b': 5},
-                'b': {'d': 5},
-                'c': {'d': 0},
-                'd': {'t': 5},
-                't': {}}
-        flow = nx.max_flow_min_cost(G, 's', 't', capacity = 'bandwidth',
-                                    weight = 'cost')
-        assert_equal(flow, soln)
-        assert_equal(nx.cost_of_flow(G, flow, weight = 'cost'), 90)
+    weight : string
+        Edges of the graph G are expected to have an attribute weight
+        that indicates the cost incurred by sending one unit of flow on
+        that edge. If not present, the weight is considered to be 0.
+        Default value: 'weight'.
 
-        G.add_edge('t', 's', cost = -100)
-        flowCost, flow = nx.capacity_scaling(G, capacity = 'bandwidth',
-                                             weight = 'cost')
-        G.remove_edge('t', 's')
-        assert_equal(flowCost, -410)
-        assert_equal(flow['t']['s'], 5)
-        del flow['t']['s']
-        assert_equal(flow, soln)
-        assert_equal(nx.cost_of_flow(G, flow, weight = 'cost'), 90)
+    tolerance : float
+        Used to check that the sum of all of the demands is approximately
+        zero.  This is done by looking at the absolute value of the sum of the
+        demands and checking to see if this is less than `tolerance`.
 
-    def test_digraph1(self):
-        # From Bradley, S. P., Hax, A. C. and Magnanti, T. L. Applied
-        # Mathematical Programming. Addison-Wesley, 1977.
-        G = nx.DiGraph()
-        G.add_node(1, demand = -20)
-        G.add_node(4, demand = 5)
-        G.add_node(5, demand = 15)
-        G.add_edges_from([(1, 2, {'capacity': 15, 'weight': 4}),
-                          (1, 3, {'capacity': 8, 'weight': 4}),
-                          (2, 3, {'weight': 2}),
-                          (2, 4, {'capacity': 4, 'weight': 2}),
-                          (2, 5, {'capacity': 10, 'weight': 6}),
-                          (3, 4, {'capacity': 15, 'weight': 1}),
-                          (3, 5, {'capacity': 5, 'weight': 3}),
-                          (4, 5, {'weight': 2}),
-                          (5, 3, {'capacity': 4, 'weight': 1})])
-        flowCost, H = nx.network_simplex(G)
-        soln = {1: {2: 12, 3: 8},
-                2: {3: 8, 4: 4, 5: 0},
-                3: {4: 11, 5: 5},
-                4: {5: 10},
-                5: {3: 0}}
-        assert_equal(flowCost, 150)
-        assert_equal(nx.min_cost_flow_cost(G), 150)
-        assert_equal(H, soln)
-        assert_equal(nx.min_cost_flow(G), soln)
-        assert_equal(nx.cost_of_flow(G, H), 150)
+    Returns
+    -------
+    flowCost : integer, float
+        Cost of a minimum cost flow satisfying all demands.
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 150)
-        assert_equal(H, soln)
-        assert_equal(nx.cost_of_flow(G, H), 150)
+    flowDict : dictionary
+        Dictionary of dictionaries keyed by nodes such that
+        flowDict[u][v] is the flow edge (u, v).
 
-    def test_digraph2(self):
-        # Example from ticket #430 from mfrasca. Original source:
-        # http://www.cs.princeton.edu/courses/archive/spr03/cs226/lectures/mincost.4up.pdf, slide 11.
-        G = nx.DiGraph()
-        G.add_edge('s', 1, capacity=12)
-        G.add_edge('s', 2, capacity=6)
-        G.add_edge('s', 3, capacity=14)
-        G.add_edge(1, 2, capacity=11, weight=4)
-        G.add_edge(2, 3, capacity=9, weight=6)
-        G.add_edge(1, 4, capacity=5, weight=5)
-        G.add_edge(1, 5, capacity=2, weight=12)
-        G.add_edge(2, 5, capacity=4, weight=4)
-        G.add_edge(2, 6, capacity=2, weight=6)
-        G.add_edge(3, 6, capacity=31, weight=3)
-        G.add_edge(4, 5, capacity=18, weight=4)
-        G.add_edge(5, 6, capacity=9, weight=5)
-        G.add_edge(4, 't', capacity=3)
-        G.add_edge(5, 't', capacity=7)
-        G.add_edge(6, 't', capacity=22)
-        flow = nx.max_flow_min_cost(G, 's', 't')
-        soln = {1: {2: 6, 4: 5, 5: 1},
-                2: {3: 6, 5: 4, 6: 2},
-                3: {6: 20},
-                4: {5: 2, 't': 3},
-                5: {6: 0, 't': 7},
-                6: {'t': 22},
-                's': {1: 12, 2: 6, 3: 14},
-                't': {}}
-        assert_equal(flow, soln)
+    Raises
+    ------
+    NetworkXError
+        This exception is raised if the input graph is not directed,
+        not connected or is a multigraph.
 
-        G.add_edge('t', 's', weight=-100)
-        flowCost, flow = nx.capacity_scaling(G)
-        G.remove_edge('t', 's')
-        assert_equal(flow['t']['s'], 32)
-        assert_equal(flowCost, -3007)
-        del flow['t']['s']
-        assert_equal(flow, soln)
-        assert_equal(nx.cost_of_flow(G, flow), 193)
+    NetworkXUnfeasible
+        This exception is raised in the following situations:
 
-    def test_digraph3(self):
-        """Combinatorial Optimization: Algorithms and Complexity,
-        Papadimitriou Steiglitz at page 140 has an example, 7.1, but that
-        admits multiple solutions, so I alter it a bit. From ticket #430
-        by mfrasca."""
+            * The sum of the demands is not zero. Then, there is no
+              flow satisfying all demands.
+            * There is no flow satisfying all demand.
 
-        G = nx.DiGraph()
-        G.add_edge('s', 'a', {0: 2, 1: 4})
-        G.add_edge('s', 'b', {0: 2, 1: 1})
-        G.add_edge('a', 'b', {0: 5, 1: 2})
-        G.add_edge('a', 't', {0: 1, 1: 5})
-        G.add_edge('b', 'a', {0: 1, 1: 3})
-        G.add_edge('b', 't', {0: 3, 1: 2})
+    NetworkXUnbounded
+        This exception is raised if the digraph G has a cycle of
+        negative cost and infinite capacity. Then, the cost of a flow
+        satisfying all demands is unbounded below.
 
-        "PS.ex.7.1: testing main function"
-        sol = nx.max_flow_min_cost(G, 's', 't', capacity=0, weight=1)
-        flow = sum(v for v in sol['s'].values())
-        assert_equal(4, flow)
-        assert_equal(23, nx.cost_of_flow(G, sol, weight=1))
-        assert_equal(sol['s'], {'a': 2, 'b': 2})
-        assert_equal(sol['a'], {'b': 1, 't': 1})
-        assert_equal(sol['b'], {'a': 0, 't': 3})
-        assert_equal(sol['t'], {})
+    Notes
+    -----
+    This algorithm is not guaranteed to work if edge weights
+    are floating point numbers (overflows and roundoff errors can
+    cause problems).
 
-        G.add_edge('t', 's', {1: -100})
-        flowCost, sol = nx.capacity_scaling(G, capacity=0, weight=1)
-        G.remove_edge('t', 's')
-        flow = sum(v for v in sol['s'].values())
-        assert_equal(4, flow)
-        assert_equal(sol['t']['s'], 4)
-        assert_equal(flowCost, -377)
-        del sol['t']['s']
-        assert_equal(sol['s'], {'a': 2, 'b': 2})
-        assert_equal(sol['a'], {'b': 1, 't': 1})
-        assert_equal(sol['b'], {'a': 0, 't': 3})
-        assert_equal(sol['t'], {})
-        assert_equal(nx.cost_of_flow(G, sol, weight=1), 23)
+    See also
+    --------
+    cost_of_flow, max_flow_min_cost, min_cost_flow, min_cost_flow_cost
 
-    def test_zero_capacity_edges(self):
-        """Address issue raised in ticket #617 by arv."""
-        G = nx.DiGraph()
-        G.add_edges_from([(1, 2, {'capacity': 1, 'weight': 1}),
-                          (1, 5, {'capacity': 1, 'weight': 1}),
-                          (2, 3, {'capacity': 0, 'weight': 1}),
-                          (2, 5, {'capacity': 1, 'weight': 1}),
-                          (5, 3, {'capacity': 2, 'weight': 1}),
-                          (5, 4, {'capacity': 0, 'weight': 1}),
-                          (3, 4, {'capacity': 2, 'weight': 1})])
-        G.node[1]['demand'] = -1
-        G.node[2]['demand'] = -1
-        G.node[4]['demand'] = 2
+    Examples
+    --------
+    A simple example of a min cost flow problem.
 
-        flowCost, H = nx.network_simplex(G)
-        soln = {1: {2: 0, 5: 1},
-                2: {3: 0, 5: 1},
-                3: {4: 2},
-                4: {},
-                5: {3: 2, 4: 0}}
-        assert_equal(flowCost, 6)
-        assert_equal(nx.min_cost_flow_cost(G), 6)
-        assert_equal(H, soln)
-        assert_equal(nx.min_cost_flow(G), soln)
-        assert_equal(nx.cost_of_flow(G, H), 6)
+    >>> import networkx as nx
+    >>> G = nx.DiGraph()
+    >>> G.add_node('a', demand=-5)
+    >>> G.add_node('d', demand=5)
+    >>> G.add_edge('a', 'b', weight=3, capacity=4)
+    >>> G.add_edge('a', 'c', weight=6, capacity=10)
+    >>> G.add_edge('b', 'd', weight=1, capacity=9)
+    >>> G.add_edge('c', 'd', weight=2, capacity=5)
+    >>> flowCost, flowDict = nx.network_simplex(G)
+    >>> flowCost
+    24
+    >>> flowDict # doctest: +SKIP
+    {'a': {'c': 1, 'b': 4}, 'c': {'d': 1}, 'b': {'d': 4}, 'd': {}}
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 6)
-        assert_equal(H, soln)
-        assert_equal(nx.cost_of_flow(G, H), 6)
+    The mincost flow algorithm can also be used to solve shortest path
+    problems. To find the shortest path between two nodes u and v,
+    give all edges an infinite capacity, give node u a demand of -1 and
+    node v a demand a 1. Then run the network simplex. The value of a
+    min cost flow will be the distance between u and v and edges
+    carrying positive flow will indicate the path.
 
-    def test_digon(self):
-        """Check if digons are handled properly. Taken from ticket
-        #618 by arv."""
-        nodes = [(1, {}),
-                 (2, {'demand': -4}),
-                 (3, {'demand': 4}),
-                 ]
-        edges = [(1, 2, {'capacity': 3, 'weight': 600000}),
-                 (2, 1, {'capacity': 2, 'weight': 0}),
-                 (2, 3, {'capacity': 5, 'weight': 714285}),
-                 (3, 2, {'capacity': 2, 'weight': 0}),
-                 ]
-        G = nx.DiGraph(edges)
-        G.add_nodes_from(nodes)
-        flowCost, H = nx.network_simplex(G)
-        soln = {1: {2: 0},
-                2: {1: 0, 3: 4},
-                3: {2: 0}}
-        assert_equal(flowCost, 2857140)
-        assert_equal(nx.min_cost_flow_cost(G), 2857140)
-        assert_equal(H, soln)
-        assert_equal(nx.min_cost_flow(G), soln)
-        assert_equal(nx.cost_of_flow(G, H), 2857140)
+    >>> G=nx.DiGraph()
+    >>> G.add_weighted_edges_from([('s', 'u' ,10), ('s' ,'x' ,5),
+    ...                            ('u', 'v' ,1), ('u' ,'x' ,2),
+    ...                            ('v', 'y' ,1), ('x' ,'u' ,3),
+    ...                            ('x', 'v' ,5), ('x' ,'y' ,2),
+    ...                            ('y', 's' ,7), ('y' ,'v' ,6)])
+    >>> G.add_node('s', demand = -1)
+    >>> G.add_node('v', demand = 1)
+    >>> flowCost, flowDict = nx.network_simplex(G)
+    >>> flowCost == nx.shortest_path_length(G, 's', 'v', weight='weight')
+    True
+    >>> sorted([(u, v) for u in flowDict for v in flowDict[u] if flowDict[u][v] > 0])
+    [('s', 'x'), ('u', 'v'), ('x', 'u')]
+    >>> nx.shortest_path(G, 's', 'v', weight = 'weight')
+    ['s', 'x', 'u', 'v']
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 2857140)
-        assert_equal(H, soln)
-        assert_equal(nx.cost_of_flow(G, H), 2857140)
+    It is possible to change the name of the attributes used for the
+    algorithm.
 
-    def test_infinite_capacity_neg_digon(self):
-        """An infinite capacity negative cost digon results in an unbounded
-        instance."""
-        nodes = [(1, {}),
-                 (2, {'demand': -4}),
-                 (3, {'demand': 4}),
-                 ]
-        edges = [(1, 2, {'weight': -600}),
-                 (2, 1, {'weight': 0}),
-                 (2, 3, {'capacity': 5, 'weight': 714285}),
-                 (3, 2, {'capacity': 2, 'weight': 0}),
-                 ]
-        G = nx.DiGraph(edges)
-        G.add_nodes_from(nodes)
-        assert_raises(nx.NetworkXUnbounded, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnbounded, nx.capacity_scaling, G)
+    >>> G = nx.DiGraph()
+    >>> G.add_node('p', spam=-4)
+    >>> G.add_node('q', spam=2)
+    >>> G.add_node('a', spam=-2)
+    >>> G.add_node('d', spam=-1)
+    >>> G.add_node('t', spam=2)
+    >>> G.add_node('w', spam=3)
+    >>> G.add_edge('p', 'q', cost=7, vacancies=5)
+    >>> G.add_edge('p', 'a', cost=1, vacancies=4)
+    >>> G.add_edge('q', 'd', cost=2, vacancies=3)
+    >>> G.add_edge('t', 'q', cost=1, vacancies=2)
+    >>> G.add_edge('a', 't', cost=2, vacancies=4)
+    >>> G.add_edge('d', 'w', cost=3, vacancies=4)
+    >>> G.add_edge('t', 'w', cost=4, vacancies=1)
+    >>> flowCost, flowDict = nx.network_simplex(G, demand='spam',
+    ...                                         capacity='vacancies',
+    ...                                         weight='cost')
+    >>> flowCost
+    37
+    >>> flowDict  # doctest: +SKIP
+    {'a': {'t': 4}, 'd': {'w': 2}, 'q': {'d': 1}, 'p': {'q': 2, 'a': 2}, 't': {'q': 1, 'w': 1}, 'w': {}}
 
-    def test_finite_capacity_neg_digon(self):
-        """The digon should receive the maximum amount of flow it can handle.
-        Taken from ticket #749 by @chuongdo."""
-        G = nx.DiGraph()
-        G.add_edge('a', 'b', capacity=1, weight=-1)
-        G.add_edge('b', 'a', capacity=1, weight=-1)
-        min_cost = -2
-        assert_equal(nx.min_cost_flow_cost(G), min_cost)
+    References
+    ----------
+    .. [1] Z. Kiraly, P. Kovacs.
+           Efficient implementation of minimum-cost flow algorithms.
+           Acta Universitatis Sapientiae, Informatica 4(1):67--118. 2012.
+    .. [2] R. Barr, F. Glover, D. Klingman.
+           Enhancement of spanning tree labeling procedures for network
+           optimization.
+           INFOR 17(1):16--34. 1979.
+    """
+    ###########################################################################
+    # Problem essentials extraction and sanity check
+    ###########################################################################
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, -2)
-        assert_equal(H, {'a': {'b': 1}, 'b': {'a': 1}})
-        assert_equal(nx.cost_of_flow(G, H), -2)
+    if len(G) == 0:
+        raise nx.NetworkXError('graph has no nodes')
 
-    def test_multidigraph(self):
-        """Multidigraphs are acceptable."""
-        G = nx.MultiDiGraph()
-        G.add_weighted_edges_from([(1, 2, 1), (2, 3, 2)], weight='capacity')
-        flowCost, H = nx.network_simplex(G)
-        assert_equal(flowCost, 0)
-        assert_equal(H, {1: {2: {0: 0}}, 2: {3: {0: 0}}, 3: {}})
+    # Number all nodes and edges and hereafter reference them using ONLY their
+    # numbers
 
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 0)
-        assert_equal(H, {1: {2: {0: 0}}, 2: {3: {0: 0}}, 3: {}})
+    N = list(G)                                # nodes
+    I = {u: i for i, u in enumerate(N)}        # node indices
+    D = [G.node[u].get(demand, 0) for u in N]  # node demands
 
-    def test_negative_selfloops(self):
-        """Negative selfloops should cause an exception if uncapacitated and
-        always be saturated otherwise.
+    inf = float('inf')
+    for p, b in zip(N, D):
+        if abs(b) == inf:
+            raise nx.NetworkXError('node %r has infinite demand' % (p,))
+
+    multigraph = G.is_multigraph()
+    S = []  # edge sources
+    T = []  # edge targets
+    if multigraph:
+        K = []  # edge keys
+    E = {}  # edge indices
+    U = []  # edge capacities
+    C = []  # edge weights
+
+    if not multigraph:
+        edges = G.edges(data=True)
+    else:
+        edges = G.edges(data=True, keys=True)
+    edges = (e for e in edges
+             if e[0] != e[1] and e[-1].get(capacity, inf) != 0)
+    for i, e in enumerate(edges):
+        S.append(I[e[0]])
+        T.append(I[e[1]])
+        if multigraph:
+            K.append(e[2])
+        E[e[:-1]] = i
+        U.append(e[-1].get(capacity, inf))
+        C.append(e[-1].get(weight, 0))
+
+    for e, c in zip(E, C):
+        if abs(c) == inf:
+            raise nx.NetworkXError('edge %r has infinite weight' % (e,))
+    if not multigraph:
+        edges = G.selfloop_edges(data=True)
+    else:
+        edges = G.selfloop_edges(data=True, keys=True)
+    for e in edges:
+        if abs(e[-1].get(weight, 0)) == inf:
+            raise nx.NetworkXError('edge %r has infinite weight' % (e[:-1],))
+
+    ###########################################################################
+    # Quick infeasibility detection
+    ###########################################################################
+
+    if abs(sum(D)) > tolerance:
+        raise nx.NetworkXUnfeasible('total node demand is not zero')
+    for e, u in zip(E, U):
+        if u < 0:
+            raise nx.NetworkXUnfeasible('edge %r has negative capacity' % (e,))
+    if not multigraph:
+        edges = G.selfloop_edges(data=True)
+    else:
+        edges = G.selfloop_edges(data=True, keys=True)
+    for e in edges:
+        if e[-1].get(capacity, inf) < 0:
+            raise nx.NetworkXUnfeasible(
+                'edge %r has negative capacity' % (e[:-1],))
+
+    ###########################################################################
+    # Initialization
+    ###########################################################################
+
+    # Add a dummy node -1 and connect all existing nodes to it with infinite-
+    # capacity dummy edges. Node -1 will serve as the root of the
+    # spanning tree of the network simplex method. The new edges will used to
+    # trivially satisfy the node demands and create an initial strongly
+    # feasible spanning tree.
+    n = len(N)  # number of nodes
+    for p, d in enumerate(D):
+        if d > 0:  # Must be greater-than here. Zero-demand nodes must have
+                   # edges pointing towards the root to ensure strong
+                   # feasibility.
+            S.append(-1)
+            T.append(p)
+        else:
+            S.append(p)
+            T.append(-1)
+    faux_inf = 3 * max(chain([sum(u for u in U if u < inf),
+                              sum(abs(c) for c in C)],
+                             (abs(d) for d in D))) or 1
+    C.extend(repeat(faux_inf, n))
+    U.extend(repeat(faux_inf, n))
+
+    # Construct the initial spanning tree.
+    e = len(E)                                           # number of edges
+    x = list(chain(repeat(0, e), (abs(d) for d in D)))   # edge flows
+    pi = [faux_inf if d <= 0 else -faux_inf for d in D]  # node potentials
+    parent = list(chain(repeat(-1, n), [None]))  # parent nodes
+    edge = list(range(e, e + n))                 # edges to parents
+    size = list(chain(repeat(1, n), [n + 1]))    # subtree sizes
+    next = list(chain(range(1, n), [-1, 0]))     # next nodes in depth-first thread
+    prev = list(range(-1, n))                    # previous nodes in depth-first thread
+    last = list(chain(range(n), [n - 1]))        # last descendants in depth-first thread
+
+    ###########################################################################
+    # Pivot loop
+    ###########################################################################
+
+    def reduced_cost(i):
+        """Return the reduced cost of an edge i.
         """
-        G = nx.DiGraph()
-        G.add_edge(1, 1, weight=-1)
-        assert_raises(nx.NetworkXUnbounded, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnbounded, nx.capacity_scaling, G)
-        G[1][1]['capacity'] = 2
-        flowCost, H = nx.network_simplex(G)
-        assert_equal(flowCost, -2)
-        assert_equal(H, {1: {1: 2}})
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, -2)
-        assert_equal(H, {1: {1: 2}})
+        c = C[i] - pi[S[i]] + pi[T[i]]
+        return c if x[i] == 0 else -c
 
-        G = nx.MultiDiGraph()
-        G.add_edge(1, 1, 'x', weight=-1)
-        G.add_edge(1, 1, 'y', weight=1)
-        assert_raises(nx.NetworkXUnbounded, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnbounded, nx.capacity_scaling, G)
-        G[1][1]['x']['capacity'] = 2
-        flowCost, H = nx.network_simplex(G)
-        assert_equal(flowCost, -2)
-        assert_equal(H, {1: {1: {'x': 2, 'y': 0}}})
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, -2)
-        assert_equal(H, {1: {1: {'x': 2, 'y': 0}}})
+    def find_entering_edges():
+        """Yield entering edges until none can be found.
+        """
+        if e == 0:
+            return
 
-    def test_bone_shaped(self):
-        # From #1283
-        G = nx.DiGraph()
-        G.add_node(0, demand=-4)
-        G.add_node(1, demand=2)
-        G.add_node(2, demand=2)
-        G.add_node(3, demand=4)
-        G.add_node(4, demand=-2)
-        G.add_node(5, demand=-2)
-        G.add_edge(0, 1, capacity=4)
-        G.add_edge(0, 2, capacity=4)
-        G.add_edge(4, 3, capacity=4)
-        G.add_edge(5, 3, capacity=4)
-        G.add_edge(0, 3, capacity=0)
-        flowCost, H = nx.network_simplex(G)
-        assert_equal(flowCost, 0)
-        assert_equal(
-            H, {0: {1: 2, 2: 2, 3: 0}, 1: {}, 2: {}, 3: {}, 4: {3: 2}, 5: {3: 2}})
-        flowCost, H = nx.capacity_scaling(G)
-        assert_equal(flowCost, 0)
-        assert_equal(
-            H, {0: {1: 2, 2: 2, 3: 0}, 1: {}, 2: {}, 3: {}, 4: {3: 2}, 5: {3: 2}})
+        # Entering edges are found by combining Dantzig's rule and Bland's
+        # rule. The edges are cyclically grouped into blocks of size B. Within
+        # each block, Dantzig's rule is applied to find an entering edge. The
+        # blocks to search is determined following Bland's rule.
+        B = int(ceil(sqrt(e)))  # pivot block size
+        M = (e + B - 1) // B    # number of blocks needed to cover all edges
+        m = 0                   # number of consecutive blocks without eligible
+                                # entering edges
+        f = 0                   # first edge in block
+        while m < M:
+            # Determine the next block of edges.
+            l = f + B
+            if l <= e:
+                edges = range(f, l)
+            else:
+                l -= e
+                edges = chain(range(f, e), range(l))
+            f = l
+            # Find the first edge with the lowest reduced cost.
+            i = min(edges, key=reduced_cost)
+            c = reduced_cost(i)
+            if c >= 0:
+                # No entering edge found in the current block.
+                m += 1
+            else:
+                # Entering edge found.
+                if x[i] == 0:
+                    p = S[i]
+                    q = T[i]
+                else:
+                    p = T[i]
+                    q = S[i]
+                yield i, p, q
+                m = 0
+        # All edges have nonnegative reduced costs. The current flow is
+        # optimal.
 
-    def test_exceptions(self):
-        G = nx.Graph()
-        assert_raises(nx.NetworkXNotImplemented, nx.network_simplex, G)
-        assert_raises(nx.NetworkXNotImplemented, nx.capacity_scaling, G)
-        G = nx.MultiGraph()
-        assert_raises(nx.NetworkXNotImplemented, nx.network_simplex, G)
-        assert_raises(nx.NetworkXNotImplemented, nx.capacity_scaling, G)
-        G = nx.DiGraph()
-        assert_raises(nx.NetworkXError, nx.network_simplex, G)
-        assert_raises(nx.NetworkXError, nx.capacity_scaling, G)
-        G.add_node(0, demand=float('inf'))
-        assert_raises(nx.NetworkXError, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
-        G.node[0]['demand'] = 0
-        G.add_node(1, demand=0)
-        G.add_edge(0, 1, weight=-float('inf'))
-        assert_raises(nx.NetworkXError, nx.network_simplex, G)
-        assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
-        G[0][1]['weight'] = 0
-        G.add_edge(0, 0, weight=float('inf'))
-        assert_raises(nx.NetworkXError, nx.network_simplex, G)
-        #assert_raises(nx.NetworkXError, nx.capacity_scaling, G)
-        G[0][0]['weight'] = 0
-        G[0][1]['capacity'] = -1
-        assert_raises(nx.NetworkXUnfeasible, nx.network_simplex, G)
-        #assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
-        G[0][1]['capacity'] = 0
-        G[0][0]['capacity'] = -1
-        assert_raises(nx.NetworkXUnfeasible, nx.network_simplex, G)
-        #assert_raises(nx.NetworkXUnfeasible, nx.capacity_scaling, G)
+    def find_apex(p, q):
+        """Find the lowest common ancestor of nodes p and q in the spanning
+        tree.
+        """
+        size_p = size[p]
+        size_q = size[q]
+        while True:
+            while size_p < size_q:
+                p = parent[p]
+                size_p = size[p]
+            while size_p > size_q:
+                q = parent[q]
+                size_q = size[q]
+            if size_p == size_q:
+                if p != q:
+                    p = parent[p]
+                    size_p = size[p]
+                    q = parent[q]
+                    size_q = size[q]
+                else:
+                    return p
 
-    def test_large(self):
-        fname = os.path.join(os.path.dirname(__file__), 'netgen-2.gpickle.bz2')
-        G = nx.read_gpickle(fname)
-        flowCost, flowDict = nx.network_simplex(G)
-        assert_equal(6749969302, flowCost)
-        assert_equal(6749969302, nx.cost_of_flow(G, flowDict))
-        flowCost, flowDict = nx.capacity_scaling(G)
-        assert_equal(6749969302, flowCost)
-        assert_equal(6749969302, nx.cost_of_flow(G, flowDict))
+    def trace_path(p, w):
+        """Return the nodes and edges on the path from node p to its ancestor
+        w.
+        """
+        Wn = [p]
+        We = []
+        while p != w:
+            We.append(edge[p])
+            p = parent[p]
+            Wn.append(p)
+        return Wn, We
+
+    def find_cycle(i, p, q):
+        """Return the nodes and edges on the cycle containing edge i == (p, q)
+        when the latter is added to the spanning tree.
+
+        The cycle is oriented in the direction from p to q.
+        """
+        w = find_apex(p, q)
+        Wn, We = trace_path(p, w)
+        Wn.reverse()
+        We.reverse()
+        We.append(i)
+        WnR, WeR = trace_path(q, w)
+        del WnR[-1]
+        Wn += WnR
+        We += WeR
+        return Wn, We
+
+
+    def residual_capacity(i, p):
+        """Return the residual capacity of an edge i in the direction away
+        from its endpoint p.
+        """
+        return U[i] - x[i] if S[i] == p else x[i]
+
+    def find_leaving_edge(Wn, We):
+        """Return the leaving edge in a cycle represented by Wn and We.
+        """
+        j, s = min(zip(reversed(We), reversed(Wn)),
+                   key=lambda i_p: residual_capacity(*i_p))
+        t = T[j] if S[j] == s else S[j]
+        return j, s, t
+
+    def augment_flow(Wn, We, f):
+        """Augment f units of flow along a cycle represented by Wn and We.
+        """
+        for i, p in zip(We, Wn):
+            if S[i] == p:
+                x[i] += f
+            else:
+                x[i] -= f
+
+    def trace_subtree(p):
+        """Yield the nodes in the subtree rooted at a node p.
+        """
+        yield p
+        l = last[p]
+        while p != l:
+            p = next[p]
+            yield p
+
+    def remove_edge(s, t):
+        """Remove an edge (s, t) where parent[t] == s from the spanning tree.
+        """
+        size_t = size[t]
+        prev_t = prev[t]
+        last_t = last[t]
+        next_last_t = next[last_t]
+        # Remove (s, t).
+        parent[t] = None
+        edge[t] = None
+        # Remove the subtree rooted at t from the depth-first thread.
+        next[prev_t] = next_last_t
+        prev[next_last_t] = prev_t
+        next[last_t] = t
+        prev[t] = last_t
+        # Update the subtree sizes and last descendants of the (old) acenstors
+        # of t.
+        while s is not None:
+            size[s] -= size_t
+            if last[s] == last_t:
+                last[s] = prev_t
+            s = parent[s]
+
+    def make_root(q):
+        """Make a node q the root of its containing subtree.
+        """
+        ancestors = []
+        while q is not None:
+            ancestors.append(q)
+            q = parent[q]
+        ancestors.reverse()
+        for p, q in zip(ancestors, islice(ancestors, 1, None)):
+            size_p = size[p]
+            last_p = last[p]
+            prev_q = prev[q]
+            last_q = last[q]
+            next_last_q = next[last_q]
+            # Make p a child of q.
+            parent[p] = q
+            parent[q] = None
+            edge[p] = edge[q]
+            edge[q] = None
+            size[p] = size_p - size[q]
+            size[q] = size_p
+            # Remove the subtree rooted at q from the depth-first thread.
+            next[prev_q] = next_last_q
+            prev[next_last_q] = prev_q
+            next[last_q] = q
+            prev[q] = last_q
+            if last_p == last_q:
+                last[p] = prev_q
+                last_p = prev_q
+            # Add the remaining parts of the subtree rooted at p as a subtree
+            # of q in the depth-first thread.
+            prev[p] = last_q
+            next[last_q] = p
+            next[last_p] = q
+            prev[q] = last_p
+            last[q] = last_p
+
+    def add_edge(i, p, q):
+        """Add an edge (p, q) to the spanning tree where q is the root of a
+        subtree.
+        """
+        last_p = last[p]
+        next_last_p = next[last_p]
+        size_q = size[q]
+        last_q = last[q]
+        # Make q a child of p.
+        parent[q] = p
+        edge[q] = i
+        # Insert the subtree rooted at q into the depth-first thread.
+        next[last_p] = q
+        prev[q] = last_p
+        prev[next_last_p] = last_q
+        next[last_q] = next_last_p
+        # Update the subtree sizes and last descendants of the (new) ancestors
+        # of q.
+        while p is not None:
+            size[p] += size_q
+            if last[p] == last_p:
+                last[p] = last_q
+            p = parent[p]
+
+    def update_potentials(i, p, q):
+        """Update the potentials of the nodes in the subtree rooted at a node
+        q connected to its parent p by an edge i.
+        """
+        if q == T[i]:
+            d = pi[p] - C[i] - pi[q]
+        else:
+            d = pi[p] + C[i] - pi[q]
+        for q in trace_subtree(q):
+            pi[q] += d
+
+    # Pivot loop
+    for i, p, q in find_entering_edges():
+        Wn, We = find_cycle(i, p, q)
+        j, s, t = find_leaving_edge(Wn, We)
+        augment_flow(Wn, We, residual_capacity(j, s))
+        if i != j:  # Do nothing more if the entering edge is the same as the
+                    # the leaving edge.
+            if parent[t] != s:
+                # Ensure that s is the parent of t.
+                s, t = t, s
+            if We.index(i) > We.index(j):
+                # Ensure that q is in the subtree rooted at t.
+                p, q = q, p
+            remove_edge(s, t)
+            make_root(q)
+            add_edge(i, p, q)
+            update_potentials(i, p, q)
+
+    ###########################################################################
+    # Infeasibility and unboundedness detection
+    ###########################################################################
+
+    if any(x[i] != 0 for i in range(-n, 0)):
+        raise nx.NetworkXUnfeasible('no flow satisfies all node demands')
+
+    if (any(x[i] * 2 >= faux_inf for i in range(e)) or
+        any(e[-1].get(capacity, inf) == inf and e[-1].get(weight, 0) < 0
+            for e in G.selfloop_edges(data=True))):
+        raise nx.NetworkXUnbounded(
+            'negative cycle with infinite capacity found')
+
+    ###########################################################################
+    # Flow cost calculation and flow dict construction
+    ###########################################################################
+
+    del x[e:]
+    flow_cost = sum(c * x for c, x in zip(C, x))
+    flow_dict = {n: {} for n in N}
+
+    def add_entry(e):
+        """Add a flow dict entry.
+        """
+        d = flow_dict[e[0]]
+        for k in e[1:-2]:
+            try:
+                d = d[k]
+            except KeyError:
+                t = {}
+                d[k] = t
+                d = t
+        d[e[-2]] = e[-1]
+
+    S = (N[s] for s in S)  # Use original nodes.
+    T = (N[t] for t in T)  # Use original nodes.
+    if not multigraph:
+        for e in zip(S, T, x):
+            add_entry(e)
+        edges = G.edges(data=True)
+    else:
+        for e in zip(S, T, K, x):
+            add_entry(e)
+        edges = G.edges(data=True, keys=True)
+    for e in edges:
+        if e[0] != e[1]:
+            if e[-1].get(capacity, inf) == 0:
+                add_entry(e[:-1] + (0,))
+        else:
+            c = e[-1].get(weight, 0)
+            if c >= 0:
+                add_entry(e[:-1] + (0,))
+            else:
+                u = e[-1][capacity]
+                flow_cost += c * u
+                add_entry(e[:-1] + (u,))
+
+    return flow_cost, flow_dict

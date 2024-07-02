@@ -1,5 +1,4 @@
 ﻿using System;
-			if (entity.GetType().BaseType != _entityType)
 using System.Collections.Generic;
 using NHibernate.Bytecode;
 using NHibernate.Engine;
@@ -133,7 +132,7 @@ namespace NHibernate.Tuple.Entity
 				return null; // Can happen when a saved entity is refreshed within the same session NH2860
 			}
 
-			if (_entityType.IsInstanceOf(entity))
+			if (entity.GetType().BaseType != _entityType)
 			{
 				throw new ArgumentException(
 					$"Passed entity instance [{entity}] is not of expected type [{EntityName}]");

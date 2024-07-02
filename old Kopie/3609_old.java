@@ -578,7 +578,6 @@ public class NearbyParentFragment extends CommonsDaggerSupportFragment
      *
      */
     private void addActionToTitle() {
-        title.setOnLongClickListener(view -> {
                 Utils.copy("place", title.getText().toString(), getContext());
                 Toast.makeText(getContext(), "Text copied to clipboard", Toast.LENGTH_SHORT).show();
                 return true;

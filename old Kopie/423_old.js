@@ -1,12 +1,16 @@
 const EventEmitter = require('events');
-var EventEmitter = require('events');
-const inversify = require('inversify');
-require('reflect-metadata'); // require this only once! See https://github.com/inversify/InversifyJS/issues/262#issuecomment-227593844
-
 function warnIfLegacy(eventName) {
   const legacyEvents = ['abi-vanila', 'abi', 'abi-contracts-vanila', 'abi-vanila-deployment'];
   if (legacyEvents.indexOf(eventName) >= 0) {
     console.info(__("this event is deprecated and will be removed in future versions %s", eventName));
+}
+function log(eventType, eventName) {
+  if (['end', 'prefinish', 'error', 'new', 'demo', 'block', 'version'].indexOf(eventName) >= 0) {
+    return;
+  //console.log(eventType, eventName);
+EventEmitter.prototype._maxListeners = 200;var EventEmitter = require('events');
+require('reflect-metadata'); // require this only once! See https://github.com/inversify/InversifyJS/issues/262#issuecomment-227593844
+
 class Events extends EventEmitter {
 
   warnIfLegacy(eventName) {
@@ -42,18 +46,13 @@ class Events extends EventEmitter {
     this.warnIfLegacy(requestName);
     return this.emit('request:' + requestName, ...other_args);
   }
-}
 
-function log(eventType, eventName) {
-  if (['end', 'prefinish', 'error', 'new', 'demo', 'block', 'version'].indexOf(eventName) >= 0) {
-    return;
   setCommandHandler(requestName, cb) {
     this.log("setting command handler for: ", requestName);
     return this.on('request:' + requestName, function (_cb) {
       cb.call(this, ...arguments);
     });
   }
-  //console.log(eventType, eventName);
 
   setCommandHandlerOnce(requestName, cb) {
     this.log("setting command handler for: ", requestName);
@@ -64,7 +63,7 @@ function log(eventType, eventName) {
 
 }
 
-EventEmitter.prototype._maxListeners = 200;inversify.decorate(inversify.injectable(), Events);
+inversify.decorate(inversify.injectable(), Events);
 inversify.decorate(inversify.injectable(), EventEmitter);
 
 module.exports = Events;

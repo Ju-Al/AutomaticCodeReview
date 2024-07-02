@@ -161,7 +161,6 @@ def update_destination(stream_name, destination_id,
             dest['S3DestinationDescription'] = {}
         for k, v in iteritems(s3_update):
             dest['S3DestinationDescription'][k] = v
-    if http_update:
         if 'HttpEndpointDestinationDescription' not in dest:
             dest['HttpEndpointDestinationDescription'] = {}
         for k, v in iteritems(http_update):

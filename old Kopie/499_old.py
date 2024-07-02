@@ -119,8 +119,6 @@ class Config(object):
             return option
         except:
             return default
-
-class MDAExtension(Extension, object):
     """Derived class to cleanly handle setup-time dependencies (numpy)
     """
     # The only setup-time numpy dependency comes when setting up its

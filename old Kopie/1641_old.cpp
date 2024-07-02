@@ -1,5 +1,4 @@
 /*
-    random_shuffle(servers_.begin(), servers_.end());
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
@@ -190,7 +189,7 @@ void TSocketPool::open() {
   }
 
   if (randomize_ && numServers > 1) {
-#if __cplusplus >= 201500L // c++17
+    random_shuffle(servers_.begin(), servers_.end());
     std::random_device rng;
     std::mt19937 urng(rng());
     std::shuffle(servers_.begin(), servers_.end(), urng);

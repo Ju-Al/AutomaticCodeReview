@@ -1046,7 +1046,6 @@ Blockly.WorkspaceSvg.prototype.zoomReset = function(e) {
 };
 
 /**
- * Scroll the workspace by a specified amount, keeping in the bounds
  * @param {number} x Target X to scroll to
  * @param {number} y Target Y to scroll to
  */

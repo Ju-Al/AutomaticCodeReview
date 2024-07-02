@@ -1806,7 +1806,6 @@ Blockly.WorkspaceSvg.prototype.setResizesEnabled = function(enabled) {
 };
 
 /**
- * Set whether this workspace is currently doing a bulk update.
  * A bulk update pauses workspace resizing but also pauses other expensive
  * operations, such as refreshing the toolbox as variables are added and
  * removed.

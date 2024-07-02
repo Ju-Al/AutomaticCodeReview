@@ -1,6 +1,4 @@
 /*
-        tablet.getTabletServer().getContext(), IteratorScope.scan, tablet.getTableConfiguration(),
-        fileManager, files, options.getAuthorizations(), samplerConfig);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -194,7 +192,8 @@ class ScanDataSource implements DataSource {
     MultiIterator multiIter = new MultiIterator(iters, tablet.getExtent());
 
     TabletIteratorEnvironment iterEnv = new TabletIteratorEnvironment(
-        tablet.getTabletServer().getContext(), IteratorScope.scan, fileManager, files,
+        tablet.getTabletServer().getContext(), IteratorScope.scan, tablet.getTableConfiguration(),
+        fileManager, files, options.getAuthorizations(), samplerConfig);
         options.getAuthorizations(), samplerConfig, new ArrayList<>());
 
     statsIterator = new StatsIterator(multiIter, TabletServer.seekCount,

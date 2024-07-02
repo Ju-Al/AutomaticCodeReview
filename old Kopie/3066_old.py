@@ -1,5 +1,4 @@
 """
-        self.comm = None
 Public API for all plots supported by HoloViews, regardless of
 plotting package or backend. Every plotting classes must be a subclass
 of this Plot baseclass.
@@ -237,7 +236,7 @@ class DimensionedPlot(Plot):
         self.current_key = None
         self.ranges = {}
         self.renderer = renderer if renderer else Store.renderers[self.backend].instance()
-        self.comm = params.pop('comm', None)
+        self.comm = None
         self._force = False
         self._updated = False # Whether the plot should be marked as updated
 

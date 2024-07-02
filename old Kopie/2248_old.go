@@ -1,5 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-	if err := crl.dockerPush(ctx, imageRef); err != nil {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -221,7 +220,7 @@ func (crl *cloudRunLauncher) Launch(ctx context.Context, input *LaunchInput) (*u
 	if err != nil {
 		return nil, xerrors.Errorf("cloud run launch: %w", err)
 	}
-	if err := crl.dockerClient.Push(ctx, imageRef, ioutil.Discard); err != nil {
+	if err := crl.dockerPush(ctx, imageRef); err != nil {
 		return nil, xerrors.Errorf("cloud run launch: %w", err)
 	}
 

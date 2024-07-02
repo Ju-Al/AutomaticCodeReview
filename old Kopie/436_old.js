@@ -751,7 +751,6 @@ Blockly.BlockSvg.prototype.renderDrawRight_ = function(steps, connectionsXY, met
   if (this.nextConnection) {
     steps.push(Blockly.BlockSvg.NOTCH_PATH_UP);
 
-    // Include width of notch in block height.
     this.width += Blockly.BlockSvg.NOTCH_WIDTH;
 
     // Create next block connection.

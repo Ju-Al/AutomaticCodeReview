@@ -1,14 +1,4 @@
 import logging
-        img_shape = img_metas[0]['img_shape']
-        scale_factor = img_metas[0]['scale_factor']
-        det_bboxes, det_labels = self.bbox_head.get_bboxes(
-            rois,
-            bbox_results['cls_score'],
-            bbox_results['bbox_pred'],
-            img_shape,
-            scale_factor,
-            rescale=rescale,
-            cfg=rcnn_test_cfg)
 import sys
 
 import torch
@@ -68,7 +58,16 @@ class BBoxTestMixin(object):
         """Test only det bboxes without augmentation."""
         rois = bbox2roi(proposals)
         bbox_results = self._bbox_forward(x, rois)
-        img_shapes = tuple(meta['img_shape'] for meta in img_metas)
+        img_shape = img_metas[0]['img_shape']
+        scale_factor = img_metas[0]['scale_factor']
+        det_bboxes, det_labels = self.bbox_head.get_bboxes(
+            rois,
+            bbox_results['cls_score'],
+            bbox_results['bbox_pred'],
+            img_shape,
+            scale_factor,
+            rescale=rescale,
+            cfg=rcnn_test_cfg)
         scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
 
         # split batch bbox prediction back to each image

@@ -1224,7 +1224,6 @@ void pmix_iof_read_local_handler(int unusedfd, short event, void *cbdata)
         goto reactivate;
     }
 
-    /* if I am a server, then push this up to my host */
     if (PMIX_PROC_IS_SERVER(&pmix_globals.mypeer->proc_type)) {
         if (NULL == pmix_host_server.push_stdin) {
             /* nothing we can do with this info */

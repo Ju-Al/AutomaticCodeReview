@@ -1,6 +1,4 @@
 var iconForAction = function (action) {
-  origin: function() {
-    return document.location.protocol + "//" + document.location.host;
   var ref = Template.instance().data;
   var appId = action.appId;
   var pkg = ref._db.collections.packages.findOne({_id: action.packageId});
@@ -139,7 +137,8 @@ Template.sandstormAppList.helpers({
       return [];
     }
   },
-  appMarketUrl: function() {
+  origin: function() {
+    return document.location.protocol + "//" + document.location.host;
     var appMarket = Settings.findOne({_id: "appMarketUrl"});
     // If the Settings subscription hasn't yet propagated client-side, default to app.sandstorm.io
     return ((appMarket && appMarket.value) || "https://apps.sandstorm.io") + "/?host=" + document.location.protocol + "//" + document.location.host;

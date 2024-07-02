@@ -1,6 +1,4 @@
 """Node assortativity coefficients and correlation measures.
-    This computes Eq. (21) in Ref. [1]_ , for the mixing matrix
-    of the specified attribute.
 """
 from networkx.algorithms.assortativity.mixing import (
     degree_mixing_matrix,
@@ -239,7 +237,8 @@ def numeric_assortativity_coefficient(G, attribute, nodes=None):
 
     Notes
     -----
-    This computes Eq. (21) in Ref. [1]_ , which is the pearson correlation
+    This computes Eq. (21) in Ref. [1]_ , for the mixing matrix
+    of the specified attribute.
     coefficient of the specified (scalar valued) attribute across edges.
 
     References

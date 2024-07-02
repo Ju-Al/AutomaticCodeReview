@@ -1,5 +1,4 @@
 <?php
-
 namespace WP_Rocket\Tests\Integration\inc\Engine\Preload\PartialPreloadSubscriber;
 
 use WP_Rocket\Tests\Fixtures\inc\Engine\Preload\PartialProcess_Wrapper;

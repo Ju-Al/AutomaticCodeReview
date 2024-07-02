@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.nearby.presenter;
-                    new MarkerPlaceGroup(nearbyBaseMarkers.get(i).getMarker(), bookmarkLocationDao.findBookmarkLocation(nearbyBaseMarkers.get(i).getPlace()), nearbyBaseMarker.getPlace()));
 
 import android.util.Log;
 import android.view.View;
@@ -310,7 +309,7 @@ public class NearbyParentFragmentPresenter
         for (int i = 0; i < nearbyBaseMarkers.size(); i++) {
             NearbyBaseMarker nearbyBaseMarker = nearbyBaseMarkers.get(i);
             NearbyController.markerLabelList.add(
-                    new MarkerPlaceGroup(nearbyBaseMarker.getMarker(), bookmarkLocationDao.findBookmarkLocation(nearbyBaseMarker.getPlace()), nearbyBaseMarker.getPlace()));
+                    new MarkerPlaceGroup(nearbyBaseMarkers.get(i).getMarker(), bookmarkLocationDao.findBookmarkLocation(nearbyBaseMarkers.get(i).getPlace()), nearbyBaseMarker.getPlace()));
             //TODO: fix bookmark location
             NearbyController.markerExistsMap.put((nearbyBaseMarkers.get(i).getPlace().hasWikidataLink()), nearbyBaseMarkers.get(i).getMarker());
             NearbyController.markerNeedPicMap.put(((nearbyBaseMarkers.get(i).getPlace().pic == null) ? true : false), nearbyBaseMarkers.get(i).getMarker());

@@ -44,7 +44,6 @@ var Set = wire.NewSet(
 // The zero value is a server with the default options.
 type Server struct {
 	reqlog        requestlog.Logger
-	Handler       http.Handler
 	healthHandler health.Handler
 	te            trace.Exporter
 	sampler       trace.Sampler

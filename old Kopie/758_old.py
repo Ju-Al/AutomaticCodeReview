@@ -1,13 +1,4 @@
 # shell.py
-        self.cli.optparser.print_help()
-        print('\n')
-        print(_('''Shell specific arguments:
-                   config                   set config options
-                   repository (or repo)     enable, disable or list repositories
-                   resolvedep               resolve the transaction set
-                   transaction (or ts)      list, reset or run the transaction set
-                   run                      resolve and run the transaction set
-                   exit (or quit)           exit the shell'''))
 # Shell CLI command.
 #
 # Copyright (C) 2016 Red Hat, Inc.
@@ -159,7 +150,15 @@ class ShellCommand(commands.Command, cmd.Cmd):
             print_or_set(key, val, self.base.conf)
 
     def _help(self, args=None):
-        """Output help information.
+        self.cli.optparser.print_help()
+        print('\n')
+        print(_('''Shell specific arguments:
+                   config                   set config options
+                   repository (or repo)     enable, disable or list repositories
+                   resolvedep               resolve the transaction set
+                   transaction (or ts)      list, reset or run the transaction set
+                   run                      resolve and run the transaction set
+                   exit (or quit)           exit the shell'''))
 
         :param arg: the command to output help information about. If
            *arg* is an empty, general help will be output.

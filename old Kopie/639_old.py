@@ -1,7 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-            is_external_network = (instance_network_interface.access_configs
-                                   is not None)
-            if not self.rules['whitelist'].get(project):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -230,7 +227,9 @@ class Rule(object):
                 instance_network_interface.network)
             project = network_and_project.group(1)
             network = network_and_project.group(2)
-            is_external_network = (instance_network_interface.access_configs is
+            is_external_network = (instance_network_interface.access_configs
+                                   is not None)
+            if not self.rules['whitelist'].get(project):
                                    not None)
             ips = None
             if is_external_network:

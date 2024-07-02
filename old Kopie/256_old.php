@@ -1,5 +1,4 @@
 <?php
-function get_metadata( $meta_type, $object_id, $meta_key = '', $single = false ) {
 /**
  * Core Metadata API
  *
@@ -485,8 +484,8 @@ function delete_metadata( $meta_type, $object_id, $meta_key, $meta_value = '', $
  * @param string $meta_key  Optional. Metadata key. If not specified, retrieve all metadata for
  *                          the specified object. Default empty.
  * @param bool   $single    Optional. If true, return only the first value of the specified meta_key.
+function get_metadata( $meta_type, $object_id, $meta_key = '', $single = false ) {
  *                          This parameter has no effect if meta_key is not specified. Default false.
- * @param bool  $unfiltered Optional. Whether to apply filters. Default false.
  * @return mixed Single metadata value, or array of values
  */
 function get_metadata( $meta_type, $object_id, $meta_key = '', $single = false, $unfiltered = false ) {

@@ -1,5 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-            remove_discovered_participant_info(dp_it.second.get_auth());
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -480,7 +479,7 @@ void SecurityManager::destroy()
                 authentication_plugin_->return_sharedsecret_handle(shared_secret_handle, exception);
             }
 
-            //auths_to_remove.push_back(dp_it.second.get_auth());
+            remove_discovered_participant_info(dp_it.second.get_auth());
             DiscoveredParticipantInfo::AuthUniquePtr remote_participant_info = dp_it.second.get_auth();
             remove_discovered_participant_info(remote_participant_info);
             auths_to_remove.push_back(std::move(remote_participant_info));

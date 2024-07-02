@@ -108,8 +108,6 @@ module.exports = targets => {
          * );
          */
         savedPaymentTypes: new targets.types.Sync(['savedPaymentTypes']),
-
-        /**
          * Provides access to Venia's editable payment methods
          *
          * This target lets you add new editable payment method to your storefronts.

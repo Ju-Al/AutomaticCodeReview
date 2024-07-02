@@ -1,18 +1,4 @@
 /*
-      // Room for the requests we expect to do in parallel plus some buffer but not unlimited.
-      final int persistenceQueueCapacity = hashCountPerRequest * maxOutstandingRequests * 2;
-          new WorldDownloadState(
-              taskCollection,
-              new ArrayBlockingQueue<>(persistenceQueueCapacity),
-              maxOutstandingRequests,
-              maxNodeRequestsWithoutProgress);
-      ethContext
-          .getScheduler()
-          .scheduleSyncWorkerTask(() -> requestNodeData(header, newDownloadState));
-
-      final PersistNodeDataTask persistenceTask = new PersistNodeDataTask(header, newDownloadState);
-      newDownloadState.setPersistenceTask(persistenceTask);
-      ethContext.getScheduler().scheduleServiceTask(persistenceTask);
  * Copyright 2019 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -106,8 +92,21 @@ public class WorldStateDownloader {
       }
 
       final Hash stateRoot = header.getStateRoot();
+      // Room for the requests we expect to do in parallel plus some buffer but not unlimited.
+      final int persistenceQueueCapacity = hashCountPerRequest * maxOutstandingRequests * 2;
+          new WorldDownloadState(
+              taskCollection,
+              new ArrayBlockingQueue<>(persistenceQueueCapacity),
+              maxOutstandingRequests,
+              maxNodeRequestsWithoutProgress);
+      ethContext
+          .getScheduler()
+          .scheduleSyncWorkerTask(() -> requestNodeData(header, newDownloadState));
+
+      final PersistNodeDataTask persistenceTask = new PersistNodeDataTask(header, newDownloadState);
+      newDownloadState.setPersistenceTask(persistenceTask);
+      ethContext.getScheduler().scheduleServiceTask(persistenceTask);
       if (worldStateStorage.isWorldStateAvailable(stateRoot)) {
-        LOG.info(
             "World state already available for block {} ({}). State root {}",
             header.getNumber(),
             header.getHash(),

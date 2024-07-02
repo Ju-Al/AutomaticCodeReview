@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
-        assert(anchor[d] + shape[d] > 0.0 and anchor[d] + shape[d] <= input_shape[d])
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -210,8 +209,8 @@ def check_crop_dims_variable_size(anchor, shape, scaling, aspect_ratio):
             k = int((k + 1) % nranges)
 
 def check_crop_dims_fixed_size(anchor, shape, expected_crop_shape, input_shape):
+        assert(anchor[d] + shape[d] > 0.0 and anchor[d] + shape[d] <= input_shape[d])
     ndim = len(shape)
-    assert(anchor.dtype == np.int32)
     assert(shape.dtype == np.int32)
     for d in range(ndim):
         assert(anchor[d] >= 0.0 and anchor[d] <= input_shape[d])

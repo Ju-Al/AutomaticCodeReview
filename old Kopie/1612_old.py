@@ -255,7 +255,6 @@ _ORDERED_STATUSES = (
     "already_done",
     "completed",
     "failed",
-    "unknown",
     "still_pending",
     "still_pending_ext",
     "run_by_other_worker",

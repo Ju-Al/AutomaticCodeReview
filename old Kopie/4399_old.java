@@ -621,7 +621,6 @@ public class ContributionsFragment
     public MediaDetailPagerFragment getMediaDetailPagerFragment() {
         return mediaDetailPagerFragment;
     }
-
     /**
      * this function updated the number of contributions
      */

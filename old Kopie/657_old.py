@@ -193,8 +193,6 @@ class Ellipse(BaseShape):
 
     aspect= param.Number(default=1.0, doc="The aspect ratio of the ellipse.")
 
-    angle = param.Number(default=0, doc="The angle in radian between the long axis and the horizontal.")
-
     samples = param.Number(default=100, doc="The sample count used to draw the ellipse.")
 
     group = param.String(default='Ellipse', constant=True, doc="The assigned group name.")

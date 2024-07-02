@@ -35,7 +35,6 @@ def mask_target_single(pos_proposals, pos_assigned_gt_inds, gt_masks, cfg):
         mask_targets = pos_proposals.new_zeros((0, mask_size, mask_size))
     return mask_targets
 
-
 def mask_iou_target(pos_proposals_list, pos_assigned_gt_inds_list,
                     gt_masks_list, mask_preds, mask_targets):
     area_ratios = map(mask_iou_target_single, pos_proposals_list,

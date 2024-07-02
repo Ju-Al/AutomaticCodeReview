@@ -185,9 +185,6 @@ func (s *server) getPinnedChunk(w http.ResponseWriter, r *http.Request) {
 		Address:    addr,
 		PinCounter: pinCounter,
 	})
-}
-
-type updatePinCounter struct {
 	PinCounter uint64 `json:"pinCounter"`
 }
 

@@ -138,7 +138,6 @@ module RSpec::Core::Formatters
           }.to change { loader.formatters.length }
         end
       end
-
       context "When a custom formatter exists" do
         before { loader.add Custom::AGeneralFormatter, output }
 

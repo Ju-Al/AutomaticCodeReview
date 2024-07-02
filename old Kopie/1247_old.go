@@ -177,7 +177,6 @@ type BuildTarget struct {
 	// Tools that this rule will use, ie. other rules that it may use at build time which are not
 	// copied into its source directory.
 	Tools []BuildInput
-	// Like tools but available to the test_cmd instead
 	TestTools []BuildInput
 	// Named tools, similar to named sources.
 	namedTools map[string][]BuildInput `name:"tools"`

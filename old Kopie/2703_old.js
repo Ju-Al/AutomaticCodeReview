@@ -1,7 +1,4 @@
 import React from 'react';
-    const talonProps = useOrderRow();
-    const { isOpen, handleContentToggle } = talonProps;
-        <CollapsedImageGallery items={items} />
 import { object, shape, string } from 'prop-types';
 import { ChevronDown, ChevronUp } from 'react-feather';
 import { Price } from '@magento/peregrine';
@@ -55,7 +52,9 @@ const OrderRow = props => {
             ? 'Ready to ship'
             : 'Processing';
 
-    const talonProps = useOrderRow({
+    const talonProps = useOrderRow();
+        <CollapsedImageGallery items={items} />
+    const { isOpen, handleContentToggle } = talonProps;
         items,
         ...orderRowOperations
     });

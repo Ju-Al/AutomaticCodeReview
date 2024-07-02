@@ -1,5 +1,4 @@
 /**
-                        localIdentName: '[name]-[local]-[hash:base64:3]',
  * @module Buildpack/WebpackTools
  */
 const path = require('path');
@@ -119,7 +118,7 @@ getModuleRules.css = async ({ hasFlag, mode, paths }) => ({
                 {
                     loader: 'css-loader',
                     options: {
-                        localIdentName:
+                        localIdentName: '[name]-[local]-[hash:base64:3]',
                             mode === 'development'
                                 ? '[path][name]__[local]--[hash:base64:3]'
                                 : '[name]-[local]-[hash:base64:3]',

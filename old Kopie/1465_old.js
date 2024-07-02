@@ -1,8 +1,4 @@
 import { EMPTY_OBJ, EMPTY_ARR } from '../constants';
-			let s = c._nextState || c.state;
-				oldState = assign({}, c.state);
-				if (s===c.state) s = c._nextState = assign({}, s);
-				assign(s, newType.getDerivedStateFromProps(newVNode.props, s));
 import { Component, enqueueRender } from '../component';
 import { coerceToVNode, Fragment } from '../create-element';
 import { diffChildren } from './children';
@@ -91,7 +87,10 @@ export function diff(dom, parentDom, newVNode, oldVNode, context, isSvg, excessD
 			c._vnode = newVNode;
 
 			// Invoke getDerivedStateFromProps
-			if (c._nextState==null) {
+				oldState = assign({}, c.state);
+				if (s===c.state) s = c._nextState = assign({}, s);
+				assign(s, newType.getDerivedStateFromProps(newVNode.props, s));
+			let s = c._nextState || c.state;
 				c._nextState = c.state;
 			}
 			if (newType.getDerivedStateFromProps!=null) {

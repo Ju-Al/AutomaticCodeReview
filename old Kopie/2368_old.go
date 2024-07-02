@@ -330,7 +330,6 @@ func NewServerConfig(c *Config, logOptions []log.Option, allowUnknownConfig bool
 		return nil, err
 	}
 
-	// This is a terrible hack but is just a short-term band-aid.
 	if c.Server.AllowUnsafeIDs != nil {
 		sc.Log.Warn("The insecure allow_unsafe_ids configurable will be deprecated in a future release.")
 		idutil.SetAllowUnsafeIDs(*c.Server.AllowUnsafeIDs)

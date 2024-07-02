@@ -1,6 +1,4 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-        # Training state
-        if self.training:
 import numpy as np
 import torch
 import torch.nn as nn
@@ -691,7 +689,8 @@ class YOLACTProtonet(BaseModule):
         prototypes = prototypes.permute(0, 2, 3, 1).contiguous()
 
         num_imgs = x.size(0)
-
+        # Training state
+        if self.training:
         # The reason for not using self.is_training is that
         # val workflow will have a dimension mismatch error.
         # Note that this writing method is very tricky.

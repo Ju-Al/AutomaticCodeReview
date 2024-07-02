@@ -87,9 +87,6 @@ function generateFields() {
         fields[id] = field;
     });
     fs.writeFileSync('data/presets/fields.json', stringify(fields));
-}
-
-function suggestionsToPresets(presets) {
     var existing = {},
         countThreshold = 0;
 

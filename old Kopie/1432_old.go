@@ -1,199 +1,244 @@
-// Copyright (c) 2018 Uber Technologies, Inc.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
-package grpc
+package staticfiles
 
 import (
-	"math"
-
-	"github.com/opentracing/opentracing-go"
-	"go.uber.org/yarpc/api/backoff"
-	"go.uber.org/yarpc/api/transport"
-	intbackoff "go.uber.org/yarpc/internal/backoff"
-	"go.uber.org/zap"
+	"fmt"
+	"math/rand"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 )
 
-const (
-	// defensive programming
-	// these are copied from grpc-go but we set them explicitly here
-	// in case these change in grpc-go so that yarpc stays consistent
-	defaultServerMaxRecvMsgSize = 1024 * 1024 * 4
-	defaultServerMaxSendMsgSize = math.MaxInt32
-	defaultClientMaxRecvMsgSize = 1024 * 1024 * 4
-	defaultClientMaxSendMsgSize = math.MaxInt32
-)
-
-// Option is an interface shared by TransportOption, InboundOption, and OutboundOption
-// allowing either to be recognized by TransportSpec().
-type Option interface {
-	grpcOption()
-}
-
-var _ Option = (TransportOption)(nil)
-var _ Option = (InboundOption)(nil)
-var _ Option = (OutboundOption)(nil)
-
-// TransportOption is an option for a transport.
-type TransportOption func(*transportOptions)
-
-func (TransportOption) grpcOption() {}
-
-// BackoffStrategy specifies the backoff strategy for delays between
-// connection attempts for each peer.
+// FileServer implements a production-ready file server
+// and is the 'default' handler for all requests to Caddy.
+// It simply loads and serves the URI requested. FileServer
+// is adapted from the one in net/http by the Go authors.
+// Significant modifications have been made.
 //
-// The default is exponential backoff starting with 10ms fully jittered,
-// doubling each attempt, with a maximum interval of 30s.
-func BackoffStrategy(backoffStrategy backoff.Strategy) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.backoffStrategy = backoffStrategy
-	}
-}
-
-// Tracer specifies the tracer to use.
+// Original license:
 //
-// By default, opentracing.GlobalTracer() is used.
-func Tracer(tracer opentracing.Tracer) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.tracer = tracer
-	}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+type FileServer struct {
+	// Jailed disk access
+	Root http.FileSystem
+
+	// List of files to treat as "Not Found"
+	Hide []string
 }
 
-// Logger sets a logger to use for internal logging.
-//
-// The default is to not write any logs.
-func Logger(logger *zap.Logger) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.logger = logger
+// ServeHTTP serves static files for r according to fs's configuration.
+func (fs FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+	// r.URL.Path has already been cleaned by Caddy.
+	if r.URL.Path == "" {
+		r.URL.Path = "/"
 	}
+	return fs.serveFile(w, r, r.URL.Path)
 }
 
-// RequestValidator specifies an option to validate a transport.Request
-// before allowing an outbound call to be made or an inbound call
-// to be processed.
-//
-// By default, no validation is done.
-func RequestValidator(requestValidator func(*transport.Request) error) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.requestValidator = requestValidator
-	}
+// see https://tools.ietf.org/html/rfc7232#section-2.3
+func calculateEtag(d os.FileInfo) string {
+	return fmt.Sprintf(`"%x-%x"`, d.ModTime().Unix(), d.Size())
 }
 
-// ServerMaxRecvMsgSize is the maximum message size the server can receive.
-//
-// The default is 4MB.
-func ServerMaxRecvMsgSize(serverMaxRecvMsgSize int) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.serverMaxRecvMsgSize = serverMaxRecvMsgSize
+// serveFile writes the specified file to the HTTP response.
+// name is '/'-separated, not filepath.Separator.
+func (fs FileServer) serveFile(w http.ResponseWriter, r *http.Request, name string) (int, error) {
+
+	location := name
+
+	// Prevent absolute path access on Windows.
+	// TODO remove when stdlib http.Dir fixes this.
+	if runtime.GOOS == "windows" {
+		if filepath.IsAbs(name[1:]) {
+			return http.StatusNotFound, nil
+		}
 	}
+
+	f, err := fs.Root.Open(name)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return http.StatusNotFound, nil
+		} else if os.IsPermission(err) {
+			return http.StatusForbidden, err
+		}
+		// Likely the server is under load and ran out of file descriptors
+		backoff := int(3 + rand.Int31()%3) // 3–5 seconds to prevent a stampede
+		w.Header().Set("Retry-After", strconv.Itoa(backoff))
+		return http.StatusServiceUnavailable, err
+	}
+	defer f.Close()
+
+	d, err := f.Stat()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return http.StatusNotFound, nil
+		} else if os.IsPermission(err) {
+			return http.StatusForbidden, err
+		}
+		// Return a different status code than above so as to distinguish these cases
+		return http.StatusInternalServerError, err
+	}
+
+	// redirect to canonical path
+	url := r.URL.Path
+	if d.IsDir() {
+		// Ensure / at end of directory url
+		if !strings.HasSuffix(url, "/") {
+			Redirect(w, r, path.Base(url)+"/", http.StatusMovedPermanently)
+			return http.StatusMovedPermanently, nil
+		}
+	} else {
+		// Ensure no / at end of file url
+		if strings.HasSuffix(url, "/") {
+			Redirect(w, r, "../"+path.Base(url), http.StatusMovedPermanently)
+			return http.StatusMovedPermanently, nil
+		}
+	}
+
+	// use contents of an index file, if present, for directory
+	if d.IsDir() {
+		for _, indexPage := range IndexPages {
+			index := strings.TrimSuffix(name, "/") + "/" + indexPage
+			ff, err := fs.Root.Open(index)
+			if err != nil {
+				continue
+			}
+
+			// this defer does not leak fds because previous iterations
+			// of the loop must have had an err, so nothing to close
+			defer ff.Close()
+
+			dd, err := ff.Stat()
+			if err != nil {
+				ff.Close()
+				continue
+			}
+
+			// Close previous file - release fd immediately
+			f.Close()
+
+			d = dd
+			f = ff
+			location = index
+			break
+		}
+	}
+
+	// Still a directory? (we didn't find an index file)
+	// Return 404 to hide the fact that the folder exists
+	if d.IsDir() {
+		return http.StatusNotFound, nil
+	}
+
+	if fs.IsHidden(d) {
+		return http.StatusNotFound, nil
+	}
+
+	filename := d.Name()
+	etag := calculateEtag(d) // strong
+
+	for _, encoding := range staticEncodingPriority {
+		acceptEncoding := strings.Split(r.Header.Get("Accept-Encoding"), ",")
+
+		accepted := false
+		for _, acc := range acceptEncoding {
+			if accepted || strings.TrimSpace(acc) == encoding {
+				accepted = true
+			}
+		}
+
+		if !accepted {
+			continue
+		}
+
+		encodedFile, err := fs.Root.Open(location + staticEncoding[encoding])
+		if err != nil {
+			continue
+		}
+
+		encodedFileInfo, err := encodedFile.Stat()
+		if err != nil {
+			encodedFile.Close()
+			continue
+		}
+
+		// Close previous file - release fd
+		f.Close()
+
+		// etag is weak because the response is a variant of the original
+		etag = "W/" + calculateEtag(encodedFileInfo)
+
+		// Encoded file will be served
+		f = encodedFile
+
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Encoding", encoding)
+
+		defer f.Close()
+		break
+	}
+
+	w.Header().Set("ETag", etag)
+
+	// Note: Errors generated by ServeContent are written immediately
+	// to the response. This usually only happens if seeking fails (rare).
+	http.ServeContent(w, r, filename, d.ModTime(), f)
+
+	return http.StatusOK, nil
 }
 
-// ServerMaxSendMsgSize is the maximum message size the server can send.
-//
-// The default is unlimited.
-func ServerMaxSendMsgSize(serverMaxSendMsgSize int) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.serverMaxSendMsgSize = serverMaxSendMsgSize
+// IsHidden checks if file with FileInfo d is on hide list.
+func (fs FileServer) IsHidden(d os.FileInfo) bool {
+	// If the file is supposed to be hidden, return a 404
+	for _, hiddenPath := range fs.Hide {
+		// Check if the served file is exactly the hidden file.
+		if hFile, err := fs.Root.Open(hiddenPath); err == nil {
+			fs, _ := hFile.Stat()
+			hFile.Close()
+			if os.SameFile(d, fs) {
+				return true
+			}
+		}
 	}
+	return false
 }
 
-// ClientMaxRecvMsgSize is the maximum message size the client can receive.
-//
-// The default is 4MB.
-func ClientMaxRecvMsgSize(clientMaxRecvMsgSize int) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.clientMaxRecvMsgSize = clientMaxRecvMsgSize
+// Redirect sends an HTTP redirect to the client but will preserve
+// the query string for the new path. Based on http.localRedirect
+// from the Go standard library.
+func Redirect(w http.ResponseWriter, r *http.Request, newPath string, statusCode int) {
+	if q := r.URL.RawQuery; q != "" {
+		newPath += "?" + q
 	}
+	http.Redirect(w, r, newPath, statusCode)
 }
 
-// ClientMaxSendMsgSize is the maximum message size the client can send.
-//
-// The default is unlimited.
-func ClientMaxSendMsgSize(clientMaxSendMsgSize int) TransportOption {
-	return func(transportOptions *transportOptions) {
-		transportOptions.clientMaxSendMsgSize = clientMaxSendMsgSize
-	}
+// IndexPages is a list of pages that may be understood as
+// the "index" files to directories.
+var IndexPages = []string{
+	"index.html",
+	"index.htm",
+	"index.txt",
+	"default.html",
+	"default.htm",
+	"default.txt",
 }
 
-// InboundOption is an option for an inbound.
-type InboundOption func(*inboundOptions)
-
-func (InboundOption) grpcOption() {}
-
-// OutboundOption is an option for an outbound.
-type OutboundOption func(*outboundOptions)
-
-func (OutboundOption) grpcOption() {}
-
-type transportOptions struct {
-	backoffStrategy      backoff.Strategy
-	tracer               opentracing.Tracer
-	logger               *zap.Logger
-	requestValidator     func(*transport.Request) error
-	serverMaxRecvMsgSize int
-	serverMaxSendMsgSize int
-	clientMaxRecvMsgSize int
-	clientMaxSendMsgSize int
+// staticEncoding is a map of content-encoding to a file extension.
+// If client accepts given encoding (via Accept-Encoding header) and compressed file with given extensions exists
+// it will be served to the client instead of original one.
+var staticEncoding = map[string]string{
+	"gzip": ".gz",
+	"br":   ".br",
 }
 
-func newTransportOptions(options []TransportOption) *transportOptions {
-	transportOptions := &transportOptions{
-		backoffStrategy:      intbackoff.DefaultExponential,
-		serverMaxRecvMsgSize: defaultServerMaxRecvMsgSize,
-		serverMaxSendMsgSize: defaultServerMaxSendMsgSize,
-		clientMaxRecvMsgSize: defaultClientMaxRecvMsgSize,
-		clientMaxSendMsgSize: defaultClientMaxSendMsgSize,
-	}
-	for _, option := range options {
-		option(transportOptions)
-	}
-	if transportOptions.logger == nil {
-		transportOptions.logger = zap.NewNop()
-	}
-	if transportOptions.tracer == nil {
-		transportOptions.tracer = opentracing.GlobalTracer()
-	}
-	if transportOptions.tracer == nil {
-		transportOptions.tracer = opentracing.NoopTracer{}
-	}
-	if transportOptions.requestValidator == nil {
-		transportOptions.requestValidator = func(*transport.Request) error { return nil }
-	}
-	return transportOptions
-}
-
-type inboundOptions struct{}
-
-func newInboundOptions(options []InboundOption) *inboundOptions {
-	inboundOptions := &inboundOptions{}
-	for _, option := range options {
-		option(inboundOptions)
-	}
-	return inboundOptions
-}
-
-type outboundOptions struct{}
-
-func newOutboundOptions(options []OutboundOption) *outboundOptions {
-	outboundOptions := &outboundOptions{}
-	for _, option := range options {
-		option(outboundOptions)
-	}
-	return outboundOptions
+// staticEncodingPriority is a list of preferred static encodings (most efficient compression to least one).
+var staticEncodingPriority = []string{
+	"br",
+	"gzip",
 }

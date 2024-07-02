@@ -758,7 +758,6 @@ public class AddProductNutritionFactsFragment extends BaseFragment implements Ph
 
     @OnClick(R.id.btn_add_a_nutrient)
     void addNutrient() {
-        String[] nutrients = getResources().getStringArray(R.array.nutrients_array);
         // sort string by ignoring accents on letters. The sorted strings will keep their accents.
         Arrays.sort(nutrients, Collator.getInstance(Locale.US));
 

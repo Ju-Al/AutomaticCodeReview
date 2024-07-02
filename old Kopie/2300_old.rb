@@ -747,7 +747,6 @@ module Mongo
 
       private
 
-      def next_available_connection(service_id: nil)
         if service_id
           @available_connections.detect do |conn|
             conn.service_id == service_id

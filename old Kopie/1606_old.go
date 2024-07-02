@@ -1,10 +1,6 @@
 package cmd
 
-	// block till a SIGINT is received or a fatal error is encountered
-	if err := util.WaitError(sigCtx, errChan); err != nil {
-		node.Logger.Fatal().Err(err).Msg("unhandled irrecoverable error")
-	node.Logger.Info().Msgf("%s node shutting down", node.BaseConfig.NodeRole)
-	sigCtx, _ = util.WithSignal(context.Background(), signalChan)import (
+import (
 	"context"
 	"errors"
 	"fmt"
@@ -84,8 +80,11 @@ func (node *FlowNodeImp) run() error {
 		}
 	}()
 
-	// listen to termination signal
-	signalChan := make(chan os.Signal, 1)
+	// block till a SIGINT is received or a fatal error is encountered
+	if err := util.WaitError(sigCtx, errChan); err != nil {
+		node.Logger.Fatal().Err(err).Msg("unhandled irrecoverable error")
+	node.Logger.Info().Msgf("%s node shutting down", node.BaseConfig.NodeRole)
+	sigCtx, _ = util.WithSignal(context.Background(), signalChan)	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	sigCtx, _ := util.WithSignal(ctx, signalChan)

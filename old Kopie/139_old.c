@@ -1,5 +1,4 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
-    event_base_free(pmix_globals.evbase);
 /*
  * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
@@ -665,7 +664,7 @@ PMIX_EXPORT pmix_status_t PMIx_tool_finalize(void)
     if (0 <= pmix_client_globals.myserver.sd) {
         CLOSE_THE_SOCKET(pmix_client_globals.myserver.sd);
     }
-/*
+    event_base_free(pmix_globals.evbase);
  * This  is already done inside of pmix_progress_thread_finalize above
  *
  *   if (!pmix_globals.external_evbase) {

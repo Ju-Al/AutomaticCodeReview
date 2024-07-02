@@ -1,288 +1,255 @@
 <?php
-use App\Notifications\CheckoutNotification;
+namespace App\Models;
 
-namespace App\Http\Controllers;
+use App\Presenters\Presentable;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Watson\Validating\ValidatingTrait;
 
-use App\Helpers\Helper;
-use App\Models\Company;
-use App\Models\Consumable;
-use App\Models\Setting;
-use App\Models\User;
-use App\Notifications\CheckoutAssetNotification;
-use Auth;
-use Config;
-use DB;
-use Input;
-use Lang;
-use Redirect;
-use Slack;
-use Str;
-use View;
-use Gate;
-use Image;
-use App\Http\Requests\ImageUploadRequest;
-
-/**
- * This controller handles all actions related to Consumables for
- * the Snipe-IT Asset Management application.
- *
- * @version    v1.0
- */
-class ConsumablesController extends Controller
+class Consumable extends SnipeModel
 {
+    protected $presenter = 'App\Presenters\ConsumablePresenter';
+    use CompanyableTrait;
+    use Loggable, Presentable;
+    use SoftDeletes;
+
+    protected $dates = ['deleted_at', 'purchase_date'];
+    protected $table = 'consumables';
+    protected $casts = [
+        'requestable' => 'boolean'
+    ];
+
+
+
     /**
-    * Return a view to display component information.
+    * Category validation rules
+    */
+    public $rules = array(
+        'name'        => 'required|min:3|max:255',
+        'qty'         => 'required|integer|min:0',
+        'category_id' => 'required|integer',
+        'company_id'  => 'integer|nullable',
+        'min_amt'     => 'integer|min:1|nullable',
+        'purchase_cost'   => 'numeric|nullable',
+    );
+
+    /**
+    * Whether the model should inject it's identifier to the unique
+    * validation rules before attempting validation. If this property
+    * is not set in the model it will default to true.
     *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::getDatatable() method that generates the JSON response
-    * @since [v1.0]
-    * @return \Illuminate\Contracts\View\View
+    * @var boolean
+    */
+    protected $injectUniqueIdentifier = true;
+    use ValidatingTrait;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
      */
-    public function index()
+    protected $fillable = [
+        'category_id',
+        'company_id',
+        'item_no',
+        'location_id',
+        'manufacturer_id',
+        'name',
+        'order_number',
+        'model_number',
+        'purchase_cost',
+        'purchase_date',
+        'qty',
+        'requestable'
+    ];
+
+    public function setRequestableAttribute($value)
     {
-        $this->authorize('index', Consumable::class);
-        return view('consumables/index');
+        if ($value == '') {
+            $value = null;
+        }
+        $this->attributes['requestable'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        return;
+    }
+
+    public function admin()
+    {
+        return $this->belongsTo('\App\Models\User', 'user_id');
+    }
+
+    public function consumableAssignments()
+    {
+        return $this->hasMany('\App\Models\ConsumableAssignment');
+    }
+
+    public function company()
+    {
+        return $this->belongsTo('\App\Models\Company', 'company_id');
+    }
+
+    public function manufacturer()
+    {
+        return $this->belongsTo('\App\Models\Manufacturer', 'manufacturer_id');
+    }
+
+    public function location()
+    {
+        return $this->belongsTo('\App\Models\Location', 'location_id');
+    }
+
+    public function category()
+    {
+        return $this->belongsTo('\App\Models\Category', 'category_id');
+    }
+
+    /**
+    * Get action logs for this consumable
+    */
+    public function assetlog()
+    {
+        return $this->hasMany('\App\Models\Actionlog', 'item_id')->where('item_type', Consumable::class)->orderBy('created_at', 'desc')->withTrashed();
+    }
+
+        if ($this->image) {
+            return url('/').'/uploads/accessories/'.$this->image;
+        }
+        return false;
+
+    }
+
+
+    public function users()
+    {
+        return $this->belongsToMany('\App\Models\User', 'consumables_users', 'consumable_id', 'assigned_to')->withPivot('user_id')->withTrashed()->withTimestamps();
+    }
+
+    public function hasUsers()
+    {
+        return $this->belongsToMany('\App\Models\User', 'consumables_users', 'consumable_id', 'assigned_to')->count();
+    }
+
+
+    public function requireAcceptance()
+    {
+        return $this->category->require_acceptance;
+    }
+
+    public function getEula()
+    {
+
+        $Parsedown = new \Parsedown();
+
+        if ($this->category->eula_text) {
+            return $Parsedown->text(e($this->category->eula_text));
+        } elseif ((Setting::getSettings()->default_eula_text) && ($this->category->use_default_eula=='1')) {
+            return $Parsedown->text(e(Setting::getSettings()->default_eula_text));
+        } else {
+            return null;
+        }
+
+    }
+
+    public function numRemaining()
+    {
+        $checkedout = $this->users->count();
+        $total = $this->qty;
+        $remaining = $total - $checkedout;
+        return $remaining;
+    }
+
+    /**
+    * Query builder scope to search on text
+    *
+    * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+    * @param  text                              $search      Search term
+    *
+    * @return Illuminate\Database\Query\Builder          Modified query builder
+    */
+    /**
+    * Query builder scope to search on text
+    *
+    * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+    * @param  text                              $search      Search term
+    *
+    * @return Illuminate\Database\Query\Builder          Modified query builder
+    */
+    public function scopeTextSearch($query, $search)
+    {
+        $search = explode(' ', $search);
+
+        return $query->where(function ($query) use ($search) {
+        
+            foreach ($search as $search) {
+                    $query->whereHas('category', function ($query) use ($search) {
+                        $query->where('categories.name', 'LIKE', '%'.$search.'%');
+                    })->orWhere(function ($query) use ($search) {
+                        $query->whereHas('company', function ($query) use ($search) {
+                            $query->where('companies.name', 'LIKE', '%'.$search.'%');
+                        });
+                    })->orWhere(function ($query) use ($search) {
+                        $query->whereHas('location', function ($query) use ($search) {
+                            $query->where('locations.name', 'LIKE', '%'.$search.'%');
+                        });
+                    })->orWhere(function ($query) use ($search) {
+                        $query->whereHas('manufacturer', function ($query) use ($search) {
+                            $query->where('manufacturers.name', 'LIKE', '%'.$search.'%');
+                        });
+                    })->orWhere('consumables.name', 'LIKE', '%'.$search.'%')
+                            ->orWhere('consumables.order_number', 'LIKE', '%'.$search.'%')
+                            ->orWhere('consumables.purchase_cost', 'LIKE', '%'.$search.'%');
+            }
+        });
+    }
+
+    /**
+    * Query builder scope to order on company
+    *
+    * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+    * @param  text                              $order       Order
+    *
+    * @return Illuminate\Database\Query\Builder          Modified query builder
+    */
+    public function scopeOrderCategory($query, $order)
+    {
+        return $query->join('categories', 'consumables.category_id', '=', 'categories.id')->orderBy('categories.name', $order);
+    }
+
+    /**
+    * Query builder scope to order on location
+    *
+    * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+    * @param  text                              $order       Order
+    *
+    * @return Illuminate\Database\Query\Builder          Modified query builder
+    */
+    public function scopeOrderLocation($query, $order)
+    {
+        return $query->leftJoin('locations', 'consumables.location_id', '=', 'locations.id')->orderBy('locations.name', $order);
+    }
+
+    /**
+     * Query builder scope to order on manufacturer
+     *
+     * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+     * @param  text                              $order       Order
+     *
+     * @return Illuminate\Database\Query\Builder          Modified query builder
+     */
+    public function scopeOrderManufacturer($query, $order)
+    {
+        return $query->leftJoin('manufacturers', 'consumables.manufacturer_id', '=', 'manufacturers.id')->orderBy('manufacturers.name', $order);
     }
 
 
     /**
-    * Return a view to display the form view to create a new consumable
+    * Query builder scope to order on company
     *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::postCreate() method that stores the form data
-    * @since [v1.0]
-    * @return \Illuminate\Contracts\View\View
-     */
-    public function create()
-    {
-        $this->authorize('create', Consumable::class);
-        $category_type = 'consumable';
-        return view('consumables/edit')->with('category_type', $category_type)
-            ->with('item', new Consumable);
-    }
-
-
-    /**
-    * Validate and store new consumable data.
+    * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
+    * @param  text                              $order       Order
     *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::getCreate() method that returns the form view
-    * @since [v1.0]
-    * @return \Illuminate\Http\RedirectResponse
-     */
-    public function store(ImageUploadRequest $request)
+    * @return Illuminate\Database\Query\Builder          Modified query builder
+    */
+    public function scopeOrderCompany($query, $order)
     {
-        $this->authorize('create', Consumable::class);
-        $consumable = new Consumable();
-        $consumable->name                   = $request->input('name');
-        $consumable->category_id            = $request->input('category_id');
-        $consumable->location_id            = $request->input('location_id');
-        $consumable->company_id             = Company::getIdForCurrentUser($request->input('company_id'));
-        $consumable->order_number           = $request->input('order_number');
-        $consumable->min_amt                = $request->input('min_amt');
-        $consumable->manufacturer_id        = $request->input('manufacturer_id');
-        $consumable->model_number           = $request->input('model_number');
-        $consumable->item_no                = $request->input('item_no');
-        $consumable->purchase_date          = $request->input('purchase_date');
-        $consumable->purchase_cost          = Helper::ParseFloat($request->input('purchase_cost'));
-        $consumable->qty                    = $request->input('qty');
-        $consumable->user_id                = Auth::id();
-
-
-        if ($request->file('image')) {
-            $image = $request->file('image');
-            $file_name = str_random(25).".".$image->getClientOriginalExtension();
-            $path = public_path('uploads/consumables/'.$file_name);
-            Image::make($image->getRealPath())->resize(200, null, function ($constraint) {
-                $constraint->aspectRatio();
-                $constraint->upsize();
-            })->save($path);
-            $consumable->image = $file_name;
-        }
-
-        if ($consumable->save()) {
-            return redirect()->route('consumables.index')->with('success', trans('admin/consumables/message.create.success'));
-        }
-
-        return redirect()->back()->withInput()->withErrors($consumable->getErrors());
-
+        return $query->leftJoin('companies', 'consumables.company_id', '=', 'companies.id')->orderBy('companies.name', $order);
     }
-
-    /**
-    * Returns a form view to edit a consumable.
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @param  int $consumableId
-    * @see ConsumablesController::postEdit() method that stores the form data.
-    * @since [v1.0]
-    * @return \Illuminate\Contracts\View\View
-     */
-    public function edit($consumableId = null)
-    {
-        if ($item = Consumable::find($consumableId)) {
-            $this->authorize($item);
-            $category_type = 'consumable';
-            return view('consumables/edit', compact('item'))->with('category_type', $category_type);
-        }
-
-        return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.does_not_exist'));
-
-    }
-
-
-    /**
-    * Returns a form view to edit a consumable.
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @param  int $consumableId
-    * @see ConsumablesController::getEdit() method that stores the form data.
-    * @since [v1.0]
-    * @return \Illuminate\Http\RedirectResponse
-     */
-    public function update(ImageUploadRequest $request,  $consumableId = null)
-    {
-        if (is_null($consumable = Consumable::find($consumableId))) {
-            return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.does_not_exist'));
-        }
-
-        $this->authorize($consumable);
-
-        $consumable->name                   = $request->input('name');
-        $consumable->category_id            = $request->input('category_id');
-        $consumable->location_id            = $request->input('location_id');
-        $consumable->company_id             = Company::getIdForCurrentUser($request->input('company_id'));
-        $consumable->order_number           = $request->input('order_number');
-        $consumable->min_amt                = $request->input('min_amt');
-        $consumable->manufacturer_id        = $request->input('manufacturer_id');
-        $consumable->model_number           = $request->input('model_number');
-        $consumable->item_no                = $request->input('item_no');
-        $consumable->purchase_date          = $request->input('purchase_date');
-        $consumable->purchase_cost          = Helper::ParseFloat(Input::get('purchase_cost'));
-        $consumable->qty                    = Helper::ParseFloat(Input::get('qty'));
-
-        if ($request->file('image')) {
-            $image = $request->file('image');
-            $file_name = str_random(25).".".$image->getClientOriginalExtension();
-            $path = public_path('uploads/consumables/'.$file_name);
-            Image::make($image->getRealPath())->resize(200, null, function ($constraint) {
-                $constraint->aspectRatio();
-                $constraint->upsize();
-            })->save($path);
-            $consumable->image = $file_name;
-        } elseif ($request->input('image_delete')=='1') {
-            $consumable->image = null;
-        }
-
-        if ($consumable->save()) {
-            return redirect()->route('consumables.index')->with('success', trans('admin/consumables/message.update.success'));
-        }
-        return redirect()->back()->withInput()->withErrors($consumable->getErrors());
-    }
-
-    /**
-    * Delete a consumable.
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @param  int $consumableId
-    * @since [v1.0]
-    * @return \Illuminate\Http\RedirectResponse
-     */
-    public function destroy($consumableId)
-    {
-        if (is_null($consumable = Consumable::find($consumableId))) {
-            return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.not_found'));
-        }
-        $this->authorize($consumable);
-        $consumable->delete();
-        // Redirect to the locations management page
-        return redirect()->route('consumables.index')->with('success', trans('admin/consumables/message.delete.success'));
-    }
-
-    /**
-    * Return a view to display component information.
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::getDataView() method that generates the JSON response
-    * @since [v1.0]
-    * @param int $consumableId
-    * @return \Illuminate\Contracts\View\View
-     */
-    public function show($consumableId = null)
-    {
-        $consumable = Consumable::find($consumableId);
-        $this->authorize($consumable);
-        if (isset($consumable->id)) {
-            return view('consumables/view', compact('consumable'));
-        }
-        return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.does_not_exist', compact('id')));
-    }
-
-    /**
-    * Return a view to checkout a consumable to a user.
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::postCheckout() method that stores the data.
-    * @since [v1.0]
-    * @param int $consumableId
-    * @return \Illuminate\Contracts\View\View
-     */
-    public function getCheckout($consumableId)
-    {
-        if (is_null($consumable = Consumable::find($consumableId))) {
-            return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.does_not_exist'));
-        }
-        $this->authorize('checkout', $consumable);
-        return view('consumables/checkout', compact('consumable'));
-    }
-
-    /**
-    * Saves the checkout information
-    *
-    * @author [A. Gianotto] [<snipe@snipe.net>]
-    * @see ConsumablesController::getCheckout() method that returns the form.
-    * @since [v1.0]
-    * @param int $consumableId
-    * @return \Illuminate\Http\RedirectResponse
-     */
-    public function postCheckout($consumableId)
-    {
-        if (is_null($consumable = Consumable::find($consumableId))) {
-            return redirect()->route('consumables.index')->with('error', trans('admin/consumables/message.not_found'));
-        }
-
-        $this->authorize('checkout', $consumable);
-
-        $admin_user = Auth::user();
-        $assigned_to = e(Input::get('assigned_to'));
-
-        // Check if the user exists
-        if (is_null($user = User::find($assigned_to))) {
-            // Redirect to the consumable management page with error
-            return redirect()->route('checkout/consumable', $consumable)->with('error', trans('admin/consumables/message.checkout.user_does_not_exist'));
-        }
-
-        // Update the consumable data
-        $consumable->assigned_to = e(Input::get('assigned_to'));
-
-        $consumable->users()->attach($consumable->id, [
-            'consumable_id' => $consumable->id,
-            'user_id' => $admin_user->id,
-            'assigned_to' => e(Input::get('assigned_to'))
-        ]);
-
-        $logaction = $consumable->logCheckout(e(Input::get('note')), $user);
-        $data['log_id'] = $logaction->id;
-        $data['eula'] = $consumable->getEula();
-        $data['first_name'] = $user->first_name;
-        $data['item_name'] = $consumable->name;
-        $data['checkout_date'] = $logaction->created_at;
-        $data['note'] = $logaction->note;
-        $data['require_acceptance'] = $consumable->requireAcceptance();
-
-
-      // Redirect to the new consumable page
-        return redirect()->route('consumables.index')->with('success', trans('admin/consumables/message.checkout.success'));
-
-    }
-
 }

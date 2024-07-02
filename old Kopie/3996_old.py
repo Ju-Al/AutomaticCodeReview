@@ -1,21 +1,4 @@
 # Licensed to Modin Development Team under one or more contributor license agreements.
-        left : NumPy 2D array
-            Left partitions.
-        right : NumPy 2D array
-            Right partitions.
-        NumPy array
-            An of partition objects.
-        [obj.drain_call_queue() for row in right for obj in row]
-        new_right = np.empty(shape=right.shape[axis], dtype=object)
-        if axis:
-            right = right.T
-        for i in range(len(right)):
-            new_right[i] = pandas.concat(
-                [right[i][j].get() for j in range(len(right[i]))], axis=axis ^ 1
-            )
-        right = new_right.T if axis else new_right
-
-        new_partitions = np.array(
 # See the NOTICE file distributed with this work for additional information regarding
 # copyright ownership.  The Modin Development Team licenses this file to you under the
 # Apache License, Version 2.0 (the "License"); you may not use this file except in
@@ -338,7 +321,23 @@ class PandasDataframePartitionManager(ABC):
             Axis to apply and broadcast over.
         apply_func : callable
             Function to apply.
-        left : np.ndarray
+        left : NumPy 2D array
+            Left partitions.
+        right : NumPy 2D array
+        NumPy array
+            An of partition objects.
+        [obj.drain_call_queue() for row in right for obj in row]
+        new_right = np.empty(shape=right.shape[axis], dtype=object)
+        if axis:
+            right = right.T
+        for i in range(len(right)):
+            new_right[i] = pandas.concat(
+                [right[i][j].get() for j in range(len(right[i]))], axis=axis ^ 1
+            )
+        right = new_right.T if axis else new_right
+
+        new_partitions = np.array(
+            Right partitions.
             NumPy array of left partitions.
         right : np.ndarray
             NumPy array of right partitions.

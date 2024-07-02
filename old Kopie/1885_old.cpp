@@ -1,825 +1,458 @@
-/* -------------------------------------------------------------------------- *
- *                     OpenSim:  testStatesTrajectory.cpp                     *
- * -------------------------------------------------------------------------- *
- * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
- * See http://opensim.stanford.edu and the NOTICE file for more information.  *
- * OpenSim is developed at Stanford University and supported by the US        *
- * National Institutes of Health (U54 GM072970, R24 HD065690) and by DARPA    *
- * through the Warrior Web program.                                           *
- *                                                                            *
- * Copyright (c) 2005-2017 Stanford University and the Authors                *
- * Author(s): Chris Dembia                                                    *
- *                                                                            *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may    *
- * not use this file except in compliance with the License. You may obtain a  *
- * copy of the License at http://www.apache.org/licenses/LICENSE-2.0.         *
- *                                                                            *
- * Unless required by applicable law or agreed to in writing, software        *
- * distributed under the License is distributed on an "AS IS" BASIS,          *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   *
- * See the License for the specific language governing permissions and        *
- * limitations under the License.                                             *
- * -------------------------------------------------------------------------- */
+/**
+ * Copyright Soramitsu Co., Ltd. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-#include <OpenSim/Simulation/osimSimulation.h>
-#include <OpenSim/Common/Constant.h>
-#include <OpenSim/Common/LoadOpenSimLibrary.h>
-#include <random>
-#include <cstdio>
-#include <OpenSim/Auxiliary/auxiliaryTestFunctions.h>
+#include "main/application.hpp"
 
-using namespace OpenSim;
-using namespace SimTK;
+#include "ametsuchi/impl/postgres_ordering_service_persistent_state.hpp"
+#include "ametsuchi/impl/tx_presence_cache_impl.hpp"
+#include "ametsuchi/impl/wsv_restorer_impl.hpp"
+#include "backend/protobuf/common_objects/proto_common_objects_factory.hpp"
+#include "backend/protobuf/proto_block_json_converter.hpp"
+#include "backend/protobuf/proto_permission_to_string.hpp"
+#include "backend/protobuf/proto_proposal_factory.hpp"
+#include "backend/protobuf/proto_query_response_factory.hpp"
+#include "backend/protobuf/proto_transport_factory.hpp"
+#include "backend/protobuf/proto_tx_status_factory.hpp"
+#include "common/bind.hpp"
+#include "consensus/yac/impl/supermajority_checker_impl.hpp"
+#include "interfaces/iroha_internal/transaction_batch_factory_impl.hpp"
+#include "interfaces/iroha_internal/transaction_batch_parser_impl.hpp"
+#include "interfaces/permission_to_string.hpp"
+#include "multi_sig_transactions/gossip_propagation_strategy.hpp"
+#include "multi_sig_transactions/mst_processor_impl.hpp"
+#include "multi_sig_transactions/mst_propagation_strategy_stub.hpp"
+#include "multi_sig_transactions/mst_time_provider_impl.hpp"
+#include "multi_sig_transactions/storage/mst_storage_impl.hpp"
+#include "multi_sig_transactions/transport/mst_transport_grpc.hpp"
+#include "multi_sig_transactions/transport/mst_transport_stub.hpp"
+#include "torii/impl/command_service_impl.hpp"
+#include "torii/impl/status_bus_impl.hpp"
+#include "validators/field_validator.hpp"
 
-// Small to-do's:
-// TODO nondecreasing or increasing? might affect upper_bound/lower_bound.
-// TODO detailed exceptions when integrity checks fail.
-// TODO currently, one gets segfaults if state is not realized.
+using namespace iroha;
+using namespace iroha::ametsuchi;
+using namespace iroha::simulator;
+using namespace iroha::validation;
+using namespace iroha::network;
+using namespace iroha::synchronizer;
+using namespace iroha::torii;
+using namespace iroha::consensus::yac;
 
-// Big to-do's:
-// TODO append two StateTrajectories together.
-// TODO test modeling options (locked coordinates, etc.)
-// TODO store a model within a StatesTrajectory.
+using namespace std::chrono_literals;
 
-const std::string statesStoFname = "testStatesTrajectory_readStorage_states.sto";
-const std::string pre40StoFname = "std_subject01_walk1_states.sto";
-
-// Helper function to get a state variable value from a storage file.
-Real getStorageEntry(const Storage& sto,
-        const int timeIndex, const std::string& columnName) {
-    Real value;
-    const int columnIndex = sto.getStateIndex(columnName);
-    sto.getData(timeIndex, columnIndex, value);
-    return value;
+/**
+ * Configuring iroha daemon
+ */
+Irohad::Irohad(const std::string &block_store_dir,
+               const std::string &pg_conn,
+               const std::string &listen_ip,
+               size_t torii_port,
+               size_t internal_port,
+               size_t max_proposal_size,
+               std::chrono::milliseconds proposal_delay,
+               std::chrono::milliseconds vote_delay,
+               const shared_model::crypto::Keypair &keypair,
+               bool is_mst_supported)
+    : block_store_dir_(block_store_dir),
+      pg_conn_(pg_conn),
+      listen_ip_(listen_ip),
+      torii_port_(torii_port),
+      internal_port_(internal_port),
+      max_proposal_size_(max_proposal_size),
+      proposal_delay_(proposal_delay),
+      vote_delay_(vote_delay),
+      is_mst_supported_(is_mst_supported),
+      keypair(keypair) {
+  log_ = logger::log("IROHAD");
+  log_->info("created");
+  // Initializing storage at this point in order to insert genesis block before
+  // initialization of iroha daemon
+  initStorage();
 }
 
-void testPopulateTrajectoryAndStatesTrajectoryReporter() {
-    Model model("gait2354_simbody.osim");
+/**
+ * Initializing iroha daemon
+ */
+void Irohad::init() {
+  // Recover VSW from the existing ledger to be sure it is consistent
+  initWsvRestorer();
+  restoreWsv();
 
-    // To assist with creating interesting (non-zero) coordinate values:
-    model.updCoordinateSet().get("pelvis_ty").setDefaultLocked(true);
+  initCryptoProvider();
+  initBatchParser();
+  initValidators();
+  initNetworkClient();
+  initFactories();
+  initOrderingGate();
+  initSimulator();
+  initConsensusCache();
+  initBlockLoader();
+  initConsensusGate();
+  initSynchronizer();
+  initPeerCommunicationService();
+  initStatusBus();
+  initMstProcessor();
+  initPendingTxsStorage();
 
-    // Also, test the StatesTrajectoryReporter.
-    auto* statesCol = new StatesTrajectoryReporter();
-    statesCol->setName("states_collector_all_steps");
-    model.addComponent(statesCol);
-
-        const double finalTime = 0.05;
-    {
-        auto& state = model.initSystem();
-    
-        SimTK::RungeKuttaMersonIntegrator integrator(model.getSystem());
-        SimTK::TimeStepper ts(model.getSystem(), integrator);
-        ts.initialize(state);
-        ts.setReportAllSignificantStates(true);
-        integrator.setReturnEveryInternalStep(true);
-    
-        StatesTrajectory states;
-        std::vector<double> times;
-        while (ts.getState().getTime() < finalTime) {
-            ts.stepTo(finalTime);
-            times.push_back(ts.getState().getTime());
-            // StatesTrajectory API for appending states:
-            states.append(ts.getState());
-            // For the StatesTrajectoryReporter:
-            model.getMultibodySystem().realize(ts.getState(), SimTK::Stage::Report);
-        }
-    
-        // Make sure we have all the states
-        SimTK_TEST_EQ((int)states.getSize(), (int)times.size());
-        SimTK_TEST_EQ((int)statesCol->getStates().getSize(), (int)times.size());
-        // ...and that they aren't all just references to the same single state.
-        for (int i = 0; i < (int)states.getSize(); ++i) {
-            SimTK_TEST_EQ(states[i].getTime(), times[i]);
-            SimTK_TEST_EQ(statesCol->getStates()[i].getTime(), times[i]);
-        }
-    }
-
-    // Test the StatesTrajectoryReporter with a constant reporting interval.
-    statesCol->clear();
-    auto* statesColInterval = new StatesTrajectoryReporter();
-    statesColInterval->setName("states_collector_interval");
-    statesColInterval->set_report_time_interval(0.01);
-    model.addComponent(statesColInterval);
-
-    {
-        auto& state = model.initSystem();
-        SimTK::RungeKuttaMersonIntegrator integrator(model.getSystem());
-        SimTK::TimeStepper ts(model.getSystem(), integrator);
-        ts.initialize(state);
-        ts.setReportAllSignificantStates(true);
-        integrator.setReturnEveryInternalStep(true);
-
-        while (ts.getState().getTime() < finalTime) {
-            ts.stepTo(finalTime);
-            model.getMultibodySystem().realize(ts.getState(), SimTK::Stage::Report);
-        }
-
-        SimTK_TEST(statesColInterval->getStates().getSize() == 6);
-        std::vector<double> times { 0, 0.01, 0.02, 0.03, 0.04, 0.05 };
-        int i = 0;
-        for (const auto& s : statesColInterval->getStates()) {
-            ASSERT_EQUAL(s.getTime(), times[i], 1e-5);
-            ++i;
-        }
-    }
+  // Torii
+  initTransactionCommandService();
+  initQueryService();
 }
 
-void testFrontBack() {
-    Model model("arm26.osim");
-    const auto& state = model.initSystem();
-    StatesTrajectory states;
-    states.append(state);
-    states.append(state);
-    states.append(state);
-
-    SimTK_TEST(&states.front() == &states[0]);
-    SimTK_TEST(&states.back() == &states[2]);
+/**
+ * Dropping iroha daemon storage
+ */
+void Irohad::dropStorage() {
+  storage->reset();
+  storage->createOsPersistentState() |
+      [](const auto &state) { state->resetState(); };
 }
 
-// Create states storage file to for states storage tests.
-void createStateStorageFile() {
+/**
+ * Initializing iroha daemon storage
+ */
+void Irohad::initStorage() {
+  common_objects_factory_ =
+      std::make_shared<shared_model::proto::ProtoCommonObjectsFactory<
+          shared_model::validation::FieldValidator>>();
+  auto perm_converter =
+      std::make_shared<shared_model::proto::ProtoPermissionToString>();
+  auto block_converter =
+      std::make_shared<shared_model::proto::ProtoBlockJsonConverter>();
+  auto storageResult = StorageImpl::create(block_store_dir_,
+                                           pg_conn_,
+                                           common_objects_factory_,
+                                           std::move(block_converter),
+                                           perm_converter);
+  storageResult.match(
+      [&](expected::Value<std::shared_ptr<ametsuchi::StorageImpl>> &_storage) {
+        storage = _storage.value;
+      },
+      [&](expected::Error<std::string> &error) { log_->error(error.error); });
 
-    Model model("gait2354_simbody.osim");
-
-    // To assist with creating interesting (non-zero) coordinate values:
-    model.updCoordinateSet().get("pelvis_ty").setDefaultLocked(true);
-
-    // Randomly assign muscle excitations to create interesting activation
-    // histories.
-    auto* controller = new PrescribedController();
-    // For consistent results, use same seed each time.
-    std::default_random_engine generator(0); 
-    // Uniform distribution between 0.1 and 0.9.
-    std::uniform_real_distribution<double> distribution(0.1, 0.8);
-
-    for (int im = 0; im < model.getMuscles().getSize(); ++im) {
-        controller->addActuator(model.getMuscles()[im]);
-        controller->prescribeControlForActuator(
-            model.getMuscles()[im].getName(),
-            new Constant(distribution(generator))
-            );
-    }
-
-    model.addController(controller);
-
-    auto& initState = model.initSystem();
-    SimTK::RungeKuttaMersonIntegrator integrator(model.getSystem());
-    Manager manager(model, integrator);
-    initState.setTime(0.0);
-    manager.integrate(initState, 0.15);
-    manager.getStateStorage().print(statesStoFname);
+  log_->info("[Init] => storage", logger::logBool(storage));
 }
 
-void testFromStatesStorageGivesCorrectStates() {
+void Irohad::resetOrderingService() {
+  if (not(storage->createOsPersistentState() |
+          [](const auto &state) { return state->resetState(); }))
+    log_->error("cannot reset ordering service storage");
+}
 
-    // Read in trajectory.
-    // -------------------
-    Model model("gait2354_simbody.osim");
+bool Irohad::restoreWsv() {
+  return wsv_restorer_->restoreWsv(*storage).match(
+      [](iroha::expected::Value<void> v) { return true; },
+      [&](iroha::expected::Error<std::string> &error) {
+        log_->error(error.error);
+        return false;
+      });
+}
 
-    Storage sto(statesStoFname);
+/**
+ * Initializing crypto provider
+ */
+void Irohad::initCryptoProvider() {
+  crypto_signer_ =
+      std::make_shared<shared_model::crypto::CryptoModelSigner<>>(keypair);
 
-    // This will fail because we have not yet called initSystem() on the model.
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto),
-            OpenSim::ModelHasNoSystem);
+  log_->info("[Init] => crypto provider");
+}
 
-    model.initSystem();
-    auto states = StatesTrajectory::createFromStatesStorage(model, sto);
+void Irohad::initBatchParser() {
+  batch_parser =
+      std::make_shared<shared_model::interface::TransactionBatchParserImpl>();
 
-    // Test that the states are correct, and also that the iterator works.
-    // -------------------------------------------------------------------
-    int itime = 0;
-    double currTime;
-    for (const auto& state : states) {
-        // Time.
-        sto.getTime(itime, currTime);
-        SimTK_TEST_EQ(currTime, state.getTime());
+  log_->info("[Init] => transaction batch parser");
+}
 
-        // Multibody states.
-        for (int ic = 0; ic < model.getCoordinateSet().getSize(); ++ic) {
-            const auto& coord = model.getCoordinateSet().get(ic);
-            auto coordName = coord.getName();
-            auto jointName = coord.getJoint().getName();
-            auto coordPath = jointName + "/" + coordName;
-            // Coordinate.
-            SimTK_TEST_EQ(getStorageEntry(sto, itime, coordPath + "/value"),
-                    coord.getValue(state));
+/**
+ * Initializing validators
+ */
+void Irohad::initValidators() {
+  auto factory = std::make_unique<shared_model::proto::ProtoProposalFactory<
+      shared_model::validation::DefaultProposalValidator>>();
+  stateful_validator =
+      std::make_shared<StatefulValidatorImpl>(std::move(factory), batch_parser);
+  chain_validator = std::make_shared<ChainValidatorImpl>(
+      std::make_shared<consensus::yac::SupermajorityCheckerImpl>());
 
-            // Speed.
-            SimTK_TEST_EQ(getStorageEntry(sto, itime, coordPath + "/speed"),
-                    coord.getSpeedValue(state));
-        }
+  log_->info("[Init] => validators");
+}
 
-        // Muscle states.
-        for (int im = 0; im < model.getMuscles().getSize(); ++im) {
-            const auto& muscle = model.getMuscles().get(im);
-            auto muscleName = muscle.getName();
+/**
+ * Initializing network client
+ */
+void Irohad::initNetworkClient() {
+  async_call_ =
+      std::make_shared<network::AsyncGrpcClient<google::protobuf::Empty>>();
+}
 
-            // Activation.
-            {
-                std::string stateVarName = muscleName + "/activation";
-                SimTK_TEST_EQ(
-                        getStorageEntry(sto, itime, stateVarName),
-                        muscle.getStateVariableValue(state, stateVarName));
+void Irohad::initFactories() {
+  transaction_batch_factory_ =
+      std::make_shared<shared_model::interface::TransactionBatchFactoryImpl>();
+  std::unique_ptr<shared_model::validation::AbstractValidator<
+      shared_model::interface::Transaction>>
+      transaction_validator =
+          std::make_unique<shared_model::validation::
+                               DefaultOptionalSignedTransactionValidator>();
+  transaction_factory =
+      std::make_shared<shared_model::proto::ProtoTransportFactory<
+          shared_model::interface::Transaction,
+          shared_model::proto::Transaction>>(std::move(transaction_validator));
+
+  query_response_factory_ =
+      std::make_shared<shared_model::proto::ProtoQueryResponseFactory>();
+
+  log_->info("[Init] => factories");
+}
+
+/**
+ * Initializing ordering gate
+ */
+void Irohad::initOrderingGate() {
+  ordering_gate = ordering_init.initOrderingGate(storage,
+                                                 max_proposal_size_,
+                                                 proposal_delay_,
+                                                 storage,
+                                                 storage,
+                                                 transaction_batch_factory_,
+                                                 async_call_);
+  log_->info("[Init] => init ordering gate - [{}]",
+             logger::logBool(ordering_gate));
+}
+
+/**
+ * Initializing iroha verified proposal creator and block creator
+ */
+void Irohad::initSimulator() {
+  auto block_factory = std::make_unique<shared_model::proto::ProtoBlockFactory>(
+      //  Block factory in simulator uses UnsignedBlockValidator because it is
+      //  not required to check signatures of block here, as they will be
+      //  checked when supermajority of peers will sign the block. It is also
+      //  not required to validate signatures of transactions here because they
+      //  are validated in the ordering gate, where they are received from the
+      //  ordering service.
+      std::make_unique<
+          shared_model::validation::DefaultUnsignedBlockValidator>());
+  simulator = std::make_shared<Simulator>(ordering_gate,
+                                          stateful_validator,
+                                          storage,
+                                          storage,
+                                          crypto_signer_,
+                                          std::move(block_factory));
+
+  log_->info("[Init] => init simulator");
+}
+
+/**
+ * Initializing consensus block cache
+ */
+void Irohad::initConsensusCache() {
+  consensus_result_cache_ = std::make_shared<consensus::ConsensusResultCache>();
+
+  log_->info("[Init] => init consensus block cache");
+}
+
+/**
+ * Initializing block loader
+ */
+void Irohad::initBlockLoader() {
+  block_loader =
+      loader_init.initBlockLoader(storage, storage, consensus_result_cache_);
+
+  log_->info("[Init] => block loader");
+}
+
+/**
+ * Initializing persistent cache
+ */
+void Irohad::initPersistentCache() {
+  persistent_cache = std::make_shared<TxPresenceCacheImpl>(storage);
+
+  log_->info("[Init] => persistent cache");
+}
+
+/**
+ * Initializing consensus gate
+ */
+void Irohad::initConsensusGate() {
+  consensus_gate = yac_init.initConsensusGate(storage,
+                                              simulator,
+                                              block_loader,
+                                              keypair,
+                                              consensus_result_cache_,
+                                              vote_delay_,
+                                              async_call_,
+                                              common_objects_factory_);
+
+  log_->info("[Init] => consensus gate");
+}
+
+/**
+ * Initializing synchronizer
+ */
+void Irohad::initSynchronizer() {
+  synchronizer = std::make_shared<SynchronizerImpl>(
+      consensus_gate, chain_validator, storage, block_loader);
+
+  log_->info("[Init] => synchronizer");
+}
+
+/**
+ * Initializing peer communication service
+ */
+void Irohad::initPeerCommunicationService() {
+  pcs = std::make_shared<PeerCommunicationServiceImpl>(
+      ordering_gate, synchronizer, simulator);
+
+  pcs->on_proposal().subscribe(
+      [this](auto) { log_->info("~~~~~~~~~| PROPOSAL ^_^ |~~~~~~~~~ "); });
+
+  pcs->on_commit().subscribe(
+      [this](auto) { log_->info("~~~~~~~~~| COMMIT =^._.^= |~~~~~~~~~ "); });
+
+  // complete initialization of ordering gate
+  ordering_gate->setPcs(*pcs);
+
+  log_->info("[Init] => pcs");
+}
+
+void Irohad::initStatusBus() {
+  status_bus_ = std::make_shared<StatusBusImpl>();
+  log_->info("[Init] => Tx status bus");
+}
+
+void Irohad::initMstProcessor() {
+  auto mst_completer = std::make_shared<DefaultCompleter>();
+  auto mst_storage = std::make_shared<MstStorageStateImpl>(mst_completer);
+  auto tx_presence_cache =
+      std::make_shared<iroha::ametsuchi::MockTxPresenceCache>();
+  std::shared_ptr<iroha::PropagationStrategy> mst_propagation;
+  if (is_mst_supported_) {
+    mst_transport = std::make_shared<iroha::network::MstTransportGrpc>(
+        async_call_,
+        transaction_factory,
+        batch_parser,
+        transaction_batch_factory_,
+        std::move(tx_presence_cache),
+        keypair.publicKey());
+    // TODO: IR-1317 @l4l (02/05/18) magics should be replaced with options via
+    // cli parameters
+    mst_propagation = std::make_shared<GossipPropagationStrategy>(
+        storage,
+        rxcpp::observe_on_new_thread(),
+        std::chrono::seconds(5) /*emitting period*/,
+        2 /*amount per once*/);
+  } else {
+    mst_propagation = std::make_shared<iroha::PropagationStrategyStub>();
+    mst_transport = std::make_shared<iroha::network::MstTransportStub>();
+  }
+
+  auto mst_time = std::make_shared<MstTimeProviderImpl>();
+  auto fair_mst_processor = std::make_shared<FairMstProcessor>(
+      mst_transport, mst_storage, mst_propagation, mst_time);
+  mst_processor = fair_mst_processor;
+  mst_transport->subscribe(fair_mst_processor);
+  log_->info("[Init] => MST processor");
+}
+
+void Irohad::initPendingTxsStorage() {
+  pending_txs_storage_ = std::make_shared<PendingTransactionStorageImpl>(
+      mst_processor->onStateUpdate(),
+      mst_processor->onPreparedBatches(),
+      mst_processor->onExpiredBatches());
+  log_->info("[Init] => pending transactions storage");
+}
+
+/**
+ * Initializing transaction command service
+ */
+void Irohad::initTransactionCommandService() {
+  auto tx_processor = std::make_shared<TransactionProcessorImpl>(
+      pcs, mst_processor, status_bus_);
+  auto status_factory =
+      std::make_shared<shared_model::proto::ProtoTxStatusFactory>();
+  command_service = std::make_shared<::torii::CommandServiceImpl>(
+      tx_processor, storage, status_bus_, status_factory);
+  command_service_transport =
+      std::make_shared<::torii::CommandServiceTransportGrpc>(
+          command_service,
+          status_bus_,
+          std::chrono::seconds(1),
+          2 * proposal_delay_,
+          status_factory,
+          transaction_factory,
+          batch_parser,
+          transaction_batch_factory_);
+
+  log_->info("[Init] => command service");
+}
+
+/**
+ * Initializing query command service
+ */
+void Irohad::initQueryService() {
+  auto query_processor = std::make_shared<QueryProcessorImpl>(
+      storage, storage, pending_txs_storage_, query_response_factory_);
+
+  query_service = std::make_shared<::torii::QueryService>(query_processor);
+
+  log_->info("[Init] => query service");
+}
+
+void Irohad::initWsvRestorer() {
+  wsv_restorer_ = std::make_shared<iroha::ametsuchi::WsvRestorerImpl>();
+}
+
+/**
+ * Run iroha daemon
+ */
+Irohad::RunResult Irohad::run() {
+  using iroha::expected::operator|;
+
+  // Initializing torii server
+  torii_server = std::make_unique<ServerRunner>(listen_ip_ + ":"
+                                                + std::to_string(torii_port_));
+
+  // Initializing internal server
+  internal_server = std::make_unique<ServerRunner>(
+      listen_ip_ + ":" + std::to_string(internal_port_));
+
+  // Run torii server
+  return (torii_server->append(command_service_transport)
+              .append(query_service)
+              .run()
+          |
+          [&](const auto &port) {
+            log_->info("Torii server bound on port {}", port);
+            if (is_mst_supported_) {
+              internal_server->append(
+                  std::static_pointer_cast<MstTransportGrpc>(mst_transport));
             }
-
-            // Fiber length.
-            {
-                std::string stateVarName = muscleName + "/fiber_length";
-                SimTK_TEST_EQ(
-                        getStorageEntry(sto, itime, stateVarName), 
-                        muscle.getStateVariableValue(state, stateVarName));
-            }
-
-        }
-
-        // More complicated computation based on state.
-        // These calculations require that the state is realized to velocity.
-        model.getMultibodySystem().realize(state, SimTK::Stage::Velocity);
-
-        for (int im = 0; im < model.getMuscles().getSize(); ++im) {
-            const auto& muscle = model.getMuscles().get(im);
-            auto muscleName = muscle.getName();
-            SimTK_TEST(!SimTK::isNaN(muscle.getFiberForce(state)));
-        }
-
-        auto loc = model.getBodySet().get("tibia_r")
-            .findStationLocationInAnotherFrame(state,
-                    SimTK::Vec3(1, 0.5, 0.25),
-                    model.getGround());
-        SimTK_TEST(!loc.isNaN());
-
-        SimTK_TEST(!model.calcMassCenterVelocity(state).isNaN());
-
-        // Make sure that we can realize to Dynamics without an issue.
-        // There used to be a bug (GitHub Issue #1455) wherein Instance-stage
-        // cache variables contain raw pointers to SimTK::Force objects,
-        // therefore one cannot use such a state with different instances
-        // of the same model.
-        model.getMultibodySystem().realize(state, SimTK::Stage::Dynamics);
-        SimTK_TEST(!SimTK::isNaN(
-                    model.getMuscles().get(0).getActiveFiberForce(state)));
-
-        // Similarly, make sure we can do an acceleration-level calculation.
-        model.getMultibodySystem().realize(state, SimTK::Stage::Acceleration);
-        SimTK_TEST(!model.calcMassCenterAcceleration(state).isNaN());
-
-        itime++;
-    }
+            // Run internal server
+            return internal_server
+                ->append(ordering_init.ordering_gate_transport)
+                .append(ordering_init.ordering_service_transport)
+                .append(yac_init.consensus_network)
+                .append(loader_init.service)
+                .run();
+          })
+      .match(
+          [&](const auto &port) -> RunResult {
+            log_->info("Internal server bound on port {}", port.value);
+            log_->info("===> iroha initialized");
+            return {};
+          },
+          [&](const expected::Error<std::string> &e) -> RunResult {
+            log_->error(e.error);
+            return e;
+          });
 }
 
-Storage newStorageWithRemovedRows(const Storage& origSto,
-        const std::set<int>& rowsToRemove) {
-    Storage sto(1000);
-    auto labels = origSto.getColumnLabels();
-    auto numOrigColumns = origSto.getColumnLabels().getSize() - 1;
-
-    // Remove in reverse order so it's easier to keep track of indices.
-     for (auto it = rowsToRemove.rbegin(); it != rowsToRemove.rend(); ++it) {
-         labels.remove(*it);
-     }
-    sto.setColumnLabels(labels);
-
-    double time;
-    for (int itime = 0; itime < origSto.getSize(); ++itime) {
-        SimTK::Vector rowData(numOrigColumns);
-        origSto.getData(itime, numOrigColumns, rowData);
-
-        SimTK::Vector newRowData(numOrigColumns - (int)rowsToRemove.size());
-        int iNew = 0;
-        for (int iOrig = 0; iOrig < numOrigColumns; ++iOrig) {
-            if (rowsToRemove.count(iOrig) == 0) {
-                newRowData[iNew] = rowData[iOrig];
-                ++iNew;
-            }
-        }
-
-        origSto.getTime(itime, time);
-        sto.append(time, newRowData);
-    }
-    return sto;
-}
-
-void testFromStatesStorageInconsistentModel(const std::string &stoFilepath) {
-
-    // States are missing from the Storage.
-    // ------------------------------------
-    {
-        Model model("gait2354_simbody.osim");
-        model.initSystem();
-
-        const auto stateNames = model.getStateVariableNames();
-        Storage sto(stoFilepath);
-        // So the test doesn't take so long.
-        sto.resampleLinear((sto.getLastTime() - sto.getFirstTime()) / 10);
-
-        // Create new Storage with fewer columns.
-        auto labels = sto.getColumnLabels();
-
-        auto origLabel10 = stateNames[10];
-        auto origLabel15 = stateNames[15];
-        Storage stoMissingCols = newStorageWithRemovedRows(sto, {
-                // gymnastics to be compatible with pre-v4.0 column names:
-                sto.getStateIndex(origLabel10) + 1,
-                sto.getStateIndex(origLabel15) + 1});
-
-        // Test that an exception is thrown.
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, stoMissingCols),
-                StatesTrajectory::MissingColumnsInStatesStorage
-                );
-        // Check some other similar calls.
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, stoMissingCols,
-                    false, true),
-                StatesTrajectory::MissingColumnsInStatesStorage
-                );
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, stoMissingCols,
-                    false, false),
-                StatesTrajectory::MissingColumnsInStatesStorage
-                );
-
-        // No exception if allowing missing columns.
-        // The unspecified states are set to NaN (for at least two random
-        // states).
-        auto states = StatesTrajectory::createFromStatesStorage(
-                model, stoMissingCols, true);
-        SimTK_TEST(SimTK::isNaN(
-                    model.getStateVariableValue(states[0], origLabel10)));
-        SimTK_TEST(SimTK::isNaN(
-                    model.getStateVariableValue(states[4], origLabel15)));
-        // Behavior is independent of value for allowMissingColumns.
-        StatesTrajectory::createFromStatesStorage(model, stoMissingCols,
-                true, true);
-        StatesTrajectory::createFromStatesStorage(model, stoMissingCols,
-                true, false);
-    }
-
-    // States are missing from the Model.
-    // ----------------------------------
-    {
-        Model model("gait2354_simbody.osim");
-        Storage sto(stoFilepath);
-        // So the test doesn't take so long.
-        sto.resampleLinear((sto.getLastTime() - sto.getFirstTime()) / 10);
-
-        // Remove a few of the muscles.
-        model.updForceSet().remove(0);
-        model.updForceSet().remove(10);
-        model.updForceSet().remove(30);
-
-        // Test that an exception is thrown.
-        // Must call initSystem() here; otherwise the _propertySubcomponents
-        // would be stale and would still include the forces we removed above.
-        model.initSystem();
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, sto),
-                StatesTrajectory::ExtraColumnsInStatesStorage
-                );
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, sto,
-                    true, false),
-                StatesTrajectory::ExtraColumnsInStatesStorage
-                );
-        SimTK_TEST_MUST_THROW_EXC(
-                StatesTrajectory::createFromStatesStorage(model, sto,
-                    false, false),
-                StatesTrajectory::ExtraColumnsInStatesStorage
-                );
-
-        // No exception if allowing extra columns, and behavior is
-        // independent of value for allowMissingColumns.
-        StatesTrajectory::createFromStatesStorage(model, sto, true, true);
-        StatesTrajectory::createFromStatesStorage(model, sto, false, true);
-    }
-}
-
-void testFromStatesStorageUniqueColumnLabels() {
-
-    Model model("gait2354_simbody.osim");
-    model.initSystem();
-    Storage sto(statesStoFname);
-    
-    // Edit column labels so that they are not unique.
-    auto labels = sto.getColumnLabels();
-    labels[10] = labels[7];
-    sto.setColumnLabels(labels); 
-   
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto),
-            StatesTrajectory::NonUniqueColumnsInStatesStorage);
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto, true, true),
-            StatesTrajectory::NonUniqueColumnsInStatesStorage);
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto, true, false),
-            StatesTrajectory::NonUniqueColumnsInStatesStorage);
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto, false, true),
-            StatesTrajectory::NonUniqueColumnsInStatesStorage);
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto, false, false),
-            StatesTrajectory::NonUniqueColumnsInStatesStorage);
-
-    // TODO unique even considering old and new formats for state variable
-    // names (/value and /speed) in the same file.
-}
-
-void testFromStatesStoragePre40CorrectStates() {
-    // This test is very similar to testFromStatesStorageGivesCorrectStates
-    // TODO could avoid the duplicate function since getStateIndex handles
-    // pre-4.0 names.
-
-    // Read in trajectory.
-    // -------------------
-    Model model("gait2354_simbody.osim");
-
-    Storage sto(pre40StoFname);
-    // So the test doesn't take so long.
-    sto.resampleLinear(0.01);
-    model.initSystem();
-    auto states = StatesTrajectory::createFromStatesStorage(model, sto);
-
-    // Test that the states are correct.
-    // ---------------------------------
-    int itime = 0;
-    double currTime;
-    for (const auto& state : states) {
-        // Time.
-        sto.getTime(itime, currTime);
-        SimTK_TEST_EQ(currTime, state.getTime());
-
-        // Multibody states.
-        for (int ic = 0; ic < model.getCoordinateSet().getSize(); ++ic) {
-            const auto& coord = model.getCoordinateSet().get(ic);
-            auto coordName = coord.getName();
-
-            // Coordinate.
-            SimTK_TEST_EQ(getStorageEntry(sto, itime, coordName),
-                    coord.getValue(state));
-
-            // Speed.
-            SimTK_TEST_EQ(getStorageEntry(sto, itime, coordName + "_u"),
-                    coord.getSpeedValue(state));
-        }
-
-        // Muscle states.
-        for (int im = 0; im < model.getMuscles().getSize(); ++im) {
-            const auto& muscle = model.getMuscles().get(im);
-            auto muscleName = muscle.getName();
-
-            // Activation.
-            // TODO Simply accessing these state variables requires realizing
-            // to Velocity; I think this is a bug.
-            model.getMultibodySystem().realize(state, SimTK::Stage::Velocity);
-            SimTK_TEST_EQ(
-                    getStorageEntry(sto, itime, muscleName + ".activation"),
-                    muscle.getActivation(state));
-
-            // Fiber length.
-            SimTK_TEST_EQ(
-                    getStorageEntry(sto, itime, muscleName + ".fiber_length"), 
-                    muscle.getFiberLength(state));
-
-            // More complicated computation based on state.
-            SimTK_TEST(!SimTK::isNaN(muscle.getFiberForce(state)));
-        }
-
-        // More complicated computations based on state.
-        auto loc = model.getBodySet().get("tibia_r")
-            .findStationLocationInAnotherFrame(state,
-                    SimTK::Vec3(1, 0.5, 0.25),
-                    model.getGround());
-        SimTK_TEST(!loc.isNaN());
-
-        SimTK_TEST(!model.calcMassCenterVelocity(state).isNaN());
-
-        // Make sure that we can realize to Dynamics without an issue.
-        // There used to be a bug (GitHub Issue #1455) wherein Instance-stage
-        // cache variables contain raw pointers to SimTK::Force objects,
-        // therefore one cannot use such a state with different instances
-        // of the same model.
-        model.getMultibodySystem().realize(state, SimTK::Stage::Dynamics);
-        SimTK_TEST(!SimTK::isNaN(
-                    model.getMuscles().get(0).getActiveFiberForce(state)));
-
-        // Similarly, make sure we can do an acceleration-level calculation.
-        model.getMultibodySystem().realize(state, SimTK::Stage::Acceleration);
-        SimTK_TEST(!model.calcMassCenterAcceleration(state).isNaN());
-
-        itime++;
-    }
-}
-
-void testFromStatesStorageAllRowsHaveSameLength() {
-    // Missing data in individual rows leads to an incorrect StatesTrajectory
-    // and could really confuse users.
-    Model model("gait2354_simbody.osim");
-    model.initSystem();
-
-    const auto stateNames = model.getStateVariableNames();
-    Storage sto(statesStoFname);
-    // Append a too-short state vector.
-    SimTK::Vector_<double> v(model.getNumStateVariables() - 10, 1.0);
-    StateVector sv{25.0, v};
-    sto.append(sv);
-
-    SimTK_TEST_MUST_THROW_EXC(
-            StatesTrajectory::createFromStatesStorage(model, sto),
-            StatesTrajectory::VaryingNumberOfStatesPerRow);
-}
-
-
-void testCopying() {
-    Model model("gait2354_simbody.osim");
-    auto& state = model.initSystem();
-
-    StatesTrajectory states;
-    {
-        state.setTime(0.5);
-        states.append(state);
-        state.setTime(1.3);
-        states.append(state);
-        state.setTime(3.5);
-        states.append(state);
-    }
-
-    {
-        StatesTrajectory statesCopyConstruct(states);
-        // Ideally we'd check for equality (operator==()), but State does not
-        // have an equality operator.
-        SimTK_TEST_EQ((int)statesCopyConstruct.getSize(), (int)states.getSize());
-        for (size_t i = 0; i < states.getSize(); ++i) {
-            SimTK_TEST_EQ(statesCopyConstruct[i].getTime(), states[i].getTime());
-        }
-    }
-
-    {
-        StatesTrajectory statesCopyAssign;
-        statesCopyAssign = states;
-        SimTK_TEST_EQ((int)statesCopyAssign.getSize(), (int)states.getSize());
-        for (size_t i = 0; i < states.getSize(); ++i) {
-            SimTK_TEST_EQ(statesCopyAssign[i].getTime(), states[i].getTime());
-        }
-    }
-}
-
-void testAppendTimesAreNonDecreasing() {
-    Model model("gait2354_simbody.osim");
-    auto& state = model.initSystem();
-    state.setTime(1.0);
-
-    StatesTrajectory states;
-    states.append(state);
-
-    // Multiple states can have the same time; does not throw an exception:
-    states.append(state);
-
-    state.setTime(0.9999);
-    SimTK_TEST_MUST_THROW_EXC(states.append(state),
-            SimTK::Exception::APIArgcheckFailed);
-}
-
-void testBoundsCheck() {
-    Model model("gait2354_simbody.osim");
-    const auto& state = model.initSystem();
-    StatesTrajectory states;
-    states.append(state);
-    states.append(state);
-    states.append(state);
-    states.append(state);
-    
-    #ifdef NDEBUG
-        // In DEBUG, Visual Studio puts asserts into the index operator.
-        states[states.getSize() + 100];
-        states[4];
-        states[5];
-    #endif
-    SimTK_TEST_MUST_THROW_EXC(states.get(4), IndexOutOfRange);
-    SimTK_TEST_MUST_THROW_EXC(states.get(states.getSize() + 100),
-                              IndexOutOfRange);
-}
-
-void testIntegrityChecks() {
-    Model arm26("arm26.osim");
-    const auto& s26 = arm26.initSystem();
-
-    Model gait2354("gait2354_simbody.osim");
-    const auto& s2354 = gait2354.initSystem();
-    // TODO add models with events, unilateral constraints, etc.
-
-    // Times are nondecreasing.
-    {
-        StatesTrajectory states;
-        auto state0(s26);
-        state0.setTime(0.5);
-        auto state1(s26);
-        state1.setTime(0.6);
-
-        states.append(state0);
-        states.append(state1);
-
-        SimTK_TEST(states.isConsistent());
-        SimTK_TEST(states.isNondecreasingInTime());
-        SimTK_TEST(states.hasIntegrity());
-
-        // Users should never do this const cast; it's just for the sake of
-        // the test.
-        const_cast<SimTK::State*>(&states[1])->setTime(0.2);
-
-        SimTK_TEST(states.isConsistent());
-        SimTK_TEST(!states.isNondecreasingInTime());
-        SimTK_TEST(!states.hasIntegrity());
-    }
-
-    // Consistency and compatibility with a model.
-    {
-        StatesTrajectory states;
-        // An empty trajectory is consistent.
-        SimTK_TEST(states.isConsistent());
-
-        // A length-1 trajectory is consistent.
-        states.append(s26);
-        SimTK_TEST(states.isConsistent());
-
-        // This trajectory is compatible with the arm26 model.
-        SimTK_TEST(states.isCompatibleWith(arm26));
-
-        // Not compatible with gait2354 model.
-        // Ensures a lower-dimensional trajectory can't pass for a higher
-        // dimensional model.
-        SimTK_TEST(!states.isCompatibleWith(gait2354));
-
-        // The checks still work with more than 1 state.
-        states.append(s26);
-        states.append(s26);
-        SimTK_TEST(states.isNondecreasingInTime());
-        SimTK_TEST(states.isConsistent());
-        SimTK_TEST(states.hasIntegrity());
-        SimTK_TEST(states.isCompatibleWith(arm26));
-        SimTK_TEST(!states.isCompatibleWith(gait2354));
-    }
-
-    {
-        StatesTrajectory states;
-        states.append(s2354);
-
-        // Reverse of the previous check; to ensure that a larger-dimensional
-        // trajectory can't pass for the smaller dimensional model.
-        SimTK_TEST(states.isCompatibleWith(gait2354));
-        SimTK_TEST(!states.isCompatibleWith(arm26));
-
-        // Check still works with more than 1 state.
-        states.append(s2354);
-        states.append(s2354);
-        SimTK_TEST(states.isNondecreasingInTime());
-        SimTK_TEST(states.isConsistent());
-        SimTK_TEST(states.hasIntegrity());
-        SimTK_TEST(states.isCompatibleWith(gait2354));
-        SimTK_TEST(!states.isCompatibleWith(arm26));
-    }
-
-    {
-        // Cannot append inconsistent states.
-        StatesTrajectory states;
-        states.append(s26);
-        SimTK_TEST_MUST_THROW_EXC(states.append(s2354),
-                StatesTrajectory::InconsistentState);
-
-        // Same check, but swap the models.
-        StatesTrajectory states2;
-        states2.append(s2354);
-        SimTK_TEST_MUST_THROW_EXC(states2.append(s26),
-                StatesTrajectory::InconsistentState);
-    }
-
-    // TODO Show weakness of the test: two models with the same number of Q's, U's,
-    // and Z's both pass the check. 
-}
-
-void tableAndTrajectoryMatch(const Model& model,
-                             const TimeSeriesTable& table,
-                             const StatesTrajectory& states,
-                             std::vector<std::string> columns = {}) {
-
-    const auto stateNames = model.getStateVariableNames();
-
-    size_t numColumns{};
-    if (columns.empty()) {
-        numColumns = stateNames.getSize();
-    } else {
-        numColumns = columns.size();
-    }
-    SimTK_TEST(table.getNumColumns() == numColumns);
-    SimTK_TEST(table.getNumRows() == states.getSize());
-
-            const auto& valueInStates = model.getStateVariableValue(
-                    states[itime], stateName);
-    const auto& colNames = table.getColumnLabels();
-
-    // Test that the data table has exactly the same numbers.
-    for (size_t itime = 0; itime < states.getSize(); ++itime) {
-        // Test time.
-        SimTK_TEST(table.getIndependentColumn()[itime] ==
-                   states[itime].getTime());
-
-        stateValues = model.getStateVariableValues(states[itime]);
-
-        // Test state values.
-        for (size_t icol = 0; icol < table.getNumColumns(); ++icol) {
-            const auto& stateName = colNames[icol];
-
-            const auto stateIndex = stateNames.findIndex(stateName);
-            const auto& valueInStates = stateValues[stateIndex];
-
-            const auto& column = table.getDependentColumnAtIndex(icol);
-            const auto& valueInTable = column[static_cast<int>(itime)];
-
-            SimTK_TEST(valueInStates == valueInTable);
-        }
-    }
-}
-
-void testExport() {
-    Model gait("gait2354_simbody.osim");
-    gait.initSystem();
-
-    // Exported data exactly matches data in the trajectory.
-    const auto stateNames = gait.getStateVariableNames();
-    Storage sto(statesStoFname);
-    auto states = StatesTrajectory::createFromStatesStorage(gait, sto);
-
-    {
-        auto tableAll = states.exportToTable(gait);
-        tableAndTrajectoryMatch(gait, tableAll, states);
-    }
-
-    // Exporting only certain columns.
-    {
-        std::vector<std::string> columns {"knee_l/knee_angle_l/value",
-                                          "knee_r/knee_angle_r/value",
-                                          "knee_r/knee_angle_r/speed"};
-        auto tableKnee = states.exportToTable(gait, columns);
-        tableAndTrajectoryMatch(gait, tableKnee, states, columns);
-    }
-
-    // Trying to export the trajectory with an incompatible model.
-    {
-        Model arm26("arm26.osim");
-        SimTK::State differentState = arm26.initSystem();
-        SimTK_TEST_MUST_THROW_EXC(states.exportToTable(arm26),
-                                  StatesTrajectory::IncompatibleModel);
-    }
-
-    // Exception if given a non-existent column name.
-    SimTK_TEST_MUST_THROW_EXC(
-            states.exportToTable(gait, {"knee_l/knee_angle_l/value",
-                                        "not_an_actual_state",
-                                        "knee_r/knee_angle_r/speed"}),
-            OpenSim::Exception);
-    SimTK_TEST_MUST_THROW_EXC(
-            states.exportToTable(gait, {"knee_l/knee_angle_l/value",
-                                        "nor/is/this",
-                                        "knee_r/knee_angle_r/speed"}),
-            OpenSim::Exception);
-}
-
-int main() {
-    SimTK_START_TEST("testStatesTrajectory");
-
-        // actuators library is not loaded automatically (unless using clang).
-        #if !defined(__clang__)
-            LoadOpenSimLibrary("osimActuators");
-        #endif
-
-        // Make sure the states Storage file doesn't already exist; we'll
-        // generate it later and we don't want to use a stale one by accident.
-        remove(statesStoFname.c_str());
-
-        SimTK_SUBTEST(testPopulateTrajectoryAndStatesTrajectoryReporter);
-        SimTK_SUBTEST(testFrontBack);
-        SimTK_SUBTEST(testBoundsCheck);
-        SimTK_SUBTEST(testIntegrityChecks);
-        SimTK_SUBTEST(testAppendTimesAreNonDecreasing);
-        SimTK_SUBTEST(testCopying);
-
-        // Test creation of trajectory from a states storage.
-        // -------------------------------------------------
-        // Using a pre-4.0 states storage file with old column names.
-        SimTK_SUBTEST(testFromStatesStoragePre40CorrectStates);
-        SimTK_SUBTEST1(testFromStatesStorageInconsistentModel, pre40StoFname);
-
-        // v4.0 states storage
-        createStateStorageFile();
-        SimTK_SUBTEST(testFromStatesStorageGivesCorrectStates);
-        SimTK_SUBTEST1(testFromStatesStorageInconsistentModel, statesStoFname);
-        SimTK_SUBTEST(testFromStatesStorageUniqueColumnLabels);
-        SimTK_SUBTEST(testFromStatesStorageAllRowsHaveSameLength);
-
-        // Export to data table.
-        SimTK_SUBTEST(testExport);
-
-    SimTK_END_TEST();
+Irohad::~Irohad() {
+  // TODO andrei 17.09.18: IR-1710 Verify that all components' destructors are
+  // called in irohad destructor
+  storage->freeConnections();
 }

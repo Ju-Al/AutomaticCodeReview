@@ -1,10 +1,4 @@
 /*
-          if (excep instanceof TableNotFoundException)
-            throw (TableNotFoundException) excep;
-          else if (excep instanceof AccumuloException)
-            throw (AccumuloException) excep;
-          else if (excep instanceof AccumuloSecurityException)
-            throw (AccumuloSecurityException) excep;
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -395,7 +389,12 @@ public class TableOperationsImpl extends TableOperationsHelper {
         if (exception.get() != null) {
           executor.shutdownNow();
           Throwable excep = exception.get();
-          if (excep instanceof TableNotFoundException) {
+          if (excep instanceof TableNotFoundException)
+            throw (TableNotFoundException) excep;
+          else if (excep instanceof AccumuloException)
+            throw (AccumuloException) excep;
+          else if (excep instanceof AccumuloSecurityException)
+            throw (AccumuloSecurityException) excep;
             TableNotFoundException tnfe = (TableNotFoundException) excep;
             throw new TableNotFoundException(tableId, tableName, "Table not found by background thread", tnfe);
           } else if (excep instanceof AccumuloSecurityException) {

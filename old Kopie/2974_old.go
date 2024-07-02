@@ -358,8 +358,6 @@ func copyTaskHealthMetrics(from []*ecstcs.TaskHealth) []*ecstcs.TaskHealth {
 	to := make([]*ecstcs.TaskHealth, len(from))
 	copy(to, from)
 	return to
-}
-
 // publishInstanceStatus queries the doctor.Doctor instance contained within cs,
 // converts the healthcheck results to an InstanceStatusRequest and then sends it
 // to the backend

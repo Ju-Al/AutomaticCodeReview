@@ -1,6 +1,4 @@
 const debug = require('../../util/debug').makeFileLogger(__filename);
-const toRootComponentMapKey = (type, variant = 'default') =>
-    `RootCmp_${type}__${variant}`;
 const walk = require('../../util/klaw-bound-fs');
 const InjectPlugin = require('webpack-inject-plugin').default;
 const directiveParser = require('@magento/directive-parser');
@@ -9,7 +7,8 @@ const micromatch = require('micromatch');
 
 const prettyLogger = require('../../util/pretty-logger');
 
-const toRootComponentMapKey = function(type, variant) {
+const toRootComponentMapKey = (type, variant = 'default') =>
+    `RootCmp_${type}__${variant}`;
     variant = variant || 'default';
     return 'RootCmp_' + type + '__' + variant;
 };

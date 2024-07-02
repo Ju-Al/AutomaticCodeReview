@@ -1,7 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-            conf.GetPositions() for conf in filename.GetConformers()], 
-            coordinates = np.empty((1,n_atoms,3), dtype=np.float32)
-        super(RDKitReader, self).__init__(coordinates, order='fac', **kwargs)
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -135,7 +132,9 @@ class RDKitReader(memory.MemoryReader):
         """
         n_atoms = filename.GetNumAtoms()
         coordinates = np.array([
-            conf.GetPositions() for conf in filename.GetConformers()],
+            coordinates = np.empty((1,n_atoms,3), dtype=np.float32)
+        super(RDKitReader, self).__init__(coordinates, order='fac', **kwargs)
+            conf.GetPositions() for conf in filename.GetConformers()], 
             dtype=np.float32)
         if coordinates.size == 0:
             warnings.warn("No coordinates found in the RDKit molecule")

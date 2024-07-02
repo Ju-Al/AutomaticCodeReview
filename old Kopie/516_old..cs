@@ -1,57 +1,84 @@
 ﻿// -------------------------------------------------------------------------------------------------
-// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
 
 using System;
-using EnsureThat;
-using Newtonsoft.Json;
+using System.Collections.Generic;
+using Hl7.Fhir.Model;
+using Hl7.Fhir.Serialization;
+using Microsoft.Health.Fhir.Core.Extensions;
+using Microsoft.Health.Fhir.Core.Features.Context;
+using Microsoft.Health.Fhir.Core.Features.Persistence;
+using Microsoft.Health.Fhir.Core.Features.Routing;
+using Microsoft.Health.Fhir.Core.Features.Search;
+using Microsoft.Health.Fhir.Core.Models;
+using Microsoft.Health.Fhir.Tests.Common;
+using NSubstitute;
+using Xunit;
 
-namespace Microsoft.Health.Fhir.Core.Features.Operations.Export.Models
+namespace Microsoft.Health.Fhir.Shared.Core.UnitTests.Features.Search
 {
-    /// <summary>
-    /// Represents metadata required for each file that is generated as part of the
-    /// export operation.
-    /// </summary>
-    public class ExportFileInfo
+    public class BundleFactoryTests
     {
-        public ExportFileInfo(
-            string type,
-            Uri fileUri,
-            int sequence)
-        {
-            EnsureArg.IsNotNullOrWhiteSpace(type);
-            EnsureArg.IsNotNull(fileUri);
+        private readonly FhirJsonSerializer _fhirJsonSerializer = new FhirJsonSerializer();
+        private readonly FhirJsonParser _fhirJsonParser = new FhirJsonParser();
+        private readonly IUrlResolver _urlResolver = Substitute.For<IUrlResolver>();
+        private readonly IFhirRequestContextAccessor _fhirRequestContextAccessor = Substitute.For<IFhirRequestContextAccessor>();
+        private readonly ResourceDeserializer _resourceDeserializer;
+        private readonly BundleFactory _bundleFactory;
 
-            Type = type;
-            FileUri = fileUri;
-            Sequence = sequence;
+        private readonly string _correlationId;
+
+        public BundleFactoryTests()
+        {
+            _resourceDeserializer = new ResourceDeserializer(
+                (FhirResourceFormat.Json, new Func<string, string, DateTimeOffset, ResourceElement>((str, version, lastUpdated) => _fhirJsonParser.Parse(str).ToResourceElement())));
+
+            _bundleFactory = new BundleFactory(
+                _urlResolver,
+                _fhirRequestContextAccessor,
+                _resourceDeserializer);
+
+            IFhirRequestContext fhirRequestContext = Substitute.For<IFhirRequestContext>();
+
+            _correlationId = Guid.NewGuid().ToString();
+
+            fhirRequestContext.CorrelationId.Returns(_correlationId);
+
+            _fhirRequestContextAccessor.FhirRequestContext.Returns(fhirRequestContext);
         }
 
-        [JsonConstructor]
-        protected ExportFileInfo()
+        [Fact]
+        public void GivenASearchResult_WhenCreateSearchBundle_ThenBundleShouldBeReturned()
         {
-        }
+            IReadOnlyList<Tuple<string, string>> unsupportedParameters = new Tuple<string, string>[0];
+            const string continuationToken = "ct";
+            var resourceUrl = new Uri("http://resource");
+            var nextUrl = new Uri("http://next");
+            var selfUrl = new Uri("http://self");
 
-        [JsonProperty(JobRecordProperties.Type)]
-        public string Type { get; private set; }
+            _urlResolver.ResolveResourceUrl(Arg.Any<ResourceElement>()).Returns(resourceUrl);
+            _urlResolver.ResolveRouteUrl(unsupportedParameters, continuationToken).Returns(nextUrl);
+            _urlResolver.ResolveRouteUrl(unsupportedParameters).Returns(selfUrl);
 
-        [JsonProperty(JobRecordProperties.Url)]
-        public Uri FileUri { get; private set; }
+            ResourceElement resourceElement = Samples.GetDefaultObservation().UpdateId("123");
 
-        [JsonProperty(JobRecordProperties.Sequence)]
-        public int Sequence { get; private set; }
+            var resourceWrapper = new ResourceWrapper(
+                resourceElement,
+                new RawResource(_fhirJsonSerializer.SerializeToString(resourceElement.ToPoco<Observation>()), FhirResourceFormat.Json),
+                null,
+                false,
+                null,
+                null,
+                null);
 
-        [JsonProperty(JobRecordProperties.Count)]
-        public int Count { get; private set; }
+            var searchResult = new SearchResult(new[] { resourceWrapper }, unsupportedParameters, continuationToken);
 
-        [JsonProperty(JobRecordProperties.CommitedBytes)]
-        public long CommittedBytes { get; private set; }
+            ResourceElement actual = _bundleFactory.CreateSearchBundle(searchResult);
 
-        public void Increment(int numberOfBytes)
-        {
-            CommittedBytes += numberOfBytes;
-            Count++;
+            Assert.NotNull(actual);
+            Assert.Equal(Bundle.BundleType.Searchset.ToString().ToLowerInvariant(), actual.Scalar<string>("Bundle.type"));
+            Assert.Equal(_correlationId, actual.Id);
         }
     }
 }

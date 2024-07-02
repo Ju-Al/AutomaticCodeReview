@@ -1,5 +1,4 @@
 // Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
-	ContainerDockerStats(taskARN string, containerID string) (*types.StatsJSON, error)
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
 // not use this file except in compliance with the License. A copy of the
@@ -67,7 +66,7 @@ type DockerContainerMetadataResolver struct {
 // defined to make testing easier.
 type Engine interface {
 	GetInstanceMetrics() (*ecstcs.MetricsMetadata, []*ecstcs.TaskMetric, error)
-	ContainerDockerStats(taskARN string, containerID string) (*types.StatsJSON, NetworkStatsPerSec, error)
+	ContainerDockerStats(taskARN string, containerID string) (*types.StatsJSON, error)
 	GetTaskHealthMetrics() (*ecstcs.HealthMetadata, []*ecstcs.TaskHealth, error)
 }
 

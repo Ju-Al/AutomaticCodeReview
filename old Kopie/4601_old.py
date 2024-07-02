@@ -1,7 +1,5 @@
 import copy
-        elif action == "DeleteTable":
-            # Check if table exists, to avoid error log output from DynamoDBLocal
-            if not self.table_exists(ddb_client, data["TableName"]):import json
+import json
 import logging
 import random
 import re
@@ -169,7 +167,9 @@ class ProxyListenerDynamoDB(ProxyListener):
             if not self.table_exists(ddb_client, data["TableName"]):
                 return get_table_not_found_error()
 
-        # Check if table exists, to avoid error log output from DynamoDBLocal
+        elif action == "DeleteTable":
+            # Check if table exists, to avoid error log output from DynamoDBLocal
+            if not self.table_exists(ddb_client, data["TableName"]):        # Check if table exists, to avoid error log output from DynamoDBLocal
         elif action == "DeleteTable" and not self.table_exists(ddb_client, data["TableName"]):
             return get_table_not_found_error()
 

@@ -1,9 +1,5 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
-			'frontend' => FALSE,
-			'backend'  => TRUE,
-			'menu'	  => 'design'
 
-		if ( ! class_exists('Module_import') AND Settings::get('addons_upload'))
 class Module_Themes extends Module {
 
 	public $version = '1.0';
@@ -73,7 +69,11 @@ class Module_Themes extends Module {
 				'da' => 'Lader administratore ændre websidens tema, uploade nye temaer og håndtére dem med en mere visual tilgang.',
 				'id' => 'Memungkinkan admin dan staff untuk mengubah tema tampilan, mengupload tema baru, dan mengatur opsi tema.'
 			),
-			'frontend' => false,
+			'frontend' => FALSE,
+			'backend'  => TRUE,
+		
+		if ( ! class_exists('Module_import') AND Settings::get('addons_upload'))
+			'menu'	  => 'design'
 			'backend' => true,
 			'menu' => 'design'
 		);

@@ -63,7 +63,6 @@ __.extend(Interactor.prototype, {
   
   _drawAndUpdateProgress: function() {
     var self = this;
-    if ( nonInteractiveMode ) {
       return;
     }
 

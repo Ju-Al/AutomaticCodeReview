@@ -1,138 +1,184 @@
-package alertlog
+package schedulemanager
 
-	alertIDs := make(pq.Int64Array, len(opts.FilterAlertIDs))
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"github.com/target/goalert/assignment"
+	"github.com/target/goalert/override"
 	"github.com/target/goalert/permission"
-	"github.com/target/goalert/search"
+	"github.com/target/goalert/schedule/rule"
+	"github.com/target/goalert/util"
+	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/util/sqlutil"
-	"github.com/target/goalert/validation/validate"
-	"text/template"
 
 	"github.com/pkg/errors"
 )
 
-// SearchOptions contains criteria for filtering alert logs.
-type SearchOptions struct {
-	// FilterAlertIDs restricts the log entries belonging to specific alertIDs only.
-	FilterAlertIDs []int `json:"f"`
-
-	// Limit restricts the maximum number of rows returned. Default is 15.
-	Limit int `json:"-"`
-
-	After SearchCursor `json:"a,omitempty"`
+// UpdateAll will update all schedule rules.
+func (db *DB) UpdateAll(ctx context.Context) error {
+	err := permission.LimitCheckAny(ctx, permission.System)
+	if err != nil {
+		return err
+	}
+	err = db.update(ctx)
+	return err
 }
 
-type SearchCursor struct {
-	ID int `json:"i,omitempty"`
-}
-
-var searchTemplate = template.Must(template.New("search").Parse(`
-	SELECT
-		log.id, 
-		log.alert_id,
-		log.timestamp,
-		log.event,
-		log.message,
-		log.sub_type,
-		log.sub_user_id,
-		u.name,
-		log.sub_integration_key_id,
-		i.name,
-		log.sub_hb_monitor_id,
-		hb.name,
-		log.sub_channel_id,
-		nc.name,
-		log.sub_classifier,
-		log.meta
-	FROM alert_logs log
-	LEFT JOIN users u ON u.id = log.sub_user_id
-	LEFT JOIN integration_keys i ON i.id = log.sub_integration_key_id
-	LEFT JOIN heartbeat_monitors hb ON hb.id = log.sub_hb_monitor_id 
-	LEFT JOIN notification_channels nc ON nc.id = log.sub_channel_id
-	WHERE TRUE
-	{{- if .FilterAlertIDs}}
-		AND log.alert_id = ANY(:alertIDs)
-	{{- end}}
-	{{- if .After.ID}}
-		AND (log.id < :afterID)
-	{{- end}}
-	ORDER BY log.id DESC
-	LIMIT {{.Limit}}
-`))
-
-type renderData SearchOptions
-
-func (opts renderData) Normalize() (*renderData, error) {
-	if opts.Limit == 0 {
-		opts.Limit = search.DefaultMaxResults
-	}
-
-	err := validate.Many(
-		validate.Range("FilterAlertIDs", len(opts.FilterAlertIDs), 0, 50),
-		validate.Range("Limit", opts.Limit, 0, search.MaxResults),
-	)
+func (db *DB) update(ctx context.Context) error {
+	tx, err := db.lock.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "start transaction")
 	}
+	defer tx.Rollback()
+	log.Debugf(ctx, "Updating schedule rules.")
 
-	return &opts, nil
-}
-
-func (opts renderData) QueryArgs() []sql.NamedArg {
-	alertIDs := make(sqlutil.IntArray, len(opts.FilterAlertIDs))
-	for i := range opts.FilterAlertIDs {
-		alertIDs[i] = int64(opts.FilterAlertIDs[i])
-	}
-
-	return []sql.NamedArg{
-		sql.Named("afterID", opts.After.ID),
-		sql.Named("alertIDs", alertIDs),
-	}
-}
-
-// Search will return a list of matching log entries
-func (db *DB) Search(ctx context.Context, opts *SearchOptions) ([]Entry, error) {
-	if opts == nil {
-		opts = &SearchOptions{}
-	}
-
-	err := permission.LimitCheckAny(ctx, permission.System, permission.Admin, permission.User)
+	var now time.Time
+	err = tx.Stmt(db.currentTime).QueryRowContext(ctx).Scan(&now)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "get DB time")
 	}
 
-	data, err := (*renderData)(opts).Normalize()
+	rows, err := tx.Stmt(db.overrides).QueryContext(ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	query, args, err := search.RenderQuery(ctx, searchTemplate, data)
-	if err != nil {
-		return nil, errors.Wrap(err, "render query")
-	}
-
-	rows, err := db.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "get active overrides")
 	}
 	defer rows.Close()
 
-	var result []rawEntry
+	var overrides []override.UserOverride
 	for rows.Next() {
-		var r rawEntry
-		err = r.scanWith(rows.Scan)
+		var o override.UserOverride
+		var schedTgt sql.NullString
+		var add, rem sql.NullString
+		err = rows.Scan(&add, &rem, &schedTgt)
 		if err != nil {
-			return nil, err
+			return errors.Wrap(err, "scan override")
 		}
-		result = append(result, r)
-	}
-	var logs []Entry
-	for _, e := range result {
-		logs = append(logs, e)
+		o.AddUserID = add.String
+		o.RemoveUserID = rem.String
+		if !schedTgt.Valid {
+			continue
+		}
+		o.Target = assignment.ScheduleTarget(schedTgt.String)
+		overrides = append(overrides, o)
 	}
 
-	return logs, nil
+	rows, err = tx.Stmt(db.rules).QueryContext(ctx)
+	if err != nil {
+		return errors.Wrap(err, "get rules")
+	}
+	defer rows.Close()
 
+	type userRule struct {
+		rule.Rule
+		UserID string
+	}
+
+	var rules []userRule
+	var tzName string
+	tz := make(map[string]*time.Location)
+	for rows.Next() {
+		var r userRule
+		filter := make(pq.BoolArray, 7)
+		err = rows.Scan(
+			&r.ScheduleID,
+			&filter,
+			&r.Start,
+			&r.End,
+			&tzName,
+			&r.UserID,
+		)
+		if err != nil {
+			return errors.Wrap(err, "scan rule")
+		}
+		for i, v := range filter {
+			r.SetDay(time.Weekday(i), v)
+		}
+		if tz[r.ScheduleID] == nil {
+			tz[r.ScheduleID], err = util.LoadLocation(tzName)
+			if err != nil {
+				return errors.Wrap(err, "load timezone")
+			}
+		}
+
+		rules = append(rules, r)
+	}
+	rows, err = tx.Stmt(db.getOnCall).QueryContext(ctx)
+	if err != nil {
+		return errors.Wrap(err, "get on call")
+	}
+	defer rows.Close()
+
+	type onCall struct {
+		UserID     string
+		ScheduleID string
+	}
+	oldOnCall := make(map[onCall]bool)
+	var oc onCall
+	for rows.Next() {
+		err = rows.Scan(&oc.ScheduleID, &oc.UserID)
+		if err != nil {
+			return errors.Wrap(err, "scan on call user")
+		}
+		oldOnCall[oc] = true
+	}
+
+	newOnCall := make(map[onCall]bool, len(rules))
+	for _, r := range rules {
+		if r.IsActive(now.In(tz[r.ScheduleID])) {
+			newOnCall[onCall{ScheduleID: r.ScheduleID, UserID: r.UserID}] = true
+		}
+	}
+
+	for _, o := range overrides {
+		if o.AddUserID != "" && o.RemoveUserID == "" {
+			// ADD override
+			newOnCall[onCall{ScheduleID: o.Target.TargetID(), UserID: o.AddUserID}] = true
+			continue
+		}
+		if o.AddUserID == "" && o.RemoveUserID != "" {
+			// REMOVE override
+			delete(newOnCall, onCall{ScheduleID: o.Target.TargetID(), UserID: o.RemoveUserID})
+			continue
+		}
+
+		if newOnCall[onCall{ScheduleID: o.Target.TargetID(), UserID: o.RemoveUserID}] {
+			// REPLACE override
+			delete(newOnCall, onCall{ScheduleID: o.Target.TargetID(), UserID: o.RemoveUserID})
+			newOnCall[onCall{ScheduleID: o.Target.TargetID(), UserID: o.AddUserID}] = true
+		}
+	}
+
+	start := tx.Stmt(db.startOnCall)
+
+	for oc := range newOnCall {
+		// not on call in DB, but are now
+		if !oldOnCall[oc] {
+			_, err = start.ExecContext(ctx, oc.ScheduleID, oc.UserID)
+			if err != nil && !isScheduleDeleted(err) {
+				return errors.Wrap(err, "record shift start")
+			}
+		}
+	}
+	end := tx.Stmt(db.endOnCall)
+	for oc := range oldOnCall {
+		// on call in DB, but no longer
+		if !newOnCall[oc] {
+			_, err = end.ExecContext(ctx, oc.ScheduleID, oc.UserID)
+			if err != nil {
+				return errors.Wrap(err, "record shift end")
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+func isScheduleDeleted(err error) bool {
+	dbErr := sqlutil.MapError(err)
+	if dbErr == nil {
+		return false
+	}
+	return dbErr.ConstraintName == "schedule_on_call_users_schedule_id_fkey"
 }

@@ -1,5 +1,3 @@
-////////////////////////////////////////////////////////////////////////////
-//
 // Copyright 2019 Realm Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -115,6 +113,4 @@ module.exports = {
         // Querying on internal names are still allowed
         results = realm.objects("ObjectA").filtered("name = 'Foo'");
         TestCase.assertEqual(results.length, 1);
-    },
 
-};

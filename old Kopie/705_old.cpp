@@ -1,6 +1,4 @@
 /*
-#include <hc.hpp>
-#include <hc_am.hpp>
 Copyright (c) 2015-2016 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,7 +26,8 @@ THE SOFTWARE.
 // which can only be used on the device.  The programmer has full control
 // over when data is copied.
 
-#include <hc/hc.hpp>
+#include <hc.hpp>
+#include <hc_am.hpp>
 #include <hc/hc_am.hpp>
 
 int main(int argc, char* argv[]) {

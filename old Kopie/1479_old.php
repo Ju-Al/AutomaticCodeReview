@@ -716,7 +716,6 @@ function excerpt_remove_blocks( $content ) {
 		'core/group',
 	);
 
-	/**
 	 * Filters the list of blocks that can be used as wrapper blocks,
 	 * allowing excerpts to be generated from their `innerBlocks`<div class=""></div>
 	 *

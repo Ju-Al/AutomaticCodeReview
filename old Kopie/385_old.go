@@ -1,390 +1,216 @@
-package parse
+// Copyright (c) 2016 Uber Technologies, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
-// (a total of 2 tokens) with the tokens in the file specified.
-// When the function returns, the cursor is on the token before
-// where the import directive was. In other words, call Next()
-// to access the first token that was imported.
-	importFile := p.Val()
+package yarpc
+
 import (
-	"net"
-	"os"
-	"path/filepath"
-	"strings"
+	"sync"
+
+	"go.uber.org/yarpc/internal/request"
+	intsync "go.uber.org/yarpc/internal/sync"
+	"go.uber.org/yarpc/transport"
+
+	"github.com/opentracing/opentracing-go"
 )
 
-type parser struct {
-	Dispenser
-	block           serverBlock // current server block being parsed
-	eof             bool        // if we encounter a valid EOF in a hard place
-	checkDirectives bool        // if true, directives must be known
+// Dispatcher object is used to configure a YARPC application; it is used by
+// Clients to send RPCs, and by Procedures to recieve them. This object is what
+// enables an application to be transport-agnostic.
+type Dispatcher interface {
+	transport.Registry
+	transport.ChannelProvider
+
+	// Inbounds returns a copy of the list of inbounds for this RPC object.
+	//
+	// The Inbounds will be returned in the same order that was used in the
+	// configuration.
+	Inbounds() []transport.Inbound
+
+	// Starts the RPC allowing it to accept and processing new incoming
+	// requests.
+	//
+	// Blocks until the RPC is ready to start accepting new requests.
+	Start() error
+
+	// Stops the RPC. No new requests will be accepted.
+	//
+	// Blocks until the RPC has stopped.
+	Stop() error
 }
 
-func (p *parser) parseAll() ([]serverBlock, error) {
-	var blocks []serverBlock
+// Config specifies the parameters of a new RPC constructed via New.
+type Config struct {
+	Name      string
+	Inbounds  []transport.Inbound
+	Outbounds transport.Outbounds
 
-	for p.Next() {
-		err := p.parseOne()
-		if err != nil {
-			return blocks, err
-		}
-		if len(p.block.Addresses) > 0 {
-			blocks = append(blocks, p.block)
+	// Filter and Interceptor that will be applied to all outgoing and incoming
+	// requests respectively.
+	Filter      transport.Filter
+	Interceptor transport.Interceptor
+
+	// TODO FallbackHandler for catch-all endpoints
+
+	Tracer opentracing.Tracer
+}
+
+// NewDispatcher builds a new Dispatcher using the specified Config.
+func NewDispatcher(cfg Config) Dispatcher {
+	if cfg.Name == "" {
+		panic("a service name is required")
+	}
+
+	return dispatcher{
+		Name:        cfg.Name,
+		Registry:    transport.NewMapRegistry(cfg.Name),
+		inbounds:    cfg.Inbounds,
+		Outbounds:   cfg.Outbounds,
+		Filter:      cfg.Filter,
+		Interceptor: cfg.Interceptor,
+		deps:        transport.NoDeps.WithTracer(cfg.Tracer),
+	}
+}
+
+// dispatcher is the standard RPC implementation.
+//
+// It allows use of multiple Inbounds and Outbounds together.
+type dispatcher struct {
+	transport.Registry
+
+	Name        string
+	Outbounds   transport.Outbounds
+	Filter      transport.Filter
+	Interceptor transport.Interceptor
+
+	inbounds []transport.Inbound
+	deps     transport.Deps
+}
+
+func (d dispatcher) Inbounds() []transport.Inbound {
+	inbounds := make([]transport.Inbound, len(d.inbounds))
+	copy(inbounds, d.inbounds)
+	return inbounds
+}
+
+func (d dispatcher) Channel(service string) transport.Channel {
+	if out, ok := d.Outbounds[service]; ok {
+		out = transport.ApplyFilter(out, d.Filter)
+		out = request.ValidatorOutbound{Outbound: out}
+		return transport.IdentityChannel(d.Name, service, out)
+	}
+	panic(noOutboundForService{Service: service})
+}
+
+			return i.Start(service, d.deps)
+			return o.Start(d.deps)
+	var wait sync.ErrorWaiter
+func (d dispatcher) Start() error {
+		mu               sync.Mutex
+		startedInbounds  []transport.Inbound
+		startedOutbounds []transport.Outbound
+	)
+
+	service := transport.ServiceDetail{
+		Name:     d.Name,
+		Registry: d,
+	}
+
+	startInbound := func(i transport.Inbound) func() error {
+		return func() error {
+			err := i.Start(service, d.deps)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			startedInbounds = append(startedInbounds, i)
+			mu.Unlock()
+			return nil
 		}
 	}
 
-	return blocks, nil
-}
+	startOutbound := func(o transport.Outbound) func() error {
+		return func() error {
+			err := o.Start(d.deps)
+			if err != nil {
+				return err
+			}
 
-func (p *parser) parseOne() error {
-	p.block = serverBlock{Tokens: make(map[string][]token)}
-
-	err := p.begin()
-	if err != nil {
-		return err
+			mu.Lock()
+			startedOutbounds = append(startedOutbounds, o)
+			mu.Unlock()
+			return nil
+		}
 	}
 
-	return nil
-}
+	var wait intsync.ErrorWaiter
+	for _, i := range d.inbounds {
+		wait.Submit(startInbound(i))
+	}
 
-func (p *parser) begin() error {
-	if len(p.tokens) == 0 {
+	for _, o := range d.Outbounds {
+		// TODO record the name of the service whose outbound failed
+		wait.Submit(startOutbound(o))
+	}
+
+	errors := wait.Wait()
+	if len(errors) == 0 {
 		return nil
 	}
 
-	err := p.addresses()
-	if err != nil {
-		return err
+	// Failed to start so stop everything that was started.
+	wait = intsync.ErrorWaiter{}
+	for _, i := range startedInbounds {
+		wait.Submit(i.Stop)
+	}
+	for _, o := range startedOutbounds {
+		wait.Submit(o.Stop)
 	}
 
-	if p.eof {
-		// this happens if the Caddyfile consists of only
-		// a line of addresses and nothing else
-		return nil
+	if newErrors := wait.Wait(); len(newErrors) > 0 {
+		errors = append(errors, newErrors...)
 	}
 
-	err = p.blockContents()
-	if err != nil {
-		return err
+	return errorGroup(errors)
+}
+
+func (d dispatcher) Register(rs []transport.Registrant) {
+	for i, r := range rs {
+		r.Handler = transport.ApplyInterceptor(r.Handler, d.Interceptor)
+		rs[i] = r
+	}
+	d.Registry.Register(rs)
+}
+
+func (d dispatcher) Stop() error {
+	var wait intsync.ErrorWaiter
+	for _, i := range d.inbounds {
+		wait.Submit(i.Stop)
+	}
+	for _, o := range d.Outbounds {
+		wait.Submit(o.Stop)
+	}
+
+	if errors := wait.Wait(); len(errors) > 0 {
+		return errorGroup(errors)
 	}
 
 	return nil
-}
-
-func (p *parser) addresses() error {
-	var expectingAnother bool
-
-	for {
-		tkn := replaceEnvVars(p.Val())
-
-		// special case: import directive replaces tokens during parse-time
-		if tkn == "import" && p.isNewLine() {
-			err := p.doImport()
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Open brace definitely indicates end of addresses
-		if tkn == "{" {
-			if expectingAnother {
-				return p.Errf("Expected another address but had '%s' - check for extra comma", tkn)
-			}
-			break
-		}
-
-		if tkn != "" { // empty token possible if user typed "" in Caddyfile
-			// Trailing comma indicates another address will follow, which
-			// may possibly be on the next line
-			if tkn[len(tkn)-1] == ',' {
-				tkn = tkn[:len(tkn)-1]
-				expectingAnother = true
-			} else {
-				expectingAnother = false // but we may still see another one on this line
-			}
-
-			// Parse and save this address
-			host, port, err := standardAddress(tkn)
-			if err != nil {
-				return err
-			}
-			p.block.Addresses = append(p.block.Addresses, address{host, port})
-		}
-
-		// Advance token and possibly break out of loop or return error
-		hasNext := p.Next()
-		if expectingAnother && !hasNext {
-			return p.EOFErr()
-		}
-		if !hasNext {
-			p.eof = true
-			break // EOF
-		}
-		if !expectingAnother && p.isNewLine() {
-			break
-		}
-	}
-
-	return nil
-}
-
-func (p *parser) blockContents() error {
-	errOpenCurlyBrace := p.openCurlyBrace()
-	if errOpenCurlyBrace != nil {
-		// single-server configs don't need curly braces
-		p.cursor--
-	}
-
-	err := p.directives()
-	if err != nil {
-		return err
-	}
-
-	// Only look for close curly brace if there was an opening
-	if errOpenCurlyBrace == nil {
-		err = p.closeCurlyBrace()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// directives parses through all the lines for directives
-// and it expects the next token to be the first
-// directive. It goes until EOF or closing curly brace
-// which ends the server block.
-func (p *parser) directives() error {
-	for p.Next() {
-		// end of server block
-		if p.Val() == "}" {
-			break
-		}
-
-		// special case: import directive replaces tokens during parse-time
-		if p.Val() == "import" {
-			err := p.doImport()
-			if err != nil {
-				return err
-			}
-			p.cursor-- // cursor is advanced when we continue, so roll back one more
-			continue
-		}
-
-		// normal case: parse a directive on this line
-		if err := p.directive(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// doImport swaps out the import directive and its argument
-// (a total of 2 tokens) with the tokens in the specified file
-// or globbing pattern. When the function returns, the cursor
-// is on the token before where the import directive was. In
-// other words, call Next() to access the first token that was
-// imported.
-func (p *parser) doImport() error {
-	if !p.NextArg() {
-		return p.ArgErr()
-	}
-	importPattern := p.Val()
-	if p.NextArg() {
-		return p.Err("Import allows only one file to import")
-	}
-
-	matches, err := filepath.Glob(importPattern)
-	if err != nil {
-		return p.Errf("Failed to use import pattern %s - %s", importPattern, err.Error())
-	}
-
-	if len(matches) == 0 {
-		return p.Errf("No files matching the import pattern %s", importPattern)
-	}
-
-	// Splice out the import directive and its argument (2 tokens total)
-	// and insert the imported tokens in their place.
-	tokensBefore := p.tokens[:p.cursor-1]
-	tokensAfter := p.tokens[p.cursor+1:]
-	// cursor was advanced one position to read filename; rewind it
-	p.cursor--
-
-	p.tokens = tokensBefore
-
-	for _, importFile := range matches {
-		if err := p.doSingleImport(importFile); err != nil {
-			return err
-		}
-	}
-
-	p.tokens = append(p.tokens, append(tokensAfter)...)
-
-	return nil
-}
-
-// doSingleImport lexes the individual files matching the
-// globbing pattern from of the import directive.
-func (p *parser) doSingleImport(importFile string) error {
-	file, err := os.Open(importFile)
-	if err != nil {
-		return p.Errf("Could not import %s - %v", importFile, err)
-	}
-	defer file.Close()
-	importedTokens := allTokens(file)
-
-	// Tack the filename onto these tokens so any errors show the imported file's name
-	for i := 0; i < len(importedTokens); i++ {
-		importedTokens[i].file = filepath.Base(importFile)
-	}
-
-	// Splice out the import directive and its argument (2 tokens total)
-	// and insert the imported tokens in their place.
-	p.tokens = append(p.tokens, append(importedTokens)...)
-
-	return nil
-}
-
-// directive collects tokens until the directive's scope
-// closes (either end of line or end of curly brace block).
-// It expects the currently-loaded token to be a directive
-// (or } that ends a server block). The collected tokens
-// are loaded into the current server block for later use
-// by directive setup functions.
-func (p *parser) directive() error {
-	dir := p.Val()
-	nesting := 0
-
-	if p.checkDirectives {
-		if _, ok := ValidDirectives[dir]; !ok {
-			return p.Errf("Unknown directive '%s'", dir)
-		}
-	}
-
-	// The directive itself is appended as a relevant token
-	p.block.Tokens[dir] = append(p.block.Tokens[dir], p.tokens[p.cursor])
-
-	for p.Next() {
-		if p.Val() == "{" {
-			nesting++
-		} else if p.isNewLine() && nesting == 0 {
-			p.cursor-- // read too far
-			break
-		} else if p.Val() == "}" && nesting > 0 {
-			nesting--
-		} else if p.Val() == "}" && nesting == 0 {
-			return p.Err("Unexpected '}' because no matching opening brace")
-		}
-		p.tokens[p.cursor].text = replaceEnvVars(p.tokens[p.cursor].text)
-		p.block.Tokens[dir] = append(p.block.Tokens[dir], p.tokens[p.cursor])
-	}
-
-	if nesting > 0 {
-		return p.EOFErr()
-	}
-	return nil
-}
-
-// openCurlyBrace expects the current token to be an
-// opening curly brace. This acts like an assertion
-// because it returns an error if the token is not
-// a opening curly brace. It does NOT advance the token.
-func (p *parser) openCurlyBrace() error {
-	if p.Val() != "{" {
-		return p.SyntaxErr("{")
-	}
-	return nil
-}
-
-// closeCurlyBrace expects the current token to be
-// a closing curly brace. This acts like an assertion
-// because it returns an error if the token is not
-// a closing curly brace. It does NOT advance the token.
-func (p *parser) closeCurlyBrace() error {
-	if p.Val() != "}" {
-		return p.SyntaxErr("}")
-	}
-	return nil
-}
-
-// standardAddress turns the accepted host and port patterns
-// into a format accepted by net.Dial.
-func standardAddress(str string) (host, port string, err error) {
-	var schemePort, splitPort string
-
-	if strings.HasPrefix(str, "https://") {
-		schemePort = "https"
-		str = str[8:]
-	} else if strings.HasPrefix(str, "http://") {
-		schemePort = "http"
-		str = str[7:]
-	}
-
-	host, splitPort, err = net.SplitHostPort(str)
-	if err != nil {
-		host, splitPort, err = net.SplitHostPort(str + ":") // tack on empty port
-	}
-	if err != nil {
-		// ¯\_(ツ)_/¯
-		host = str
-	}
-
-	if splitPort != "" {
-		port = splitPort
-	} else {
-		port = schemePort
-	}
-
-	return
-}
-
-// replaceEnvVars replaces environment variables that appear in the token
-// and understands both the Unix $SYNTAX and Windows %SYNTAX%.
-func replaceEnvVars(s string) string {
-	s = replaceEnvReferences(s, "{%", "%}")
-	s = replaceEnvReferences(s, "{$", "}")
-	return s
-}
-
-// replaceEnvReferences performs the actual replacement of env variables
-// in s, given the placeholder start and placeholder end strings.
-func replaceEnvReferences(s, refStart, refEnd string) string {
-	index := strings.Index(s, refStart)
-	for index != -1 {
-		endIndex := strings.Index(s, refEnd)
-		if endIndex != -1 {
-			ref := s[index : endIndex+len(refEnd)]
-			s = strings.Replace(s, ref, os.Getenv(ref[len(refStart):len(ref)-len(refEnd)]), -1)
-		} else {
-			return s
-		}
-		index = strings.Index(s, refStart)
-	}
-	return s
-}
-
-type (
-	// serverBlock associates tokens with a list of addresses
-	// and groups tokens by directive name.
-	serverBlock struct {
-		Addresses []address
-		Tokens    map[string][]token
-	}
-
-	address struct {
-		Host, Port string
-	}
-)
-
-// HostList converts the list of addresses (hosts)
-// that are associated with this server block into
-// a slice of strings. Each string is a host:port
-// combination.
-func (sb serverBlock) HostList() []string {
-	sbHosts := make([]string, len(sb.Addresses))
-	for j, addr := range sb.Addresses {
-		sbHosts[j] = net.JoinHostPort(addr.Host, addr.Port)
-	}
-	return sbHosts
 }

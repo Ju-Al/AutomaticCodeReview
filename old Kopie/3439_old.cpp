@@ -473,7 +473,6 @@ namespace detail {
 
         if (istringEqual("Adiabatic", outsideBoundaryCondition)){
           // remove all subsurfaces
-          int n_subsurfaces = 0;
           for (auto subSurface : subSurfaces()){
             subSurface.remove();
             ++n_subsurfaces;

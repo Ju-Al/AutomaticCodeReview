@@ -1,5 +1,4 @@
 // Copyright 2016 Keybase Inc. All rights reserved.
-    [-runtime-dir=path/to/dir] [-label=label] [-mount-type=force]
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -31,7 +30,7 @@ const usageFormatStr = `Usage:
 
 To run against remote KBFS servers:
   kbfsfuse
-    [-runtime-dir=path/to/dir] [-label=label] [-mount-type=` + defaultMountType + `]
+    [-runtime-dir=path/to/dir] [-label=label] [-mount-type=force]
 %s
     %s/path/to/mountpoint
 

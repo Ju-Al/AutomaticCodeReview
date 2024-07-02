@@ -1,6 +1,4 @@
 // Copyright 2019 Dolthub, Inc.
-		err := v.IterAll(ctx, f)
-
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -464,7 +462,8 @@ func marshalerDecoder(t reflect.Type) decoderFunc {
 func iterListOrSlice(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, t reflect.Type, f func(c types.Value, i uint64) error) error {
 	switch v := v.(type) {
 	case types.List:
-		err := v.Iter(ctx, func(v types.Value, idx uint64) (stop bool, err error) {
+		err := v.IterAll(ctx, f)
+
 			err = f(v, idx)
 			if err != nil {
 				return false, err

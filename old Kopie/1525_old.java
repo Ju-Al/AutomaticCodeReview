@@ -1,7 +1,4 @@
 /*
-            URL resource = config.getServletContext().getResource("/images/server_16x16.gif");
-            defaultBytes = getImage(resource.toString());
-        catch (MalformedURLException e) {
  * Copyright (C) 2005-2008 Jive Software. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,7 +92,9 @@ public class FaviconServlet extends HttpServlet {
             .build();
         // Load the default favicon to use when no favicon was found of a remote host
         try {
-           defaultBytes = Files.readAllBytes(Paths.get(JiveGlobals.getHomeDirectory(), "plugins/admin/webapp/images/server_16x16.gif"));
+            URL resource = config.getServletContext().getResource("/images/server_16x16.gif");
+        catch (MalformedURLException e) {
+            defaultBytes = getImage(resource.toString());
         }
         catch (final IOException e) {
             LOGGER.warn("Unable to retrieve default favicon", e);

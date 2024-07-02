@@ -438,7 +438,6 @@ class EntryRestController extends WallabagRestController
 
         return (new JsonResponse())->setJson($json);
     }
-
     /**
      * Handles an entries list delete tags from them.
      *

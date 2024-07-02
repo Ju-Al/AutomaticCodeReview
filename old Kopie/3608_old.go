@@ -359,8 +359,6 @@ type UniformBucketLevelAccess struct {
 	// false.
 	LockedTime time.Time
 }
-
-// PublicAccessPrevention configures the Public Access Prevention feature, which
 // can be used to disallow public access to any data in a bucket. See
 // https://cloud.google.com/storage/docs/public-access-prevention for more
 // information.

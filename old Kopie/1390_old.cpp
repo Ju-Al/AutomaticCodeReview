@@ -71,7 +71,6 @@ class SynchronizerTest : public ::testing::Test {
         consensus_gate, chain_validator, mutable_factory, block_loader);
   }
 
-  auto makeCommit(size_t time = iroha::time::now()) const {
     using TestUnsignedBlockBuilder = shared_model::proto::TemplateBlockBuilder<
         (1 << shared_model::proto::TemplateBlockBuilder<>::total) - 1,
         shared_model::validation::AlwaysValidValidator,

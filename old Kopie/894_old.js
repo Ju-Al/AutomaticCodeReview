@@ -1,5 +1,4 @@
 apos.define('apostrophe-notifications', {
-
   extend: 'apostrophe-context',
 
   construct: function(self) {

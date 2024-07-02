@@ -250,7 +250,6 @@ def main():
     subparsers.add_parser('start',
                           help='Start BigchainDB')
 
-    # parser for configuring the number of shards
     sharding_parser = subparsers.add_parser('sharding',
                                             help='Configure number of shards')
 

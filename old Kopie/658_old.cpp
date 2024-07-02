@@ -1,8 +1,4 @@
 // Licensed to the .NET Foundation under one or more agreements.
-            
-            if (SUCCEEDED(g_ExtSymbols->GetModuleByModuleName(MSCOREE_SHIM_A, 0, NULL, NULL)))
-                g_ExtSymbols->Reload("/f " MSCOREE_SHIM_A);
-            
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -3280,6 +3276,10 @@ void ReloadSymbolWithLineInfo()
     static BOOL bLoadSymbol = FALSE;
     if (!bLoadSymbol)
     {
+            
+            if (SUCCEEDED(g_ExtSymbols->GetModuleByModuleName(MSCOREE_SHIM_A, 0, NULL, NULL)))
+                g_ExtSymbols->Reload("/f " MSCOREE_SHIM_A);
+            
         ULONG Options;
         g_ExtSymbols->GetSymbolOptions(&Options);
         if (!(Options & SYMOPT_LOAD_LINES))

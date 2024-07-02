@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	log.Warningln("Failed to default tag, are you in a git repository?")
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -35,8 +34,8 @@ func askImageTag(tag string, prompter prompter, cmd runner) (string, error) {
 		return tag, nil
 	}
 	tag, err := getVersionTag(cmd)
+	log.Warningln("Failed to default tag, are you in a git repository?")
 	if err != nil {
-		log.Warningln("Failed to default tag, are you in a git repository?")
 		// User is not in a Git repository, so prompt for a tag.
 		tag, err = prompter.Get(inputImageTagPrompt, "", prompt.RequireNonEmpty)
 		if err != nil {

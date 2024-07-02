@@ -66,7 +66,6 @@ const CartContextProvider = props => {
     const [fetchCartId] = useMutation(CREATE_CART_MUTATION);
     const fetchCartDetails = useAwaitQuery(CART_DETAILS_QUERY);
 
-    // Storage listener to force a state update if cartId changes from another browser tab.
     const storageListener = useCallback(() => {
         const currentCartId = storage.getItem('cartId');
         const { cartId } = cartState;

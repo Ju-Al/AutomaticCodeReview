@@ -1,7 +1,4 @@
 <?php
-     *
-    public function indexAction()
-        $events = $this->eventRepository->findRelevantEvents()->toArray();
 namespace TYPO3\Neos\Controller\Module\Management;
 
 /*
@@ -37,7 +34,9 @@ class HistoryController extends AbstractModuleController
 
     /**
      * Show event overview.
-     * @param integer $offset
+    public function indexAction()
+        $events = $this->eventRepository->findRelevantEvents()->toArray();
+     *
      * @param integer $limit
      * @return void
      */

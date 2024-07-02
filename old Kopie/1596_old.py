@@ -1,5 +1,4 @@
 #
-        self.order_target_percent(self.sid(0), .002)
 # Copyright 2014 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -430,6 +429,7 @@ class TestTargetPercentAlgorithm(TradingAlgorithm):
                 "Orders not filled at current price."
 
         self.sale_price = data.current(sid(0), "price")
+        self.order_target_percent(self.sid(0), .002)
         self._order(sid(0), .002)
         self.ordered = True
 

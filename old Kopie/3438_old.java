@@ -1237,7 +1237,6 @@ public class NearbyParentFragment extends CommonsDaggerSupportFragment
     @Override
     public void recenterMap(fr.free.nrw.commons.location.LatLng curLatLng) {
         if (curLatLng == null) {
-            if (!locationManager.isProviderEnabled("network")) {
                 showLocationOffDialog();
             }
             return;

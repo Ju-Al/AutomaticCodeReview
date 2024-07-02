@@ -1,5 +1,4 @@
 // Copyright 2016 The prometheus-operator Authors
-	flagset.StringVar(&cfg.PrometheusConfigReloader, "prometheus-config-reloader", fmt.Sprintf("quay.io/coreos/prometheus-config-reloader:v%v", version.Version), "Prometheus config reloader image")
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,7 +121,7 @@ func init() {
 	// Prometheus Operator image, tagged with the same semver version. Default to
 	// the Prometheus Operator version if no Prometheus config reloader image is
 	// specified.
-	flagset.StringVar(&cfg.PrometheusConfigReloaderImage, "prometheus-config-reloader", fmt.Sprintf("quay.io/coreos/prometheus-config-reloader:v%v", version.Version), "Prometheus config reloader image")
+	flagset.StringVar(&cfg.PrometheusConfigReloader, "prometheus-config-reloader", fmt.Sprintf("quay.io/coreos/prometheus-config-reloader:v%v", version.Version), "Prometheus config reloader image")
 	flagset.StringVar(&cfg.PrometheusConfigReloaderCPU, "prometheus-config-reloader-cpu", "50m", "Prometheus config reloader CPU")
 	flagset.StringVar(&cfg.PrometheusConfigReloaderMemory, "prometheus-config-reloader-memory", "50Mi", "Prometheus config reloader Memory")
 	flagset.StringVar(&cfg.ConfigReloaderImage, "config-reloader-image", "quay.io/coreos/configmap-reload:v0.0.1", "Reload Image")

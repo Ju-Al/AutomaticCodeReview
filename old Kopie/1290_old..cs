@@ -1,14 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-                        // TODO: Pin pointer if not pinned
-                        void* inPointer;
-                        if (memory.TryGetPointer(out inPointer))
-                        {
-                            _deflater.SetInput((IntPtr)inPointer, memory.Length);
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException("Pointer needs to be pinned");
-                        }
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
@@ -131,7 +121,16 @@ namespace System.IO.Pipelines.Compression
 
                     unsafe
                     {
-                        var handle = memory.GetPinnedMemoryHandle();
+                        // TODO: Pin pointer if not pinned
+                        void* inPointer;
+                        if (memory.TryGetPointer(out inPointer))
+                        {
+                            _deflater.SetInput((IntPtr)inPointer, memory.Length);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Pointer needs to be pinned");
+                        }
                         _deflater.SetInput((IntPtr)handle.PinnedPointer, memory.Length);
                         handle.Free();
                     }

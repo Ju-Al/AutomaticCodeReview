@@ -1,17 +1,4 @@
 /**
-        shared_model::builder::DefaultSignatureBuilder()
-            .publicKey(pubkey)
-            .signedData(signature)
-            .build()
-            .match([&vote](iroha::expected::Value<
-                           std::shared_ptr<shared_model::interface::Signature>>
-                               &sig) { vote.signature = sig.value; },
-                   [](iroha::expected::Error<std::shared_ptr<std::string>>
-                          &reason) {
-                     logger::log("YacCryptoProvider::getVote")
-                         ->error("Cannot build vote signature: {}",
-                                 *reason.error);
-                   });
  * Copyright Soramitsu Co., Ltd. 2018 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -76,7 +63,19 @@ namespace iroha {
         auto signature = shared_model::crypto::CryptoSigner<>::sign(
             blob, shared_model::crypto::Keypair(pubkey, privkey));
 
-        factory_->createSignature(pubkey, signature)
+        shared_model::builder::DefaultSignatureBuilder()
+            .publicKey(pubkey)
+            .signedData(signature)
+            .build()
+            .match([&vote](iroha::expected::Value<
+                           std::shared_ptr<shared_model::interface::Signature>>
+                               &sig) { vote.signature = sig.value; },
+                   [](iroha::expected::Error<std::shared_ptr<std::string>>
+                          &reason) {
+                     logger::log("YacCryptoProvider::getVote")
+                         ->error("Cannot build vote signature: {}",
+                                 *reason.error);
+                   });
             .match(
                 [&](iroha::expected::Value<
                     std::unique_ptr<shared_model::interface::Signature>> &sig) {

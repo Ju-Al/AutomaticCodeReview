@@ -1,5 +1,4 @@
 using System;
-        public static string serverIp { get; internal set; } = "";
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -28,7 +27,7 @@ namespace Mirror
 
         internal static ConnectState connectState = ConnectState.None;
 
-        [Obsolete("Use NetworkClient.connection.address instead.")]
+        public static string serverIp { get; internal set; } = "";
         public static string serverIp => connection.address;
 
         // active is true while a client is connecting/connected

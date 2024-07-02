@@ -1,5 +1,4 @@
 // Package remote provides our interface to the Google remote execution APIs
-	return c.reallyExecute(tid, target, command, digest, needStdout, isTest)
 // (https://github.com/bazelbuild/remote-apis) which Please can use to distribute
 // work to remote servers.
 package remote
@@ -589,7 +588,7 @@ func (c *Client) execute(tid int, target *core.BuildTarget, command *pb.Command,
 	} else if target.IsTextFile {
 		return c.buildTextFile(target, command, digest)
 	}
-	return c.reallyExecute(tid, target, command, digest, needStdout, isTest, (c.state.ForceRerun && isTest) || (!isTest && c.state.ForceRebuild))
+	return c.reallyExecute(tid, target, command, digest, needStdout, isTest)
 }
 
 // reallyExecute is like execute but after the initial cache check etc.

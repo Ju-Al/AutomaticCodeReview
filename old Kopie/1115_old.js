@@ -565,7 +565,6 @@ apos.define('apostrophe-pieces-manager-modal', {
         } else {
           self.removeChoice(id);
         }
-
         var gridIds = self.$el.find('[data-piece]').map(function() {
           return $(this).attr('data-piece');
         }).get();

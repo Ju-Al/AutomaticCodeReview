@@ -1,6 +1,4 @@
 // This file is part of BOINC.
-
-void CAdvancedFrame::ResetReminderTimers() {
 // http://boinc.berkeley.edu
 // Copyright (C) 2018 University of California
 //
@@ -1961,7 +1959,8 @@ void CAdvancedFrame::OnNotebookSelectionChanged(wxNotebookEvent& event) {
     wxLogTrace(wxT("Function Start/End"), wxT("CAdvancedFrame::OnNotebookSelectionChanged - Function End"));
 }
 
-void CBOINCBaseFrame::ResetReminderTimers() {
+
+void CAdvancedFrame::ResetReminderTimers() {
 #ifdef __WXMSW__
     wxASSERT(m_pDialupManager);
     wxASSERT(wxDynamicCast(m_pDialupManager, CBOINCDialUpManager));

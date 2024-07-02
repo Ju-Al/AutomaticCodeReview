@@ -145,7 +145,6 @@ TEST(GossipPropagationStrategyTest, ErrorEmitting) {
   auto emitted = subscribe_and_emit(nonstd::nullopt, 1ms, 1, 13);
   ASSERT_EQ(emitted.size(), 0);
 }
-
 /**
  * @given list of peers and
  *        strategy that emits two peers

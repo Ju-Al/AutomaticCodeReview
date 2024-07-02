@@ -300,9 +300,6 @@ func (r *Repository) FailRun(ctx context.Context, runId string, _ ...Option) (*R
 	}
 
 	return run, nil
-}
-
-// InterruptRuns updates the Run repository entries for all job runs that have not been
 // updated for the provided interruptThreshold. It sets the status to 'interrupted' and
 // updates the run's EndTime to the current database time.
 //

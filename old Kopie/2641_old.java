@@ -1,5 +1,4 @@
 /*
-                    serviceManager.addUpdatedService2Queue(checksums.namespaceId, serviceName, serverIp, checksum);
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -321,7 +320,7 @@ public class ServiceController {
                         Loggers.SRV_LOG.debug("checksum of {} is not consistent, remote: {}, checksum: {}, local: {}",
                             serviceName, serverIp, checksum, service.getChecksum());
                     }
-                    serviceManager.addUpdatedServiceQueue(checksums.namespaceId, serviceName, serverIp, checksum);
+                    serviceManager.addUpdatedService2Queue(checksums.namespaceId, serviceName, serverIp, checksum);
                 }
             }
         } catch (Exception e) {

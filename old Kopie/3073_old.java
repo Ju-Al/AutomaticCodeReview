@@ -249,7 +249,6 @@ public abstract class BinPackStrategy implements RewriteStrategy {
     Preconditions.checkArgument(minInputFiles > 0,
         "Cannot set %s is less than 1. All values less than 1 have the same effect as 1. %d < 1",
         MIN_INPUT_FILES, minInputFiles);
-
     Preconditions.checkArgument(openFileCost > 0,
         "Cannot set %s is less than 1, %d < 1", RewriteDataFiles.OPEN_FILE_COST, openFileCost);
   }

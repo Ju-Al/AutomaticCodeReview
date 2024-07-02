@@ -1,6 +1,4 @@
 ﻿namespace Nancy.Validation.DataAnnotations
-        /// <returns>A <see cref="ModelValidationResult"/> with the result of the validation.</returns>
-        public ModelValidationResult Validate(object instance)
 {
     using System;
     using System.Collections.Generic;
@@ -40,7 +38,8 @@
         /// Validates the specified instance.
         /// </summary>
         /// <param name="instance">The instance that should be validated.</param>
-        /// <param name="context">The <see cref="NancyContext"/> of the current request.</param>
+        /// <returns>A <see cref="ModelValidationResult"/> with the result of the validation.</returns>
+        public ModelValidationResult Validate(object instance)
         /// <returns>A ValidationResult with the result of the validation.</returns>
         public ModelValidationResult Validate(object instance, NancyContext context)
         {

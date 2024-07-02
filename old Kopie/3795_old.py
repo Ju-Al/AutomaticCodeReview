@@ -107,7 +107,6 @@ class TestCodeWriter(CythonTest):
     def test_attribute(self):
         self.t(u"a.x")
 
-    def test_return_none(self):
         self.t(u"""
                     def f(x, y, z):
                         return

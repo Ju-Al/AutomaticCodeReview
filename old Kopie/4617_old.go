@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/api/googleapi"
 	raw "google.golang.org/api/storage/v1"
-	storagepb "google.golang.org/genproto/googleapis/storage/v2"
 )
 
 const (

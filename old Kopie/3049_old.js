@@ -1,5 +1,6 @@
+export const useWishlist = () => {
+        console.log('To be handled by PWA-632');
 import { useCallback, useState } from 'react';
-import { useMutation } from '@apollo/client';
 import DEFAULT_OPERATIONS from './wishlist.gql';
 import mergeOperations from '../../util/shallowMerge';
 
@@ -16,7 +17,6 @@ const dialogs = {
  * @param {ID} props.id - The unique identifier of the wish list
  * @returns {WishListProps}
  */
-export const useWishlist = () => {
 export const useWishlist = (props = {}) => {
     const { id } = props;
     const operations = mergeOperations(DEFAULT_OPERATIONS, props.operations);
@@ -29,7 +29,6 @@ export const useWishlist = (props = {}) => {
     };
 
     const handleActionMenuClick = useCallback(() => {
-        console.log('To be handled by PWA-632');
         setCurrentDialog(dialogs.LIST_ACTIONS);
     }, []);
 

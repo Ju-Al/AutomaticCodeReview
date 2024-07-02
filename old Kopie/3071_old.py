@@ -931,7 +931,6 @@ class AbstractRange(models.Model):
         return self.all_products().count()
 
     def all_products(self):
-        if self.proxy:
             return self.proxy.all_products()
 
         return self.product_queryset

@@ -1,5 +1,4 @@
 package computer
-) error {
 
 import (
 	"context"
@@ -315,7 +314,7 @@ func (e *blockComputer) executeTransaction(
 	collectionIndex int,
 	txIndex uint32,
 	res *execution.ComputationResult,
-) (error, txerror error) {
+) error {
 
 	startedAt := time.Now()
 	var txSpan opentracing.Span

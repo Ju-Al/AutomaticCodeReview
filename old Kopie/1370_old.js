@@ -1,5 +1,4 @@
 // @flow
-  _tlsConfig: ?TlsConfig = null;
 import { observable, action, computed, runInAction } from 'mobx';
 import moment from 'moment';
 import { isEqual, includes } from 'lodash';
@@ -58,13 +57,13 @@ const NODE_STOPPED_STATES = [
 export default class NetworkStatusStore extends Store {
   // Initialize store properties
   _startTime = Date.now();
+  _tlsConfig: ?TlsConfig = null;
   _networkStatus = NETWORK_STATUS.CONNECTING;
   _networkStatusPollingInterval: ?IntervalID = null;
 
   // Initialize store observables
 
   // Internal Node states
-  @observable _tlsConfig: ?TlsConfig = null;
   @observable cardanoNodeState: ?CardanoNodeState = null;
   @observable cardanoNodeID: number = 0;
   @observable isNodeResponding = false; // Is 'true' as long we are receiving node Api responses

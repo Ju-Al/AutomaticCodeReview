@@ -1,635 +1,864 @@
-import os
-        executor = lambda_executors.LambdaExecutor()
 import re
+import os
 import json
-import unittest
-import mock
 import time
-import datetime
-from localstack.utils.common import save_file, new_tmp_dir, mkdir
+import shutil
+import unittest
+import six
+from io import BytesIO
+from localstack import config
+from localstack.constants import LOCALSTACK_ROOT_FOLDER, LOCALSTACK_MAVEN_VERSION
+from localstack.utils import testutil
+from localstack.utils.aws import aws_stack
+from localstack.utils.common import (
+    unzip, new_tmp_dir, short_uid, load_file, to_str, mkdir, download,
+    run_safe, get_free_tcp_port, get_service_protocol, retry)
+from localstack.services.infra import start_proxy
 from localstack.services.awslambda import lambda_api, lambda_executors
-from localstack.utils.aws.aws_models import LambdaFunction
-
-
-class TestLambdaAPI(unittest.TestCase):
-    CODE_SIZE = 50
-    CODE_SHA_256 = '/u60ZpAA9bzZPVwb8d4390i5oqP1YAObUwV03CZvsWA='
-    MEMORY_SIZE = 128
-    ROLE = 'arn:aws:iam::123456:role/role-name'
-    LAST_MODIFIED = '2019-05-25T17:00:48.260+0000'
-    TRACING_CONFIG = {'Mode': 'PassThrough'}
-    REVISION_ID = 'e54dbcf8-e3ef-44ab-9af7-8dbef510608a'
-    HANDLER = 'index.handler'
-    RUNTIME = 'node.js4.3'
-    TIMEOUT = 60  # Default value, hardcoded
-    FUNCTION_NAME = 'test1'
-    ALIAS_NAME = 'alias1'
-    ALIAS2_NAME = 'alias2'
-    RESOURCENOTFOUND_EXCEPTION = 'ResourceNotFoundException'
-    RESOURCENOTFOUND_MESSAGE = 'Function not found: %s'
-    ALIASEXISTS_EXCEPTION = 'ResourceConflictException'
-    ALIASEXISTS_MESSAGE = 'Alias already exists: %s'
-    ALIASNOTFOUND_EXCEPTION = 'ResourceNotFoundException'
-    ALIASNOTFOUND_MESSAGE = 'Alias not found: %s'
-    TEST_UUID = 'Test'
-    TAGS = {'hello': 'world', 'env': 'prod'}
-
-    def setUp(self):
-        lambda_api.cleanup()
-        self.maxDiff = None
-        self.app = lambda_api.app
-        self.app.testing = True
-        self.client = self.app.test_client()
-
-    def test_get_non_existent_function_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.get_function('non_existent_function_name').get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(
-                self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn('non_existent_function_name'),
-                result['message'])
-
-    def test_get_event_source_mapping(self):
-        with self.app.test_request_context():
-            lambda_api.event_source_mappings.append({'UUID': self.TEST_UUID})
-            result = lambda_api.get_event_source_mapping(self.TEST_UUID)
-            self.assertEqual(json.loads(result.get_data()).get('UUID'), self.TEST_UUID)
-
-    def test_get_event_sources(self):
-        with self.app.test_request_context():
-            lambda_api.event_source_mappings.append(
-                {
-                    'UUID': self.TEST_UUID,
-                    'EventSourceArn': 'the_arn'
-                })
-
-            # Match source ARN
-            result = lambda_api.get_event_sources(source_arn='the_arn')
-            self.assertEqual(len(result), 1)
-            self.assertEqual(result[0].get('UUID'), self.TEST_UUID)
-
-            # No partial match on source ARN
-            result = lambda_api.get_event_sources(source_arn='the_')
-            self.assertEqual(len(result), 0)
-
-    def test_get_event_sources_with_paths(self):
-        with self.app.test_request_context():
-            lambda_api.event_source_mappings.append(
-                {
-                    'UUID': self.TEST_UUID,
-                    'EventSourceArn': 'the_arn/path/subpath'
-                })
-
-            # Do partial match on paths
-            result = lambda_api.get_event_sources(source_arn='the_arn')
-            self.assertEqual(len(result), 1)
-            result = lambda_api.get_event_sources(source_arn='the_arn/path')
-            self.assertEqual(len(result), 1)
-
-    def test_delete_event_source_mapping(self):
-        with self.app.test_request_context():
-            lambda_api.event_source_mappings.append({'UUID': self.TEST_UUID})
-            result = lambda_api.delete_event_source_mapping(self.TEST_UUID)
-            self.assertEqual(json.loads(result.get_data()).get('UUID'), self.TEST_UUID)
-            self.assertEqual(0, len(lambda_api.event_source_mappings))
-
-    def test_invoke_RETURNS_415_WHEN_not_json_input(self):
-        with self.app.test_request_context() as context:
-            context.request._cached_data = '~notjsonrequest~'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual('415 UNSUPPORTED MEDIA TYPE', response.status)
-
-    def _request_response(self, context):
-        context.request._cached_data = '{}'
-        context.request.args = {'Qualifier': '$LATEST'}
-        context.request.environ['HTTP_X_AMZ_INVOCATION_TYPE'] = 'RequestResponse'
-        self._create_function(self.FUNCTION_NAME)
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_plain_text_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '~notjsonresponse~'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual('~notjsonresponse~', response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'text/plain'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_empty_plain_text_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = ''
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual('', response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'text/plain'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_empty_map_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '{}'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'{}\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEquals({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_populated_map_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '{"bool":true,"int":1}'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'{"bool":true,"int":1}\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEquals({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_empty_list_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '[]'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'[]\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEquals({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_populated_list_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '[true,1,"thing"]'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'[true,1,"thing"]\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEquals({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_string_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '"thing"'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'"thing"\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_integer_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '1234'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'1234\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_float_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = '1.3'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'1.3\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_boolean_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = 'true'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'true\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'application/json'}, response[2])
-
-    @mock.patch('localstack.services.awslambda.lambda_api.run_lambda')
-    def test_invoke_null_json_response(self, mock_run_lambda):
-        with self.app.test_request_context() as context:
-            self._request_response(context)
-            mock_run_lambda.return_value = 'null'
-            response = lambda_api.invoke_function(self.FUNCTION_NAME)
-            self.assertEqual(b'null\n', response[0].response[0])
-            self.assertEqual(200, response[1])
-            self.assertEqual({'Content-Type': 'application/json'}, response[2])
-
-    def test_create_event_source_mapping(self):
-        self.client.post('{0}/event-source-mappings/'.format(lambda_api.PATH_ROOT),
-            data=json.dumps({'FunctionName': 'test-lambda-function', 'EventSourceArn': 'fake-arn'}))
-
-        listResponse = self.client.get('{0}/event-source-mappings/'.format(lambda_api.PATH_ROOT))
-        listResult = json.loads(listResponse.get_data())
-
-        eventSourceMappings = listResult.get('EventSourceMappings')
-
-        self.assertEqual(1, len(eventSourceMappings))
-        self.assertEqual('Enabled', eventSourceMappings[0]['State'])
-
-    def test_create_disabled_event_source_mapping(self):
-        createResponse = self.client.post('{0}/event-source-mappings/'.format(lambda_api.PATH_ROOT),
-                            data=json.dumps({'FunctionName': 'test-lambda-function',
-                                             'EventSourceArn': 'fake-arn',
-                                             'Enabled': 'false'}))
-        createResult = json.loads(createResponse.get_data())
-
-        self.assertEqual('Disabled', createResult['State'])
-
-        getResponse = self.client.get('{0}/event-source-mappings/{1}'.format(lambda_api.PATH_ROOT,
-                        createResult.get('UUID')))
-        getResult = json.loads(getResponse.get_data())
-
-        self.assertEqual('Disabled', getResult['State'])
-
-    def test_update_event_source_mapping(self):
-        createResponse = self.client.post('{0}/event-source-mappings/'.format(lambda_api.PATH_ROOT),
-                            data=json.dumps({'FunctionName': 'test-lambda-function',
-                                             'EventSourceArn': 'fake-arn',
-                                             'Enabled': 'true'}))
-        createResult = json.loads(createResponse.get_data())
-
-        putResponse = self.client.put('{0}/event-source-mappings/{1}'.format(lambda_api.PATH_ROOT,
-                        createResult.get('UUID')), data=json.dumps({'Enabled': 'false'}))
-        putResult = json.loads(putResponse.get_data())
-
-        self.assertEqual('Disabled', putResult['State'])
-
-        getResponse = self.client.get('{0}/event-source-mappings/{1}'.format(lambda_api.PATH_ROOT,
-                        createResult.get('UUID')))
-        getResult = json.loads(getResponse.get_data())
-
-        self.assertEqual('Disabled', getResult['State'])
-
-    def test_publish_function_version(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-
-            result = json.loads(lambda_api.publish_version(self.FUNCTION_NAME).get_data())
-            result2 = json.loads(lambda_api.publish_version(self.FUNCTION_NAME).get_data())
-            result.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-            result2.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-
-            expected_result = dict()
-            expected_result['CodeSize'] = self.CODE_SIZE
-            expected_result['CodeSha256'] = self.CODE_SHA_256
-            expected_result['FunctionArn'] = str(lambda_api.func_arn(self.FUNCTION_NAME)) + ':1'
-            expected_result['FunctionName'] = str(self.FUNCTION_NAME)
-            expected_result['Handler'] = str(self.HANDLER)
-            expected_result['Runtime'] = str(self.RUNTIME)
-            expected_result['Timeout'] = self.TIMEOUT
-            expected_result['Description'] = ''
-            expected_result['MemorySize'] = self.MEMORY_SIZE
-            expected_result['Role'] = self.ROLE
-            expected_result['LastModified'] = self.LAST_MODIFIED
-            expected_result['TracingConfig'] = self.TRACING_CONFIG
-            expected_result['Version'] = '1'
-            expected_result['State'] = 'Active'
-            expected_result2 = dict(expected_result)
-            expected_result2['FunctionArn'] = str(lambda_api.func_arn(self.FUNCTION_NAME)) + ':2'
-            expected_result2['Version'] = '2'
-            self.assertDictEqual(expected_result, result)
-            self.assertDictEqual(expected_result2, result2)
-
-    def test_publish_non_existant_function_version_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.publish_version(self.FUNCTION_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_list_function_versions(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            lambda_api.publish_version(self.FUNCTION_NAME)
-            lambda_api.publish_version(self.FUNCTION_NAME)
-
-            result = json.loads(lambda_api.list_versions(self.FUNCTION_NAME).get_data())
-            for version in result['Versions']:
-                # we need to remove this, since this is random, so we cannot know its value
-                version.pop('RevisionId', None)
-
-            latest_version = dict()
-            latest_version['CodeSize'] = self.CODE_SIZE
-            latest_version['CodeSha256'] = self.CODE_SHA_256
-            latest_version['FunctionArn'] = str(lambda_api.func_arn(self.FUNCTION_NAME)) + ':$LATEST'
-            latest_version['FunctionName'] = str(self.FUNCTION_NAME)
-            latest_version['Handler'] = str(self.HANDLER)
-            latest_version['Runtime'] = str(self.RUNTIME)
-            latest_version['Timeout'] = self.TIMEOUT
-            latest_version['Description'] = ''
-            latest_version['MemorySize'] = self.MEMORY_SIZE
-            latest_version['Role'] = self.ROLE
-            latest_version['LastModified'] = self.LAST_MODIFIED
-            latest_version['TracingConfig'] = self.TRACING_CONFIG
-            latest_version['Version'] = '$LATEST'
-            latest_version['State'] = 'Active'
-            version1 = dict(latest_version)
-            version1['FunctionArn'] = str(lambda_api.func_arn(self.FUNCTION_NAME)) + ':1'
-            version1['Version'] = '1'
-            version2 = dict(latest_version)
-            version2['FunctionArn'] = str(lambda_api.func_arn(self.FUNCTION_NAME)) + ':2'
-            version2['Version'] = '2'
-            expected_result = {'Versions': sorted([latest_version, version1, version2],
-                                                  key=lambda k: str(k.get('Version')))}
-            self.assertDictEqual(expected_result, result)
-
-    def test_list_non_existant_function_versions_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.list_versions(self.FUNCTION_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_create_alias(self):
-        self._create_function(self.FUNCTION_NAME)
-        self.client.post('{0}/functions/{1}/versions'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-
-        response = self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                         data=json.dumps({'Name': self.ALIAS_NAME, 'FunctionVersion': '1',
-                             'Description': ''}))
-        result = json.loads(response.get_data())
-        result.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-
-        expected_result = {'AliasArn': lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME,
-                           'FunctionVersion': '1', 'Description': '', 'Name': self.ALIAS_NAME}
-        self.assertDictEqual(expected_result, result)
-
-    def test_create_alias_on_non_existant_function_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.create_alias(self.FUNCTION_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_create_alias_returns_error_if_already_exists(self):
-        self._create_function(self.FUNCTION_NAME)
-        self.client.post('{0}/functions/{1}/versions'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-        data = json.dumps({'Name': self.ALIAS_NAME, 'FunctionVersion': '1', 'Description': ''})
-        self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME), data=data)
-
-        response = self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                                    data=data)
-        result = json.loads(response.get_data())
-
-        alias_arn = lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME
-        self.assertEqual(self.ALIASEXISTS_EXCEPTION, result['__type'])
-        self.assertEqual(self.ALIASEXISTS_MESSAGE % alias_arn,
-                         result['message'])
-
-    def test_update_alias(self):
-        self._create_function(self.FUNCTION_NAME)
-        self.client.post('{0}/functions/{1}/versions'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-        self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                         data=json.dumps({
-                             'Name': self.ALIAS_NAME, 'FunctionVersion': '1', 'Description': ''}))
-
-        response = self.client.put('{0}/functions/{1}/aliases/{2}'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME,
-                                                                          self.ALIAS_NAME),
-                                   data=json.dumps({'FunctionVersion': '$LATEST', 'Description': 'Test-Description'}))
-        result = json.loads(response.get_data())
-        result.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-
-        expected_result = {'AliasArn': lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME,
-                           'FunctionVersion': '$LATEST', 'Description': 'Test-Description',
-                           'Name': self.ALIAS_NAME}
-        self.assertDictEqual(expected_result, result)
-
-    def test_update_alias_on_non_existant_function_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.update_alias(self.FUNCTION_NAME, self.ALIAS_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_update_alias_on_non_existant_alias_returns_error(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            result = json.loads(lambda_api.update_alias(self.FUNCTION_NAME, self.ALIAS_NAME).get_data())
-            alias_arn = lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME
-            self.assertEqual(self.ALIASNOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.ALIASNOTFOUND_MESSAGE % alias_arn, result['message'])
-
-    def test_get_alias(self):
-        self._create_function(self.FUNCTION_NAME)
-        self.client.post('{0}/functions/{1}/versions'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-        self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                         data=json.dumps({
-                             'Name': self.ALIAS_NAME, 'FunctionVersion': '1', 'Description': ''}))
-
-        response = self.client.get('{0}/functions/{1}/aliases/{2}'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME,
-                                                                          self.ALIAS_NAME))
-        result = json.loads(response.get_data())
-        result.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-
-        expected_result = {'AliasArn': lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME,
-                           'FunctionVersion': '1', 'Description': '',
-                           'Name': self.ALIAS_NAME}
-        self.assertDictEqual(expected_result, result)
-
-    def test_get_alias_on_non_existant_function_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.get_alias(self.FUNCTION_NAME, self.ALIAS_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_get_alias_on_non_existant_alias_returns_error(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            result = json.loads(lambda_api.get_alias(self.FUNCTION_NAME, self.ALIAS_NAME).get_data())
-            alias_arn = lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME
-            self.assertEqual(self.ALIASNOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.ALIASNOTFOUND_MESSAGE % alias_arn, result['message'])
-
-    def test_list_aliases(self):
-        self._create_function(self.FUNCTION_NAME)
-        self.client.post('{0}/functions/{1}/versions'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-
-        self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                         data=json.dumps({'Name': self.ALIAS2_NAME, 'FunctionVersion': '$LATEST'}))
-        self.client.post('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME),
-                         data=json.dumps({'Name': self.ALIAS_NAME, 'FunctionVersion': '1',
-                                          'Description': self.ALIAS_NAME}))
-
-        response = self.client.get('{0}/functions/{1}/aliases'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-        result = json.loads(response.get_data())
-        for alias in result['Aliases']:
-            alias.pop('RevisionId', None)  # we need to remove this, since this is random, so we cannot know its value
-        expected_result = {'Aliases': [
-            {
-                'AliasArn': lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS_NAME,
-                'FunctionVersion': '1',
-                'Name': self.ALIAS_NAME,
-                'Description': self.ALIAS_NAME
-            },
-            {
-                'AliasArn': lambda_api.func_arn(self.FUNCTION_NAME) + ':' + self.ALIAS2_NAME,
-                'FunctionVersion': '$LATEST',
-                'Name': self.ALIAS2_NAME,
-                'Description': ''
-            }
-        ]}
-        self.assertDictEqual(expected_result, result)
-
-    def test_list_non_existant_function_aliases_returns_error(self):
-        with self.app.test_request_context():
-            result = json.loads(lambda_api.list_aliases(self.FUNCTION_NAME).get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(self.RESOURCENOTFOUND_MESSAGE % lambda_api.func_arn(self.FUNCTION_NAME),
-                             result['message'])
-
-    def test_get_container_name(self):
-        executor = lambda_executors.EXECUTOR_CONTAINERS_REUSE
-        name = executor.get_container_name('arn:aws:lambda:us-east-1:00000000:function:my_function_name')
-        self.assertEqual(name, 'localstack_lambda_arn_aws_lambda_us-east-1_00000000_function_my_function_name')
-
-    def test_put_concurrency(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            # note: PutFunctionConcurrency is mounted at: /2017-10-31
-            # NOT lambda_api.PATH_ROOT
-            # https://docs.aws.amazon.com/lambda/latest/dg/API_PutFunctionConcurrency.html
-            concurrency_data = {'ReservedConcurrentExecutions': 10}
-            response = self.client.put('/2017-10-31/functions/{0}/concurrency'.format(self.FUNCTION_NAME),
-                                       data=json.dumps(concurrency_data))
-
-            result = json.loads(response.get_data())
-            self.assertDictEqual(concurrency_data, result)
-
-    def test_concurrency_get_function(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            # note: PutFunctionConcurrency is mounted at: /2017-10-31
-            # NOT lambda_api.PATH_ROOT
-            # https://docs.aws.amazon.com/lambda/latest/dg/API_PutFunctionConcurrency.html
-            concurrency_data = {'ReservedConcurrentExecutions': 10}
-            self.client.put('/2017-10-31/functions/{0}/concurrency'.format(self.FUNCTION_NAME),
-                            data=json.dumps(concurrency_data))
-
-            response = self.client.get('{0}/functions/{1}'.format(lambda_api.PATH_ROOT, self.FUNCTION_NAME))
-
-            result = json.loads(response.get_data())
-            self.assertTrue('Concurrency' in result)
-            self.assertDictEqual(concurrency_data, result['Concurrency'])
-
-    def test_list_tags(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME, self.TAGS)
-            arn = lambda_api.func_arn(self.FUNCTION_NAME)
-            response = self.client.get('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn))
-            result = json.loads(response.get_data())
-            self.assertTrue('Tags' in result)
-            self.assertDictEqual(self.TAGS, result['Tags'])
-
-    def test_tag_resource(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME)
-            arn = lambda_api.func_arn(self.FUNCTION_NAME)
-            response = self.client.get('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn))
-            result = json.loads(response.get_data())
-            self.assertTrue('Tags' in result)
-            self.assertDictEqual({}, result['Tags'])
-
-            self.client.post('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn), data=json.dumps({'Tags': self.TAGS}))
-            response = self.client.get('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn))
-            result = json.loads(response.get_data())
-            self.assertTrue('Tags' in result)
-            self.assertDictEqual(self.TAGS, result['Tags'])
-
-    def test_tag_non_existent_function_returns_error(self):
-        with self.app.test_request_context():
-            arn = lambda_api.func_arn('non-existent-function')
-            response = self.client.post(
-                '{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn),
-                data=json.dumps({'Tags': self.TAGS}))
-            result = json.loads(response.get_data())
-            self.assertEqual(self.RESOURCENOTFOUND_EXCEPTION, result['__type'])
-            self.assertEqual(
-                self.RESOURCENOTFOUND_MESSAGE % arn,
-                result['message'])
-
-    def test_untag_resource(self):
-        with self.app.test_request_context():
-            self._create_function(self.FUNCTION_NAME, tags=self.TAGS)
-            arn = lambda_api.func_arn(self.FUNCTION_NAME)
-            response = self.client.get('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn))
-            result = json.loads(response.get_data())
-            self.assertTrue('Tags' in result)
-            self.assertDictEqual(self.TAGS, result['Tags'])
-
-            self.client.delete('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn), query_string={'tagKeys': 'env'})
-            response = self.client.get('{0}/tags/{1}'.format(lambda_api.PATH_ROOT, arn))
-            result = json.loads(response.get_data())
-            self.assertTrue('Tags' in result)
-            self.assertDictEqual({'hello': 'world'}, result['Tags'])
-
-    def test_java_options_empty_return_empty_value(self):
-        lambda_executors.config.LAMBDA_JAVA_OPTS = ''
-        result = lambda_executors.Util.get_java_opts()
-        self.assertFalse(result)
-
-    def test_java_options_with_only_memory_options(self):
-        expected = '-Xmx512M'
-        result = self.prepare_java_opts(expected)
-        self.assertEqual(expected, result)
-
-    def test_java_options_with_memory_options_and_agentlib_option(self):
-        expected = '.*transport=dt_socket,server=y,suspend=y,address=[0-9]+'
-        result = self.prepare_java_opts('-Xmx512M -agentlib:jdwp=transport=dt_socket,server=y'
-                                      ',suspend=y,address=_debug_port_')
-        self.assertTrue(re.match(expected, result))
-
-    def prepare_java_opts(self, java_opts):
-        lambda_executors.config.LAMBDA_JAVA_OPTS = java_opts
-        result = lambda_executors.Util.get_java_opts()
-        return result
-
-    def test_get_java_lib_folder_classpath(self):
-        jar_file = os.path.join(new_tmp_dir(), 'foo.jar')
-        save_file(jar_file, '')
-        self.assertEquals('.:foo.jar', lambda_executors.Util.get_java_classpath(jar_file))
-
-    def test_get_java_lib_folder_classpath_no_directories(self):
-        base_dir = new_tmp_dir()
-        jar_file = os.path.join(base_dir, 'foo.jar')
-        save_file(jar_file, '')
-        lib_file = os.path.join(base_dir, 'lib', 'lib.jar')
-        mkdir(os.path.dirname(lib_file))
-        save_file(lib_file, '')
-        self.assertEquals('.:lib/lib.jar:foo.jar', lambda_executors.Util.get_java_classpath(jar_file))
-
-    def test_get_java_lib_folder_classpath_archive_is_None(self):
-        self.assertRaises(TypeError, lambda_executors.Util.get_java_classpath, None)
-
-    @mock.patch('localstack.services.awslambda.lambda_executors.store_cloudwatch_logs')
-    def test_executor_store_logs_can_handle_milliseconds(self, mock_store_cloudwatch_logs):
-        mock_details = mock.Mock()
-        executor = lambda_executors
-        t_sec = time.time()  # plain old epoch secs
-        t_ms = time.time() * 1000  # epoch ms as a long-int like AWS
-
-        # pass t_ms millisecs to _store_logs
-        executor._store_logs(mock_details, 'mock log output', t_ms)
-
-        # expect the computed log-stream-name to having a prefix matching the date derived from t_sec
-        today = datetime.datetime.utcfromtimestamp(t_sec).strftime('%Y/%m/%d')
-        log_stream_name = mock_store_cloudwatch_logs.call_args_list[0].args[1]
-        parts = log_stream_name.split('/')
-        date_part = '/'.join(parts[:3])
-        self.assertEqual(date_part, today)
-
-    def _create_function(self, function_name, tags={}):
-        arn = lambda_api.func_arn(function_name)
-        lambda_api.arn_to_lambda[arn] = LambdaFunction(arn)
-        lambda_api.arn_to_lambda[arn].versions = {
-            '$LATEST': {'CodeSize': self.CODE_SIZE, 'CodeSha256': self.CODE_SHA_256, 'RevisionId': self.REVISION_ID}
+from localstack.services.generic_proxy import ProxyListener
+from localstack.services.awslambda.lambda_api import (
+    LAMBDA_RUNTIME_DOTNETCORE2, LAMBDA_RUNTIME_RUBY25, LAMBDA_RUNTIME_PYTHON27,
+    use_docker, LAMBDA_RUNTIME_PYTHON36, LAMBDA_RUNTIME_JAVA8,
+    LAMBDA_RUNTIME_NODEJS810, LAMBDA_RUNTIME_PROVIDED
+)
+from .lambdas import lambda_integration
+
+THIS_FOLDER = os.path.dirname(os.path.realpath(__file__))
+TEST_LAMBDA_PYTHON = os.path.join(THIS_FOLDER, 'lambdas', 'lambda_integration.py')
+TEST_LAMBDA_PYTHON3 = os.path.join(THIS_FOLDER, 'lambdas', 'lambda_python3.py')
+TEST_LAMBDA_NODEJS = os.path.join(THIS_FOLDER, 'lambdas', 'lambda_integration.js')
+TEST_LAMBDA_RUBY = os.path.join(THIS_FOLDER, 'lambdas', 'lambda_integration.rb')
+TEST_LAMBDA_DOTNETCORE2 = os.path.join(THIS_FOLDER, 'lambdas', 'dotnetcore2', 'dotnetcore2.zip')
+TEST_LAMBDA_CUSTOM_RUNTIME = os.path.join(THIS_FOLDER, 'lambdas', 'custom-runtime')
+TEST_LAMBDA_JAVA = os.path.join(LOCALSTACK_ROOT_FOLDER, 'localstack', 'infra', 'localstack-utils-tests.jar')
+TEST_LAMBDA_JAVA_WITH_LIB = os.path.join(THIS_FOLDER, 'lambdas', 'java', 'lambda-function-with-lib-0.0.1.jar')
+TEST_LAMBDA_ENV = os.path.join(THIS_FOLDER, 'lambdas', 'lambda_environment.py')
+
+
+TEST_LAMBDA_NAME_PY = 'test_lambda_py'
+TEST_LAMBDA_NAME_PY3 = 'test_lambda_py3'
+TEST_LAMBDA_NAME_JS = 'test_lambda_js'
+TEST_LAMBDA_NAME_RUBY = 'test_lambda_ruby'
+TEST_LAMBDA_NAME_DOTNETCORE2 = 'test_lambda_dotnetcore2'
+TEST_LAMBDA_NAME_CUSTOM_RUNTIME = 'test_lambda_custom_runtime'
+TEST_LAMBDA_NAME_JAVA = 'test_lambda_java'
+TEST_LAMBDA_NAME_JAVA_STREAM = 'test_lambda_java_stream'
+TEST_LAMBDA_NAME_JAVA_SERIALIZABLE = 'test_lambda_java_serializable'
+TEST_LAMBDA_NAME_ENV = 'test_lambda_env'
+
+TEST_LAMBDA_S3_KEY = os.path.join(THIS_FOLDER, 'lambdas')
+TEST_LAMBDA_FUNCTION_NAME = 'test-lambda-function'
+TEST_SNS_TOPIC_NAME = 'sns-topic-1'
+
+MAVEN_BASE_URL = 'https://repo.maven.apache.org/maven2'
+
+TEST_LAMBDA_JAR_URL = '{url}/cloud/localstack/{name}/{version}/{name}-{version}-tests.jar'.format(
+    version=LOCALSTACK_MAVEN_VERSION, url=MAVEN_BASE_URL, name='localstack-utils')
+
+TEST_LAMBDA_LIBS = [
+    'localstack', 'localstack_client', 'requests', 'psutil', 'urllib3', 'chardet', 'certifi', 'idna', 'pip', 'dns'
+]
+
+
+def _run_forward_to_fallback_url(url, num_requests=3):
+    lambda_client = aws_stack.connect_to_service('lambda')
+    config.LAMBDA_FALLBACK_URL = url
+    try:
+        for i in range(num_requests):
+            lambda_client.invoke(FunctionName='non-existing-lambda-%s' % i,
+                Payload=b'{}', InvocationType='RequestResponse')
+    finally:
+        config.LAMBDA_FALLBACK_URL = ''
+
+
+class LambdaTestBase(unittest.TestCase):
+    def check_lambda_logs(self, func_name, expected_lines=[]):
+        logs_client = aws_stack.connect_to_service('logs')
+        log_group_name = '/aws/lambda/%s' % func_name
+        streams = logs_client.describe_log_streams(logGroupName=log_group_name)['logStreams']
+        streams = sorted(streams, key=lambda x: x['creationTime'], reverse=True)
+        log_events = logs_client.get_log_events(
+            logGroupName=log_group_name, logStreamName=streams[0]['logStreamName'])['events']
+        log_messages = [e['message'] for e in log_events]
+        for line in expected_lines:
+            if '.*' in line:
+                found = [re.match(line, m) for m in log_messages]
+                if any(found):
+                    continue
+            self.assertIn(line, log_messages)
+
+
+class TestLambdaBaseFeatures(unittest.TestCase):
+    def test_forward_to_fallback_url_dynamodb(self):
+        db_table = 'lambda-records'
+        ddb_client = aws_stack.connect_to_service('dynamodb')
+
+        def num_items():
+            return len((run_safe(ddb_client.scan, TableName=db_table) or {'Items': []})['Items'])
+
+        items_before = num_items()
+        _run_forward_to_fallback_url('dynamodb://%s' % db_table)
+        items_after = num_items()
+        self.assertEqual(items_after, items_before + 3)
+
+    def test_forward_to_fallback_url_http(self):
+        class MyUpdateListener(ProxyListener):
+            def forward_request(self, method, path, data, headers):
+                records.append(data)
+                return 200
+
+        records = []
+        local_port = get_free_tcp_port()
+        proxy = start_proxy(local_port, backend_url=None, update_listener=MyUpdateListener())
+
+        items_before = len(records)
+        _run_forward_to_fallback_url('%s://localhost:%s' % (get_service_protocol(), local_port))
+        items_after = len(records)
+        self.assertEqual(items_after, items_before + 3)
+        proxy.stop()
+
+    def test_dead_letter_queue(self):
+        sqs_client = aws_stack.connect_to_service('sqs')
+        lambda_client = aws_stack.connect_to_service('lambda')
+
+        # create DLQ and Lambda function
+        queue_name = 'test-%s' % short_uid()
+        lambda_name = 'test-%s' % short_uid()
+        queue_url = sqs_client.create_queue(QueueName=queue_name)['QueueUrl']
+        queue_arn = aws_stack.sqs_queue_arn(queue_name)
+        zip_file = testutil.create_lambda_archive(load_file(TEST_LAMBDA_PYTHON),
+            get_content=True, libs=TEST_LAMBDA_LIBS, runtime=LAMBDA_RUNTIME_PYTHON36)
+        testutil.create_lambda_function(func_name=lambda_name, zip_file=zip_file,
+            runtime=LAMBDA_RUNTIME_PYTHON36, DeadLetterConfig={'TargetArn': queue_arn})
+
+        # invoke Lambda, triggering an error
+        payload = {
+            lambda_integration.MSG_BODY_RAISE_ERROR_FLAG: 1
         }
-        lambda_api.arn_to_lambda[arn].handler = self.HANDLER
-        lambda_api.arn_to_lambda[arn].runtime = self.RUNTIME
-        lambda_api.arn_to_lambda[arn].timeout = self.TIMEOUT
-        lambda_api.arn_to_lambda[arn].tags = tags
-        lambda_api.arn_to_lambda[arn].envvars = {}
-        lambda_api.arn_to_lambda[arn].last_modified = self.LAST_MODIFIED
-        lambda_api.arn_to_lambda[arn].role = self.ROLE
-        lambda_api.arn_to_lambda[arn].memory_size = self.MEMORY_SIZE
+        lambda_client.invoke(FunctionName=lambda_name,
+            Payload=json.dumps(payload), InvocationType='Event')
+
+        # assert that message has been received on the DLQ
+        def receive_dlq():
+            result = sqs_client.receive_message(QueueUrl=queue_url, MessageAttributeNames=['All'])
+            self.assertGreater(len(result['Messages']), 0)
+            msg_attrs = result['Messages'][0]['MessageAttributes']
+            self.assertIn('RequestID', msg_attrs)
+            self.assertIn('ErrorCode', msg_attrs)
+            self.assertIn('ErrorMessage', msg_attrs)
+        retry(receive_dlq, retries=8, sleep=2)
+
+    def test_add_lambda_permission(self):
+        iam_client = aws_stack.connect_to_service('iam')
+        lambda_client = aws_stack.connect_to_service('lambda')
+
+        # create lambda permission
+        action = 'lambda:InvokeFunction'
+        sid = 's3'
+        resp = lambda_client.add_permission(FunctionName=TEST_LAMBDA_NAME_PY, Action=action,
+            StatementId=sid, Principal='s3.amazonaws.com', SourceArn=aws_stack.s3_bucket_arn('test-bucket'))
+        self.assertIn('Statement', resp)
+        # fetch lambda policy
+        policy = lambda_client.get_policy(FunctionName=TEST_LAMBDA_NAME_PY)['Policy']
+        self.assertIsInstance(policy, six.string_types)
+        policy = json.loads(to_str(policy))
+        self.assertEqual(policy['Statement'][0]['Action'], action)
+        self.assertEqual(policy['Statement'][0]['Sid'], sid)
+        self.assertEqual(policy['Statement'][0]['Resource'], lambda_api.func_arn(TEST_LAMBDA_NAME_PY))
+        # fetch IAM policy
+        policies = iam_client.list_policies(Scope='Local', MaxItems=500)['Policies']
+        matching = [p for p in policies if p['PolicyName'] == 'lambda_policy_%s' % TEST_LAMBDA_NAME_PY]
+        self.assertEqual(len(matching), 1)
+        self.assertIn(':policy/', matching[0]['Arn'])
+
+        # remove permission that we just added
+        resp = lambda_client.remove_permission(FunctionName=TEST_LAMBDA_NAME_PY,
+            StatementId=resp['Statement'], Qualifier='qual1', RevisionId='r1')
+        self.assertEqual(resp['ResponseMetadata']['HTTPStatusCode'], 200)
+
+
+class TestPythonRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+        cls.s3_client = aws_stack.connect_to_service('s3')
+        cls.sns_client = aws_stack.connect_to_service('sns')
+
+        Util.create_function(TEST_LAMBDA_PYTHON, TEST_LAMBDA_NAME_PY,
+            runtime=LAMBDA_RUNTIME_PYTHON27, libs=TEST_LAMBDA_LIBS)
+
+    @classmethod
+    def tearDownClass(cls):
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_PY)
+
+    def test_invocation_type_not_set(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_PY, Payload=b'{}')
+        result_data = json.loads(result['Payload'].read())
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(result_data['event'], json.loads('{}'))
+
+    def test_invocation_type_request_response(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_PY,
+            Payload=b'{}', InvocationType='RequestResponse')
+        result_data = result['Payload'].read()
+        result_data = json.loads(to_str(result_data))
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertIsInstance(result_data, dict)
+
+    def test_invocation_type_event(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_PY,
+            Payload=b'{}', InvocationType='Event')
+
+        self.assertEqual(result['StatusCode'], 202)
+
+    def test_invocation_type_dry_run(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_PY, Payload=b'{}',
+            InvocationType='DryRun')
+
+        self.assertEqual(result['StatusCode'], 204)
+
+    def test_lambda_environment(self):
+        vars = {'Hello': 'World'}
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_ENV), get_content=True,
+            libs=TEST_LAMBDA_LIBS, runtime=LAMBDA_RUNTIME_PYTHON27)
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_ENV, zip_file=zip_file,
+            runtime=LAMBDA_RUNTIME_PYTHON27, envvars=vars)
+
+        # invoke function and assert result contains env vars
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_ENV, Payload=b'{}')
+        result_data = result['Payload']
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertDictEqual(json.load(result_data), vars)
+
+        # get function config and assert result contains env vars
+        result = self.lambda_client.get_function_configuration(
+            FunctionName=TEST_LAMBDA_NAME_ENV)
+        self.assertEqual(result['Environment'], {'Variables': vars})
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_ENV)
+
+    def test_invocation_with_qualifier(self):
+        lambda_name = 'test_lambda_%s' % short_uid()
+        bucket_name = 'test-bucket-lambda2'
+        bucket_key = 'test_lambda.zip'
+
+        # upload zip file to S3
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_PYTHON),
+            get_content=True,
+            libs=TEST_LAMBDA_LIBS,
+            runtime=LAMBDA_RUNTIME_PYTHON27
+        )
+        self.s3_client.create_bucket(Bucket=bucket_name)
+        self.s3_client.upload_fileobj(
+            BytesIO(zip_file), bucket_name, bucket_key)
+
+        # create lambda function
+        response = self.lambda_client.create_function(
+            FunctionName=lambda_name, Handler='handler.handler',
+            Runtime=lambda_api.LAMBDA_RUNTIME_PYTHON27, Role='r1',
+            Code={
+                'S3Bucket': bucket_name,
+                'S3Key': bucket_key
+            },
+            Publish=True
+        )
+
+        self.assertIn('Version', response)
+
+        # invoke lambda function
+        data_before = b'{"foo": "bar with \'quotes\\""}'
+        result = self.lambda_client.invoke(
+            FunctionName=lambda_name,
+            Payload=data_before,
+            Qualifier=response['Version']
+        )
+        data_after = json.loads(result['Payload'].read())
+        self.assertEqual(json.loads(to_str(data_before)), data_after['event'])
+
+        context = data_after['context']
+        self.assertEqual(response['Version'], context['function_version'])
+        self.assertEqual(lambda_name, context['function_name'])
+
+        # assert that logs are present
+        expected = ['Lambda log message - print function']
+        if use_docker():
+            # Note that during regular test execution, nosetests captures the output from
+            # the logging module - hence we can only expect this when running in Docker
+            expected.append('.*Lambda log message - logging module')
+        self.check_lambda_logs(lambda_name, expected_lines=expected)
+
+        # clean up
+        testutil.delete_lambda_function(lambda_name)
+
+    def test_upload_lambda_from_s3(self):
+        lambda_name = 'test_lambda_%s' % short_uid()
+        bucket_name = 'test-bucket-lambda'
+        bucket_key = 'test_lambda.zip'
+
+        # upload zip file to S3
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_PYTHON),
+            get_content=True,
+            libs=TEST_LAMBDA_LIBS,
+            runtime=LAMBDA_RUNTIME_PYTHON27
+        )
+        self.s3_client.create_bucket(Bucket=bucket_name)
+        self.s3_client.upload_fileobj(
+            BytesIO(zip_file), bucket_name, bucket_key)
+
+        # create lambda function
+        self.lambda_client.create_function(
+            FunctionName=lambda_name, Handler='handler.handler',
+            Runtime=lambda_api.LAMBDA_RUNTIME_PYTHON27, Role='r1',
+            Code={
+                'S3Bucket': bucket_name,
+                'S3Key': bucket_key
+            }
+        )
+
+        # invoke lambda function
+        data_before = b'{"foo": "bar with \'quotes\\""}'
+        result = self.lambda_client.invoke(
+            FunctionName=lambda_name, Payload=data_before)
+        data_after = json.loads(result['Payload'].read())
+        self.assertEqual(json.loads(to_str(data_before)), data_after['event'])
+
+        context = data_after['context']
+        self.assertEqual('$LATEST', context['function_version'])
+        self.assertEqual(lambda_name, context['function_name'])
+
+        # clean up
+        testutil.delete_lambda_function(lambda_name)
+
+    def test_python_lambda_running_in_docker(self):
+        if not use_docker():
+            return
+
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_PYTHON3),
+            get_content=True,
+            libs=TEST_LAMBDA_LIBS,
+            runtime=LAMBDA_RUNTIME_PYTHON36
+        )
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_PY3,
+            zip_file=zip_file,
+            runtime=LAMBDA_RUNTIME_PYTHON36
+        )
+
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_PY3, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(to_str(result_data).strip(), '{}')
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_PY3)
+
+    def test_handler_in_submodule(self):
+        func_name = 'lambda-%s' % short_uid()
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_PYTHON), get_content=True,
+            libs=TEST_LAMBDA_LIBS, runtime=LAMBDA_RUNTIME_PYTHON36,
+            file_name='abc/def/main.py')
+        testutil.create_lambda_function(func_name=func_name, zip_file=zip_file,
+            handler='abc.def.main.handler', runtime=LAMBDA_RUNTIME_PYTHON36)
+
+        # invoke function and assert result
+        result = self.lambda_client.invoke(FunctionName=func_name, Payload=b'{}')
+        result_data = json.loads(result['Payload'].read())
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(result_data['event'], json.loads('{}'))
+        function_name = '{}-{}'.format(TEST_LAMBDA_FUNCTION_NAME, short_uid())
+        lambda_function = self.lambda_client.create_function(
+            FunctionName=function_name,
+            Runtime=LAMBDA_RUNTIME_PYTHON36,
+            Code={
+                'S3Bucket': '__local__',
+                'S3Key': TEST_LAMBDA_S3_KEY
+            },
+            Handler='lambda_function.lambda_handler',
+            Role='whatever'
+        )
+
+        topic = self.sns_client.create_topic(
+            Name=TEST_SNS_TOPIC_NAME
+        )
+        topic_arn = topic['TopicArn']
+
+        self.sns_client.subscribe(
+            TopicArn=topic_arn,
+            Protocol='lambda',
+            Endpoint=lambda_function['FunctionArn'],
+        )
+
+        subject = '[Subject] Test subject'
+        message = 'Hello world.'
+        self.sns_client.publish(
+            TopicArn=topic_arn,
+            Subject=subject,
+            Message=message
+        )
+
+        logs = aws_stack.connect_to_service('logs')
+
+        # wait for lambda executing
+        def check_log_steams():
+            rs = logs.describe_log_streams(
+                logGroupName='/aws/lambda/{}'.format(function_name)
+            )
+
+            self.assertEqual(len(rs['logStreams']), 1)
+            return rs['logStreams'][0]['logStreamName']
+
+        log_stream = retry(check_log_steams, retries=3, sleep=2)
+
+        rs = logs.get_log_events(
+            logGroupName='/aws/lambda/{}'.format(function_name),
+            logStreamName=log_stream
+        )
+
+        self.assertEqual(len(rs['events']), 1)
+        message = json.loads(rs['events'][0]['message'])
+
+        self.assertEqual(len(message['Records']), 1)
+        notification = message['Records'][0]['Sns']
+
+        self.assertIn('Subject', notification)
+        self.assertEqual(notification['Subject'], subject)
+
+
+class TestNodeJSRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+    def test_nodejs_lambda_running_in_docker(self):
+        if not use_docker():
+            return
+
+        zip_file = testutil.create_zip_file(
+            TEST_LAMBDA_NODEJS, get_content=True)
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_JS,
+            zip_file=zip_file,
+            handler='lambda_integration.handler',
+            runtime=LAMBDA_RUNTIME_NODEJS810
+        )
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JS, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(to_str(result_data).strip(), '{}')
+
+        # assert that logs are present
+        expected = ['.*Node.js Lambda handler executing.']
+        self.check_lambda_logs(TEST_LAMBDA_NAME_JS, expected_lines=expected)
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_JS)
+
+
+class TestCustomRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+    def test_nodejs_lambda_running_in_docker(self):
+        if not use_docker():
+            return
+
+        zip_file = testutil.create_zip_file(
+            TEST_LAMBDA_CUSTOM_RUNTIME, get_content=True)
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_CUSTOM_RUNTIME,
+            zip_file=zip_file,
+            handler='function.handler',
+            runtime=LAMBDA_RUNTIME_PROVIDED
+        )
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_CUSTOM_RUNTIME,
+            Payload=b'{"text":"bar with \'quotes\\""}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(
+            to_str(result_data).strip(),
+            """Echoing request: '{"text": "bar with \'quotes\\""}'""")
+
+        # assert that logs are present
+        expected = ['.*Custom Runtime Lambda handler executing.']
+        self.check_lambda_logs(
+            TEST_LAMBDA_NAME_CUSTOM_RUNTIME, expected_lines=expected)
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_CUSTOM_RUNTIME)
+
+
+class TestDotNetCoreRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+        # lambda .NET Core 2.0 is already a zip
+        zip_file = TEST_LAMBDA_DOTNETCORE2
+        cls.zip_file_content = None
+        with open(zip_file, 'rb') as file_obj:
+            cls.zip_file_content = file_obj.read()
+
+    def test_dotnet_lambda_running_in_docker(self):
+        if not use_docker():
+            return
+
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_DOTNETCORE2,
+            zip_file=self.zip_file_content,
+            handler='DotNetCore2::DotNetCore2.Lambda.Function::SimpleFunctionHandler',
+            runtime=LAMBDA_RUNTIME_DOTNETCORE2
+        )
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_DOTNETCORE2, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(to_str(result_data).strip(), '{}')
+
+        # assert that logs are present
+        expected = ['Running .NET Core 2.0 Lambda']
+        self.check_lambda_logs(TEST_LAMBDA_NAME_DOTNETCORE2, expected_lines=expected)
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_DOTNETCORE2)
+
+
+class TestRubyRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+    def test_ruby_lambda_running_in_docker(self):
+        if not use_docker():
+            return
+
+        zip_file = testutil.create_zip_file(
+            TEST_LAMBDA_RUBY, get_content=True)
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_RUBY,
+            zip_file=zip_file,
+            handler='lambda_integration.handler',
+            runtime=LAMBDA_RUNTIME_RUBY25
+        )
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_RUBY, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(to_str(result_data).strip(), '{}')
+
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_RUBY)
+
+
+class TestJavaRuntimes(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+        # deploy lambda - Java
+        if not os.path.exists(TEST_LAMBDA_JAVA):
+            mkdir(os.path.dirname(TEST_LAMBDA_JAVA))
+            download(TEST_LAMBDA_JAR_URL, TEST_LAMBDA_JAVA)
+
+        # Lambda supports single JAR deployments without the zip,
+        # so we upload the JAR directly.
+        cls.test_java_jar = load_file(TEST_LAMBDA_JAVA, mode='rb')
+        cls.test_java_zip = testutil.create_zip_file(TEST_LAMBDA_JAVA, get_content=True)
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_JAVA,
+            zip_file=cls.test_java_jar,
+            runtime=LAMBDA_RUNTIME_JAVA8,
+            handler='cloud.localstack.sample.LambdaHandler'
+        )
+
+        # deploy lambda - Java with stream handler
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_JAVA_STREAM,
+            zip_file=cls.test_java_jar,
+            runtime=LAMBDA_RUNTIME_JAVA8,
+            handler='cloud.localstack.sample.LambdaStreamHandler'
+        )
+
+        # deploy lambda - Java with serializable input object
+        testutil.create_lambda_function(
+            func_name=TEST_LAMBDA_NAME_JAVA_SERIALIZABLE,
+            zip_file=cls.test_java_zip,
+            runtime=LAMBDA_RUNTIME_JAVA8,
+            handler='cloud.localstack.sample.SerializedInputLambdaHandler'
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        # clean up
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_JAVA)
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_JAVA_STREAM)
+        testutil.delete_lambda_function(TEST_LAMBDA_NAME_JAVA_SERIALIZABLE)
+
+    def test_java_runtime(self):
+        self.assertIsNotNone(self.test_java_jar)
+
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertIn('LinkedHashMap', to_str(result_data))
+
+    def test_java_runtime_with_lib(self):
+        java_jar_with_lib = load_file(TEST_LAMBDA_JAVA_WITH_LIB, mode='rb')
+
+        # create ZIP file from JAR file
+        jar_dir = new_tmp_dir()
+        zip_dir = new_tmp_dir()
+        unzip(TEST_LAMBDA_JAVA_WITH_LIB, jar_dir)
+        shutil.move(os.path.join(jar_dir, 'lib'), os.path.join(zip_dir, 'lib'))
+        jar_without_libs_file = testutil.create_zip_file(jar_dir)
+        shutil.copy(jar_without_libs_file, os.path.join(zip_dir, 'lib', 'lambda.jar'))
+        java_zip_with_lib = testutil.create_zip_file(zip_dir, get_content=True)
+
+        for archive in [java_jar_with_lib, java_zip_with_lib]:
+            lambda_name = 'test-%s' % short_uid()
+            testutil.create_lambda_function(func_name=lambda_name,
+                zip_file=archive, runtime=LAMBDA_RUNTIME_JAVA8,
+                handler='cloud.localstack.sample.LambdaHandlerWithLib')
+
+            result = self.lambda_client.invoke(FunctionName=lambda_name, Payload=b'{"echo":"echo"}')
+            result_data = result['Payload'].read()
+
+            self.assertEqual(result['StatusCode'], 200)
+            self.assertIn('echo', to_str(result_data))
+            # clean up
+            testutil.delete_lambda_function(lambda_name)
+
+    def test_sns_event(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA, InvocationType='Event',
+            Payload=b'{"Records": [{"Sns": {"Message": "{}"}}]}')
+
+        self.assertEqual(result['StatusCode'], 202)
+
+    def test_ddb_event(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA, InvocationType='Event',
+            Payload=b'{"Records": [{"dynamodb": {"Message": "{}"}}]}')
+
+        self.assertEqual(result['StatusCode'], 202)
+
+    def test_kinesis_invocation(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA,
+            Payload=b'{"Records": [{"Kinesis": {"Data": "data", "PartitionKey": "partition"}}]}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertIn('KinesisEvent', to_str(result_data))
+
+    def test_kinesis_event(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA, InvocationType='Event',
+            Payload=b'{"Records": [{"Kinesis": {"Data": "data", "PartitionKey": "partition"}}]}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 202)
+        self.assertEqual(to_str(result_data).strip(), '')
+
+    def test_stream_handler(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA_STREAM, Payload=b'{}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertEqual(to_str(result_data).strip(), '{}')
+
+    def test_serializable_input_object(self):
+        result = self.lambda_client.invoke(
+            FunctionName=TEST_LAMBDA_NAME_JAVA_SERIALIZABLE,
+            Payload=b'{"bucket": "test_bucket", "key": "test_key"}')
+        result_data = result['Payload'].read()
+
+        self.assertEqual(result['StatusCode'], 200)
+        self.assertDictEqual(
+            json.loads(to_str(result_data)),
+            {'validated': True, 'bucket': 'test_bucket', 'key': 'test_key'}
+        )
+
+
+class TestDockerBehaviour(LambdaTestBase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lambda_client = aws_stack.connect_to_service('lambda')
+
+    def test_prime_and_destroy_containers(self):
+        # run these tests only for the "reuse containers" Lambda executor
+        if not isinstance(lambda_api.LAMBDA_EXECUTOR,
+                          lambda_executors.LambdaExecutorReuseContainers):
+            return
+
+        executor = lambda_api.LAMBDA_EXECUTOR
+        func_name = 'test_prime_and_destroy_containers'
+        func_arn = lambda_api.func_arn(func_name)
+
+        # make sure existing containers are gone
+        executor.cleanup()
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+
+        # deploy and invoke lambda without Docker
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_ENV),
+            get_content=True,
+            libs=TEST_LAMBDA_LIBS,
+            runtime=LAMBDA_RUNTIME_PYTHON27
+        )
+        testutil.create_lambda_function(
+            func_name=func_name,
+            zip_file=zip_file,
+            runtime=LAMBDA_RUNTIME_PYTHON27,
+            envvars={'Hello': 'World'}
+        )
+
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+        self.assertDictEqual(executor.function_invoke_times, {})
+
+        # invoke a few times.
+        durations = []
+        num_iterations = 3
+
+        for i in range(0, num_iterations + 1):
+            prev_invoke_time = None
+            if i > 0:
+                prev_invoke_time = executor.function_invoke_times[func_arn]
+
+            start_time = time.time()
+            self.lambda_client.invoke(FunctionName=func_name, Payload=b'{}')
+            duration = time.time() - start_time
+
+            self.assertEqual(len(executor.get_all_container_names()), 1)
+
+            # ensure the last invoke time is being updated properly.
+            if i > 0:
+                self.assertGreater(executor.function_invoke_times[func_arn], prev_invoke_time)
+            else:
+                self.assertGreater(executor.function_invoke_times[func_arn], 0)
+
+            durations.append(duration)
+
+        # the first call would have created the container. subsequent calls would reuse and be faster.
+        for i in range(1, num_iterations + 1):
+            self.assertLess(durations[i], durations[0])
+
+        status = executor.get_docker_container_status(func_arn)
+        self.assertEqual(status, 1)
+
+        container_network = executor.get_docker_container_network(func_arn)
+        self.assertEqual(container_network, 'default')
+
+        executor.cleanup()
+        status = executor.get_docker_container_status(func_arn)
+        self.assertEqual(status, 0)
+
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+
+        # clean up
+        testutil.delete_lambda_function(func_name)
+
+    def test_docker_command_for_separate_container_lambda_executor(self):
+        # run these tests only for the "separate containers" Lambda executor
+        if not isinstance(lambda_api.LAMBDA_EXECUTOR,
+                          lambda_executors.LambdaExecutorSeparateContainers):
+            return
+
+        executor = lambda_api.LAMBDA_EXECUTOR
+        func_name = 'test_docker_command_for_separate_container_lambda_executor'
+        func_arn = lambda_api.func_arn(func_name)
+
+        handler = 'handler'
+        lambda_cwd = '/app/lambda'
+        network = 'compose_network'
+
+        config.LAMBDA_DOCKER_NETWORK = network
+
+        cmd = executor.prepare_execution(func_arn, {}, LAMBDA_RUNTIME_NODEJS810, '', handler, lambda_cwd)
+
+        expected = 'docker run -v "%s":/var/task   --network="%s"  --rm "lambci/lambda:%s" "%s"' % (
+            lambda_cwd, network, LAMBDA_RUNTIME_NODEJS810, handler)
+
+        self.assertIn(('--network="%s"' % network), cmd, 'cmd=%s expected=%s' % (cmd, expected))
+
+        config.LAMBDA_DOCKER_NETWORK = ''
+
+    def test_destroy_idle_containers(self):
+        # run these tests only for the "reuse containers" Lambda executor
+        if not isinstance(lambda_api.LAMBDA_EXECUTOR,
+                          lambda_executors.LambdaExecutorReuseContainers):
+            return
+
+        executor = lambda_api.LAMBDA_EXECUTOR
+        func_name = 'test_destroy_idle_containers'
+        func_arn = lambda_api.func_arn(func_name)
+
+        # make sure existing containers are gone
+        executor.destroy_existing_docker_containers()
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+
+        # deploy and invoke lambda without Docker
+        zip_file = testutil.create_lambda_archive(
+            load_file(TEST_LAMBDA_ENV),
+            get_content=True,
+            libs=TEST_LAMBDA_LIBS,
+            runtime=LAMBDA_RUNTIME_PYTHON27
+        )
+        testutil.create_lambda_function(
+            func_name=func_name,
+            zip_file=zip_file,
+            runtime=LAMBDA_RUNTIME_PYTHON27,
+            envvars={'Hello': 'World'}
+        )
+
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+
+        self.lambda_client.invoke(FunctionName=func_name, Payload=b'{}')
+        self.assertEqual(len(executor.get_all_container_names()), 1)
+
+        # try to destroy idle containers.
+        executor.idle_container_destroyer()
+        self.assertEqual(len(executor.get_all_container_names()), 1)
+
+        # simulate an idle container
+        executor.function_invoke_times[func_arn] = time.time() - lambda_executors.MAX_CONTAINER_IDLE_TIME_MS
+        executor.idle_container_destroyer()
+        self.assertEqual(len(executor.get_all_container_names()), 0)
+
+        # clean up
+        testutil.delete_lambda_function(func_name)
+
+
+class Util(object):
+    @classmethod
+    def create_function(cls, file, name, runtime=None, libs=None):
+        runtime = runtime or LAMBDA_RUNTIME_PYTHON27
+        zip_file = testutil.create_lambda_archive(
+            load_file(file), get_content=True, libs=libs, runtime=runtime)
+        testutil.create_lambda_function(
+            func_name=name, zip_file=zip_file, runtime=runtime)

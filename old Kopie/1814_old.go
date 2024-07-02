@@ -1,5 +1,4 @@
 // Package caddy implements the Caddy server manager.
-	isUpgrade bool
 //
 // To use this package:
 //
@@ -53,7 +52,7 @@ var (
 	// isUpgrade will be set to true if this process
 	// was started as part of an upgrade, where a parent
 	// Caddy process started this one.
-	isUpgrade = os.Getenv("CADDY_UPGRADE") == "1"
+	isUpgrade bool
 
 	// started will be set to true when the first
 	// instance is started; it never gets set to

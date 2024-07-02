@@ -1,310 +1,683 @@
-# Copyright 2019 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""Performance stats constants and helpers for libFuzzer."""
-import re
+# -------------------------------------------------------------------------
+#                     The CodeChecker Infrastructure
+#   This file is distributed under the University of Illinois Open Source
+#   License. See LICENSE.TXT for details.
+# -------------------------------------------------------------------------
 
-from bot.fuzzers import dictionary_manager
-from bot.fuzzers import strategy
-from bot.fuzzers import utils as fuzzer_utils
-from bot.fuzzers.libFuzzer import constants
-from crash_analysis.stack_parsing import stack_analyzer
-from metrics import logs
-from system import environment
+from __future__ import print_function
+from __future__ import unicode_literals
 
-# Regular expressions to detect different types of crashes.
-LEAK_TESTCASE_REGEX = re.compile(r'.*ERROR: LeakSanitizer.*')
-LIBFUZZER_BAD_INSTRUMENTATION_REGEX = re.compile(
-    r'.*ERROR:.*Is the code instrumented for coverage.*')
-LIBFUZZER_CRASH_TYPE_REGEX = r'.*Test unit written to.*{type}'
-LIBFUZZER_CRASH_START_MARKER = r'.*ERROR: (libFuzzer|.*Sanitizer):'
-LIBFUZZER_ANY_CRASH_TYPE_REGEX = re.compile(
-    r'(%s|%s)' % (LIBFUZZER_CRASH_START_MARKER,
-                  LIBFUZZER_CRASH_TYPE_REGEX.format(type='')))
-LIBFUZZER_CRASH_TESTCASE_REGEX = re.compile(
-    LIBFUZZER_CRASH_TYPE_REGEX.format(type='crash'))
-LIBFUZZER_OOM_TESTCASE_REGEX = re.compile(
-    LIBFUZZER_CRASH_TYPE_REGEX.format(type='oom'))
-LIBFUZZER_SLOW_UNIT_TESTCASE_REGEX = re.compile(
-    LIBFUZZER_CRASH_TYPE_REGEX.format(type='slow-unit'))
-LIBFUZZER_TIMEOUT_TESTCASE_REGEX = re.compile(
-    LIBFUZZER_CRASH_TYPE_REGEX.format(type='timeout'))
+import datetime
+import errno
+import ntpath
+import os
+import socket
+import sys
 
-# Regular expressions to detect different sections of logs.
-LIBFUZZER_FUZZING_STRATEGIES = re.compile(r'cf::fuzzing_strategies:\s*(.*)')
-LIBFUZZER_LOG_COVERAGE_REGEX = re.compile(r'#\d+.*cov:\s+(\d+)\s+ft:\s+(\d+).*')
-LIBFUZZER_LOG_DICTIONARY_REGEX = re.compile(r'Dictionary: \d+ entries')
-LIBFUZZER_LOG_END_REGEX = re.compile(r'Done \d+ runs.*')
-LIBFUZZER_LOG_IGNORE_REGEX = re.compile(r'.*WARNING:.*Sanitizer')
-LIBFUZZER_LOG_LINE_REGEX = re.compile(r'^#\d+.*(READ|cov:)')
-LIBFUZZER_LOG_SEED_CORPUS_INFO_REGEX = re.compile(
-    r'INFO:\s+seed corpus:\s+files:\s+(\d+).*rss:\s+(\d+)Mb.*')
-LIBFUZZER_LOG_START_INITED_REGEX = re.compile(
-    r'#\d+\s+INITED\s+cov:\s+(\d+)\s+ft:\s+(\d+).*')
-LIBFUZZER_MERGE_LOG_EDGE_COVERAGE_REGEX = re.compile(r'#\d+.*cov:\s+(\d+).*')
-LIBFUZZER_MODULES_LOADED_REGEX = re.compile(
-    r'^INFO:\s+Loaded\s+\d+\s+(modules|PC tables)\s+\((\d+)\s+.*\).*')
+import sqlalchemy
 
-# Regular expressions to extract different values from the log.
-LIBFUZZER_LOG_MAX_LEN_REGEX = re.compile(
-    r'.*-max_len is not provided; libFuzzer will not generate inputs larger'
-    r' than (\d+) bytes.*')
+from thrift.protocol import TBinaryProtocol
+from thrift.server import TServer
+from thrift.transport import TSocket
+from thrift.transport import TTransport
+
+from DBThriftAPI import CheckerReport
+from DBThriftAPI.ttypes import *
+
+from libcodechecker import database_handler
+from libcodechecker import decorators
+from libcodechecker.logger import LoggerFactory
+from libcodechecker.orm_model import *
+from libcodechecker.profiler import timeit
+
+LOG = LoggerFactory.get_new_logger('CC SERVER')
+
+if os.environ.get('CODECHECKER_ALCHEMY_LOG') is not None:
+    import logging
+
+    logging.basicConfig()
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+    logging.getLogger('sqlalchemy.orm').setLevel(logging.DEBUG)
 
 
-def calculate_log_lines(log_lines):
-  """Calculate number of logs lines of different kind in the given log."""
-  # Counters to be returned.
-  libfuzzer_lines_count = 0
-  other_lines_count = 0
-  ignored_lines_count = 0
+class CheckerReportHandler(object):
+    """
+    Class to handle requests from the CodeChecker script to store run
+    information to the database.
+    """
 
-  lines_after_last_libfuzzer_line_count = 0
-  libfuzzer_inited = False
-  found_libfuzzer_crash = False
-  for line in log_lines:
-    if not libfuzzer_inited:
-      # Skip to start of libFuzzer log output.
-      if LIBFUZZER_LOG_START_INITED_REGEX.match(line):
-        libfuzzer_inited = True
-      else:
-        ignored_lines_count += 1
-        continue
+    def __sequence_deleter(self, table, first_id):
+        """Delete points of sequence in a general way."""
+        next_id = first_id
+        while next_id:
+            item = self.session.query(table).get(next_id)
+            if item:
+                next_id = item.next
+                self.session.delete(item)
+            else:
+                break
 
-    if LIBFUZZER_LOG_IGNORE_REGEX.match(line):
-      # We should ignore lines like sanitizer warnings, etc.
-      ignored_lines_count += 1
-      continue
-    elif LIBFUZZER_ANY_CRASH_TYPE_REGEX.match(line):
-      # We should ignore whole block if a libfuzzer crash is found.
-      # E.g. slow units.
-      found_libfuzzer_crash = True
-    elif LIBFUZZER_LOG_LINE_REGEX.match(line):
-      if found_libfuzzer_crash:
-        # Ignore previous block.
-        other_lines_count -= lines_after_last_libfuzzer_line_count
-        ignored_lines_count += lines_after_last_libfuzzer_line_count
+    def __del_source_file_for_report(self, run_id, report_id, report_file_id):
+        """
+        Delete the stored file if there are no report references to it
+        in the database.
+        """
+        report_reference_to_file = self.session.query(Report) \
+            .filter(
+            and_(Report.run_id == run_id,
+                 Report.file_id == report_file_id,
+                 Report.id != report_id))
+        rep_ref_count = report_reference_to_file.count()
+        if rep_ref_count == 0:
+            LOG.debug("No other references to the source file \n id: " +
+                      str(report_file_id) + " can be deleted.")
+            # There are no other references to the file, it can be deleted.
+            self.session.query(File).filter(File.id == report_file_id) \
+                .delete()
+        return rep_ref_count
 
-      libfuzzer_lines_count += 1
-      lines_after_last_libfuzzer_line_count = 0
-      found_libfuzzer_crash = False
-    elif LIBFUZZER_LOG_END_REGEX.match(line):
-      libfuzzer_lines_count += 1
-      break
-    else:
-      other_lines_count += 1
-      lines_after_last_libfuzzer_line_count += 1
+    def __del_buildaction_results(self, build_action_id, run_id):
+        """
+        Delete the build action and related analysis results from the database.
 
-  # Ignore the lines after the last libfuzzer line.
-  other_lines_count -= lines_after_last_libfuzzer_line_count
-  ignored_lines_count += lines_after_last_libfuzzer_line_count
+        Report entry will be deleted by ReportsToBuildActions cascade delete.
+        """
+        LOG.debug("Cleaning old buildactions")
 
-  return other_lines_count, libfuzzer_lines_count, ignored_lines_count
+        try:
+            rep_to_ba = self.session.query(ReportsToBuildActions) \
+                .filter(ReportsToBuildActions.build_action_id ==
+                        build_action_id)
+
+            reports_to_delete = [r.report_id for r in rep_to_ba]
+
+            LOG.debug("Trying to delete reports belonging to the buildaction:")
+            LOG.debug(reports_to_delete)
+
+            for report_id in reports_to_delete:
+                # Check if there is another reference to this report from
+                # other buildactions.
+                other_reference = self.session.query(ReportsToBuildActions) \
+                    .filter(
+                    and_(ReportsToBuildActions.report_id == report_id,
+                         ReportsToBuildActions.build_action_id !=
+                         build_action_id))
+
+                LOG.debug("Checking report id:" + str(report_id))
+
+                LOG.debug("Report id " + str(report_id) +
+                          " reference count: " +
+                          str(other_reference.count()))
+
+                if other_reference.count() == 0:
+                    # There is no other reference, data related to the report
+                    # can be deleted.
+                    report = self.session.query(Report).get(report_id)
+
+                    LOG.debug("Removing bug path events.")
+                    self.__sequence_deleter(BugPathEvent,
+                                            report.start_bugevent)
+                    LOG.debug("Removing bug report points.")
+                    self.__sequence_deleter(BugReportPoint,
+                                            report.start_bugpoint)
+
+                    if self.__del_source_file_for_report(run_id, report.id,
+                                                         report.file_id):
+                        LOG.debug("Stored source file needs to be kept, "
+                                  "there is reference to it from another "
+                                  "report.")
+                        # Report needs to be deleted if there is no reference
+                        # the file cascade delete will remove it else manual
+                        # cleanup is needed.
+                        self.session.delete(report)
+
+            self.session.query(BuildAction).filter(
+                BuildAction.id == build_action_id) \
+                .delete()
+
+            self.session.query(ReportsToBuildActions).\
+                filter(ReportsToBuildActions.build_action_id ==
+                       build_action_id).\
+                delete()
+        except Exception as ex:
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str(ex))
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addCheckerRun(self, command, name, version, force):
+        """
+        Store checker run related data to the database.
+        By default updates the results if name already exists.
+        Using the force flag removes existing analysis results for a run.
+        """
+        run = self.session.query(Run).filter(Run.name == name).first()
+        if run and force:
+            # Clean already collected results.
+            if not run.can_delete:
+                # Deletion is already in progress.
+                msg = "Can't delete " + str(run.id)
+                LOG.debug(msg)
+                raise shared.ttypes.RequestFailed(
+                    shared.ttypes.ErrorCode.DATABASE,
+                    msg)
+
+            LOG.info('Removing previous analysis results ...')
+            self.session.delete(run)
+            self.session.commit()
+
+            checker_run = Run(name, version, command)
+            self.session.add(checker_run)
+            self.session.commit()
+            return checker_run.id
+
+        elif run:
+            # There is already a run, update the results.
+            run.date = datetime.now()
+            # Increment update counter and the command.
+            run.inc_count += 1
+            run.command = command
+            self.session.commit()
+            return run.id
+        else:
+            # There is no run create new.
+            checker_run = Run(name, version, command)
+            self.session.add(checker_run)
+            self.session.commit()
+            return checker_run.id
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def finishCheckerRun(self, run_id):
+        """
+        """
+        run = self.session.query(Run).get(run_id)
+        if not run:
+            return False
+
+        run.mark_finished()
+        self.session.commit()
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def setRunDuration(self, run_id, duration):
+        """
+        """
+        run = self.session.query(Run).get(run_id)
+        if not run:
+            return False
+
+        run.duration = duration
+        self.session.commit()
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def replaceConfigInfo(self, run_id, config_values):
+        """
+        Removes all the previously stored config information and stores the
+        new values.
+        """
+        count = self.session.query(Config) \
+            .filter(Config.run_id == run_id) \
+            .delete()
+        LOG.debug('Config: ' + str(count) + ' removed item.')
+
+        configs = [Config(
+            run_id, info.checker_name, info.attribute, info.value) for
+            info in config_values]
+        self.session.bulk_save_objects(configs)
+        self.session.commit()
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addBuildAction(self,
+                       run_id,
+                       build_cmd_hash,
+                       check_cmd,
+                       analyzer_type,
+                       analyzed_source_file):
+        """
+        """
+        try:
+
+            build_actions = \
+                self.session.query(BuildAction) \
+                    .filter(
+                    and_(BuildAction.run_id == run_id,
+                         BuildAction.build_cmd_hash == build_cmd_hash,
+                         or_(
+                             and_(
+                                 BuildAction.analyzer_type == analyzer_type,
+                                 BuildAction.analyzed_source_file ==
+                                 analyzed_source_file),
+                             and_(BuildAction.analyzer_type == "",
+                                  BuildAction.analyzed_source_file == "")
+                         ))) \
+                    .all()
+
+            if build_actions:
+                # Delete the already stored buildaction and analysis results.
+                for build_action in build_actions:
+                    self.__del_buildaction_results(build_action.id, run_id)
+
+                self.session.commit()
+
+            action = BuildAction(run_id,
+                                 build_cmd_hash,
+                                 check_cmd,
+                                 analyzer_type,
+                                 analyzed_source_file)
+            self.session.add(action)
+            self.session.commit()
+
+        except Exception as ex:
+            LOG.error(ex)
+            raise
+
+        return action.id
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def finishBuildAction(self, action_id, failure):
+        """
+        """
+        action = self.session.query(BuildAction).get(action_id)
+        if action is None:
+            # TODO: if file is not needed update reportsToBuildActions.
+            return False
+
+        failure = failure.decode('unicode_escape').encode('ascii', 'ignore')
+
+        action.mark_finished(failure)
+        self.session.commit()
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def needFileContent(self, run_id, filepath):
+        """
+        """
+        try:
+            f = self.session.query(File) \
+                .filter(and_(File.run_id == run_id,
+                             File.filepath == filepath)) \
+                .one_or_none()
+        except Exception as ex:
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str(ex))
+
+        run_inc_count = self.session.query(Run).get(run_id).inc_count
+        needed = False
+        if not f:
+            needed = True
+            f = File(run_id, filepath)
+            self.session.add(f)
+            self.session.commit()
+        elif f.inc_count < run_inc_count:
+            needed = True
+            f.inc_count = run_inc_count
+        return NeedFileResult(needed, f.id)
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addFileContent(self, id, content):
+        """
+        """
+        f = self.session.query(File).get(id)
+        assert f is not None
+        f.addContent(content)
+        return True
+
+    def __is_same_event_path(self, start_bugevent_id, events):
+        """
+        Checks if the given event path is the same as the one in the
+        events argument.
+        """
+        try:
+            # There should be at least one bug event.
+            point2 = self.session.query(BugPathEvent).get(start_bugevent_id)
+
+            for point1 in events:
+                if point1.startLine != point2.line_begin or \
+                        point1.startCol != point2.col_begin or \
+                        point1.endLine != point2.line_end or \
+                        point1.endCol != point2.col_end or \
+                        point1.msg != point2.msg or \
+                        point1.fileId != point2.file_id:
+                    return False
+
+                if point2.next is None:
+                    return point1 == events[-1]
+
+                point2 = self.session.query(BugPathEvent).get(point2.next)
+
+        except Exception as ex:
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str(ex))
+
+    def storeReportInfo(self,
+                        action,
+                        file_id,
+                        bug_hash,
+                        msg,
+                        bugpath,
+                        events,
+                        checker_id,
+                        checker_cat,
+                        bug_type,
+                        severity,
+                        suppressed=False):
+        """
+        """
+        try:
+            path_ids = self.storeBugPath(bugpath)
+            event_ids = self.storeBugEvents(events)
+            path_start = path_ids[0].id if len(path_ids) > 0 else None
+
+            source_file = self.session.query(File).get(file_id)
+            source_file_path, source_file_name = ntpath.split(
+                source_file.filepath)
+
+            # Old suppress format did not contain file name.
+            suppressed = self.session.query(SuppressBug).filter(
+                and_(SuppressBug.run_id == action.run_id,
+                     SuppressBug.hash == bug_hash,
+                     or_(SuppressBug.file_name == source_file_name,
+                         SuppressBug.file_name == u''))).count() > 0
+
+            report = Report(action.run_id,
+                            bug_hash,
+                            file_id,
+                            msg,
+                            path_start,
+                            event_ids[0].id,
+                            event_ids[-1].id,
+                            checker_id,
+                            checker_cat,
+                            bug_type,
+                            severity,
+                            suppressed)
+
+            self.session.add(report)
+            self.session.commit()
+            # Commit required to get the ID of the newly added report.
+            reportToActions = ReportsToBuildActions(report.id, action.id)
+            self.session.add(reportToActions)
+            # Avoid data loss for duplicate keys.
+            self.session.commit()
+            return report.id
+        except Exception as ex:
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str(ex))
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addReport(self,
+                  build_action_id,
+                  file_id,
+                  bug_hash,
+                  msg,
+                  bugpath,
+                  events,
+                  checker_id,
+                  checker_cat,
+                  bug_type,
+                  severity,
+                  suppress):
+        """
+        """
+        try:
+            action = self.session.query(BuildAction).get(build_action_id)
+            assert action is not None
+
+            checker_id = checker_id or 'NOT FOUND'
+
+            # TODO: performance issues when executing the following query on
+            # large databases?
+            reports = self.session.query(self.report_ident) \
+                .filter(and_(self.report_ident.c.bug_id == bug_hash,
+                             self.report_ident.c.run_id == action.run_id))
+            try:
+                # Check for duplicates by bug hash.
+                if reports.count() != 0:
+                    for possib_dup in reports:
+                        # It's a duplicate or a hash clash. Check checker name,
+                        # file id, and position.
+                        dup_report_obj = self.session.query(Report).get(
+                            possib_dup.report_ident.id)
+                        if dup_report_obj and \
+                                dup_report_obj.checker_id == checker_id and \
+                                dup_report_obj.file_id == file_id and \
+                                self.__is_same_event_path(
+                                    dup_report_obj.start_bugevent, events):
+                            # It's a duplicate.
+                            rtp = self.session.query(ReportsToBuildActions) \
+                                .get((dup_report_obj.id,
+                                      action.id))
+                            if not rtp:
+                                reportToActions = ReportsToBuildActions(
+                                    dup_report_obj.id, action.id)
+                                self.session.add(reportToActions)
+                                self.session.commit()
+                            return dup_report_obj.id
+
+                return self.storeReportInfo(action,
+                                            file_id,
+                                            bug_hash,
+                                            msg,
+                                            bugpath,
+                                            events,
+                                            checker_id,
+                                            checker_cat,
+                                            bug_type,
+                                            severity,
+                                            suppress)
+
+            except sqlalchemy.exc.IntegrityError as ex:
+                self.session.rollback()
+
+                reports = self.session.query(self.report_ident) \
+                    .filter(and_(self.report_ident.c.bug_id == bug_hash,
+                                 self.report_ident.c.run_id == action.run_id))
+                if reports.count() != 0:
+                    return reports.first().report_ident.id
+                else:
+                    raise
+        except Exception as ex:
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str(ex))
+
+    def storeBugEvents(self, bugevents):
+        """
+        """
+        events = []
+        for event in bugevents:
+            bpe = BugPathEvent(event.startLine,
+                               event.startCol,
+                               event.endLine,
+                               event.endCol,
+                               event.msg,
+                               event.fileId)
+            self.session.add(bpe)
+            events.append(bpe)
+
+        self.session.flush()
+
+        if len(events) > 1:
+            for i in range(len(events) - 1):
+                events[i].addNext(events[i + 1].id)
+                events[i + 1].addPrev(events[i].id)
+            events[-1].addPrev(events[-2].id)
+        return events
+
+    def storeBugPath(self, bugpath):
+        paths = []
+        for piece in bugpath:
+            brp = BugReportPoint(piece.startLine,
+                                 piece.startCol,
+                                 piece.endLine,
+                                 piece.endCol,
+                                 piece.fileId)
+            self.session.add(brp)
+            paths.append(brp)
+
+        self.session.flush()
+
+        for i in range(len(paths) - 1):
+            paths[i].addNext(paths[i + 1].id)
+
+        return paths
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addSuppressBug(self, run_id, bugs_to_suppress):
+        """
+        Supppress multiple bugs for a run. This can be used before storing
+        the suppress file content.
+        """
+
+        try:
+            for bug_to_suppress in bugs_to_suppress:
+                res = self.session.query(SuppressBug) \
+                    .filter(SuppressBug.hash == bug_to_suppress.bug_hash,
+                            SuppressBug.run_id == run_id,
+                            SuppressBug.file_name == bug_to_suppress.file_name)
+
+                if res.one_or_none():
+                    res.update({'comment': bug_to_suppress.comment})
+                else:
+                    self.session.add(SuppressBug(run_id,
+                                                 bug_to_suppress.bug_hash,
+                                                 bug_to_suppress.file_name,
+                                                 bug_to_suppress.comment))
+
+            self.session.commit()
+
+        except Exception as ex:
+            LOG.error(str(ex))
+            return False
+
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def cleanSuppressData(self, run_id):
+        """
+        Clean the suppress bug entries for a run
+        and remove suppressed flags for the suppressed reports.
+        Only the database is modified.
+        """
+
+        try:
+            count = self.session.query(SuppressBug) \
+                .filter(SuppressBug.run_id == run_id) \
+                .delete()
+            LOG.debug('Cleaning previous suppress entries from the database.'
+                      '{0} removed items.'.format(str(count)))
+
+            reports = self.session.query(Report) \
+                .filter(and_(Report.run_id == run_id,
+                             Report.suppressed)) \
+                .all()
+
+            for report in reports:
+                report.suppressed = False
+
+            self.session.commit()
+
+        except Exception as ex:
+            LOG.error(str(ex))
+            return False
+
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def addSkipPath(self, run_id, paths):
+        """
+        """
+        count = self.session.query(SkipPath) \
+            .filter(SkipPath.run_id == run_id) \
+            .delete()
+        LOG.debug('SkipPath: ' + str(count) + ' removed item.')
+
+        skipPathList = []
+        for path, comment in paths.items():
+            skipPath = SkipPath(run_id, path, comment)
+            skipPathList.append(skipPath)
+        self.session.bulk_save_objects(skipPathList)
+        self.session.commit()
+        return True
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def stopServer(self):
+        """
+        """
+        self.session.commit()
+        sys.exit(0)
+
+    def __init__(self, session):
+        self.session = session
+        self.report_ident = sqlalchemy.orm.query.Bundle('report_ident',
+                                                        Report.id,
+                                                        Report.bug_id,
+                                                        Report.run_id,
+                                                        Report.start_bugevent,
+                                                        Report.start_bugpoint)
 
 
-def strategy_column_name(strategy_name):
-  """Convert the strategy name into stats column name."""
-  return 'strategy_%s' % strategy_name
-
-
-def parse_fuzzing_strategies(log_lines, strategies):
-  """Extract stats for fuzzing strategies used."""
-  if not strategies:
-    # Extract strategies from the log.
-    for line in log_lines:
-      match = LIBFUZZER_FUZZING_STRATEGIES.match(line)
-      if match:
-        strategies = match.group(1).split(',')
-        break
-
-  stats = {}
-
-  def parse_line_for_strategy_prefix(line, strategy_name):
-    """Parse log line to find the value of a strategy with a prefix."""
-    strategy_prefix = strategy_name + '_'
-    if not line.startswith(strategy_prefix):
-      return
+def run_server(port, db_uri, callback_event=None):
+    LOG.debug('Starting CodeChecker server ...')
 
     try:
-      strategy_value = int(line[len(strategy_prefix):])
-      stats[strategy_column_name(strategy_name)] = strategy_value
-    except (IndexError, ValueError) as e:
-      logs.log_error('Failed to parse strategy "%s":\n%s\n' % (line, str(e)))
+        engine = database_handler.SQLServer.create_engine(db_uri)
 
-  # These strategies are used with different values specified in the prefix.
-  for strategy_type in strategy.strategies_with_prefix_value:
-    for line in strategies:
-      parse_line_for_strategy_prefix(line, strategy_type.name)
+        LOG.debug('Creating new database session.')
+        session = CreateSession(engine)
 
-  # Other strategies are either ON or OFF, without arbitrary values.
-  for strategy_type in strategy.strategies_with_boolean_value:
-    if strategy_type.name in strategies:
-      stats[strategy_column_name(strategy_type.name)] = 1
+    except sqlalchemy.exc.SQLAlchemyError as alch_err:
+        LOG.error(str(alch_err))
+        sys.exit(1)
 
-  return stats
+    session.autoflush = False  # Autoflush is enabled by default.
 
+    LOG.debug('Starting thrift server.')
+    try:
+        # Start thrift server.
+        handler = CheckerReportHandler(session)
 
-def parse_performance_features(log_lines, strategies, arguments):
-  """Extract stats for performance analysis."""
-  # Initialize stats with default values.
-  stats = {
-      'bad_instrumentation': 0,
-      'corpus_crash_count': 0,
-      'corpus_size': 0,
-      'crash_count': 0,
-      'dict_used': 0,
-      'edge_coverage': 0,
-      'edges_total': 0,
-      'feature_coverage': 0,
-      'initial_edge_coverage': 0,
-      'initial_feature_coverage': 0,
-      'leak_count': 0,
-      'log_lines_unwanted': 0,
-      'log_lines_from_engine': 0,
-      'log_lines_ignored': 0,
-      'max_len': 0,
-      'manual_dict_size': 0,
-      'merge_edge_coverage': 0,
-      'new_edges': 0,
-      'new_features': 0,
-      'oom_count': 0,
-      'recommended_dict_size': 0,
-      'slow_unit_count': 0,
-      'slow_units_count': 0,
-      'startup_crash_count': 1,
-      'timeout_count': 0,
-  }
+        processor = CheckerReport.Processor(handler)
+        transport = TSocket.TServerSocket(port=port)
+        tfactory = TTransport.TBufferedTransportFactory()
+        pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
-  # Extract strategy selection method.
-  stats['strategy_selection_method'] = environment.get_value(
-      'STRATEGY_SELECTION_METHOD')
+        server = TServer.TThreadPoolServer(processor,
+                                           transport,
+                                           tfactory,
+                                           pfactory,
+                                           daemon=True)
 
-  # Initialize all strategy stats as disabled by default.
-  for strategy_type in strategy.strategy_list:
-    stats[strategy_column_name(strategy_type.name)] = 0
-
-  # Process fuzzing strategies used.
-  stats.update(parse_fuzzing_strategies(log_lines, strategies))
-
-  (stats['log_lines_unwanted'], stats['log_lines_from_engine'],
-   stats['log_lines_ignored']) = calculate_log_lines(log_lines)
-
-  # Extract '-max_len' value from arguments, if possible.
-  stats['max_len'] = int(
-      fuzzer_utils.extract_argument(
-          arguments, constants.MAX_LEN_FLAG, remove=False) or stats['max_len'])
-
-  # Extract sizes of manual and recommended dictionary used for fuzzing.
-  dictionary_path = fuzzer_utils.extract_argument(
-      arguments, constants.DICT_FLAG, remove=False)
-  stats['manual_dict_size'], stats['recommended_dict_size'] = (
-      dictionary_manager.get_stats_for_dictionary_file(dictionary_path))
-
-  # Different crashes and other flags extracted via regexp match.
-  has_corpus = False
-  libfuzzer_inited = False
-  for line in log_lines:
-    if LIBFUZZER_BAD_INSTRUMENTATION_REGEX.match(line):
-      stats['bad_instrumentation'] = 1
-      continue
-
-    if LIBFUZZER_CRASH_TESTCASE_REGEX.match(line):
-      stats['crash_count'] = 1
-      continue
-
-    if LIBFUZZER_LOG_DICTIONARY_REGEX.match(line):
-      stats['dict_used'] = 1
-      continue
-
-    if LEAK_TESTCASE_REGEX.match(line):
-      stats['leak_count'] = 1
-      continue
-
-    if (LIBFUZZER_OOM_TESTCASE_REGEX.match(line) or
-        stack_analyzer.OUT_OF_MEMORY_REGEX.match(line)):
-      stats['oom_count'] = 1
-      continue
-
-    if LIBFUZZER_SLOW_UNIT_TESTCASE_REGEX.match(line):
-      # Use |slow_unit_count| to track if this run had any slow units at all.
-      # and use |slow_units_count| to track the actual number of slow units in
-      # this run (used by performance analyzer).
-      stats['slow_unit_count'] = 1
-      stats['slow_units_count'] += 1
-      continue
-
-    match = LIBFUZZER_LOG_SEED_CORPUS_INFO_REGEX.match(line)
-    if match:
-      has_corpus = True
-
-    match = LIBFUZZER_MODULES_LOADED_REGEX.match(line)
-    if match:
-      stats['startup_crash_count'] = 0
-      stats['edges_total'] = int(match.group(2))
-
-    match = LIBFUZZER_LOG_START_INITED_REGEX.match(line)
-    if match:
-      stats['initial_edge_coverage'] = stats['edge_coverage'] = int(
-          match.group(1))
-      stats['initial_feature_coverage'] = stats['feature_coverage'] = int(
-          match.group(2))
-      libfuzzer_inited = True
-      continue
-
-    # This regexp will match multiple lines and will be overwriting the stats.
-    # This is done on purpose, as the last line in the log may have different
-    # format, e.g. 'DONE' without a crash and 'NEW' or 'pulse' with a crash.
-    # Also, ignore values before INITED i.e. while seed corpus is being read.
-    match = LIBFUZZER_LOG_COVERAGE_REGEX.match(line)
-    if match and libfuzzer_inited:
-      stats['edge_coverage'] = int(match.group(1))
-      stats['feature_coverage'] = int(match.group(2))
-      continue
-
-    if (LIBFUZZER_TIMEOUT_TESTCASE_REGEX.match(line) or
-        stack_analyzer.LIBFUZZER_TIMEOUT_REGEX.match(line)):
-      stats['timeout_count'] = 1
-      continue
-
-    if not stats['max_len']:
-      # Get "max_len" value from the log, if it has not been found in arguments.
-      match = LIBFUZZER_LOG_MAX_LEN_REGEX.match(line)
-      if match:
-        stats['max_len'] = int(match.group(1))
-        continue
-
-  if has_corpus and not stats['log_lines_from_engine']:
-    stats['corpus_crash_count'] = 1
-
-  # new_cov_* is a reliable metric when corpus subset strategy is not used.
-  if not stats['strategy_corpus_subset']:
-    assert stats['edge_coverage'] >= stats['initial_edge_coverage']
-    stats['new_edges'] = (
-        stats['edge_coverage'] - stats['initial_edge_coverage'])
-
-    assert stats['feature_coverage'] >= stats['initial_feature_coverage']
-    stats['new_features'] = (
-        stats['feature_coverage'] - stats['initial_feature_coverage'])
-
-  return stats
-
-
-def parse_stats_from_merge_log(log_lines):
-  """Extract stats from a log produced by libFuzzer run with -merge=1."""
-  stats = {}
-  for line in log_lines:
-    match = LIBFUZZER_MERGE_LOG_EDGE_COVERAGE_REGEX.match(line)
-    if match:
-      stats['merge_edge_coverage'] = int(match.group(1))
-      continue
-
-  return stats
+        LOG.info('Waiting for check results on [' + str(port) + ']')
+        if callback_event:
+            callback_event.set()
+        LOG.debug('Starting to serve.')
+        server.serve()
+        session.commit()
+    except socket.error as sockerr:
+        LOG.error(str(sockerr))
+        if sockerr.errno == errno.EADDRINUSE:
+            LOG.error('Checker port ' + str(port) + ' is already used!')
+        sys.exit(1)
+    except Exception as err:
+        LOG.error(str(err))
+        session.commit()
+        sys.exit(1)

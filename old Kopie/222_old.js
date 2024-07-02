@@ -291,8 +291,6 @@ define(function (require) {
             var kill_kernel = false;
             if (kill_kernel) {
                 that.session.delete();
-            }
-            // if the kernel is busy, prompt the user if he’s sure
             if (that.kernel_busy) {
                 return "The Kernel is busy, changes may be lost.";
             }

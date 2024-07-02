@@ -1,6 +1,4 @@
 /*
-    CorsServiceBuilder corsBuilder =
-      CorsServiceBuilder.forOrigins(allowedOrigins.split(",")).allowRequestMethods(HttpMethod.GET);
  * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -89,7 +87,8 @@ public class ZipkinServerConfiguration implements WebMvcConfigurer {
   /** Configures the server at the last because of the specified {@link Order} annotation. */
   @Order @Bean ArmeriaServerConfigurator corsConfigurator(
     @Value("${zipkin.query.allowed-origins:*}") String allowedOrigins) {
-    CorsServiceBuilder corsBuilder = CorsServiceBuilder.forOrigins(allowedOrigins.split(","))
+    CorsServiceBuilder corsBuilder =
+      CorsServiceBuilder.forOrigins(allowedOrigins.split(",")).allowRequestMethods(HttpMethod.GET);
       // NOTE: The property says query, and the UI does not use POST, but we allow POST?
       //
       // The reason is that our former CORS implementation accidentally allowed POST. People doing

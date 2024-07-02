@@ -22,103 +22,123 @@ package yarpcjson
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"reflect"
 
 	yarpc "go.uber.org/yarpc/v2"
-	"go.uber.org/yarpc/v2/yarpcencoding"
 )
 
-var _ yarpc.UnaryTransportHandler = (*jsonHandler)(nil)
+var (
+	_ctxType            = reflect.TypeOf((*context.Context)(nil)).Elem()
+	_errorType          = reflect.TypeOf((*error)(nil)).Elem()
+	_interfaceEmptyType = reflect.TypeOf((*interface{})(nil)).Elem()
+)
 
-// jsonHandler adapts a user-provided high-level handler into a transport-level
-// UnaryTransportHandler.
-//
-// The wrapped function must already be in the correct format:
+// Where $reqBody and $resBody are a map[string]interface{} or pointers to
+// structs.
+func Procedure(name string, handler interface{}) []yarpc.TransportProcedure {
+	return []yarpc.TransportProcedure{
+// Procedure builds a TransportProcedure from the given JSON handler. handler must be
+// a function with a signature similar to,
 //
 // 	f(ctx context.Context, body $reqBody) ($resBody, error)
-type jsonHandler struct {
-	reader  requestReader
-	handler reflect.Value
-}
-	handler reflect.Value
+//
+// Where $reqBody and $resBody are of type map[string]interface{}, interface{}, or
+// struct pointers.
+func Procedure(name string, handler interface{}) []yarpc.EncodingProcedure {
+	return []yarpc.EncodingProcedure{
+		{
+			Name: name,
+			HandlerSpec: yarpc.NewUnaryEncodingHandlerSpec(
+				wrapUnaryHandler(name, handler),
+			),
+			Encoding: Encoding,
+			Codec:    newCodec(name, handler),
+		},
+	}
 }
 
-func (h jsonHandler2) Handle(ctx context.Context, reqBody interface{}) (interface{}, error) {
-	results := h.handler.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(reqBody)})
-	return results[0].Interface(), results[1].Interface().(error)
+// wrapUnaryHandler takes a valid JSON handler function and converts it into a
+// yarpc.UnaryEncodingHandler.
+func wrapUnaryHandler(name string, handler interface{}) yarpc.UnaryEncodingHandler {
+	return jsonHandler{
+		handler: reflect.ValueOf(handler),
+	}
 }
 
-func (h jsonHandler) Handle(ctx context.Context, req *yarpc.Request, reqBuf *yarpc.Buffer) (*yarpc.Response, *yarpc.Buffer, error) {
-	if err := yarpcencoding.ExpectEncodings(req, Encoding); err != nil {
-		return nil, nil, err
+// verifyUnarySignature verifies that the given type matches what we expect from
+// JSON unary handlers and returns the request type.
+func verifyUnarySignature(n string, t reflect.Type) reflect.Type {
+	reqBodyType := verifyInputSignature(n, t)
+
+	if t.NumOut() != 2 {
+		panic(fmt.Sprintf(
+			"expected handler for %q to have 2 results but it had %v",
+			n, t.NumOut(),
+		))
 	}
 
-	ctx, call := yarpc.NewInboundCall(ctx)
-	if err := call.ReadFromRequest(req); err != nil {
-		return nil, nil, err
+	if t.Out(1) != _errorType {
+		panic(fmt.Sprintf(
+			"handler for %q must return error as its second reuslt, not %v",
+			n, t.Out(1),
+		))
 	}
 
-	reqBody, err := h.reader.Read(json.NewDecoder(reqBuf))
-	if err != nil {
-		return nil, nil, yarpcencoding.RequestBodyDecodeError(req, err)
+	resBodyType := t.Out(0)
+
+	if !isValidReqResType(resBodyType) {
+		panic(fmt.Sprintf(
+			"the first result of the handler for %q must be "+
+				"a struct pointer, a map[string]interface{}, or interface{], and not: %v",
+			n, resBodyType,
+		))
 	}
 
-	results := h.handler.Call([]reflect.Value{reflect.ValueOf(ctx), reqBody})
+	return reqBodyType
+}
 
-	res := &yarpc.Response{}
-	resBuf := &yarpc.Buffer{}
-	call.WriteToResponse(res)
-	// we want to return the appErr if it exists as this is what
-	// the previous behavior was so we deprioritize this error
-	var encodeErr error
-	if result := results[0].Interface(); result != nil {
-		if err := json.NewEncoder(resBuf).Encode(result); err != nil {
-			encodeErr = yarpcencoding.ResponseBodyEncodeError(req, err)
-		}
+// verifyInputSignature verifies that the given input argument types match
+// what we expect from JSON handlers and returns the request body type.
+func verifyInputSignature(n string, t reflect.Type) reflect.Type {
+	if t.Kind() != reflect.Func {
+		panic(fmt.Sprintf(
+			"handler for %q is not a function but a %v", n, t.Kind(),
+		))
 	}
 
-	if appErr, _ := results[1].Interface().(error); appErr != nil {
-		res.ApplicationError = true
-		// TODO(apeatsbond): now that we propogate a Response struct back, the
-		// Response should hold the actual application error. Errors returned by the
-		// handler (not through the Response) could be considered fatal.
-		return res, resBuf, appErr
+	if t.NumIn() != 2 {
+		panic(fmt.Sprintf(
+			"expected handler for %q to have 2 arguments but it had %v",
+			n, t.NumIn(),
+		))
 	}
 
-	return res, resBuf, encodeErr
+	if t.In(0) != _ctxType {
+		panic(fmt.Sprintf(
+			"the first argument of the handler for %q must be of type "+
+				"context.Context, and not: %v", n, t.In(0),
+		))
+
+	}
+
+	reqBodyType := t.In(1)
+
+	if !isValidReqResType(reqBodyType) {
+		panic(fmt.Sprintf(
+			"the second argument of the handler for %q must be "+
+				"a struct pointer, a map[string]interface{}, or interface{}, and not: %v",
+			n, reqBodyType,
+		))
+	}
+
+	return reqBodyType
 }
 
-// requestReader is used to parse a JSON request argument from a JSON decoder.
-type requestReader interface {
-	Read(*json.Decoder) (reflect.Value, error)
-}
-
-type structReader struct {
-	// Type of the struct (not a pointer to the struct)
-	Type reflect.Type
-}
-
-func (r structReader) Read(d *json.Decoder) (reflect.Value, error) {
-	value := reflect.New(r.Type)
-	err := d.Decode(value.Interface())
-	return value, err
-}
-
-type mapReader struct {
-	Type reflect.Type // Type of the map
-}
-
-func (r mapReader) Read(d *json.Decoder) (reflect.Value, error) {
-	value := reflect.New(r.Type)
-	err := d.Decode(value.Interface())
-	return value.Elem(), err
-}
-
-type ifaceEmptyReader struct{}
-
-func (ifaceEmptyReader) Read(d *json.Decoder) (reflect.Value, error) {
-	value := reflect.New(_interfaceEmptyType)
-	err := d.Decode(value.Interface())
-	return value.Elem(), err
+// isValidReqResType checks if the given type is a pointer to a struct, a
+// map[string]interface{}, or a interface{}.
+func isValidReqResType(t reflect.Type) bool {
+	return (t == _interfaceEmptyType) ||
+		(t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct) ||
+		(t.Kind() == reflect.Map && t.Key().Kind() == reflect.String)
 }

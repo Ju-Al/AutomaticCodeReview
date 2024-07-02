@@ -1,8 +1,4 @@
 // Copyright The OpenTelemetry Authors
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-// NewExporter constructs a new Exporter and starts it.
-func NewExporter(ctx context.Context, opts ...Option) (*otlptrace.Exporter, error) {
-	return otlptrace.NewExporter(ctx, NewClient(opts...))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +18,12 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// New constructs a new Exporter and starts it.
+// NewExporter constructs a new Exporter and starts it.
+func NewExporter(ctx context.Context, opts ...Option) (*otlptrace.Exporter, error) {
+	return otlptrace.NewExporter(ctx, NewClient(opts...))
 func New(ctx context.Context, opts ...Option) (*otlptrace.Exporter, error) {
 	return otlptrace.New(ctx, NewClient(opts...))
 }

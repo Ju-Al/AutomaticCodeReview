@@ -643,9 +643,6 @@ class Rocket_Critical_CSS {
 		}
 
 		echo '<style id="rocket-critical-css">' . wp_strip_all_tags( $critical_css_content ) . '</style>';
-	}
-
-	/**
 	 * Remove critical CSS once the page is fully loaded
 	 *
 	 * @since 2.11.5

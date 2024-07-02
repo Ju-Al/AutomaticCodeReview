@@ -1,5 +1,5 @@
 /*
-	@RequestMapping(path = "/history/{name}/{max}", method = RequestMethod.GET) * Copyright 2015-2018 the original author or authors.
+ * Copyright 2015-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,7 @@ public class StreamDeploymentController {
 		return this.streamService.manifest(name, version);
 	}
 
-	@RequestMapping(path = "/platform/list", method = RequestMethod.GET)
+	@RequestMapping(path = "/history/{name}/{max}", method = RequestMethod.GET)	@RequestMapping(path = "/platform/list", method = RequestMethod.GET)
 	@ResponseStatus(HttpStatus.OK)
 	public Collection<Deployer> platformList() {
 		return this.streamService.platformList();

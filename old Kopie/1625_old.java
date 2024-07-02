@@ -194,7 +194,6 @@ public abstract class SelectGroups {
         }
     }
 
-    /**
      * H2 session.
      */
     final Session session;

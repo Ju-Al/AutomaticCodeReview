@@ -1,5 +1,4 @@
 import { version as appVersion } from '../../package.json';
-        if (window.NativeShell) {
 import appSettings from '../scripts/settings/appSettings';
 import browser from '../scripts/browser';
 import { Events } from 'jellyfin-apiclient';
@@ -276,7 +275,7 @@ const supportedFeatures = function () {
      */
 function doExit() {
     try {
-        if (window.NativeShell && window.NativeShell.AppHost.exit) {
+        if (window.NativeShell) {
             window.NativeShell.AppHost.exit();
         } else if (browser.tizen) {
             tizen.application.getCurrentApplication().exit();

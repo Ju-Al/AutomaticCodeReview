@@ -1,6 +1,4 @@
 // 
-                if (fileDateUtc > MaxAgeArchiveFileDate && (NLog.Time.TimeSource.Current.Time.Date.ToUniversalTime() - fileDateUtc).TotalDays > maxArchiveDays)
-                    return true;
 // Copyright (c) 2004-2019 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
@@ -191,7 +189,8 @@ namespace NLog.Targets.FileArchiveModes
             if (maxArchiveDays > 0)
             {
                 var fileDateUtc = existingArchiveFile.Date.Date.ToUniversalTime();
-                if (fileDateUtc > MaxAgeArchiveFileDate)
+                if (fileDateUtc > MaxAgeArchiveFileDate && (NLog.Time.TimeSource.Current.Time.Date.ToUniversalTime() - fileDateUtc).TotalDays > maxArchiveDays)
+                    return true;
                 {
                     var currentDateUtc = NLog.Time.TimeSource.Current.Time.Date.ToUniversalTime();
                     var fileAgeDays = (currentDateUtc - fileDateUtc).TotalDays;

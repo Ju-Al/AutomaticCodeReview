@@ -1,5 +1,4 @@
 using System;
-        public abstract void Init();
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -228,7 +227,7 @@ namespace Jackett.Common.Utils.Clients
         protected virtual async Task<WebClientByteResult> Run(WebRequest webRequest) => throw new NotImplementedException();
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 
-        public virtual void Init()
+        public abstract void Init();
         {
             if (serverConfig.RuntimeSettings.IgnoreSslErrors == true)
             {

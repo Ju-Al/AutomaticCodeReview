@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-    _integ = new SimTK::RungeKuttaMersonIntegrator(_model->getMultibodySystem());
  *                           OpenSim:  Manager.cpp                            *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -51,7 +50,7 @@ std::string Manager::_displayName = "Simulator";
 //=============================================================================
 Manager::Manager(Model& model) : Manager(model, true)
 {
-    _integ = make_unique<SimTK::RungeKuttaMersonIntegrator>(_model->getMultibodySystem());
+    _integ = new SimTK::RungeKuttaMersonIntegrator(_model->getMultibodySystem());
 }
 
 Manager::Manager(Model& model, const SimTK::State& state)

@@ -1,5 +1,4 @@
 # This code is part of the Biopython distribution and governed by its
-    """find_states(markov_model, output) -> list of (states, score)"""
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 #
@@ -449,8 +448,8 @@ def _mle(N, M, training_outputs, training_states, pseudo_initial,
     return p_initial, p_transition, p_emission
 
 
+    """find_states(markov_model, output) -> list of (states, score)"""
 def _argmaxes(vector, allowance=None):
-    """Return indeces of the maximum values aong the vector (PRIVATE)."""
     return [numpy.argmax(vector)]
 
 

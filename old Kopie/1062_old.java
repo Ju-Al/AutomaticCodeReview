@@ -1,290 +1,266 @@
-package fr.free.nrw.commons.contributions;
+/*
+public class JetMetricsService implements ManagedService, ConfigurableService<MetricsConfig> {
 
-import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.Fragment;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AlertDialog;
-import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.GridView;
-import android.widget.ListAdapter;
-import android.widget.ProgressBar;
-import android.widget.TextView;
+    // keys used for synchronization of read operation
+    private final MetricsNotifyKey notifyKey = new MetricsNotifyKey();
+    private final Notifier notifier = new MetricsNotifier();
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import javax.inject.Inject;
-import javax.inject.Named;
+package com.hazelcast.jet.impl.metrics;
 
-import butterknife.BindView;
-import butterknife.ButterKnife;
-import dagger.android.support.AndroidSupportInjection;
-import dagger.android.support.DaggerFragment;
-import fr.free.nrw.commons.R;
-import fr.free.nrw.commons.di.FixedDaggerFragment;
-import fr.free.nrw.commons.nearby.NearbyActivity;
-import timber.log.Timber;
+import com.hazelcast.config.Config;
+import com.hazelcast.internal.diagnostics.Diagnostics;
+import com.hazelcast.internal.metrics.ProbeLevel;
+import com.hazelcast.internal.metrics.renderers.ProbeRenderer;
+import com.hazelcast.jet.config.MetricsConfig;
+import com.hazelcast.jet.impl.LiveOperationRegistry;
+import com.hazelcast.jet.impl.metrics.jmx.JmxPublisher;
+import com.hazelcast.jet.impl.metrics.management.ConcurrentArrayRingbuffer;
+import com.hazelcast.jet.impl.metrics.management.ConcurrentArrayRingbuffer.RingbufferSlice;
+import com.hazelcast.jet.impl.metrics.management.ManagementCenterPublisher;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.spi.ConfigurableService;
+import com.hazelcast.spi.LiveOperations;
+import com.hazelcast.spi.LiveOperationsTracker;
+import com.hazelcast.spi.ManagedService;
+import com.hazelcast.spi.NodeEngine;
+import com.hazelcast.spi.impl.NodeEngineImpl;
 
-import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
-import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
-import static android.app.Activity.RESULT_OK;
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-import static android.view.View.GONE;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
-public class ContributionsListFragment extends FixedDaggerFragment {
+import static com.hazelcast.jet.Util.entry;
+import static java.util.stream.Collectors.joining;
 
-    @BindView(R.id.contributionsList)
-    GridView contributionsList;
-    @BindView(R.id.waitingMessage)
-    TextView waitingMessage;
-    @BindView(R.id.loadingContributionsProgressBar)
-    ProgressBar progressBar;
+/**
+ * A service to render metrics at regular intervals and store them in a
+ * ringbuffer from which the clients can read.
+ */
+public class JetMetricsService implements ManagedService, ConfigurableService<MetricsConfig>, LiveOperationsTracker {
 
-    @Inject @Named("prefs") SharedPreferences prefs;
-    @Inject @Named("default_preferences") SharedPreferences defaultPrefs;
+    public static final String SERVICE_NAME = "hz:impl:jetMetricsService";
 
-    private ContributionController controller;
+    private final NodeEngineImpl nodeEngine;
+    private final ILogger logger;
+    private final LiveOperationRegistry liveOperationRegistry;
+    // Holds futures for pending read metrics operations
+    private final ConcurrentMap<CompletableFuture<RingbufferSlice<Map.Entry<Long, byte[]>>>, Long>
+            futureMap = new ConcurrentHashMap<>();
+
+    /**
+     * Ringbuffer which stores a bounded history of metrics. For each round of collection,
+     * the metrics are compressed into a blob and stored along with the timestamp,
+     * with the format (timestamp, byte[])
+     */
+    private ConcurrentArrayRingbuffer<Map.Entry<Long, byte[]>> metricsJournal;
+    private MetricsConfig config;
+    private volatile ScheduledFuture<?> scheduledFuture;
+
+    private List<MetricsPublisher> publishers;
+
+    // pauses the collection service for testing
+    private volatile boolean paused;
+
+    public JetMetricsService(NodeEngine nodeEngine) {
+        this.nodeEngine = (NodeEngineImpl) nodeEngine;
+        this.logger = nodeEngine.getLogger(getClass());
+        this.liveOperationRegistry = new LiveOperationRegistry();
+    }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.fragment_contributions, container, false);
-        ButterKnife.bind(this, v);
+    public void configure(MetricsConfig config) {
+        this.config = config;
+    }
 
-        contributionsList.setOnItemClickListener((AdapterView.OnItemClickListener) getActivity());
-        if (savedInstanceState != null) {
-            Timber.d("Scrolling to %d", savedInstanceState.getInt("grid-position"));
-            contributionsList.setSelection(savedInstanceState.getInt("grid-position"));
+    @Override
+    public void init(NodeEngine nodeEngine, Properties properties) {
+        this.publishers = getPublishers();
+
+        if (publishers.isEmpty()) {
+            return;
         }
 
-        //TODO: Should this be in onResume?
-        String lastModified = prefs.getString("lastSyncTimestamp", "");
-        Timber.d("Last Sync Timestamp: %s", lastModified);
+        logger.info("Configuring metrics collection, collection interval=" + config.getCollectionIntervalSeconds()
+                + " seconds, retention=" + config.getRetentionSeconds() + " seconds, publishers="
+                + publishers.stream().map(MetricsPublisher::name).collect(joining(", ", "[", "]")));
 
-        if (lastModified.equals("")) {
-            waitingMessage.setVisibility(View.VISIBLE);
-        } else {
-            waitingMessage.setVisibility(GONE);
+        ProbeRenderer renderer = new PublisherProbeRenderer();
+        scheduledFuture = nodeEngine.getExecutionService().scheduleWithRepetition("MetricsPublisher", () -> {
+            if (paused) {
+                logger.fine("Metrics not collected, service is paused.");
+                return;
+            }
+            this.nodeEngine.getMetricsRegistry().render(renderer);
+            for (MetricsPublisher publisher : publishers) {
+                try {
+                    publisher.whenComplete();
+                } catch (Exception e) {
+                    logger.severe("Error completing publication for publisher " + publisher, e);
+                }
+            }
+        }, 1, config.getCollectionIntervalSeconds(), TimeUnit.SECONDS);
+    }
+
+    public LiveOperationRegistry getLiveOperationRegistry() {
+        return liveOperationRegistry;
+    }
+
+    @Override
+    public void populate(LiveOperations liveOperations) {
+        liveOperationRegistry.populate(liveOperations);
+    }
+
+    /**
+     * Read metrics from the journal from the given sequence
+     */
+    public CompletableFuture<RingbufferSlice<Map.Entry<Long, byte[]>>> readMetrics(long startSequence) {
+        if (!config.isEnabled()) {
+            throw new IllegalArgumentException("Metrics collection is not enabled");
+        }
+        CompletableFuture<RingbufferSlice<Map.Entry<Long, byte[]>>> future = new CompletableFuture<>();
+        future.whenComplete((s, e) -> futureMap.remove(future));
+        futureMap.put(future, startSequence);
+
+        readFromJournal(future, startSequence);
+
+        return future;
+    }
+
+    private void readFromJournal(CompletableFuture<RingbufferSlice<Map.Entry<Long, byte[]>>> future, long sequence) {
+        try {
+            RingbufferSlice<Map.Entry<Long, byte[]>> slice = metricsJournal.copyFrom(sequence);
+            if (!slice.isEmpty()) {
+                future.complete(slice);
+            }
+        } catch (Exception e) {
+            logger.severe("Error reading from metrics journal, sequence: " + sequence, e);
+            future.completeExceptionally(e);
+        }
+    }
+
+    @Override
+    public void reset() {
+    }
+
+    @Override
+    public void shutdown(boolean terminate) {
+        if (scheduledFuture != null) {
+            scheduledFuture.cancel(false);
         }
 
-        changeProgressBarVisibility(true);
-        return v;
-    }
-
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-    }
-
-    public ListAdapter getAdapter() {
-        return contributionsList.getAdapter();
-    }
-
-    public void setAdapter(ListAdapter adapter) {
-        this.contributionsList.setAdapter(adapter);
-    }
-
-    public void changeProgressBarVisibility(boolean isVisible) {
-        this.progressBar.setVisibility(isVisible ? View.VISIBLE : View.GONE);
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        if (outState == null) {
-            outState = new Bundle();
-        }
-        super.onSaveInstanceState(outState);
-        controller.saveState(outState);
-        outState.putInt("grid-position", contributionsList.getFirstVisiblePosition());
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        //FIXME: must get the file data for Google Photos when receive the intent answer, in the onActivityResult method
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (resultCode == RESULT_OK) {
-            Timber.d("OnActivityResult() parameters: Req code: %d Result code: %d Data: %s",
-                    requestCode, resultCode, data);
-            controller.handleImagePicked(requestCode, data);
-        } else {
-            Timber.e("OnActivityResult() parameters: Req code: %d Result code: %d Data: %s",
-                    requestCode, resultCode, data);
+        for (MetricsPublisher publisher : publishers) {
+            try {
+                publisher.shutdown();
+            } catch (Exception e) {
+                logger.warning("Error shutting down metrics publisher " + publisher.name(), e);
+            }
         }
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_from_gallery:
-                //Gallery crashes before reach ShareActivity screen so must implement permissions check here
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    // apply MetricsConfig to HZ properties
+    // these properties need to be set here so that the metrics get applied from startup
+    public static void applyMetricsConfig(Config hzConfig, MetricsConfig metricsConfig) {
+        if (metricsConfig.isEnabled()) {
+            hzConfig.setProperty(Diagnostics.METRICS_LEVEL.getName(), ProbeLevel.INFO.name());
+            if (metricsConfig.isMetricsForDataStructures()) {
+                hzConfig.setProperty(Diagnostics.METRICS_DISTRIBUTED_DATASTRUCTURES.getName(), "true");
+            }
+        }
+    }
 
-                    // Here, thisActivity is the current activity
-                    if (ContextCompat.checkSelfPermission(getActivity(),
-                            READ_EXTERNAL_STORAGE)
-                            != PERMISSION_GRANTED) {
-
-                        // Should we show an explanation?
-                        if (shouldShowRequestPermissionRationale(READ_EXTERNAL_STORAGE)) {
-
-                            // Show an explanation to the user *asynchronously* -- don't block
-                            // this thread waiting for the user's response! After the user
-                            // sees the explanation, try again to request the permission.
-
-                            new AlertDialog.Builder(getActivity())
-                                    .setMessage(getString(R.string.read_storage_permission_rationale))
-                                    .setPositiveButton("OK", (dialog, which) -> {
-                                        requestPermissions(new String[]{READ_EXTERNAL_STORAGE}, 1);
-                                        dialog.dismiss();
-                                    })
-                                    .setNegativeButton("Cancel", null)
-                                    .create()
-                                    .show();
-
-                        } else {
-
-                            // No explanation needed, we can request the permission.
-
-                            requestPermissions(new String[]{READ_EXTERNAL_STORAGE},
-                                    1);
-
-                            // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
-                            // app-defined int constant. The callback method gets the
-                            // result of the request.
-                        }
-                    } else {
-                        controller.startGalleryPick();
-                        return true;
+    private List<MetricsPublisher> getPublishers() {
+        List<MetricsPublisher> publishers = new ArrayList<>();
+        if (config.isEnabled()) {
+            int journalSize = Math.max(
+                    1, (int) Math.ceil((double) config.getRetentionSeconds() / config.getCollectionIntervalSeconds())
+            );
+            metricsJournal = new ConcurrentArrayRingbuffer<>(journalSize);
+            ManagementCenterPublisher publisher = new ManagementCenterPublisher(this.nodeEngine.getLoggingService(),
+                    (blob, ts) -> {
+                        metricsJournal.add(entry(ts, blob));
+                        futureMap.forEach(this::readFromJournal);
                     }
-
-                } else {
-                    controller.startGalleryPick();
-                    return true;
-                }
-
-                return true;
-            case R.id.menu_from_camera:
-                boolean useExtStorage = defaultPrefs.getBoolean("useExternalStorage", true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && useExtStorage) {
-                    // Here, thisActivity is the current activity
-                    if (ContextCompat.checkSelfPermission(getActivity(), WRITE_EXTERNAL_STORAGE)
-                            != PackageManager.PERMISSION_GRANTED) {
-                        if (shouldShowRequestPermissionRationale(WRITE_EXTERNAL_STORAGE)) {
-                            // Show an explanation to the user *asynchronously* -- don't block
-                            // this thread waiting for the user's response! After the user
-                            // sees the explanation, try again to request the permission.
-                            new AlertDialog.Builder(getActivity())
-                                    .setMessage(getString(R.string.write_storage_permission_rationale))
-                                    .setPositiveButton("OK", (dialog, which) -> {
-                                        requestPermissions(new String[]{WRITE_EXTERNAL_STORAGE}, 3);
-                                        dialog.dismiss();
-                                    })
-                                    .setNegativeButton("Cancel", null)
-                                    .create()
-                                    .show();
-                        } else {
-                            // No explanation needed, we can request the permission.
-                            requestPermissions(new String[]{WRITE_EXTERNAL_STORAGE},
-                                    3);
-                            // MY_PERMISSIONS_WRITE_EXTERNAL_STORAGE is an
-                            // app-defined int constant. The callback method gets the
-                            // result of the request.
-                        }
-                    } else {
-                        controller.startCameraCapture();
-                        return true;
-                    }
-                } else {
-                    controller.startCameraCapture();
-                    return true;
-                }
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
+            );
+            publishers.add(publisher);
         }
+        if (config.isJmxEnabled()) {
+            publishers.add(new JmxPublisher(nodeEngine.getHazelcastInstance().getName(), "com.hazelcast"));
+        }
+        return publishers;
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        Timber.d("onRequestPermissionsResult: req code = " + " perm = "
-                + permissions + " grant =" + grantResults);
+    /**
+     * Pause collection of metrics for testing
+     */
+    void pauseCollection() {
+        this.paused = true;
+    }
 
-        switch (requestCode) {
-            // 1 = Storage allowed when gallery selected
-            case 1: {
-                if (grantResults.length > 0 && grantResults[0] == PERMISSION_GRANTED) {
-                    Timber.d("Call controller.startGalleryPick()");
-                    controller.startGalleryPick();
-                }
-            }
-            break;
-            // 2 = Location allowed when 'nearby places' selected
-            case 2: {
-                if (grantResults.length > 0 && grantResults[0] == PERMISSION_GRANTED) {
-                    Timber.d("Location permission granted");
-                    Intent nearbyIntent = new Intent(getActivity(), NearbyActivity.class);
-                    startActivity(nearbyIntent);
-                }
-            }
-            break;
-            case 3: {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Timber.d("Call controller.startCameraCapture()");
-                    controller.startCameraCapture();
+    /**
+     * Resume collection of metrics for testing
+     */
+    void resumeCollection() {
+        this.paused = false;
+    }
+
+    /**
+     * A probe renderer which renders the metrics to all the given publishers.
+     */
+    private class PublisherProbeRenderer implements ProbeRenderer {
+        @Override
+        public void renderLong(String name, long value) {
+            for (MetricsPublisher publisher : publishers) {
+                try {
+                    publisher.publishLong(name, value);
+                } catch (Exception e) {
+                    logError(name, value, publisher, e);
                 }
             }
         }
-    }
 
-    @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        menu.clear(); // See http://stackoverflow.com/a/8495697/17865
-        inflater.inflate(R.menu.fragment_contributions_list, menu);
-
-        if (!deviceHasCamera()) {
-            menu.findItem(R.id.menu_from_camera).setEnabled(false);
+        @Override
+        public void renderDouble(String name, double value) {
+            for (MetricsPublisher publisher : publishers) {
+                try {
+                    publisher.publishDouble(name, value);
+                } catch (Exception e) {
+                    logError(name, value, publisher, e);
+                }
+            }
         }
-    }
 
-    public boolean deviceHasCamera() {
-        PackageManager pm = getContext().getPackageManager();
-        return pm.hasSystemFeature(PackageManager.FEATURE_CAMERA) ||
-                pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_FRONT);
-    }
+        @Override
+        public void renderException(String name, Exception e) {
+            logger.warning("Error when rendering '" + name + '\'', e);
+        }
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        controller = new ContributionController(this);
-        setHasOptionsMenu(true);
-    }
+        @Override
+        public void renderNoValue(String name) {
+            // noop
+        }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-    }
-
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-        controller.loadState(savedInstanceState);
-    }
-
-    protected void clearSyncMessage() {
-        waitingMessage.setVisibility(GONE);
-    }
-
-    public interface SourceRefresher {
-        void refreshSource();
+        private void logError(String name, Object value, MetricsPublisher publisher, Exception e) {
+            logger.fine("Error publishing metric to: " + publisher.name() + ", metric=" + name + ", value=" + value, e);
+        }
     }
 }

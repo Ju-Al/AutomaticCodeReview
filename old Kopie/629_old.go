@@ -1,5 +1,4 @@
 // Copyright (c) 2016 Uber Technologies, Inc.
-			onewayOutbound = middleware.ApplyOnewayOutbound(outs.Oneway, mw.Oneway)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -107,7 +106,7 @@ func convertOutbounds(outbounds Outbounds, mw OutboundMiddleware) Outbounds {
 		}
 
 		if outs.Oneway != nil {
-			//onewayOutbound = middleware.ApplyOnewayOutbound(outs.Oneway, mw.Oneway)
+			onewayOutbound = middleware.ApplyOnewayOutbound(outs.Oneway, mw.Oneway)
 			// TODO: I think the parameter should be onewayOutbound, this was caught by staticcheck
 			onewayOutbound = request.OnewayValidatorOutbound{OnewayOutbound: outs.Oneway}
 		}

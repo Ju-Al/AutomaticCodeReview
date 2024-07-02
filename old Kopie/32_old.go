@@ -1,192 +1,416 @@
-package iam
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+package rpmrepocloner
 
 import (
-	"context"
-	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
-	"github.com/hashicorp/vault/sdk/helper/base62"
-	"github.com/hashicorp/watchtower/internal/db"
-	"github.com/hashicorp/watchtower/internal/iam/store"
-	"google.golang.org/protobuf/proto"
+	"microsoft.com/pkggen/internal/buildpipeline"
+	"microsoft.com/pkggen/internal/logger"
+	"microsoft.com/pkggen/internal/packagerepo/repocloner"
+	"microsoft.com/pkggen/internal/packagerepo/repomanager/rpmrepomanager"
+	"microsoft.com/pkggen/internal/pkgjson"
+	"microsoft.com/pkggen/internal/safechroot"
+	"microsoft.com/pkggen/internal/shell"
 )
-
-// ScopeType defines the possible types for Scopes
-type ScopeType uint32
 
 const (
-	UnknownScope      ScopeType = 0
-	OrganizationScope ScopeType = 1
-	ProjectScope      ScopeType = 2
+	squashChrootRunErrors  = false
+	chrootDownloadDir      = "/outputrpms"
+	leaveChrootFilesOnDisk = false
+	updateRepoID           = "mariner-official-update"
+	fetcherRepoID          = "fetcher-cloned-repo"
 )
 
-func (s ScopeType) String() string {
-	return [...]string{
-		"unknown",
-		"organization",
-		"project",
-	}[s]
+var (
+	// Every valid line will be of the form: <package>-<version>.<arch> : <Description>
+	packageLookupNameMatchRegex = regexp.MustCompile(`^\s*([^:]+(x86_64|aarch64|noarch))\s*:`)
+
+	// Every valid line will be of the form: <package_name>.<architecture> <version>.<dist>  fetcher-cloned-repo
+	listedPackageRegex = regexp.MustCompile(`^\s*(?P<Name>[a-zA-Z0-9_+-]+)\.(?P<Arch>[a-zA-Z0-9_+-]+)\s*(?P<Version>[a-zA-Z0-9._+-]+)\.(?P<Dist>[a-zA-Z0-9_+-]+)\s*fetcher-cloned-repo`)
+)
+
+const (
+	listMatchSubString = iota
+	listPackageName    = iota
+	listPackageArch    = iota
+	listPackageVersion = iota
+	listPackageDist    = iota
+	listMaxMatchLen    = iota
+)
+
+// RpmRepoCloner represents an RPM repository cloner.
+type RpmRepoCloner struct {
+	chroot        *safechroot.Chroot
+	useUpdateRepo bool
+	cloneDir      string
 }
 
-// Scope is used to create a hierarchy of "containers" that encompass the scope of
-// an IAM resource.  Scopes are Organizations and Projects (based on their Type) for
-// launch and likely Folders and SubProjects in the future
-type Scope struct {
-	*store.Scope
-
-	// tableName which is used to support overriding the table name in the db
-	// and making the Scope a ReplayableMessage
-	tableName string `gorm:"-"`
+// New creates a new RpmRepoCloner
+func New() *RpmRepoCloner {
+	return &RpmRepoCloner{}
 }
 
-// ensure that Scope implements the interfaces of: Resource, ClonableResource, and db.VetForWriter
-var _ Resource = (*Scope)(nil)
-var _ db.VetForWriter = (*Scope)(nil)
-var _ ClonableResource = (*Scope)(nil)
+// Initialize initializes rpmrepocloner, enabling Clone() to be called.
+//  - destinationDir is the directory to save RPMs
+//  - tmpDir is the directory to create a chroot
+//  - workerTar is the path to the worker tar used to seed the chroot
+//  - existingRpmsDir is the directory with prebuilt RPMs
+//  - useUpdateRepo if set, the upstream update repository will be used.
+//  - repoDefinitions is a list of repo files to use when cloning RPMs
+func (r *RpmRepoCloner) Initialize(destinationDir, tmpDir, workerTar, existingRpmsDir string, useUpdateRepo bool, repoDefinitions []string) (err error) {
+	const (
+		isExistingDir = false
 
-func NewOrganization(opt ...Option) (*Scope, error) {
-	return newScope(OrganizationScope, opt...)
-}
+		bindFsType = ""
+		bindData   = ""
 
-func NewProject(organizationPublicId string, opt ...Option) (*Scope, error) {
-	org := allocScope()
-	org.PublicId = organizationPublicId
-	opt = append(opt, WithScope(&org))
-	p, err := newScope(ProjectScope, opt...)
-	if err != nil {
-		return nil, fmt.Errorf("error creating new project: %w", err)
-	}
-	return p, nil
-}
+		chrootLocalRpmsDir = "/localrpms"
 
-// newScope creates a new Scope of the specified ScopeType with options:
-// WithName specifies the Scope's friendly name.
-// WithScope specifies the Scope's parent
-func newScope(scopeType ScopeType, opt ...Option) (*Scope, error) {
-	opts := getOpts(opt...)
-	withName := opts.withName
-	withScope := opts.withScope
+		overlayWorkDirectory  = "/overlaywork/workdir"
+		overlayUpperDirectory = "/overlaywork/upper"
+		overlaySource         = "overlay"
+	)
 
-	if scopeType == UnknownScope {
-		return nil, errors.New("error unknown scope type for new scope")
+	r.useUpdateRepo = useUpdateRepo
+	if !useUpdateRepo {
+		logger.Log.Warnf("Disabling update repo")
 	}
-	if scopeType == ProjectScope {
-		if withScope == nil {
-			return nil, errors.New("error project scope must be with a scope")
-		}
-		if withScope.PublicId == "" {
-			return nil, errors.New("error project scope parent id is unset")
-		}
-	}
-	publicId, err := base62.Random(32)
-	if err != nil {
-		return nil, fmt.Errorf("error generating public id %w for new scope", err)
-	}
-	s := &Scope{
-		Scope: &store.Scope{
-			PublicId: publicId,
-			Type:     scopeType.String(),
-		},
-	}
-	if withScope != nil {
-		if withScope.PublicId == "" {
-			return nil, errors.New("error assigning scope parent id to a scope with unset id")
-		}
-		s.ParentId = withScope.PublicId
-	}
-	if withName != "" {
-		s.Name = withName
-	}
-	return s, nil
-}
 
-func allocScope() Scope {
-	return Scope{
-		Scope: &store.Scope{},
-	}
-}
-
-// Clone creates a clone of the Scope
-func (s *Scope) Clone() Resource {
-	cp := proto.Clone(s.Scope)
-	return &Scope{
-		Scope: cp.(*store.Scope),
-	}
-}
-
-// VetForWrite implements db.VetForWrite() interface for scopes
-func (s *Scope) VetForWrite(ctx context.Context, r db.Reader, opType db.OpType, opt ...db.Option) error {
-	if s.Type == UnknownScope.String() {
-		return errors.New("unknown scope type for scope write")
-	}
-	if s.PublicId == "" {
-		return errors.New("public id is empty string for scope write")
-	}
-	if opType == db.UpdateOp {
-		dbOptions := db.GetOpts(opt...)
-		for _, path := range dbOptions.WithFieldMaskPaths {
-			if path == "ParentId" {
-				if s.ParentId == "" && s.Type == ProjectScope.String() {
-					return errors.New("parent id is unset for project scope")
-				}
-				if s.Type == ProjectScope.String() {
-					parentScope := allocScope()
-					parentScope.PublicId = s.ParentId
-					if err := r.LookupByPublicId(ctx, &parentScope, opt...); err != nil {
-						return fmt.Errorf("unable to verify project's organization scope: %w", err)
-					}
-					if parentScope.Type != OrganizationScope.String() {
-						return errors.New("project parent scope is not an organization")
-					}
+	// Ensure that if initialization fails, the chroot is closed
+	defer func() {
+		if err != nil {
+			logger.Log.Warnf("Failed to initialize cloner. Error: %s", err)
+			if r.chroot != nil {
+				closeErr := r.chroot.Close(leaveChrootFilesOnDisk)
+				if closeErr != nil {
+					logger.Log.Panicf("Unable to close chroot on failed initialization. Error: %s", closeErr)
 				}
 			}
 		}
+	}()
+
+	// Create the directory to download into
+	err = os.MkdirAll(destinationDir, os.ModePerm)
+	if err != nil {
+		logger.Log.Warnf("Could not create download directory (%s)", destinationDir)
+		return
 	}
-	return nil
+
+	// Setup the chroot
+	logger.Log.Infof("Creating cloning environment to populate (%s)", destinationDir)
+	r.chroot = safechroot.NewChroot(tmpDir, isExistingDir)
+
+	r.cloneDir = destinationDir
+
+	// Setup mount points for the chroot.
+	//
+	// 1) Mount the provided directory of existings RPMs into the chroot as an overlay,
+	// ensuring the chroot can read the files, but not alter the actual directory outside
+	// the chroot.
+	//
+	// 2) Mount the directory to download RPMs into as a bind, allowing the chroot to write
+	// files into it.
+	overlayMount, overlayExtraDirs := safechroot.NewOverlayMountPoint(r.chroot.RootDir(), overlaySource, chrootLocalRpmsDir, existingRpmsDir, overlayUpperDirectory, overlayWorkDirectory)
+	extraMountPoints := []*safechroot.MountPoint{
+		overlayMount,
+		safechroot.NewMountPoint(destinationDir, chrootDownloadDir, bindFsType, safechroot.BindMountPointFlags, bindData),
+	}
+
+	// Also request that /overlaywork is created before any chroot mounts happen so the overlay can
+	// be created succesfully
+	err = r.chroot.Initialize(workerTar, overlayExtraDirs, extraMountPoints)
+	if err != nil {
+		r.chroot = nil
+		return
+	}
+
+	logger.Log.Info("Initializing local RPM repository")
+	err = r.initializeMountedChrootRepo(chrootLocalRpmsDir)
+	if err != nil {
+		return
+	}
+
+	logger.Log.Info("Initializing repository configurations")
+	err = r.initializeRepoDefinitions(repoDefinitions)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
-// ResourceType returns the type of scope
-func (s *Scope) ResourceType() ResourceType {
-	if s.Type == OrganizationScope.String() {
-		return ResourceTypeOrganization
+// AddNetworkFiles adds files needed for networking capabilities into the cloner.
+// tlsClientCert and tlsClientKey are optional.
+func (r *RpmRepoCloner) AddNetworkFiles(tlsClientCert, tlsClientKey string) (err error) {
+	files := []safechroot.FileToCopy{
+		{Src: "/etc/resolv.conf", Dest: "/etc/resolv.conf"},
 	}
-	if s.Type == ProjectScope.String() {
-		return ResourceTypeProject
+
+	if tlsClientCert != "" && tlsClientKey != "" {
+		tlsFiles := []safechroot.FileToCopy{
+			{Src: tlsClientCert, Dest: "/etc/tdnf/mariner_user.crt"},
+			{Src: tlsClientKey, Dest: "/etc/tdnf/mariner_user.key"},
+		}
+
+		files = append(files, tlsFiles...)
 	}
-	return ResourceTypeScope
+
+	err = r.chroot.AddFiles(files...)
+	return
 }
 
-// Actions returns the  available actions for Scopes
-func (*Scope) Actions() map[string]Action {
-	return StdActions()
+// initializeRepoDefinitions will configure the chroot's repo files to match those
+// provided by the caller.
+func (r *RpmRepoCloner) initializeRepoDefinitions(repoDefinitions []string) (err error) {
+	// ============== TDNF SPECIFIC IMPLEMENTATION ==============
+	// Unlike some other package managers, TDNF has no notion of repository priority.
+	// It reads the repo files using `readdir`, which should be assumed to be random ordering.
+	//
+	// In order to simulate repository priority, concatenate all requested repofiles into a single file.
+	// TDNF will read the file top-down. It will then parse the results into a linked list, meaning
+	// the first repo entry in the file is the first to be checked.
+	const chrootRepoFile = "/etc/yum.repos.d/allrepos.repo"
+
+	fullRepoFilePath := filepath.Join(r.chroot.RootDir(), chrootRepoFile)
+
+	// Create the directory for the repo file
+	err = os.MkdirAll(filepath.Dir(fullRepoFilePath), os.ModePerm)
+	if err != nil {
+		logger.Log.Warnf("Could not create directory for chroot repo file (%s)", fullRepoFilePath)
+		return
+	}
+
+	dstFile, err := os.OpenFile(fullRepoFilePath, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return
+	}
+	defer dstFile.Close()
+
+	// Append all repo files together into a single repo file.
+	// Assume the order of repoDefinitions indicates their relative priority.
+	for _, repoFilePath := range repoDefinitions {
+		err = appendRepoFile(repoFilePath, dstFile)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
-// GetScope returns the scope for the "scope" if there is one defined
-func (s *Scope) GetScope(ctx context.Context, r db.Reader) (*Scope, error) {
-	if r == nil {
-		return nil, errors.New("error db is nil for get scope")
+func appendRepoFile(repoFilePath string, dstFile *os.File) (err error) {
+	repoFile, err := os.Open(repoFilePath)
+	if err != nil {
+		return
 	}
-	if s.ParentId == "" {
-		return nil, nil
+	defer repoFile.Close()
+
+	_, err = io.Copy(dstFile, repoFile)
+	if err != nil {
+		return
 	}
-	var p Scope
-	if err := r.LookupWhere(ctx, &p, "public_id = ?", s.ParentId); err != nil {
-		return nil, fmt.Errorf("error getting scope %w", err)
-	}
-	return &p, nil
+
+	// Append a new line
+	_, err = dstFile.WriteString("\n")
+	return
 }
 
-// TableName returns the tablename to override the default gorm table name
-func (s *Scope) TableName() string {
-	if s.tableName != "" {
-		return s.tableName
-	}
-	return "iam_scope"
+// initializeMountedChrootRepo will initialize a local RPM repository inside the chroot.
+func (r *RpmRepoCloner) initializeMountedChrootRepo(repoDir string) (err error) {
+	return r.chroot.Run(func() (err error) {
+		return rpmrepomanager.CreateRepo(repoDir)
+	})
 }
 
-// SetTableName sets the tablename and satisfies the ReplayableMessage interface
-func (s *Scope) SetTableName(n string) {
-	if n != "" {
-		s.tableName = n
+// Clone clones the provided list of packages.
+// If cloneDeps is set, package dependencies will also be cloned.
+// It will automatically resolve packages that describe a provide or file from a package.
+func (r *RpmRepoCloner) Clone(cloneDeps bool, packagesToClone ...*pkgjson.PackageVer) (err error) {
+	const (
+		strictComparisonOperator          = "="
+		lessThanOrEqualComparisonOperator = "<="
+		versionSuffixFormat               = "-%s"
+
+		builtRepoID  = "local-repo"
+		cachedRepoID = "upstream-cache-repo"
+		allRepoIDs   = "*"
+	)
+
+	for _, pkg := range packagesToClone {
+		builder := strings.Builder{}
+		builder.WriteString(pkg.Name)
+
+		// Treat <= as =
+		// Treat > and >= as "latest"
+		if pkg.Condition == strictComparisonOperator || pkg.Condition == lessThanOrEqualComparisonOperator {
+			builder.WriteString(fmt.Sprintf(versionSuffixFormat, pkg.Version))
+		}
+
+		pkgName := builder.String()
+		logger.Log.Debugf("Cloning: %s", pkgName)
+		args := []string{
+			"--destdir",
+			chrootDownloadDir,
+			pkgName,
+		}
+
+		if cloneDeps {
+			args = append([]string{"download", "--alldeps"}, args...)
+		} else {
+			args = append([]string{"download-nodeps"}, args...)
+		}
+
+		err = r.chroot.Run(func() (err error) {
+			// Consider the built RPMs first, then the already cached (e.g. tooolchain), and finally all remote packages.
+			repoOrderList := []string{builtRepoID, cachedRepoID, allRepoIDs}
+			return r.clonePackage(args, repoOrderList...)
+		})
+
+		if err != nil {
+			return
+		}
 	}
+
+	return
+}
+
+// ConvertDownloadedPackagesIntoRepo initializes the downloaded RPMs into an RPM repository.
+func (r *RpmRepoCloner) ConvertDownloadedPackagesIntoRepo() (err error) {
+	fullRpmDownloadDir := buildpipeline.GetRpmsDir(r.chroot.RootDir(), chrootDownloadDir)
+
+	err = rpmrepomanager.OrganizePackagesByArch(fullRpmDownloadDir, fullRpmDownloadDir)
+	if err != nil {
+		return
+	}
+
+	err = r.initializeMountedChrootRepo(chrootDownloadDir)
+	return
+}
+
+// ClonedRepoContents returns the packages contained in the cloned repository.
+func (r *RpmRepoCloner) ClonedRepoContents() (repoContents *repocloner.RepoContents, err error) {
+	repoContents = &repocloner.RepoContents{}
+	onStdout := func(args ...interface{}) {
+		if len(args) == 0 {
+			return
+		}
+
+		line := args[0].(string)
+		matches := listedPackageRegex.FindStringSubmatch(line)
+		if len(matches) != listMaxMatchLen {
+			return
+		}
+
+		pkg := &repocloner.RepoPackage{
+			Name:         matches[listPackageName],
+			Version:      matches[listPackageVersion],
+			Architecture: matches[listPackageArch],
+			Distribution: matches[listPackageDist],
+		}
+
+		repoContents.Repo = append(repoContents.Repo, pkg)
+	}
+
+	err = r.chroot.Run(func() (err error) {
+		// Disable all repositories except the fetcher repository (the repository with the cloned packages)
+		tdnfArgs := []string{
+			"list",
+			"ALL",
+			"--disablerepo=*",
+			fmt.Sprintf("--enablerepo=%s", fetcherRepoID),
+		}
+		return shell.ExecuteLiveWithCallback(onStdout, logger.Log.Warn, "tdnf", tdnfArgs...)
+	})
+
+	return
+}
+
+// CloneDirectory returns the directory where cloned packages are saved.
+func (r *RpmRepoCloner) CloneDirectory() string {
+	return r.cloneDir
+}
+
+// Close closes the given RpmRepoCloner.
+func (r *RpmRepoCloner) Close() error {
+	return r.chroot.Close(leaveChrootFilesOnDisk)
+// clonePackage clones a given package using prepopulated arguments.
+// It will gradually enable more repos to consider using enabledRepoOrder until the package is found.
+func (r *RpmRepoCloner) clonePackage(baseArgs []string, enabledRepoOrder ...string) (err error) {
+	const (
+		unresolvedOutputPrefix  = "No package"
+		toyboxConflictsPrefix   = "toybox conflicts"
+		unresolvedOutputPostfix = "available"
+	)
+
+	if len(enabledRepoOrder) == 0 {
+		return fmt.Errorf("enabledRepoOrder cannot be empty")
+	}
+
+	// Disable all repos first so we can gradually enable them below.
+	// TDNF processes enable/disable repo requests in the order that they are passed.
+	// So if `--disablerepo=foo` and then `--enablerepo=foo` are pased, `foo` will be enabled.
+	baseArgs = append(baseArgs, "--disablerepo=*")
+
+	var enabledRepoArgs []string
+	for _, repoID := range enabledRepoOrder {
+		logger.Log.Debugf("Enabling repo ID: %s", repoID)
+		// Gradually increase the scope of allowed repos. Keep repos already considered enabled
+		// as packages from one repo may depend on another.
+		// e.g. packages in upstream update repo may require packages in upstream base repo.
+		enabledRepoArgs = append(enabledRepoArgs, fmt.Sprintf("--enablerepo=%s", repoID))
+		args := append(baseArgs, enabledRepoArgs...)
+
+		// Do not enable the fetcher's own repo as it is only used for listing cloned files
+		// and will not been initialized until ConvertDownloadedPackagesIntoRepo is called on it
+		// when all cloning is complete.
+		args = append(args, fmt.Sprintf("--disablerepo=%s", fetcherRepoID))
+
+		// Explicitly disable the update repo if it is turned off.
+		if !r.useUpdateRepo {
+			args = append(args, fmt.Sprintf("--disablerepo=%s", updateRepoID))
+		}
+		stdout, stderr, err := shell.Execute("tdnf", args...)
+
+		logger.Log.Debugf("stdout: %s", stdout)
+		logger.Log.Debugf("stderr: %s", stderr)
+
+		if err != nil {
+			logger.Log.Errorf("tdnf error (will continue if the only errors are toybox conflicts):\n '%s'", stderr)
+		}
+
+		// ============== TDNF SPECIFIC IMPLEMENTATION ==============
+		// Check if TDNF could not resolve a given package. If TDNF does not find a requested package,
+		// it will not error. Instead it will print a message to stdout. Check for this message.
+		//
+		// *NOTE*: TDNF will attempt best effort. If N packages are requested, and 1 cannot be found,
+		// it will still download N-1 packages while also printing the message.
+		splitStdout := strings.Split(stdout, "\n")
+		for _, line := range splitStdout {
+			trimmedLine := strings.TrimSpace(line)
+			// Toybox conflicts are a known issue, reset the err value if encountered
+			if strings.HasPrefix(trimmedLine, toyboxConflictsPrefix) {
+				logger.Log.Warn("Ignoring known toybox conflict")
+				err = nil
+				continue
+			}
+			// If a package was not available, update err
+			if strings.HasPrefix(trimmedLine, unresolvedOutputPrefix) && strings.HasSuffix(trimmedLine, unresolvedOutputPostfix) {
+				err = fmt.Errorf(trimmedLine)
+				break
+			}
+		}
+
+		if err == nil {
+			break
+		}
+	}
+
+	return
 }

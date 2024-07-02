@@ -1,5 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-func roundTrip(r *http.Request, h http.Handler) (*Entry, error) {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,9 +74,8 @@ func TestHandler(t *testing.T) {
 		t.Errorf("ResponseHeaderSize = %d; want >=%d", ent.ResponseHeaderSize, responseHdrSize)
 	}
 	if ent.ResponseBodySize != int64(len(responseMsg)) {
+func roundTrip(r *http.Request, h http.Handler) (*Entry, error) {
 		t.Errorf("ResponseBodySize = %d; want %d", ent.ResponseBodySize, len(responseMsg))
-	}
-	if ent.TraceID != spanCtx.TraceID {
 		t.Errorf("TraceID = %v; want %v", ent.TraceID, spanCtx.TraceID)
 	}
 	if ent.SpanID != spanCtx.SpanID {

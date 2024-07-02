@@ -1,111 +1,98 @@
 package langserver
-
-	content, err := getHoverContent(ctx, documentURI, position)
-		Contents: content,
-func getHoverContent(ctx context.Context, uri lsp.DocumentURI, position lsp.Position) (content []lsp.MarkedString, err error) {
-	// Read file,
-	// get the character from the line
-	fmt.Println(fileContent)
-	// look up the character from build_defs, and pull out the documentation
-	return nil, nil
 import (
+	"core"
 	"context"
-	"encoding/json"
-	"fmt"
+	"path"
+	"testing"
 
-	"github.com/sourcegraph/jsonrpc2"
-
+	"parse/asp"
 	"tools/build_langserver/lsp"
-	"strings"
+
+	"github.com/stretchr/testify/assert"
+	"fmt"
 )
 
-const hoverMethod = "textDocument/hover"
-
-func (h *LsHandler) handleHover(ctx context.Context, req *jsonrpc2.Request) (result interface{}, err error) {
-	if req.Params == nil {
-		return nil, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams}
-	}
-
-	var params lsp.TextDocumentPositionParams
-	if err := json.Unmarshal(*req.Params, &params); err != nil {
-		return nil, err
-	}
-	documentURI, err := EnsureURL(params.TextDocument.URL, "file")
-	if err != nil {
-		return nil, &jsonrpc2.Error{
-			Code:    jsonrpc2.CodeInvalidParams,
-			Message: fmt.Sprintf("invalid documentURI '%s' for method %s", documentURI, hoverMethod),
-		}
-	}
-	position := params.Position
-
-	h.mu.Lock()
-	content, err := getHoverContent(ctx, h.analyzer, documentURI, position)
-	h.mu.Unlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &lsp.Hover{
-		Contents: *content,
-	}, nil
+func TestNewAnalyzer(t *testing.T) {
+	a := newAnalyzer()
+	assert.NotEqual(t, nil, a.BuiltIns)
 }
 
-func getHoverContent(ctx context.Context, analyzer *Analyzer, uri lsp.DocumentURI, position lsp.Position) (content *lsp.MarkupContent, err error) {
-	// Read file, and get a list of strings from the file
+func TestGetStatementsFromFile(t *testing.T) {
+	a := newAnalyzer()
+	core.FindRepoRoot()
+	ctx := context.Background()
+	filepath := path.Join(core.RepoRoot, "tools/build_langserver/langserver/BUILD")
+	uri := lsp.DocumentURI("file://" + filepath)
 	fileContent, err := ReadFile(ctx, uri)
-	if err != nil {
-		return nil, &jsonrpc2.Error{
-			Code: jsonrpc2.CodeParseError,
-			Message: fmt.Sprintf("fail to read file %s", uri),
-		}
+
+	stmt, err := a.IdentFromFile(uri, fileContent)
+	fmt.Println(err)
+	fmt.Println("Luna", stmt[0].Action.Call.Arguments[0].Value.Val)
+	fmt.Println(stmt)
+
+}
+
+func TestNewRuleDef(t *testing.T) {
+	a := newAnalyzer()
+	// Test header the definition for build_rule
+	buildRule := a.parser.GetAllBuiltinStatements()[0].FuncDef
+	expected := "def build_rule(name:str, cmd:str|dict='', test_cmd:str|dict='', srcs:list|dict=None, data:list=None, \n" +
+		"               outs:list|dict=None, deps:list=None, exported_deps:list=None, secrets:list=None, \n" +
+		"               tools:list|dict=None, labels:list=None, visibility:list=CONFIG.DEFAULT_VISIBILITY, \n" +
+		"               hashes:list=None, binary:bool=False, test:bool=False, test_only:bool=CONFIG.DEFAULT_TESTONLY, \n" +
+		"               building_description:str=None, needs_transitive_deps:bool=False, output_is_complete:bool=False, \n" +
+		"               container:bool|dict=False, sandbox:bool=CONFIG.BUILD_SANDBOX, test_sandbox:bool=CONFIG.TEST_SANDBOX, \n" +
+		"               no_test_output:bool=False, flaky:bool|int=0, build_timeout:int=0, test_timeout:int=0, \n" +
+		"               pre_build:function=None, post_build:function=None, requires:list=None, \n" +
+		"               provides:dict=None, licences:list=CONFIG.DEFAULT_LICENCES, test_outputs:list=None, \n" +
+		"               system_srcs:list=None, stamp:bool=False, tag:str='', optional_outs:list=None, \n" +
+		"               progress:bool=False, _urls:list=None)"
+	ruledef := newRuleDef(buildRule)
+	assert.Equal(t, expected, ruledef.Header)
+	assert.Equal(t, len(ruledef.Arguments), len(ruledef.ArgMap))
+	assert.Equal(t, false, ruledef.ArgMap["test_cmd"].required)
+	assert.Equal(t, true, ruledef.ArgMap["name"].required)
+
+	// Test header for len()
+	lenFunc := a.parser.GetAllBuiltinStatements()[1].FuncDef
+	expected = "def len(obj)"
+	ruledef = newRuleDef(lenFunc)
+	assert.Equal(t, expected, ruledef.Header)
+	assert.Equal(t, 1, len(ruledef.ArgMap))
+	assert.Equal(t, true, ruledef.ArgMap["obj"].required)
+
+	// Test header for a string function, startswith()
+	startswith := a.parser.GetAllBuiltinStatements()[9].FuncDef
+	expected = "str.startswith(s:str)"
+	ruledef = newRuleDef(startswith)
+	assert.Equal(t, expected, ruledef.Header)
+	assert.Equal(t, 1, len(ruledef.ArgMap))
+	assert.Equal(t, true, ruledef.ArgMap["s"].required)
+
+	// Test header for a config function, setdefault()
+	setDefault := a.parser.GetAllBuiltinStatements()[37].FuncDef
+	expected = "CONFIG.setdefault(key:str, default=None)"
+	ruledef = newRuleDef(setDefault)
+	assert.Equal(t, expected, ruledef.Header)
+	assert.Equal(t, 2, len(ruledef.ArgMap))
+	assert.Equal(t, false, ruledef.ArgMap["default"].required)
+}
+
+func TestGetArgument(t *testing.T) {
+	argWithVal := asp.Argument{
+		Name: "mystring",
+		Type: []string{"string", "list"},
+		Value: &asp.Expression{
+			Optimised: &asp.OptimisedExpression{
+				Local: "None",
+			},
+		},
 	}
+	assert.Equal(t, getArgument(argWithVal), "mystring:string|list=None")
 
-	// Get Hover Identifier
-	ident, err := analyzer.IdentFromPos(uri, position, fileContent)
-	if err != nil {
-		return nil, &jsonrpc2.Error{
-			Code: jsonrpc2.CodeParseError,
-			Message: fmt.Sprintf("fail to parse Build file %s", uri),
-		}
+	argWithoutVal := asp.Argument{
+		Name: "name",
+		Type: []string{"string"},
 	}
-
-	lineContent := fileContent[position.Line]
-
-	var contentString string
-	// check if the hovered line is an build target indentifier definition
-	if strings.Contains(lineContent, ident.Name) {
-		header := analyzer.BuiltIns[ident.Name].Header
-		docString := analyzer.BuiltIns[ident.Name].Docstring
-
-		contentString = header + "\n\n" + docString
-	}
-
-	// check if the hovered line is an argument to the Identifier
-	// TODO(bnmetrics): THE FOLLOWING NEEDS TO BE REVAMPED, I CHANGED MY MIND
-	if strings.Contains(lineContent, "=") && ident.Action.Call != nil {
-		EqualIndex := strings.Index(lineContent, "=")
-		if position.Character < EqualIndex {
-			arg := strings.TrimSpace(lineContent[:EqualIndex])
-
-			IdentArgs := ident.Action.Call.Arguments
-
-			for _, IdenArg := range IdentArgs {
-				// Ensure we are not getting the arguments from nested calls
-				if IdenArg.Name == arg {
-					contentString = analyzer.BuiltIns[ident.Name].ArgMap[arg].definition
-				} else {
-					//TODO(bnmetrics): get the content from nested called, do something with the ident.Call.Arguments
-				}
-			}
-		} else {
-
-		}
-	}
-
-	return &lsp.MarkupContent{
-		Value: contentString,
-		Kind:lsp.MarkDown, // TODO(bnmetrics): this might be reconsidered
-	}, nil
+	assert.Equal(t, getArgument(argWithoutVal), "name:string")
 }

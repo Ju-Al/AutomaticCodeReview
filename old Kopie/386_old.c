@@ -1,7 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-    /* Always seek to head */
-    sd_journal_seek_head(ctx->j);
 /*  Fluent Bit
  *  ==========
  *  Copyright (C) 2015-2017 Treasure Data Inc.
@@ -136,7 +134,8 @@ struct flb_systemd_config *flb_systemd_config_create(struct flb_input_instance *
         sd_journal_add_disjunction(ctx->j);
     }
 
-    /* Seek to head by default or tail if specified in configuration */
+    /* Always seek to head */
+    sd_journal_seek_head(ctx->j);
     tmp = flb_input_get_property("read_from_tail", i_ins);
     if (tmp && strcasecmp(tmp, "true") == 0) {
         sd_journal_seek_tail(ctx->j);

@@ -1,12 +1,4 @@
 /* Copyright (C) 2000-2012 by George Williams */
-    char *utf8buf, *pt;
-    while ( (pt=utf8_idpb(pt,*ubuf++,0)) && --len );
-    if ( pt ) {
-	*pt = '\0';
-	return( utf8buf );
-    }
-    free( utf8buf );
-    return( NULL );
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -663,7 +655,14 @@ char *u2utf8_copy(const unichar_t *ubuf) {
 
 char *u2utf8_copyn(const unichar_t *ubuf,int len) {
 /* Make a utf8 string copy of unichar string ubuf[0..len] */
-    char *utf8buf, *pt, *pt2;
+    while ( (pt=utf8_idpb(pt,*ubuf++,0)) && --len );
+    if ( pt ) {
+	*pt = '\0';
+	return( utf8buf );
+    }
+    free( utf8buf );
+    return( NULL );
+    char *utf8buf, *pt;
 
     if ( ubuf==NULL || len<=0 || (utf8buf=pt=(char *)malloc(len*6+1))==NULL )
 	return( NULL );

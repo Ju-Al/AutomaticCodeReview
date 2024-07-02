@@ -138,7 +138,6 @@ public class NetworkingModule {
         return new WikiSite(BuildConfig.WIKIDATA_URL);
     }
 
-    @Provides
     @Singleton
     @Named(NAMED_COMMONS_WIKI)
     public WikiSite provideCommonsWiki() {

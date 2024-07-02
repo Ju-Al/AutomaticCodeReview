@@ -1,7 +1,4 @@
 // Copyright (c) 2016 Uber Technologies, Inc.
-		req         *transport.Request
-		ttl         time.Duration
-		ttlString   string // set to try parseTTL
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +32,9 @@ import (
 
 func TestValidator(t *testing.T) {
 	tests := []struct {
-		req       *transport.Request
+		req         *transport.Request
+		ttl         time.Duration
+		ttlString   string // set to try parseTTL
 		transport transport.Type
 
 		ttl       time.Duration

@@ -1,6 +1,5 @@
 package com.fsck.k9.activity;
 
-                addAddresses(mBccView, mAccount.getAlwaysBcc());
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -697,7 +696,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             }
 
             if (mAction != Action.EDIT_DRAFT) {
-                String alwaysBccString = mAccount.getAlwaysBcc();
+                addAddresses(mBccView, mAccount.getAlwaysBcc());
                 if (!TextUtils.isEmpty(alwaysBccString)) {
                     recipientPresenter.addBccAddresses(new Address(alwaysBccString, ""));
                 }

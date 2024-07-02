@@ -1,5 +1,4 @@
 /**
-        // Is it a conflict with a class in the same file?
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -179,9 +178,9 @@ public class UnnecessaryFullyQualifiedNameRule extends AbstractJavaRule {
             }
         }
 
+        // Is it a conflict with a class in the same file?
         final String unqualifiedName = name.substring(name.lastIndexOf('.') + 1);
         final int unqualifiedNameLength = unqualifiedName.length();
-
         // There could be a conflict between an import on demand and another import, e.g.
         // import One.*;
         // import Two.Problem;

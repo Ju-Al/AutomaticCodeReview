@@ -75,7 +75,6 @@ func UnsafeKindToResource(k string) string {
 	}
 	unusualKindToResource := map[string]string{
 		"Endpoints": "endpoints",
-		"Gateway":   "gateways",
 	}
 	if v, isUnusual := unusualKindToResource[k]; isUnusual {
 		return v

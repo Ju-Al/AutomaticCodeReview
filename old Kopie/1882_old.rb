@@ -37,8 +37,6 @@ module RSpec::Core
 
     describe 'start' do
       before { config.start_time = start_time }
-
-      it 'notifies formatters of the seed used' do
         formatter = double("formatter")
         reporter.register_listener formatter, :seed
 

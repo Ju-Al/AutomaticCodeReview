@@ -1,5 +1,4 @@
 /*
-    ebpf::BPF *bpf = new ebpf::BPF();
  * Copyright (c) 2019-2021 Fastly, Inc., Toru Maesaka, Goro Fuji, Kazuho Oku
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -395,7 +394,7 @@ int main(int argc, char **argv)
         cflags.push_back(generate_header_filter_cflag(response_header_filters));
     }
 
-    std::unique_ptr<ebpf::BPF> bpf(new ebpf::BPF());
+    ebpf::BPF *bpf = new ebpf::BPF();
     std::vector<ebpf::USDT> probes;
 
     bool selective_tracing = false;

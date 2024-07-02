@@ -94,7 +94,6 @@ test('no settings for org', function (assert) {
     assert.equal(currentURL(), '/profile/org-login');
   });
 });
-
 test('Email settings sanity', async function (assert) {
   await profilePage.visit({ username: 'testuser' });
   await profilePage.settings.visit();

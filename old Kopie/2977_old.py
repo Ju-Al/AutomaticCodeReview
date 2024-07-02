@@ -1,5 +1,4 @@
 # Copyright 2000 Andrew Dalke.
-        Trying to transcribe a protein or RNA sequence raises an exception:
 # Copyright 2000-2002 Brad Chapman.
 # Copyright 2004-2005, 2010 by M de Hoon.
 # Copyright 2007-2020 by Peter Cock.
@@ -967,7 +966,7 @@ class Seq:
         >>> coding_dna.transcribe()
         Seq('AUGGCCAUUGUAAUGGGCCGCUGAAAGGGUGCCCGAUAG')
 
-        Trying to transcribe an RNA sequence should have no effect.
+        Trying to transcribe a protein or RNA sequence raises an exception:
 
         Trying to transcribe a protein sequence will replace any
         T for Threonine with U for Selenocysteine, which has no

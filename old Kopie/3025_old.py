@@ -373,7 +373,6 @@ class EntityClassify(nn.Module):
 
             x = y
         return y
-
 class EntityClassify_Hetero(nn.Module):
     def __init__(self,
                  g,

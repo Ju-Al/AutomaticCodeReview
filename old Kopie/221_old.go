@@ -154,8 +154,6 @@ release:
     name: fake
 `
 	createFile(t, "goreleaser.yml", yaml)
-}
-
 func TestInitProject(t *testing.T) {
 	var filename = "test_goreleaser.yml"
 

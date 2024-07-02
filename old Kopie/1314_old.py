@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-    .. SeeAlso::
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -400,7 +399,7 @@ def hausdorff(P, Q):
     distance matrix without further optimizations, essentially following
     [Huttenlocher1993]_.
 
-    See Also
+    .. SeeAlso::
     --------
     
 

@@ -1,5 +1,4 @@
 namespace Nancy.Testing
-            return new Request(method, path, contextValues.Headers, requestStream, contextValues.Protocol, contextValues.QueryString, contextValues.UserHostAddress);
 {
     using System;
     using System.Collections.Generic;
@@ -203,7 +202,7 @@ namespace Nancy.Testing
             var requestStream =
                 RequestStream.FromStream(contextValues.Body, 0, true);
 
-            var certBytes = contextValues.ClientCertificate == null
+            return new Request(method, path, contextValues.Headers, requestStream, contextValues.Protocol, contextValues.QueryString, contextValues.UserHostAddress);
                                 ? new byte[] {}
                                 : contextValues.ClientCertificate.GetRawCertData();
 

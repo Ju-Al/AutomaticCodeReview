@@ -103,7 +103,6 @@ def get_loading_pipeline(pipeline):
         'loading image and annotations related pipeline.'
     return loading_pipeline_cfg
 
-
 class CompatibleCheckHook(Hook):
 
     def _check_head(self, model, dataset):

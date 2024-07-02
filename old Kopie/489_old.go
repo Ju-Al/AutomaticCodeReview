@@ -1,8 +1,5 @@
 package sql
 
-// listMatchingEntries finds registered entries containing all specified selectors. Note
-// that entries containing _more_ than the specified selectors may be returned, since
-// that is also considered a "match"
 import (
 	"context"
 	"crypto/x509"
@@ -941,7 +938,9 @@ func (sqlPlugin) GetPluginInfo(context.Context, *spi.GetPluginInfoRequest) (*spi
 	return &pluginInfo, nil
 }
 
-// listMatchingEntries finds registered entries containing all specified selectors.
+// listMatchingEntries finds registered entries containing all specified selectors. Note
+// that entries containing _more_ than the specified selectors may be returned, since
+// that is also considered a "match"
 func (ds *sqlPlugin) listMatchingEntries(selectors []*common.Selector) ([]*common.RegistrationEntry, error) {
 	if len(selectors) < 1 {
 		return nil, nil

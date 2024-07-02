@@ -1,34 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-func (b *bucket) listObjectsV2Request(in *s3.ListObjectsV2Input) (req *request.Request, output *s3.ListObjectsV2Output) {
-	if b.useLegacyList {
-		marker := in.ContinuationToken
-		if marker == nil || (marker != nil && in.StartAfter != nil && *in.StartAfter > *marker) {
-			marker = in.StartAfter
-
-		legacyIn := &s3.ListObjectsInput{
-			Bucket:       in.Bucket,
-			Delimiter:    in.Delimiter,
-			EncodingType: in.EncodingType,
-			Marker:       marker,
-			MaxKeys:      in.MaxKeys,
-			Prefix:       in.Prefix,
-			RequestPayer: in.RequestPayer,
-		req, legacyResp := b.client.ListObjectsRequest(legacyIn)
-		var nextContinuationToken *string
-		if legacyResp.NextMarker != nil && *legacyResp.NextMarker != "" {
-			nextContinuationToken = legacyResp.NextMarker
-		} else if !*legacyResp.IsTruncated {
-			nextContinuationToken = aws.String(*legacyResp.Contents[len(legacyResp.Contents)-1].Key + " ")
-		} else {
-			nextContinuationToken = nil
-
-		resp := &s3.ListObjectsV2Output{
-			CommonPrefixes:        legacyResp.CommonPrefixes,
-			Contents:              legacyResp.Contents,
-			NextContinuationToken: nextContinuationToken,
-		return req, resp
-	} else {
-		return b.client.ListObjectsV2Request(in)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -394,7 +364,36 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 	return &page, nil
 }
 
-func (b *bucket) listObjects(in *s3.ListObjectsV2Input, opts *driver.ListOptions) (*s3.ListObjectsV2Output, error) {
+func (b *bucket) listObjectsV2Request(in *s3.ListObjectsV2Input) (req *request.Request, output *s3.ListObjectsV2Output) {
+	if b.useLegacyList {
+		marker := in.ContinuationToken
+		if marker == nil || (marker != nil && in.StartAfter != nil && *in.StartAfter > *marker) {
+
+		legacyIn := &s3.ListObjectsInput{
+			Bucket:       in.Bucket,
+			Delimiter:    in.Delimiter,
+			EncodingType: in.EncodingType,
+			Marker:       marker,
+			MaxKeys:      in.MaxKeys,
+			Prefix:       in.Prefix,
+			RequestPayer: in.RequestPayer,
+		req, legacyResp := b.client.ListObjectsRequest(legacyIn)
+		var nextContinuationToken *string
+		if legacyResp.NextMarker != nil && *legacyResp.NextMarker != "" {
+			nextContinuationToken = legacyResp.NextMarker
+		} else if !*legacyResp.IsTruncated {
+			nextContinuationToken = aws.String(*legacyResp.Contents[len(legacyResp.Contents)-1].Key + " ")
+		} else {
+			nextContinuationToken = nil
+
+		resp := &s3.ListObjectsV2Output{
+			CommonPrefixes:        legacyResp.CommonPrefixes,
+			Contents:              legacyResp.Contents,
+			NextContinuationToken: nextContinuationToken,
+		return req, resp
+	} else {
+		return b.client.ListObjectsV2Request(in)
+			marker = in.StartAfter
 	if !b.useLegacyList {
 		if opts.BeforeList != nil {
 			asFunc := func(i interface{}) bool {

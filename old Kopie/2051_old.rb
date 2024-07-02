@@ -1,5 +1,4 @@
 RSpec::Support.require_rspec_core "backtrace_formatter"
-          path, lines = captures[0], captures[1][1..-1].split(":").map { |n| n.to_i }
 RSpec::Support.require_rspec_core "ruby_project"
 RSpec::Support.require_rspec_core "formatters/deprecation_formatter"
 
@@ -1713,7 +1712,7 @@ module RSpec
 
         if match
           captures = match.captures
-          path = captures[0]
+          path, lines = captures[0], captures[1][1..-1].split(":").map { |n| n.to_i }
           lines =  captures[1][1..-1].split(":").map(&:id)
           filter_manager.add_location path, lines
         else

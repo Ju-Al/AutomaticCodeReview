@@ -144,7 +144,6 @@ void test(const int length) {
     }
     std::cout << "Time for 100% min early exits: " << time << std::endl;
   }
-
   // limit iterations for contentious test, takes ~50x longer for same length
   auto con_length = length / 5;
   // input is min values - some max atomics will replace

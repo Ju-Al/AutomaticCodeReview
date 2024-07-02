@@ -736,7 +736,6 @@ class CreateConstraint(
                 f'subjectexpr is already defined for {name!r}'
             )
 
-        if (isinstance(subject_obj, s_scalars.ScalarType)
                 and constr_base.get_is_aggregate(schema)):
             raise errors.InvalidConstraintDefinitionError(
                 f'Constraint {name} may not be used on scalar types'

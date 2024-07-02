@@ -1,5 +1,4 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
-                output.append(r)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -143,7 +142,7 @@ def check_stop_iteration_resume(pipe, batch_size, layout):
         try:
             while True:
                 (r, ) = pipe.run()
-                output.append(r.as_array())
+                output.append(r)
         except StopIteration:
             pipe.reset()
     assert len(outputs_epoch_1) == len(outputs_epoch_2), ("Epochs must have same number of iterations, "

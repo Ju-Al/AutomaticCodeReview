@@ -1,7 +1,5 @@
-# Copyright (C) 2014-2019 MongoDB, Inc.
-      # Creates up to the min size connections.
+# Copyright (C) 2018-2019 MongoDB, Inc.
 #
-      # Used by the spec test runner.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,563 +11,483 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-require 'mongo/server/connection_pool/connection_pool_populator'
 
-module Mongo
-  class Server
+class Mongo::Cluster
+  # Handles SDAM flow for a server description changed event.
+  #
+  # Updates server descriptions, topology descriptions and publishes
+  # SDAM events.
+  #
+  # SdamFlow is meant to be instantiated once for every server description
+  # changed event that needs to be processed.
+  #
+  # @api private
+  class SdamFlow
+    extend Forwardable
 
-    # Represents a connection pool for server connections.
+    def initialize(cluster, previous_desc, updated_desc)
+      @cluster = cluster
+      @topology = cluster.topology
+      @previous_desc = previous_desc
+      @updated_desc = updated_desc
+    end
+
+    attr_reader :cluster
+
+    def_delegators :cluster, :servers_list, :seeds,
+      :publish_sdam_event, :log_warn
+
+    # The topology stored in this attribute can change multiple times throughout
+    # a single sdam flow (e.g. unknown -> RS no primary -> RS with primary).
+    # Events for topology change get sent at the end of flow processing,
+    # such that the above example only publishes an unknown -> RS with primary
+    # event to the application.
     #
-    # @since 2.0.0, largely rewritten in 2.9.0
-    class ConnectionPool
-      include Loggable
-      include Monitoring::Publishable
-      extend Forwardable
+    # @return Mongo::Cluster::Topology The current topology.
+    attr_reader :topology
 
-      # The default max size for the connection pool.
-      #
-      # @since 2.9.0
-      DEFAULT_MAX_SIZE = 5.freeze
+    attr_reader :previous_desc
+    attr_reader :updated_desc
 
-      # The default min size for the connection pool.
-      #
-      # @since 2.9.0
-      DEFAULT_MIN_SIZE = 0.freeze
+    def_delegators :topology, :replica_set_name
 
-      # The default timeout, in seconds, to wait for a connection.
-      #
-      # @since 2.9.0
-      DEFAULT_WAIT_TIMEOUT = 1.freeze
-
-      # Background thread reponsible for maintaining the size of
-      # the pool to at least min_size
-      attr_reader :populator
-
-      # Condition variable broadcast when the size of the pool changes
-      # to wake up the populator
-      attr_reader :populate_semaphore
-
-      # Create the new connection pool.
-      #
-      # @param [ Server ] server The server which this connection pool is for.
-      # @param [ Hash ] options The connection pool options.
-      #
-      # @option options [ Integer ] :max_size The maximum pool size.
-      # @option options [ Integer ] :max_pool_size Deprecated.
-      #   The maximum pool size. If max_size is also given, max_size and
-      #   max_pool_size must be identical.
-      # @option options [ Integer ] :min_size The minimum pool size.
-      # @option options [ Integer ] :min_pool_size Deprecated.
-      #   The minimum pool size. If min_size is also given, min_size and
-      #   min_pool_size must be identical.
-      # @option options [ Float ] :wait_timeout The time to wait, in
-      #   seconds, for a free connection.
-      # @option options [ Float ] :wait_queue_timeout Deprecated.
-      #   Alias for :wait_timeout. If both wait_timeout and wait_queue_timeout
-      #   are given, their values must be identical.
-      # @option options [ Float ] :max_idle_time The time, in seconds,
-      #   after which idle connections should be closed by the pool.
-      #
-      # @since 2.0.0, API changed in 2.9.0
-      def initialize(server, options = {})
-        unless server.is_a?(Server)
-          raise ArgumentError, 'First argument must be a Server instance'
-        end
-        options = options.dup
-        if options[:min_size] && options[:min_pool_size] && options[:min_size] != options[:min_pool_size]
-          raise ArgumentError, "Min size #{options[:min_size]} is not identical to min pool size #{options[:min_pool_size]}"
-        end
-        if options[:max_size] && options[:max_pool_size] && options[:max_size] != options[:max_pool_size]
-          raise ArgumentError, "Max size #{options[:max_size]} is not identical to max pool size #{options[:max_pool_size]}"
-        end
-        if options[:wait_timeout] && options[:wait_queue_timeout] && options[:wait_timeout] != options[:wait_queue_timeout]
-          raise ArgumentError, "Wait timeout #{options[:wait_timeout]} is not identical to wait queue timeout #{options[:wait_queue_timeout]}"
-        end
-        options[:min_size] ||= options[:min_pool_size]
-        options.delete(:min_pool_size)
-        options[:max_size] ||= options[:max_pool_size]
-        options.delete(:max_pool_size)
-        if options[:min_size] && options[:max_size] &&
-          options[:min_size] > options[:max_size]
-        then
-          raise ArgumentError, "Cannot have min size #{options[:min_size]} exceed max size #{options[:max_size]}"
-        end
-        if options[:wait_queue_timeout]
-          options[:wait_timeout] ||= options[:wait_queue_timeout]
-        end
-        options.delete(:wait_queue_timeout)
-
-        @server = server
-        @options = options.freeze
-
-        @generation = 1
-        @closed = false
-
-        # A connection owned by this pool should be either in the
-        # available connections array (which is used as a stack)
-        # or in the checked out connections set.
-        @available_connections = available_connections = []
-        @checked_out_connections = Set.new
-
-        # Mutex used for synchronizing access to @available_connections and
-        # @checked_out_connections. The pool object is thread-safe, thus
-        # all methods that retrieve or modify instance variables generally
-        # must do so under this lock.
-        @lock = Mutex.new
-
-        # Condition variable broadcast when a connection is added to
-        # @available_connections, to wake up any threads waiting for an
-        # available connection when pool is at max size
-        @available_semaphore = Semaphore.new
-
-        @populate_semaphore = Semaphore.new
-        @populator = ConnectionPoolPopulator.new(self)
-        @populator.start! if min_size > 0
-
-        ObjectSpace.define_finalizer(self, self.class.finalize(@available_connections, @populator))
-
-        publish_cmap_event(
-          Monitoring::Event::Cmap::PoolCreated.new(@server.address, options)
-        )
-      end
-
-      # @return [ Hash ] options The pool options.
-      attr_reader :options
-
-      # Get the maximum size of the connection pool.
-      #
-      # @return [ Integer ] The maximum size of the connection pool.
-      #
-      # @since 2.9.0
-      def max_size
-        @max_size ||= options[:max_size] || [DEFAULT_MAX_SIZE, min_size].max
-      end
-
-      # Get the minimum size of the connection pool.
-      #
-      # @return [ Integer ] The minimum size of the connection pool.
-      #
-      # @since 2.9.0
-      def min_size
-        @min_size ||= options[:min_size] || DEFAULT_MIN_SIZE
-      end
-
-      # The time to wait, in seconds, for a connection to become available.
-      #
-      # @return [ Float ] The queue wait timeout.
-      #
-      # @since 2.9.0
-      def wait_timeout
-        @wait_timeout ||= options[:wait_timeout] || DEFAULT_WAIT_TIMEOUT
-      end
-
-      # The maximum seconds a socket can remain idle since it has been
-      # checked in to the pool, if set.
-      #
-      # @return [ Float | nil ] The max socket idle time in seconds.
-      #
-      # @since 2.9.0
-      def max_idle_time
-        @max_idle_time ||= options[:max_idle_time]
-      end
-
-      # @return [ Integer ] generation Generation of connections currently
-      #   being used by the queue.
-      #
-      # @since 2.9.0
-      # @api private
-      attr_reader :generation
-
-      # Size of the connection pool.
-      #
-      # Includes available and checked out connections.
-      #
-      # @return [ Integer ] Size of the connection pool.
-      #
-      # @since 2.9.0
-      def size
-        raise_if_closed!
-
-        @lock.synchronize do
-          unsynchronized_size
+    # Updates descriptions on all servers whose address matches
+    # updated_desc's address.
+    def update_server_descriptions
+      servers_list.each do |server|
+        if server.address == updated_desc.address
+          changed = server.description != updated_desc
+          # Always update server description, so that fields like
+          # last_update_time reflect the last ismaster response
+          server.update_description(updated_desc)
+          # But return if there was a content difference between
+          # descriptions, and if there wasn't we'll skip the remainder of
+          # sdam flow
+          return changed
         end
       end
+      false
+    end
 
-      # Returns the size of the connection pool without acquiring the lock.
-      # This method should only be used by other pool methods when they are
-      # already holding the lock as Ruby does not allow a thread holding a
-      # lock to acquire this lock again.
-      def unsynchronized_size
-        @available_connections.length + @checked_out_connections.size
+    def server_description_changed
+      unless update_server_descriptions
+        # All of the transitions require that server whose updated_desc we are
+        # processing is still in the cluster (i.e., was not removed as a result
+        # of processing another response, potentially concurrently).
+        # If update_server_descriptions returned false we have no servers
+        # in the topology for the description we are processing, stop.
+        return
       end
-      private :unsynchronized_size
 
-      # Number of available connections in the pool.
-      #
-      # @return [ Integer ] Number of available connections.
-      #
-      # @since 2.9.0
-      def available_count
-        raise_if_closed!
-
-        @lock.synchronize do
-          @available_connections.length
+      case topology
+      when Topology::Single
+        # no changes ever
+      when Topology::Unknown
+        if updated_desc.standalone?
+          update_unknown_with_standalone
+        elsif updated_desc.mongos?
+          @topology = Topology::Sharded.new(topology.options, topology.monitoring, self)
+        elsif updated_desc.primary?
+          @topology = Topology::ReplicaSetWithPrimary.new(
+            topology.options.merge(replica_set_name: updated_desc.replica_set_name),
+            topology.monitoring, self)
+          update_rs_from_primary
+        elsif updated_desc.secondary? || updated_desc.arbiter? || updated_desc.other?
+          @topology = Topology::ReplicaSetNoPrimary.new(
+            topology.options.merge(replica_set_name: updated_desc.replica_set_name),
+            topology.monitoring, self)
+          update_rs_without_primary
         end
-      end
-
-      # Whether the pool has been closed.
-      #
-      # @return [ true | false ] Whether the pool is closed.
-      #
-      # @since 2.9.0
-      def closed?
-        !!@closed
-      end
-
-      # @since 2.9.0
-      def_delegators :@server, :monitoring
-
-      # Checks a connection out of the pool.
-      #
-      # If there are active connections in the pool, the most recently used
-      # connection is returned. Otherwise if the connection pool size is less
-      # than the max size, creates a new connection and returns it. Otherwise
-      # waits up to the wait timeout and raises Timeout::Error if there are
-      # still no active connections and the pool is at max size.
-      #
-      # The returned connection counts toward the pool's max size. When the
-      # caller is finished using the connection, the connection should be
-      # checked back in via the check_in method.
-      #
-      # @return [ Mongo::Server::Connection ] The checked out connection.
-      # @raise [ Timeout::Error ] If the connection pool is at maximum size
-      #   and remains so for longer than the wait timeout.
-      #
-      # @since 2.9.0
-      def check_out
-        raise_if_closed!
-
-        publish_cmap_event(
-          Monitoring::Event::Cmap::ConnectionCheckOutStarted.new(@server.address)
-        )
-
-        deadline = Time.now + wait_timeout
-        connection = nil
-        # It seems that synchronize sets up its own loop, thus a simple break
-        # is insufficient to break the outer loop
-        catch(:done) do
-          loop do
-            # Lock must be taken on each iteration, rather for the method
-            # overall, otherwise other threads will not be able to check in
-            # a connection while this thread is waiting for one.
-            @lock.synchronize do
-              until @available_connections.empty?
-                connection = @available_connections.pop
-
-                if connection.generation != generation
-                  # Stale connections should be disconnected in the clear
-                  # method, but if any don't, check again here
-                  connection.disconnect!(reason: :stale)
-                  @populate_semaphore.signal
-                  next
-                end
-
-                if max_idle_time && connection.last_checkin &&
-                  Time.now - connection.last_checkin > max_idle_time
-                then
-                  connection.disconnect!(reason: :idle)
-                  @populate_semaphore.signal
-                  next
-                end
-
-                @checked_out_connections << connection
-                throw(:done)
-              end
-
-              # Ruby does not allow a thread to lock a mutex which it already
-              # holds.
-              if unsynchronized_size < max_size
-                # This does not currently connect the socket and handshake,
-                # but if it did, it would be performing i/o under our lock,
-                # which is bad. Fix in the future.
-                connection = create_connection
-                @checked_out_connections << connection
-                throw(:done)
-              end
-            end
-
-            wait = deadline - Time.now
-            if wait <= 0
-              publish_cmap_event(
-                Monitoring::Event::Cmap::ConnectionCheckOutFailed.new(
-                  @server.address,
-                  Monitoring::Event::Cmap::ConnectionCheckOutFailed::TIMEOUT,
-                ),
-              )
-              raise Error::ConnectionCheckOutTimeout.new(@server.address, wait_timeout)
-            end
-            @available_semaphore.wait(wait)
-          end
+      when Topology::Sharded
+        unless updated_desc.unknown? || updated_desc.mongos?
+          remove
         end
-
-        publish_cmap_event(
-          Monitoring::Event::Cmap::ConnectionCheckedOut.new(@server.address, connection.id),
-        )
-        connection
-      end
-
-      # Check a connection back into the pool.
-      #
-      # The connection must have been previously created by this pool.
-      #
-      # @param [ Mongo::Server::Connection ] connection The connection.
-      #
-      # @since 2.9.0
-      def check_in(connection)
-        @lock.synchronize do
-          unless @checked_out_connections.include?(connection)
-            raise ArgumentError, "Trying to check in a connection which is not currently checked out by this pool: #{connection}"
-          end
-
-          @checked_out_connections.delete(connection)
-
-          # Note: if an event handler raises, resource will not be signaled.
-          # This means threads waiting for a connection to free up when
-          # the pool is at max size may time out.
-          # Threads that begin waiting after this method completes (with
-          # the exception) should be fine.
-          publish_cmap_event(
-            Monitoring::Event::Cmap::ConnectionCheckedIn.new(@server.address, connection.id)
-          )
-
-          if closed?
-            connection.disconnect!(reason: :pool_closed)
-            return
-          end
-
-          if connection.closed?
-            # Connection was closed - for example, because it experienced
-            # a network error. Nothing else needs to be done here.
-            @populate_semaphore.signal
-          elsif connection.generation != @generation
-            connection.disconnect!(reason: :stale)
-            @populate_semaphore.signal
-          else
-            connection.record_checkin!
-            @available_connections << connection
-
-            # Wake up only one thread waiting for an available connection,
-            # since only one connection was checked in.
-            @available_semaphore.signal
-          end
-        end
-      end
-
-      # Closes all idle connections in the pool and schedules currently checked
-      # out connections to be closed when they are checked back into the pool.
-      # The pool remains operational and can create new connections when
-      # requested.
-      #
-      # @option options [ true | false ] :lazy If true, do not close any of
-      #   the idle connections and instead let them be closed during a
-      #   subsequent check out operation.
-      #
-      # @return [ true ] true.
-      #
-      # @since 2.1.0
-      def clear(options = nil)
-        raise_if_closed!
-
-        @lock.synchronize do
-          @generation += 1
-
-          publish_cmap_event(
-            Monitoring::Event::Cmap::PoolCleared.new(@server.address)
-          )
-
-          unless options && options[:lazy]
-            until @available_connections.empty?
-              connection = @available_connections.pop
-              connection.disconnect!(reason: :stale)
-              @populate_semaphore.signal
-            end
-          end
-        end
-
-        true
-      end
-
-      # @since 2.1.0
-      # @deprecated
-      alias :disconnect! :clear
-
-      # Marks the pool closed, closes all idle connections in the pool and
-      # schedules currently checked out connections to be closed when they are
-      # checked back into the pool. If force option is true, checked out
-      # connections are also closed. Attempts to use the pool after it is closed
-      # will raise Error::PoolClosedError.
-      #
-      # @option options [ true | false ] :force Also close all checked out
-      #   connections.
-      #
-      # @return [ true ] true.
-      #
-      # @since 2.9.0
-      def close(options = nil)
-        return if closed?
-
-        @lock.synchronize do
-          until @available_connections.empty?
-            connection = @available_connections.pop
-            connection.disconnect!(reason: :pool_closed)
-          end
-
-          if options && options[:force]
-            until @checked_out_connections.empty?
-              connection = @checked_out_connections.take(1).first
-              connection.disconnect!(reason: :pool_closed)
-              @checked_out_connections.delete(connection)
-            end
-          end
-
-          # mark pool as closed and stop populator before releasing lock so
-          # no connections can be created, checked in, or checked out
-          @closed = true
-          @populator.stop!
-        end
-
-        publish_cmap_event(
-          Monitoring::Event::Cmap::PoolClosed.new(@server.address)
-        )
-
-        true
-      end
-
-      # Get a pretty printed string inspection for the pool.
-      #
-      # @example Inspect the pool.
-      #   pool.inspect
-      #
-      # @return [ String ] The pool inspection.
-      #
-      # @since 2.0.0
-      def inspect
-        if closed?
-          "#<Mongo::Server::ConnectionPool:0x#{object_id} min_size=#{min_size} max_size=#{max_size} " +
-            "wait_timeout=#{wait_timeout} closed>"
+      when Topology::ReplicaSetWithPrimary
+        if updated_desc.standalone? || updated_desc.mongos?
+          remove
+          check_if_has_primary
+        elsif updated_desc.primary?
+          update_rs_from_primary
+        elsif updated_desc.secondary? || updated_desc.arbiter? || updated_desc.other?
+          update_rs_with_primary_from_member
         else
-          "#<Mongo::Server::ConnectionPool:0x#{object_id} min_size=#{min_size} max_size=#{max_size} " +
-            "wait_timeout=#{wait_timeout} current_size=#{size} available=#{available_count}>"
+          check_if_has_primary
         end
+      when Topology::ReplicaSetNoPrimary
+        if updated_desc.standalone? || updated_desc.mongos?
+          remove
+        elsif updated_desc.primary?
+          # Here we change topology type to RS with primary, however
+          # while processing updated_desc we may find that its RS name
+          # does not match our existing RS name. For this reason
+          # is is imperative to NOT pass updated_desc's RS name to
+          # topology constructor here.
+          # During processing we may remove the server whose updated_desc
+          # we are be processing (e.g. the RS name mismatch case again),
+          # in which case topoogy type will go back to RS without primary
+          # in the check_if_has_primary step.
+          @topology = Topology::ReplicaSetWithPrimary.new(
+            # Do not pass updated_desc's RS name here
+            topology.options,
+            topology.monitoring, self)
+          update_rs_from_primary
+        elsif updated_desc.secondary? || updated_desc.arbiter? || updated_desc.other?
+          update_rs_without_primary
+        end
+      else
+        raise ArgumentError, "Unknown topology #{topology.class}"
       end
 
-      # Yield the block to a connection, while handling check in/check out logic.
-      #
-      # @example Execute with a connection.
-      #   pool.with_connection do |connection|
-      #     connection.read
-      #   end
-      #
-      # @return [ Object ] The result of the block.
-      #
-      # @since 2.0.0
-      def with_connection
-        raise_if_closed!
+      commit_changes
+    end
 
-        connection = check_out
-        yield(connection)
-      ensure
-        if connection
-          check_in(connection)
-        end
+    # Transitions from unknown to single topology type, when a standalone
+    # server is discovered.
+    def update_unknown_with_standalone
+      if seeds.length == 1
+        @topology = Topology::Single.new(
+          topology.options, topology.monitoring, self)
+      else
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it is a standalone and we have multiple seeds (#{seeds.length})"
+        )
+        remove
+      end
+    end
+
+    # Updates topology which must be a ReplicaSetWithPrimary with information
+    # from the primary's server description.
+    #
+    # This method does not change topology type to ReplicaSetWithPrimary -
+    # this needs to have been done prior to calling this method.
+    #
+    # If the primary whose description is being processed is determined to be
+    # stale, this method will change the server description and topology
+    # type to unknown.
+    def update_rs_from_primary
+      if topology.replica_set_name.nil?
+        @topology = Topology::ReplicaSetWithPrimary.new(
+          topology.options.merge(replica_set_name: updated_desc.replica_set_name),
+          topology.monitoring, self)
       end
 
-      # Close sockets that have been open for longer than the max idle time,
-      #   if the option is set.
-      #
-      # @since 2.5.0
-      def close_idle_sockets
-        return if closed?
-        return unless max_idle_time
+      if topology.replica_set_name != updated_desc.replica_set_name
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it has an " +
+          "incorrect replica set name (#{updated_desc.replica_set_name}); " +
+          "current set name is #{topology.replica_set_name}"
+        )
+        remove
+        check_if_has_primary
+        return
+      end
 
-        @lock.synchronize do
-          i = 0
-          while i < @available_connections.length
-            connection = @available_connections[i]
-            if last_checkin = connection.last_checkin
-              if (Time.now - last_checkin) > max_idle_time
-                connection.disconnect!(reason: :idle)
-                @available_connections.delete_at(i)
-                @populate_semaphore.signal
-                next
-              end
-            end
-            i += 1
+      if stale_primary?
+        @updated_desc = ::Mongo::Server::Description.new(updated_desc.address,
+          {}, updated_desc.average_round_trip_time)
+        update_server_descriptions
+        check_if_has_primary
+        return
+      end
+
+      max_election_id = topology.new_max_election_id(updated_desc)
+      max_set_version = topology.new_max_set_version(updated_desc)
+
+      if max_election_id != topology.max_election_id ||
+        max_set_version != topology.max_set_version
+      then
+        @topology = Topology::ReplicaSetWithPrimary.new(
+          topology.options.merge(
+            max_election_id: max_election_id,
+            max_set_version: max_set_version
+          ), topology.monitoring, self)
+      end
+
+      # At this point we have accepted the updated server description
+      # and the topology (both are primary). Commit these changes so that
+      # their respective SDAM events are published before SDAM events for
+      # server additions/removals that follow
+      publish_description_change_event
+
+      servers_list.each do |server|
+        if server.address != updated_desc.address
+          if server.primary?
+            server.update_description(::Mongo::Server::Description.new(
+              server.address, {}, server.description.average_round_trip_time))
           end
         end
       end
 
-      # Create and add connections to the pool until the
-      # pool size is at least min_size.
-      #
-      # Used by the spec test runner and the pool populator background thread.
-      #
-      # @api private
-      def populate
-        return if closed?
+      servers = add_servers_from_desc(updated_desc)
+      remove_servers_not_in_desc(updated_desc)
 
-        catch(:done) do
-          loop do
-            @lock.synchronize do
-              if !closed? && unsynchronized_size < min_size
-                @available_connections << create_connection
-              else
-                throw(:done)
-              end
-            end
+      check_if_has_primary
+
+      servers.each do |server|
+        server.start_monitoring
+      end
+    end
+
+    # Updates a ReplicaSetWithPrimary topology from a non-primary member.
+    def update_rs_with_primary_from_member
+      if topology.replica_set_name != updated_desc.replica_set_name
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it has an " +
+          "incorrect replica set name (#{updated_desc.replica_set_name}); " +
+          "current set name is #{topology.replica_set_name}"
+        )
+        remove
+        check_if_has_primary
+        return
+      end
+
+      if updated_desc.me_mismatch?
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it " +
+          "reported itself as #{updated_desc.me}"
+        )
+        remove
+        check_if_has_primary
+        return
+      end
+
+      have_primary = false
+      servers_list.each do |server|
+        if server.primary?
+          have_primary = true
+          break
+        end
+      end
+
+      unless have_primary
+        @topology = Topology::ReplicaSetNoPrimary.new(
+          topology.options, topology.monitoring, self)
+      end
+    end
+
+    # Updates a ReplicaSetNoPrimary topology from a non-primary member.
+    def update_rs_without_primary
+      if topology.replica_set_name.nil?
+        @topology = Topology::ReplicaSetNoPrimary.new(
+          topology.options.merge(replica_set_name: updated_desc.replica_set_name),
+          topology.monitoring, self)
+      end
+
+      if topology.replica_set_name != updated_desc.replica_set_name
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it has an " +
+          "incorrect replica set name (#{updated_desc.replica_set_name}); " +
+          "current set name is #{topology.replica_set_name}"
+        )
+        remove
+        return
+      end
+
+      publish_description_change_event
+
+      servers = add_servers_from_desc(updated_desc)
+
+      commit_changes
+
+      servers.each do |server|
+        server.start_monitoring
+      end
+
+      if updated_desc.me_mismatch?
+        log_warn(
+          "Removing server #{updated_desc.address.to_s} because it " +
+          "reported itself as #{updated_desc.me}"
+        )
+        remove
+        return
+      end
+    end
+
+    # Adds all servers referenced in the given description (which is
+    # supposed to have come from a good primary) which are not
+    # already in the cluster, to the cluster.
+    #
+    # @note Servers are added unmonitored. Monitoring must be started later
+    # separately.
+    #
+    # @return [ Array<Server> ] Servers actually added to the cluster.
+    #   This is the set of servers on which monitoring should be started.
+    def add_servers_from_desc(updated_desc)
+      added_servers = []
+      address_strs = servers_list.map(&:address).map(&:to_s)
+      %w(hosts passives arbiters).each do |m|
+        updated_desc.send(m).each do |address_str|
+          if server = cluster.add(address_str, monitor: false)
+            added_servers << server
           end
         end
       end
+      added_servers
+    end
 
-      # Finalize the connection pool for garbage collection.
+    # Removes servers from the topology which are not present in the
+    # given server description (which is supposed to have come from a
+    # good primary).
+    def remove_servers_not_in_desc(updated_desc)
+      updated_desc_address_strs = %w(hosts passives arbiters).map do |m|
+        updated_desc.send(m)
+      end.flatten
+      servers_list.each do |server|
+        unless updated_desc_address_strs.include?(address_str = server.address.to_s)
+          log_warn(
+            "Removing server #{address_str} because it is not in hosts reported by primary " +
+            "#{updated_desc.address}"
+          )
+          do_remove(address_str)
+        end
+      end
+    end
+
+    # Removes the server whose description we are processing from the
+    # topology.
+    def remove
+      publish_description_change_event
+      do_remove(updated_desc.address.to_s)
+    end
+
+    # Removes specified server from topology and warns if the topology ends
+    # up with an empty server list as a result
+    def do_remove(address_str)
+      cluster.remove(address_str)
+      if servers_list.empty?
+        log_warn(
+          "Topology now has no servers - this is likely a misconfiguration of the cluster and/or the application"
+        )
+      end
+    end
+
+    def publish_description_change_event
+      # updated_desc here may not be the description we received from
+      # the server - in case of a stale primary, the server reported itself
+      # as being a primary but updated_desc here will be unknown.
+
+      # We do not notify on unknown -> unknown changes.
+      # This can also be important for tests which have real i/o
+      # happening against bogus addresses which yield unknown responses
+      # and that also mock responses with the resulting race condition,
+      # though tests should avoid performing real i/o with monitoring_io: false
+      # option.
+      if updated_desc.unknown? && previous_desc.unknown?
+        return
+      end
+
+      # Avoid dispatching events when updated description is the same as
+      # previous description. This allows this method to be called multiple
+      # times in the flow when the events should be published, without
+      # worrying about whether there are any unpublished changes.
+      if updated_desc.object_id == previous_desc.object_id
+        return
+      end
+
+      publish_sdam_event(
+        ::Mongo::Monitoring::SERVER_DESCRIPTION_CHANGED,
+        ::Mongo::Monitoring::Event::ServerDescriptionChanged.new(
+          updated_desc.address,
+          topology,
+          previous_desc,
+          updated_desc,
+        )
+      )
+      @previous_desc = updated_desc
+      @need_topology_changed_event = true
+    end
+
+    # Publishes server description changed events, updates topology on
+    # the cluster and publishes topology changed event, as needed
+    # based on operations performed during SDAM flow processing.
+    def commit_changes
+      # The application-visible sequence of events should be as follows:
       #
-      # @param [ List<Mongo::Connection> ] available_connections The available connections.
-      # @param [ ConnectionPoolPopulator ] populator The populator.
+      # 1. Description change for the server which we are processing;
+      # 2. Topology change, if any;
+      # 3. Description changes for other servers, if any.
       #
-      # @return [ Proc ] The Finalizer.
-      def self.finalize(available_connections, populator)
-        proc do
-          populator.stop!
-          available_connections.each do |connection|
-            connection.disconnect!(reason: :pool_closed)
+      # The tricky part here is that the server description changes are
+      # not all processed together.
+
+      publish_description_change_event
+
+      topology_changed_event_published = false
+      if topology.object_id != cluster.topology.object_id || @need_topology_changed_event
+        # We are about to publish topology changed event.
+        # Recreate the topology instance to get its server descriptions
+        # up to date.
+        @topology = topology.class.new(topology.options, topology.monitoring, cluster)
+        # This sends the SDAM event
+        cluster.update_topology(topology)
+        topology_changed_event_published = true
+        @need_topology_changed_event = false
+      end
+
+      # If a server description changed, topology description change event
+      # must be published with the previous and next topologies being of
+      # the same type, unless we already published topology change event
+      if topology_changed_event_published
+        return
+      end
+
+      if updated_desc.unknown? && previous_desc.unknown?
+        return
+      end
+      if updated_desc.object_id == previous_desc.object_id
+        return
+      end
+
+      # If we are here, there has been a change in the server descriptions
+      # in our topology, but topology class has not changed.
+      # Publish the topology changed event and recreate the topology to
+      # get the new list of server descriptions into it.
+      @topology = topology.class.new(topology.options, topology.monitoring, cluster)
+      # This sends the SDAM event
+      cluster.update_topology(topology)
+    end
+
+    # If the server being processed is data bearing, creates the server's
+    # connection pool so it can start establishing connections in the background.
+    def start_pool_if_data_bearing
+      servers_list.each do |server|
+        if server.address == @updated_desc.address
+          if @updated_desc.data_bearing?
+            server.pool
           end
-          available_connections.clear
-          # Finalizer does not close checked out connections.
-          # Those would have to be garbage collected on their own
-          # and that should close them.
         end
       end
+    end
 
-      private
-
-      def create_connection
-        connection = Connection.new(@server, options.merge(generation: generation))
-        # CMAP spec requires connections to be returned from the pool
-        # fully established.
-        #connection.connect!
-        connection
+    # Checks if the cluster has a primary, and if not, transitions the topology
+    # to ReplicaSetNoPrimary. Topology must be ReplicaSetWithPrimary when
+    # invoking this method.
+    def check_if_has_primary
+      unless topology.replica_set?
+        raise ArgumentError, 'check_if_has_primary should only be called when topology is replica set'
       end
 
-      # Asserts that the pool has not been closed.
-      #
-      # @raise [ Error::PoolClosedError ] If the pool has been closed.
-      #
-      # @since 2.9.0
-      def raise_if_closed!
-        if closed?
-          raise Error::PoolClosedError.new(@server.address)
+      primary = servers_list.detect do |server|
+        # A primary with the wrong set name is not a primary
+        server.primary? && server.description.replica_set_name == topology.replica_set_name
+      end
+      unless primary
+        @topology = Topology::ReplicaSetNoPrimary.new(
+          topology.options, topology.monitoring, self)
+      end
+    end
+
+    # Whether updated_desc is for a stale primary.
+    def stale_primary?
+      if updated_desc.election_id && updated_desc.set_version
+        if topology.max_set_version && topology.max_election_id &&
+            (updated_desc.set_version < topology.max_set_version ||
+                (updated_desc.set_version == topology.max_set_version &&
+                    updated_desc.election_id < topology.max_election_id))
+          return true
         end
       end
+      false
     end
   end
 end

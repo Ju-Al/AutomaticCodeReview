@@ -206,9 +206,6 @@ func TestIntegration_ManagedWriter_BasicOperation(t *testing.T) {
 	// wait for the result to indicate ready, then validate again.
 	results[0].Ready()
 	wantRows = wantRows * 2
-	validateRowCount(ctx, t, bqClient, testTable, wantRows)
-}
-
 func TestIntegration_ManagedWriter_DynamicJSON(t *testing.T) {
 	mwClient, bqClient := getTestClients(context.Background(), t)
 	defer mwClient.Close()

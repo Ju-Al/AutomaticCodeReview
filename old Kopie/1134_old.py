@@ -267,7 +267,6 @@ def get_acl(bucket, object_key):
     else:
         return acl
 
-
 def usage_demo():
     """Demonstrated ways to use the functions in this module."""
     bucket = bucket_wrapper.create_bucket(

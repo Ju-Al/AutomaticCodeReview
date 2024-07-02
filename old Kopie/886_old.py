@@ -1,5 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-    warnings = Column(Text())
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,7 +87,7 @@ class Model(MODEL_BASE):
     created_at = Column(DateTime)
     etag_seed = Column(String(32), nullable=False)
     message = Column(Text())
-    warnings = Column(MEDIUMTEXT())
+    warnings = Column(Text())
 
     def __init__(self, *args, **kwargs):
         super(Model, self).__init__(*args, **kwargs)

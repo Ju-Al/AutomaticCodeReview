@@ -1,5 +1,4 @@
 jest.mock('node-fetch');
-test('dev-mode IOAdapter can fetch unsecure URLs', async () => {
 jest.mock('@magento/upward-js');
 const upward = require('@magento/upward-js');
 const fetch = require('node-fetch');
@@ -228,7 +227,7 @@ test('dev-mode IOAdapter uses fetch', async () => {
     );
 });
 
-test('dev-mode IOAdapter can fetch insecure URLs', async () => {
+test('dev-mode IOAdapter can fetch unsecure URLs', async () => {
     const devServer = {};
     const app = {
         use: jest.fn()

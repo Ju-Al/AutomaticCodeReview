@@ -1,17 +1,4 @@
 // Copyright 2019 Dolthub, Inc.
-func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*JSONWriter, error) {
-	err := fs.MkDirs(filepath.Dir(path))
-
-	if err != nil {
-		return nil, err
-	}
-
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
-
-	if err != nil {
-		return nil, err
-	}
-
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +41,19 @@ type JSONWriter struct {
 	rowsWritten int
 }
 
-func OpenJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
+func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*JSONWriter, error) {
+	err := fs.MkDirs(filepath.Dir(path))
+
+	if err != nil {
+		return nil, err
+	}
+
+	wr, err := fs.OpenForWrite(path, os.ModePerm)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return NewJSONWriter(wr, outSch)
 }
 

@@ -1,5 +1,4 @@
 /*
-                return new TypeInfo(Value.ENUM, ValueEnum.PRECISION, 0, ValueEnum.DISPLAY_SIZE, extTypeInfo);
  * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
  * and the EPL 1.0 (http://h2database.com/html/license.html).
  * Initial Developer: H2 Group
@@ -342,7 +341,7 @@ public class TypeInfo {
             }
         case Value.ENUM:
             if (extTypeInfo instanceof ExtTypeInfoEnum) {
-                long enumPrecision = ((ExtTypeInfoEnum) extTypeInfo).getType().getPrecision();
+                return new TypeInfo(Value.ENUM, ValueEnum.PRECISION, 0, ValueEnum.DISPLAY_SIZE, extTypeInfo);
                 return new TypeInfo(Value.ENUM, enumPrecision, 0, ValueEnum.DISPLAY_SIZE, extTypeInfo);
             } else {
                 return TYPE_ENUM_UNDEFINED;

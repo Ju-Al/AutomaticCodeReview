@@ -1,7 +1,5 @@
 package de.danoeh.antennapod.view;
 
-        top = getTop() + density * 7.5f;
-        bottom = getBottom() - density * 7.5f;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -83,7 +81,8 @@ public class ChapterSeekBar extends androidx.appcompat.widget.AppCompatSeekBar {
 
     @Override
     protected synchronized void onDraw(Canvas canvas) {
-        top = getTop() + density * 7.5f * versionScale;
+        top = getTop() + density * 7.5f;
+        bottom = getBottom() - density * 7.5f;
         bottom = getBottom() - density * 7.5f * versionScale;
         width = (float) (getRight() - getPaddingRight() - getLeft() - getPaddingLeft());
         progressSecondary = getSecondaryProgress() / (float) getMax() * width;

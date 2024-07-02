@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
+    const { filterApi, filterState } = props;
 import { shape, string } from 'prop-types';
-import { shape, string, func } from 'prop-types';
 
 import { mergeClasses } from '../../../classify';
 import CurrentFilter from './currentFilter';
@@ -8,7 +8,6 @@ import defaultClasses from './currentFilters.css';
 import { useIntl } from 'react-intl';
 
 const CurrentFilters = props => {
-    const { filterApi, filterState } = props;
     const { filterApi, filterState, handleApply } = props;
     const { removeItem } = filterApi;
     const classes = mergeClasses(defaultClasses, props.classes);

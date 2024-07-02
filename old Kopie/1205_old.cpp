@@ -1,12 +1,4 @@
 /* -------------------------------------------------------------------------- *
-    cmc.run();
-    Array<double> rms_tols(0.02, 2*10+2*18); // activations within 2%
-    for(int i=0; i<20; ++i){
-        rms_tols[i] = 0.01;  // angles and speeds within .6 degrees .6 degs/s 
-    }
-    CHECK_STORAGE_AGAINST_STANDARD(results, *standard, rms_tols, __FILE__, __LINE__, "testArm26 failed");
-    const string& muscleType = cmc.getModel().getMuscles()[0].getConcreteClassName();
-    cout << "\ntestGait10dof18musc "+muscleType+" passed\n" << endl;
  *                           OpenSim:  testCMCGait10dof18musc.cpp             *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -74,7 +66,14 @@ void testGait10dof18musc() {
     cout << "*                      testGait10dof18musc                       *" << endl;
     cout << "******************************************************************\n" << endl;
     CMCTool cmc("gait10dof18musc_Setup_CMC.xml");
+    Array<double> rms_tols(0.02, 2*10+2*18); // activations within 2%
+    for(int i=0; i<20; ++i){
+        rms_tols[i] = 0.01;  // angles and speeds within .6 degrees .6 degs/s 
+    }
+    CHECK_STORAGE_AGAINST_STANDARD(results, *standard, rms_tols, __FILE__, __LINE__, "testArm26 failed");
     const string& muscleType = cmc.getModel().getMuscles()[0].getConcreteClassName();
+    cout << "\ntestGait10dof18musc "+muscleType+" passed\n" << endl;
+    cmc.run();
 
     if (!cmc.run())
         OPENSIM_THROW(Exception, "testGait10dof18musc " + muscleType +

@@ -278,7 +278,6 @@ def test_regressor(output, client, listen_port):
     if output != 'dataframe':
         s1 = r2_score(dy, p1)
     p1 = p1.compute()
-    p2_local_predict = dask_regressor.to_local().predict(X)
     s2_local_predict = dask_regressor.to_local().score(X, y)
 
     local_regressor = lightgbm.LGBMRegressor(**params)

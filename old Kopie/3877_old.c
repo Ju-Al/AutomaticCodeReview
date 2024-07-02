@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: LGPL-2.1+ */
 
-	if (!newnames[pos])
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
@@ -2271,7 +2270,7 @@ static bool add_to_array(char ***names, char *cname, int pos)
 
 	*names = newnames;
 	newnames[pos] = strdup(cname);
-	if (!newnames[pos]) {
+	if (!newnames[pos])
 		*names = (char**)realloc(*names, (pos) * sizeof(char *));
 		return false;
 	}

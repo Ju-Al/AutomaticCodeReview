@@ -1,389 +1,243 @@
 <?php
 
 /**
- * This file contains a couple of functions for the latest posts on forum.
+ * DB and general functions for working with the message index
  *
  * @name      ElkArte Forum
  * @copyright ElkArte Forum contributors
  * @license   BSD http://opensource.org/licenses/BSD-3-Clause
- *
- * This file contains code covered by:
- * copyright:	2011 Simple Machines (http://www.simplemachines.org)
- * license:  	BSD, See included LICENSE.TXT for terms and conditions.
  *
  * @version 1.1 beta 3
  *
  */
 
 /**
- * Get the latest posts of a forum.
+ * Builds the message index with the supplied parameters
+ * creates all you ever wanted on message index, returns the data in array
  *
- * @param mixed[] $latestPostOptions
- * @return array
+ * @param int $id_board board to build the topic listing for
+ * @param int $id_member who we are building it for so we don't show unapproved topics
+ * @param int $start where to start from
+ * @param int $items_per_page  The number of items to show per page
+ * @param string $sort_by how to sort the results asc/desc
+ * @param string $sort_column which value we sort by
+ * @param mixed[] $indexOptions
+ *     'include_sticky' => if on, loads sticky topics as additional
+ *     'only_approved' => if on, only load approved topics
+ *     'previews' => if on, loads in a substring of the first/last message text for use in previews
+ *     'include_avatars' => if on loads the last message posters avatar
+ *     'ascending' => ASC or DESC for the sort
+ *     'fake_ascending' =>
+ *     'custom_selects' => loads additional values from the tables used in the query, for addon use
  */
-function getLastPosts($latestPostOptions)
+function messageIndexTopics($id_board, $id_member, $start, $items_per_page, $sort_by, $sort_column, $indexOptions)
 {
-	global $scripturl, $modSettings;
-
 	$db = database();
 
-	// Find all the posts. Newer ones will have higher IDs. (assuming the last 20 * number are accessible...)
-	// @todo SLOW This query is now slow, NEEDS to be fixed.  Maybe break into two?
-	$request = $db->query('substring', '
-		SELECT
-			m.poster_time, m.subject, m.id_topic, m.id_member, m.id_msg,
-			COALESCE(mem.real_name, m.poster_name) AS poster_name, t.id_board, b.name AS board_name,
-			SUBSTRING(m.body, 1, 385) AS body, m.smileys_enabled
-		FROM {db_prefix}messages AS m
-			INNER JOIN {db_prefix}topics AS t ON (t.id_topic = m.id_topic)
-			INNER JOIN {db_prefix}boards AS b ON (b.id_board = t.id_board)
-			LEFT JOIN {db_prefix}members AS mem ON (mem.id_member = m.id_member)
-		WHERE m.id_msg >= {int:likely_max_msg}' .
-			(!empty($modSettings['recycle_enable']) && $modSettings['recycle_board'] > 0 ? '
-			AND b.id_board != {int:recycle_board}' : '') . '
-			AND {query_wanna_see_board}' . ($modSettings['postmod_active'] ? '
-			AND t.approved = {int:is_approved}
-			AND m.approved = {int:is_approved}' : '') . '
-		ORDER BY m.id_msg DESC
-		LIMIT ' . $latestPostOptions['number_posts'],
-		array(
-			'likely_max_msg' => max(0, $modSettings['maxMsgID'] - 50 * $latestPostOptions['number_posts']),
-			'recycle_board' => $modSettings['recycle_board'],
-			'is_approved' => 1,
-		)
-	);
+	$topics = array();
+	$topic_ids = array();
+	$indexOptions = array_merge(array(
+		'include_sticky' => true,
+		'fake_ascending' => false,
+		'ascending' => true,
+		'only_approved' => true,
+		'previews' => -1,
+		'include_avatars' => false,
+		'custom_selects' => array(),
+		'custom_joins' => array(),
+	), $indexOptions);
 
-	$posts = array();
-	$bbc_parser = \BBC\ParserWrapper::getInstance();
-
-	while ($row = $db->fetch_assoc($request))
-	{
-		// Censor the subject and post for the preview ;).
-		$row['subject'] = censor($row['subject']);
-		$row['body'] = censor($row['body']);
-
-		$row['body'] = strip_tags(strtr($bbc_parser->parseMessage($row['body'], $row['smileys_enabled']), array('<br />' => '&#10;')));
-		$row['body'] = Util::shorten_text($row['body'], !empty($modSettings['lastpost_preview_characters']) ? $modSettings['lastpost_preview_characters'] : 128, true);
-
-		// Build the array.
-		$posts[] = array(
-			'board' => array(
-				'id' => $row['id_board'],
-				'name' => $row['board_name'],
-				'href' => $scripturl . '?board=' . $row['id_board'] . '.0',
-				'link' => '<a href="' . $scripturl . '?board=' . $row['id_board'] . '.0">' . $row['board_name'] . '</a>'
-			),
-			'topic' => $row['id_topic'],
-			'poster' => array(
-				'id' => $row['id_member'],
-				'name' => $row['poster_name'],
-				'href' => empty($row['id_member']) ? '' : $scripturl . '?action=profile;u=' . $row['id_member'],
-				'link' => empty($row['id_member']) ? $row['poster_name'] : '<a href="' . $scripturl . '?action=profile;u=' . $row['id_member'] . '">' . $row['poster_name'] . '</a>'
-			),
-			'subject' => $row['subject'],
-			'short_subject' => Util::shorten_text($row['subject'], $modSettings['subject_length']),
-			'preview' => $row['body'],
-			'time' => standardTime($row['poster_time']),
-			'html_time' => htmlTime($row['poster_time']),
-			'timestamp' => forum_time(true, $row['poster_time']),
-			'raw_timestamp' => $row['poster_time'],
-			'href' => $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . ';topicseen#msg' . $row['id_msg'],
-			'link' => '<a href="' . $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . ';topicseen#msg' . $row['id_msg'] . '" rel="nofollow">' . $row['subject'] . '</a>'
-		);
-	}
-	$db->free_result($request);
-
-	return $posts;
-}
-
-/**
- * Callback-function for the cache for getLastPosts().
- *
- * @param mixed[] $latestPostOptions
- */
-function cache_getLastPosts($latestPostOptions)
-{
-	return array(
-		'data' => getLastPosts($latestPostOptions),
-		'expires' => time() + 60,
-		'post_retri_eval' => '
-			foreach ($cache_block[\'data\'] as $k => $post)
-			{
-				$cache_block[\'data\'][$k] += array(
-					\'time\' => standardTime($post[\'raw_timestamp\']),
-					\'html_time\' => htmlTime($post[\'raw_timestamp\']),
-					\'timestamp\' => $post[\'raw_timestamp\'],
-				);
-			}',
-	);
-}
-
-/**
- * Formats data supplied into a form that can be used in the template
- *
- * @param mixed[] $messages
- * @param int $start
- */
-function prepareRecentPosts($messages, $start)
-{
-	global $user_info, $scripturl, $modSettings;
-
-	$counter = $start + 1;
-	$posts = array();
-	$board_ids = array('own' => array(), 'any' => array());
-	$bbc_parser = \BBC\ParserWrapper::getInstance();
-	foreach ($messages as $row)
-	{
-		// Censor everything.
-		$row['body'] = censor($row['body']);
-		$row['subject'] = censor($row['subject']);
-
-		// BBC-atize the message.
-		$row['body'] = $bbc_parser->parseMessage($row['body'], $row['smileys_enabled']);
-
-		// And build the array.
-		$posts[$row['id_msg']] = array(
-			'id' => $row['id_msg'],
-			'counter' => $counter++,
-			'alternate' => $counter % 2,
-			'category' => array(
-				'id' => $row['id_cat'],
-				'name' => $row['cname'],
-				'href' => $scripturl . '#c' . $row['id_cat'],
-				'link' => '<a href="' . $scripturl . '#c' . $row['id_cat'] . '">' . $row['cname'] . '</a>'
-			),
-			'board' => array(
-				'id' => $row['id_board'],
-				'name' => $row['bname'],
-				'href' => $scripturl . '?board=' . $row['id_board'] . '.0',
-				'link' => '<a href="' . $scripturl . '?board=' . $row['id_board'] . '.0">' . $row['bname'] . '</a>'
-			),
-			'topic' => $row['id_topic'],
-			'href' => $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . '#msg' . $row['id_msg'],
-			'link' => '<a href="' . $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . '#msg' . $row['id_msg'] . '" rel="nofollow">' . $row['subject'] . '</a>',
-			'start' => $row['num_replies'],
-			'subject' => $row['subject'],
-			'time' => standardTime($row['poster_time']),
-			'html_time' => htmlTime($row['poster_time']),
-			'timestamp' => forum_time(true, $row['poster_time']),
-			'first_poster' => array(
-				'id' => $row['first_id_member'],
-				'name' => $row['first_display_name'],
-				'href' => empty($row['first_id_member']) ? '' : $scripturl . '?action=profile;u=' . $row['first_id_member'],
-				'link' => empty($row['first_id_member']) ? $row['first_display_name'] : '<a href="' . $scripturl . '?action=profile;u=' . $row['first_id_member'] . '">' . $row['first_display_name'] . '</a>'
-			),
-			'poster' => array(
-				'id' => $row['id_member'],
-				'name' => $row['poster_name'],
-				'href' => empty($row['id_member']) ? '' : $scripturl . '?action=profile;u=' . $row['id_member'],
-				'link' => empty($row['id_member']) ? $row['poster_name'] : '<a href="' . $scripturl . '?action=profile;u=' . $row['id_member'] . '">' . $row['poster_name'] . '</a>'
-			),
-			'body' => $row['body'],
-			'message' => $row['body'],
-			'tests' => array(
-				'can_reply' => false,
-				'can_mark_notify' => false,
-				'can_delete' => false,
-			),
-			'delete_possible' => ($row['id_first_msg'] != $row['id_msg'] || $row['id_last_msg'] == $row['id_msg']) && (empty($modSettings['edit_disable_time']) || $row['poster_time'] + $modSettings['edit_disable_time'] * 60 >= time()),
-		);
-
-		if ($user_info['id'] == $row['first_id_member'])
-			$board_ids['own'][$row['id_board']][] = $row['id_msg'];
-		$board_ids['any'][$row['id_board']][] = $row['id_msg'];
-	}
-
-	return array($posts, $board_ids);
-}
-
-/**
- * Return the earliest message a user can...see?
- */
-function earliest_msg()
-{
-	global $board, $user_info;
-
-	$db = database();
-
-	if (!empty($board))
+	// Extra-query for the pages after the first
+	$ids_query = $start > 0;
+	if ($ids_query && $items_per_page > 0)
 	{
 		$request = $db->query('', '
-			SELECT MIN(id_msg)
-			FROM {db_prefix}log_mark_read
-			WHERE id_member = {int:current_member}
-				AND id_board = {int:current_board}',
+			SELECT t.id_topic
+			FROM {db_prefix}topics AS t' . ($sort_by === 'last_poster' ? '
+				INNER JOIN {db_prefix}messages AS ml ON (ml.id_msg = t.id_last_msg)' : (in_array($sort_by, array('starter', 'subject')) ? '
+				INNER JOIN {db_prefix}messages AS mf ON (mf.id_msg = t.id_first_msg)' : '')) . ($sort_by === 'starter' ? '
+				LEFT JOIN {db_prefix}members AS memf ON (memf.id_member = mf.id_member)' : '') . ($sort_by === 'last_poster' ? '
+				LEFT JOIN {db_prefix}members AS meml ON (meml.id_member = ml.id_member)' : '') . '
+			WHERE t.id_board = {int:current_board}' . (!$indexOptions['only_approved'] ? '' : '
+				AND (t.approved = {int:is_approved}' . ($id_member == 0 ? '' : ' OR t.id_member_started = {int:current_member}') . ')') . '
+			ORDER BY ' . ($indexOptions['include_sticky'] ? 'is_sticky' . ($indexOptions['fake_ascending'] ? '' : ' DESC') . ', ' : '') . $sort_column . ($indexOptions['ascending'] ? '' : ' DESC') . '
+			LIMIT {int:start}, {int:maxindex}',
 			array(
-				'current_board' => $board,
-				'current_member' => $user_info['id'],
+				'current_board' => $id_board,
+				'current_member' => $id_member,
+				'is_approved' => 1,
+				'id_member_guest' => 0,
+				'start' => $start,
+				'maxindex' => $items_per_page,
 			)
 		);
-		list ($earliest_msg) = $db->fetch_row($request);
-		$db->free_result($request);
-	}
-	else
-	{
-		$request = $db->query('', '
-			SELECT MIN(lmr.id_msg)
-			FROM {db_prefix}boards AS b
-				LEFT JOIN {db_prefix}log_mark_read AS lmr ON (lmr.id_board = b.id_board AND lmr.id_member = {int:current_member})
-			WHERE {query_see_board}',
-			array(
-				'current_member' => $user_info['id'],
-			)
-		);
-		list ($earliest_msg) = $db->fetch_row($request);
+		$topic_ids = array();
+		while ($row = $db->fetch_assoc($request))
+			$topic_ids[] = $row['id_topic'];
 		$db->free_result($request);
 	}
 
-	// This is needed in case of topics marked unread.
-	if (empty($earliest_msg))
-		$earliest_msg = 0;
-	else
+	// And now, all you ever wanted on message index...
+	// and some you wish you didn't! :P
+	if (!$ids_query || !empty($topic_ids))
 	{
-		// Using caching, when possible, to ignore the below slow query.
-		if (isset($_SESSION['cached_log_time']) && $_SESSION['cached_log_time'][0] + 45 > time())
-			$earliest_msg2 = $_SESSION['cached_log_time'][1];
-		else
+		// If -1 means preview the whole body
+		if ($indexOptions['previews'] === -1)
+			$indexOptions['custom_selects'] += array('ml.body AS last_body', 'mf.body AS first_body');
+		// Default: a SUBSTRING
+		elseif (!empty($indexOptions['previews']))
+			$indexOptions['custom_selects'] += array('SUBSTRING(ml.body, 1, ' . ($indexOptions['previews'] + 256) . ') AS last_body', 'SUBSTRING(mf.body, 1, ' . ($indexOptions['previews'] + 256) . ') AS first_body');
+
+		if (!empty($indexOptions['include_avatars']))
 		{
-			// This query is pretty slow, but it's needed to ensure nothing crucial is ignored.
-			$request = $db->query('', '
-				SELECT MIN(id_msg)
-				FROM {db_prefix}log_topics
-				WHERE id_member = {int:current_member}',
-				array(
-					'current_member' => $user_info['id'],
-				)
-			);
-			list ($earliest_msg2) = $db->fetch_row($request);
-			$db->free_result($request);
+			// Double equal comparison for 1 because it is backward compatible with 1.0 where the value was true/false
+			if ($indexOptions['include_avatars'] == 1 || $indexOptions['include_avatars'] === 3)
+			{
+				$indexOptions['custom_selects'] = array_merge($indexOptions['custom_selects'], array('memf.avatar AS avatar_first', 'IFNULL(af.id_attach, 0) AS id_attach_first', 'af.filename AS filename_first', 'af.attachment_type AS attachment_type_first', 'memf.email_address AS email_address_first'));
+				' . ($id_member == 0 ? '0' : 'IFNULL(lt.id_msg, IFNULL(lmr.id_msg, -1)) + 1') . ' AS new_from,
+				$indexOptions['custom_selects'] = array_merge($indexOptions['custom_selects'], array('meml.avatar', 'IFNULL(a.id_attach, 0) AS id_attach', 'a.filename', 'a.attachment_type', 'meml.email_address'));
+				$indexOptions['custom_joins'] = array_merge($indexOptions['custom_joins'], array('LEFT JOIN {db_prefix}attachments AS a ON (a.id_member = ml.id_member AND a.id_member != 0)'));
+			}
 
-			// In theory this could be zero, if the first ever post is unread, so fudge it ;)
-			if ($earliest_msg2 == 0)
-				$earliest_msg2 = -1;
-
-			$_SESSION['cached_log_time'] = array(time(), $earliest_msg2);
+			if ($indexOptions['include_avatars'] === 2 || $indexOptions['include_avatars'] === 3)
+			{
+				$indexOptions['custom_selects'] = array_merge($indexOptions['custom_selects'], array('memf.avatar AS avatar_first', 'COALESCE(af.id_attach, 0) AS id_attach_first', 'af.filename AS filename_first', 'af.attachment_type AS attachment_type_first', 'memf.email_address AS email_address_first'));
+				$indexOptions['custom_joins'] = array_merge($indexOptions['custom_joins'], array('LEFT JOIN {db_prefix}attachments AS af ON (af.id_member = mf.id_member AND af.id_member != 0)'));
+			}
 		}
 
-		$earliest_msg = min($earliest_msg2, $earliest_msg);
+		$request = $db->query('substring', '
+			SELECT
+				t.id_topic, t.num_replies, t.locked, t.num_views, t.num_likes, t.is_sticky, t.id_poll, t.id_previous_board,
+				' . ($id_member == 0 ? '0' : 'COALESCE(lt.id_msg, lmr.id_msg, -1 + 1') . ' AS new_from,
+				t.id_last_msg, t.approved, t.unapproved_posts, t.id_redirect_topic, t.id_first_msg,
+				ml.poster_time AS last_poster_time, ml.id_msg_modified, ml.subject AS last_subject, ml.icon AS last_icon,
+				ml.poster_name AS last_member_name, ml.id_member AS last_id_member, ml.smileys_enabled AS last_smileys,
+				COALESCE(meml.real_name, ml.poster_name) AS last_display_name,
+				mf.poster_time AS first_poster_time, mf.subject AS first_subject, mf.icon AS first_icon,
+				mf.poster_name AS first_member_name, mf.id_member AS first_id_member, mf.smileys_enabled AS first_smileys,
+				COALESCE(memf.real_name, mf.poster_name) AS first_display_name
+				' . (!empty($indexOptions['custom_selects']) ? ' ,' . implode(',', $indexOptions['custom_selects']) : '') . '
+			FROM {db_prefix}topics AS t
+				INNER JOIN {db_prefix}messages AS ml ON (ml.id_msg = t.id_last_msg)
+				INNER JOIN {db_prefix}messages AS mf ON (mf.id_msg = t.id_first_msg)
+				LEFT JOIN {db_prefix}members AS meml ON (meml.id_member = ml.id_member)
+				LEFT JOIN {db_prefix}members AS memf ON (memf.id_member = mf.id_member)' . ($id_member == 0 ? '' : '
+				LEFT JOIN {db_prefix}log_topics AS lt ON (lt.id_topic = t.id_topic AND lt.id_member = {int:current_member})
+				LEFT JOIN {db_prefix}log_mark_read AS lmr ON (lmr.id_board = {int:current_board} AND lmr.id_member = {int:current_member})') .
+				(!empty($indexOptions['custom_joins']) ? implode("\n\t\t\t\t", $indexOptions['custom_joins']) : '') . '
+			WHERE ' . ($ids_query ? 't.id_topic IN ({array_int:topic_list})' : 't.id_board = {int:current_board}') . (!$indexOptions['only_approved'] ? '' : '
+				AND (t.approved = {int:is_approved}' . ($id_member == 0 ? '' : ' OR t.id_member_started = {int:current_member}') . ')') . '
+			ORDER BY ' . ($ids_query ? 'FIND_IN_SET(t.id_topic, {string:find_set_topics})' : ($indexOptions['include_sticky'] ? 'is_sticky' . ($indexOptions['fake_ascending'] ? '' : ' DESC') . ', ' : '') . $sort_column . ($indexOptions['ascending'] ? '' : ' DESC')) . '
+			LIMIT ' . ($ids_query ? '' : '{int:start}, ') . '{int:maxindex}',
+			array(
+				'current_board' => $id_board,
+				'current_member' => $id_member,
+				'topic_list' => $topic_ids,
+				'is_approved' => 1,
+				'find_set_topics' => implode(',', $topic_ids),
+				'start' => $start,
+				'maxindex' => $items_per_page,
+			)
+		);
+
+		// Lets take the results
+		while ($row = $db->fetch_assoc($request))
+			$topics[$row['id_topic']] = $row;
+
+		$db->free_result($request);
 	}
 
-	return $earliest_msg;
+	return $topics;
 }
 
 /**
- * Callback-function for the cache for getLastTopics().
- *
- * @param mixed[] $latestTopicOptions
+ * This simple function returns the sort methods for message index in an array.
  */
-function cache_getLastTopics($latestTopicOptions)
+function messageIndexSort()
 {
-	return array(
-		'data' => getLastTopics($latestTopicOptions),
-		'expires' => time() + 60,
-		'post_retri_eval' => '
-			foreach ($cache_block[\'data\'] as $k => $post)
-			{
-				$cache_block[\'data\'][$k] += array(
-					\'time\' => standardTime($post[\'raw_timestamp\']),
-					\'html_time\' => htmlTime($post[\'raw_timestamp\']),
-					\'timestamp\' => $post[\'raw_timestamp\'],
-				);
-			}',
+	// Default sort methods for message index.
+	$sort_methods = array(
+		'subject' => 'mf.subject',
+		'starter' => 'COALESCE(memf.real_name, mf.poster_name)',
+		'last_poster' => 'COALESCE(meml.real_name, ml.poster_name)',
+		'replies' => 't.num_replies',
+		'views' => 't.num_views',
+		'likes' => 't.num_likes',
+		'first_post' => 't.id_topic',
+		'last_post' => 't.id_last_msg'
 	);
+
+	call_integration_hook('integrate_messageindex_sort', array(&$sort_methods));
+
+	return $sort_methods;
 }
 
 /**
- * Get the latest posts of a forum.
+ * This function determines if a user has posted in the list of topics,
+ * and returns the list of those topics they posted in.
  *
- * @param mixed[] $latestTopicOptions
- * @return array
+ * @param int $id_member member to check
+ * @param int[] $topic_ids array of topics ids to check for participation
  */
-function getLastTopics($latestTopicOptions)
+function topicsParticipation($id_member, $topic_ids)
 {
-	global $scripturl, $modSettings, $txt;
-
 	$db = database();
+	$topics = array();
 
-	// Find all the posts. Newer ones will have higher IDs. (assuming the last 20 * number are accessable...)
-	// @todo SLOW This query is now slow, NEEDS to be fixed.  Maybe break into two?
-	$request = $db->query('substring', '
-		SELECT
-			ml.poster_time, mf.subject, ml.id_topic, ml.id_member, ml.id_msg, t.id_first_msg, ml.id_msg_modified,
-			' . ($latestTopicOptions['id_member'] == 0 ? '0' : 'IFNULL(lt.id_msg, IFNULL(lmr.id_msg, -1)) + 1') . ' AS new_from,
-			IFNULL(mem.real_name, ml.poster_name) AS poster_name, t.id_board, b.name AS board_name,
-			COALESCE(mem.real_name, ml.poster_name) AS poster_name, t.id_board, b.name AS board_name,
-			SUBSTRING(ml.body, 1, 385) AS body, ml.smileys_enabled
-		FROM {db_prefix}topics AS t
-			INNER JOIN {db_prefix}boards AS b ON (b.id_board = t.id_board)
-			LEFT JOIN {db_prefix}messages AS mf ON (t.id_first_msg = mf.id_msg)
-			LEFT JOIN {db_prefix}messages AS ml ON (t.id_last_msg = ml.id_msg)
-			LEFT JOIN {db_prefix}members AS mem ON (mem.id_member = ml.id_member)' . ($latestTopicOptions['id_member'] == 0 ? '' : '
-			LEFT JOIN {db_prefix}log_topics AS lt ON (lt.id_topic = t.id_topic AND lt.id_member = {int:current_member})
-			LEFT JOIN {db_prefix}log_mark_read AS lmr ON (lmr.id_board = t.id_board AND lmr.id_member = {int:current_member})') . '
-		WHERE ml.id_msg >= {int:likely_max_msg}' .
-			(!empty($modSettings['recycle_enable']) && $modSettings['recycle_board'] > 0 ? '
-			AND b.id_board != {int:recycle_board}' : '') . '
-			AND {query_wanna_see_board}' . ($modSettings['postmod_active'] ? '
-			AND t.approved = {int:is_approved}' : '') . '
-		ORDER BY t.id_last_msg DESC
-		LIMIT {int:num_msgs}',
+	$result = $db->query('', '
+		SELECT id_topic
+		FROM {db_prefix}messages
+		WHERE id_topic IN ({array_int:topic_list})
+			AND id_member = {int:current_member}
+		GROUP BY id_topic
+			LIMIT ' . count($topic_ids),
 		array(
-			'likely_max_msg' => max(0, $modSettings['maxMsgID'] - 50 * $latestTopicOptions['number_posts']),
-			'recycle_board' => $modSettings['recycle_board'],
-			'is_approved' => 1,
-			'num_msgs' =>  $latestTopicOptions['number_posts'],
-			'current_member' =>  $latestTopicOptions['id_member'],
+			'current_member' => $id_member,
+			'topic_list' => $topic_ids,
 		)
 	);
+	while ($row = $db->fetch_assoc($result))
+		$topics[] = $row;
 
-	$posts = array();
-	$bbc_parser = \BBC\ParserWrapper::getInstance();
+	$db->free_result($result);
 
-	while ($row = $db->fetch_assoc($request))
-	{
-		// Censor the subject and post for the preview ;).
-		$row['subject'] = censor($row['subject']);
-		$row['body'] = censor($row['body']);
+	return $topics;
+}
 
-		$row['body'] = strip_tags(strtr($bbc_parser->parseMessage($row['body'], $row['smileys_enabled']), array('<br />' => '&#10;')));
-		$row['body'] = Util::shorten_text($row['body'], !empty($modSettings['lastpost_preview_characters']) ? $modSettings['lastpost_preview_characters'] : 128, true);
+/**
+ * This simple function returns the message topic icon array.
+ * @deprecated since 1.1 - use the MessageTopicIcons class instead
+ */
+function MessageTopicIcons()
+{
+	// Setup the default topic icons...
+	$stable_icons = array(
+		'xx',
+		'thumbup',
+		'thumbdown',
+		'exclamation',
+		'question',
+		'lamp',
+		'smiley',
+		'angry',
+		'cheesy',
+		'grin',
+		'sad',
+		'wink',
+		'poll',
+		'moved',
+		'recycled',
+		'wireless',
+		'clip'
+	);
 
-		// Build the array.
-		$post = array(
-			'board' => array(
-				'id' => $row['id_board'],
-				'name' => $row['board_name'],
-				'href' => $scripturl . '?board=' . $row['id_board'] . '.0',
-				'link' => '<a href="' . $scripturl . '?board=' . $row['id_board'] . '.0">' . $row['board_name'] . '</a>'
-			),
-			'topic' => $row['id_topic'],
-			'poster' => array(
-				'id' => $row['id_member'],
-				'name' => $row['poster_name'],
-				'href' => empty($row['id_member']) ? '' : $scripturl . '?action=profile;u=' . $row['id_member'],
-				'link' => empty($row['id_member']) ? $row['poster_name'] : '<a href="' . $scripturl . '?action=profile;u=' . $row['id_member'] . '">' . $row['poster_name'] . '</a>'
-			),
-			'subject' => $row['subject'],
-			'short_subject' => Util::shorten_text($row['subject'], $modSettings['subject_length']),
-			'preview' => $row['body'],
-			'time' => standardTime($row['poster_time']),
-			'html_time' => htmlTime($row['poster_time']),
-			'timestamp' => forum_time(true, $row['poster_time']),
-			'raw_timestamp' => $row['poster_time'],
-			'href' => $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . ';topicseen#msg' . $row['id_msg'],
-			'link' => '<a href="' . $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['id_msg'] . ';topicseen#msg' . $row['id_msg'] . '" rel="nofollow">' . $row['subject'] . '</a>',
-			'new' => $row['new_from'] <= $row['id_msg_modified'],
-			'new_from' => $row['new_from'],
-			'newtime' => $row['new_from'],
-			'new_href' => $scripturl . '?topic=' . $row['id_topic'] . '.msg' . $row['new_from'] . '#new',
-		);
-		if ($post['new'])
-			$post['link'] .= '
-							<a class="new_posts" href="' . $post['new_href'] . '" id="newicon' . $row['id_msg'] . '">' . $txt['new'] . '</a>';
+	// Allow addons to add to the message icon array
+	call_integration_hook('integrate_messageindex_icons', array(&$stable_icons));
 
-		$posts[] = $post;
-	}
-	$db->free_result($request);
+	$icon_sources = array();
+	foreach ($stable_icons as $icon)
+		$icon_sources[$icon] = 'images_url';
 
-	return $posts;
+	return $icon_sources;
 }

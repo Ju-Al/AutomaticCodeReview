@@ -61,7 +61,6 @@ def get_if(iff, cmd):
     return ifreq
 
 
-def get_if_raw_hwaddr(iff):
     from scapy.arch import SIOCGIFHWADDR
     return struct.unpack("16xh6s8x", get_if(iff, SIOCGIFHWADDR))
 

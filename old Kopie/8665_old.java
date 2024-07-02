@@ -77,7 +77,6 @@ public final class JwtTimestampValidator implements OAuth2TokenValidator<Jwt> {
 
 		if (expiry != null) {
 			if (Instant.now(this.clock).minus(clockSkew).isAfter(expiry)) {
-				if (logger.isDebugEnabled()){
 					logger.debug("Failed to validate OAuth2 token claim. Token has expired");
 				}
 				OAuth2Error error = new OAuth2Error(

@@ -1,9 +1,5 @@
 # mypy: ignore-errors
 
-        can_have_implicit_fields = (
-            native_out_format and
-            single_stmt_mode
-        )
 #
 # This source file is part of the EdgeDB open source project.
 #
@@ -555,7 +551,10 @@ class Compiler:
 
         single_stmt_mode = ctx.stmt_mode is enums.CompileStatementMode.SINGLE
 
-        if not ctx.inline_shapeids:
+        can_have_implicit_fields = (
+            native_out_format and
+            single_stmt_mode
+        )
             can_have_implicit_fields = False
         else:
             can_have_implicit_fields = (

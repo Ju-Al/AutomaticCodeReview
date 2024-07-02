@@ -166,7 +166,6 @@ namespace Mirror
         }
 
         public void WriteInt64(long value) => WriteUInt64((ulong)value);
-
         /// <summary>
         /// Writes any type that mirror supports
         /// </summary>

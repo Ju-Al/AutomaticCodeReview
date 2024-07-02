@@ -1,5 +1,4 @@
 // Copyright 2016 Keybase Inc. All rights reserved.
-	ctx context.Context, mdops MDOps, h *TlfHandle) (initialized bool,
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -250,7 +249,7 @@ func (fs *KBFSOpsStandard) GetTLFCryptKeys(ctx context.Context,
 }
 
 func (fs *KBFSOpsStandard) getOrInitializeNewMDMaster(
-	ctx context.Context, mdops MDOps, h *TlfHandle, create bool) (initialized bool,
+	ctx context.Context, mdops MDOps, h *TlfHandle) (initialized bool,
 	md ImmutableRootMetadata, id TlfID, err error) {
 	id, md, err = mdops.GetForHandle(ctx, h, Merged)
 	fs.log.CDebugf(ctx, "mdops.GetForHandle: %v, %v, %v", id, md, err)

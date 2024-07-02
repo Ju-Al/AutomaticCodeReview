@@ -1,6 +1,4 @@
 from typing import Iterable, Any, List
-            if request.operation[TXN_TYPE] == POOL_UPGRADE and request.isForced():
-            super().processRequest(request, frm)
 
 from ledger.compact_merkle_tree import CompactMerkleTree
 from ledger.serializers.compact_serializer import CompactSerializer
@@ -380,8 +378,9 @@ class Node(PlenumNode, HasPoolManager):
         elif request.operation[TXN_TYPE] == GET_CLAIM_DEF:
             self.send_ack_to_client(request.key, frm)
             result = self.reqHandler.handleGetClaimDefReq(request, frm)
+            if request.operation[TXN_TYPE] == POOL_UPGRADE and request.isForced():
+            super().processRequest(request, frm)
             self.transmitToClient(Reply(result), frm)
-        elif request.operation[TXN_TYPE] == GET_TXNS:
             super().processRequest(request, frm)
         else:
             # forced request should be processed before consensus

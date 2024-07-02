@@ -207,7 +207,6 @@ public class AddProductIngredientsFragment extends BaseFragment {
         return tag;
     }
 
-    /**
      * To enable fast addition mode
      *
      * @param is

@@ -89,8 +89,6 @@ public class AthenzUtils {
         // certificate which has the <domain>.<service> format
 
         return principal.contains(ROLE_SEP);
-    }
-
     /**
      * Extract the role name from the full Athenz Role Name (arn)
      * which includes the domain name. The format of the role name

@@ -1,10 +1,4 @@
 import copy
-    def test_create_transaction(self, b):
-        tx = b.create_transaction('a', 'b', 'c', 'd')
-
-        assert sorted(tx) == sorted(['id', 'transaction'])
-        assert sorted(tx['transaction']) == sorted(['current_owner', 'new_owner', 'input', 'operation',
-                                                    'timestamp', 'data'])
 import multiprocessing as mp
 import random
 import time
@@ -31,8 +25,13 @@ def test_remove_unclosed_sockets():
     pass
 
 
+    def test_create_transaction(self, b):
+        tx = b.create_transaction('a', 'b', 'c', 'd')
+
+        assert sorted(tx) == sorted(['id', 'transaction'])
+        assert sorted(tx['transaction']) == sorted(['current_owner', 'new_owner', 'input', 'operation',
+                                                    'timestamp', 'data'])
 class TestBigchainApi(object):
-    def test_create_transaction_create(self, b, user_sk):
         tx = b.create_transaction(b.me, user_sk, None, 'CREATE')
 
         assert sorted(tx) == sorted(['id', 'transaction', 'version'])

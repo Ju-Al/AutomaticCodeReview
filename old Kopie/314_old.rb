@@ -1,101 +1,25 @@
-require "test_helper"
+class UserOnboardingController < ApplicationController
 
-    user = create :user
-class Tracks::ExercisesControllerTest < ActionDispatch::IntegrationTest
-  test "index: renders correctly for external" do
-    # TODO: Unskip when devise is added
-    skip
+  before_action :authenticate_user!
 
-    track = create :track
-
-    get track_exercises_url(track)
-    assert_template "tracks/exercises/index/external"
+  def show
+    @onboarding = UserOnboardingForm.new
   end
 
-  test "index: renders correctly for joined" do
-    user = create :user, :onboarded
-    track = create :track
-    create :user_track, user: user, track: track
+  def create
+    @onboarding = UserOnboardingForm.new(
+      user_onboarding_params.merge(user: current_user)
+    )
 
-    sign_in!(user)
-
-    get track_exercises_url(track)
-    assert_template "tracks/exercises/index"
+    if @onboarding.save
+      redirect_to after_sign_in_path_for(current_user)
+    else
+      render :show
+    end
   end
 
-  test "index: renders correctly for unjoined" do
-    user = create :user, :onboarded
-    track = create :track
-
-    sign_in!(user)
-
-    get track_exercises_url(track)
-    assert_template "tracks/exercises/index"
-  end
-
-  test "concept/show: renders correctly for external" do
-    # TODO: Unskip when devise is added
-    skip
-
-    track = create :track
-    exercise = create :concept_exercise, track: track
-
-    get track_exercise_url(track, exercise)
-    assert_template "tracks/exercises/show"
-  end
-
-  test "concept/show: renders correctly for joined" do
-    user = create :user, :onboarded
-    exercise = create :concept_exercise
-    create :user_track, user: user, track: exercise.track
-
-    sign_in!(user)
-
-    get track_exercise_url(exercise.track, exercise)
-    assert_template "tracks/exercises/show"
-  end
-
-  test "concept/show: renders correctly for unjoined" do
-    user = create :user, :onboarded
-    exercise = create :concept_exercise
-
-    sign_in!(user)
-
-    get track_exercise_url(exercise.track, exercise)
-    assert_template "tracks/exercises/show"
-  end
-
-  test "practice/show: renders correctly for external" do
-    # TODO: Unskip when devise is added
-    skip
-
-    track = create :track
-    exercise = create :practice_exercise, track: track
-
-    get track_exercise_url(track, exercise)
-    assert_template "tracks/exercises/show"
-  end
-
-  test "practice/show: renders correctly for joined" do
-    user = create :user, :onboarded
-    track = create :track
-    create :user_track, user: user, track: track
-    exercise = create :practice_exercise, track: track
-
-    sign_in!(user)
-
-    get track_exercise_url(track, exercise)
-    assert_template "tracks/exercises/show"
-  end
-
-  test "practice/show: renders correctly for unjoined" do
-    user = create :user, :onboarded
-    track = create :track
-    exercise = create :practice_exercise, track: track
-
-    sign_in!(user)
-
-    get track_exercise_url(track, exercise)
-    assert_template "tracks/exercises/show"
+  private
+  def user_onboarding_params
+    params.require(:user_onboarding_form).permit(:terms_of_service, :privacy_policy)
   end
 end

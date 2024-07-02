@@ -1,5 +1,4 @@
 /*
-int s2n_config_set_psk_selection_callback(struct s2n_config *config, s2n_psk_selection_callback cb)
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -847,7 +846,7 @@ int s2n_config_enable_cert_req_dss_legacy_compat(struct s2n_config *config)
     return S2N_SUCCESS;
 }
 
-int s2n_config_set_psk_selection_callback(struct s2n_config *config, s2n_psk_selection_callback cb, void *context)
+int s2n_config_set_psk_selection_callback(struct s2n_config *config, s2n_psk_selection_callback cb)
 {
     POSIX_ENSURE_REF(config);
     POSIX_ENSURE_REF(cb);

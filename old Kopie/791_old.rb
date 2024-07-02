@@ -1,13 +1,4 @@
 # encoding: UTF-8
-      self.output_stage = GoodData::AdsOutputStage.create({ ads: ads, project: project, client: project.client }.merge(opts))
-      output_stage
-    end
-
-    def output_stage
-      return @output_stage if @output_stage
-
-      @output_stage = GoodData::AdsOutputStage[project: project, client: project.client]
-      @output_stage
 #
 # Copyright (c) 2010-2015 GoodData Corporation. All rights reserved.
 # This source code is licensed under the BSD-style license found in the
@@ -34,7 +25,15 @@ module GoodData
     end
 
     def create_output_stage(ads, opts = {})
-      @output_stage = GoodData::AdsOutputStage.create({ads: ads, project: project, client: project.client}.merge(opts))
+      self.output_stage = GoodData::AdsOutputStage.create({ ads: ads, project: project, client: project.client }.merge(opts))
+      output_stage
+    end
+
+    def output_stage
+      return @output_stage if @output_stage
+
+      @output_stage = GoodData::AdsOutputStage[project: project, client: project.client]
+      @output_stage
     end
   end
 end

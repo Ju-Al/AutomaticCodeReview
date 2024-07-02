@@ -183,7 +183,6 @@ class SeleniumExecutor(AbstractSeleniumExecutor, WidgetProvider, FileLister):
         Start runner
         :return:
         """
-        if self.virtual_display_service is not None:
             self.virtual_display_service.startup()
         self.start_time = time.time()
         self.runner.env = self.additional_env

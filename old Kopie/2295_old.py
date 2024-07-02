@@ -1,1931 +1,1022 @@
-import os
-import sqlite3
-from unittest import TestCase
+from __future__ import absolute_import, division
+
+from collections import Callable, Iterable
+from functools import partial
+from distutils.version import LooseVersion
 import warnings
 
-from contextlib2 import ExitStack
-from logbook import NullHandler, Logger
+import param
+import numpy as np
 import pandas as pd
-from six import with_metaclass, iteritems, itervalues
-import responses
-from toolz import flip, groupby, merge
-from trading_calendars import (
-    get_calendar,
-    register_calendar_alias,
-)
+import xarray as xr
+import datashader as ds
+import datashader.transfer_functions as tf
+import dask.dataframe as dd
+from param.parameterized import bothmethod
 
-import zipline
-from zipline.algorithm import TradingAlgorithm
-from zipline.assets import Equity, Future
-from zipline.assets.continuous_futures import CHAIN_PREDICATES
-from zipline.finance.asset_restrictions import NoRestrictions
-from zipline.utils.memoize import classlazyval
-from zipline.pipeline import SimplePipelineEngine
-from zipline.pipeline.data import USEquityPricing
-from zipline.pipeline.domain import GENERIC, US_EQUITIES
-from zipline.pipeline.loaders import USEquityPricingLoader
-from zipline.pipeline.loaders.testing import make_seeded_random_loader
-from zipline.protocol import BarData
-from zipline.utils.paths import ensure_directory
-from .core import (
-    create_daily_bar_data,
-    create_minute_bar_data,
-    make_simple_equity_info,
-    tmp_asset_finder,
-    tmp_dir,
-)
-from .debug import debug_mro_failure
-from ..data.adjustments import (
-    SQLiteAdjustmentReader,
-    SQLiteAdjustmentWriter,
-)
-from ..data.bcolz_daily_bars import (
-    BcolzDailyBarReader,
-    BcolzDailyBarWriter,
-)
-from ..data.data_portal import (
-    DataPortal,
-    DEFAULT_MINUTE_HISTORY_PREFETCH,
-    DEFAULT_DAILY_HISTORY_PREFETCH,
-)
-from ..data.hdf5_daily_bars import (
-    HDF5DailyBarWriter,
-    MultiCountryHDF5DailyBarReader,
-)
-from ..data.loader import (
-    get_benchmark_filename,
-)
-from ..data.minute_bars import (
-    BcolzMinuteBarReader,
-    BcolzMinuteBarWriter,
-    US_EQUITIES_MINUTES_PER_DAY,
-    FUTURES_MINUTES_PER_DAY,
-)
-from ..data.resample import (
-    minute_frame_to_session_frame,
-    MinuteResampleSessionBarReader
-)
+ds_version = LooseVersion(ds.__version__)
 
-from ..finance.trading import SimulationParameters
-from ..utils.classproperty import classproperty
-from ..utils.final import FinalMeta, final
-from ..utils.memoize import remember_last
+try:
+    from datashader.bundling import (directly_connect_edges as connect_edges,
+                                     hammer_bundle)
+except:
+    hammer_bundle, connect_edges = object, object
+
+from ..core import (Operation, Element, Dimension, NdOverlay,
+                    CompositeOverlay, Dataset, Overlay)
+from ..core.data import PandasInterface, XArrayInterface
+from ..core.sheetcoords import BoundingBox
+from ..core.util import get_param_values, basestring, datetime_types, dt_to_int
+from ..element import (Image, Path, Curve, RGB, Graph, TriMesh, Points,
+                       Scatter, Dataset, QuadMesh)
+from ..streams import RangeXY, PlotSize
 
 
-zipline_dir = os.path.dirname(zipline.__file__)
-
-
-class DebugMROMeta(FinalMeta):
-    """Metaclass that helps debug MRO resolution errors.
+class ResamplingOperation(Operation):
     """
-    def __new__(mcls, name, bases, clsdict):
-        try:
-            return super(DebugMROMeta, mcls).__new__(
-                mcls, name, bases, clsdict
-            )
-        except TypeError as e:
-            if "(MRO)" in str(e):
-                msg = debug_mro_failure(name, bases)
-                raise TypeError(msg)
+    Abstract baseclass for resampling operations
+    """
+
+    dynamic = param.Boolean(default=True, doc="""
+       Enables dynamic processing by default.""")
+
+    expand = param.Boolean(default=True, doc="""
+       Whether the x_range and y_range should be allowed to expand
+       beyond the extent of the data.  Setting this value to True is
+       useful for the case where you want to ensure a certain size of
+       output grid, e.g. if you are doing masking or other arithmetic
+       on the grids.  A value of False ensures that the grid is only
+       just as large as it needs to be to contain the data, which will
+       be faster and use less memory if the resulting aggregate is
+       being overlaid on a much larger background.""")
+
+    height = param.Integer(default=400, doc="""
+       The height of the output image in pixels.""")
+
+    width = param.Integer(default=400, doc="""
+       The width of the output image in pixels.""")
+
+    x_range  = param.NumericTuple(default=None, length=2, doc="""
+       The x_range as a tuple of min and max x-value. Auto-ranges
+       if set to None.""")
+
+    y_range  = param.NumericTuple(default=None, length=2, doc="""
+       The x_range as a tuple of min and max y-value. Auto-ranges
+       if set to None.""")
+
+    x_sampling = param.Number(default=None, doc="""
+        Specifies the smallest allowed sampling interval along the y-axis.""")
+
+    y_sampling = param.Number(default=None, doc="""
+        Specifies the smallest allowed sampling interval along the y-axis.""")
+
+    target = param.ClassSelector(class_=Image, doc="""
+        A target Image which defines the desired x_range, y_range,
+        width and height.
+    """)
+
+    streams = param.List(default=[PlotSize, RangeXY], doc="""
+        List of streams that are applied if dynamic=True, allowing
+        for dynamic interaction with the plot.""")
+
+    element_type = param.ClassSelector(class_=(Dataset,), instantiate=False,
+                                        is_instance=False, default=Image,
+                                        doc="""
+        The type of the returned Elements, must be a 2D Dataset type.""")
+
+    link_inputs = param.Boolean(default=True, doc="""
+        By default, the link_inputs parameter is set to True so that
+        when applying shade, backends that support linked streams
+        update RangeXY streams on the inputs of the shade operation.
+        Disable when you do not want the resulting plot to be interactive,
+        e.g. when trying to display an interactive plot a second time.""")
+
+    precompute = param.Boolean(default=False, doc="""
+        Whether to apply precomputing operations. Precomputing can
+        speed up resampling operations by avoiding unnecessary
+        recomputation if the supplied element does not change between
+        calls. The cost of enabling this option is that the memory
+        used to represent this internal state is not freed between
+        calls.""")
+
+    @bothmethod
+    def instance(self_or_cls,**params):
+        inst = super(ResamplingOperation, self_or_cls).instance(**params)
+        inst._precomputed = {}
+        return inst
+
+    def _get_sampling(self, element, x, y):
+        target = self.p.target
+        if target:
+            x_range, y_range = target.range(x), target.range(y)
+            height, width = target.dimension_values(2, flat=False).shape
+        else:
+            if x is None or y is None:
+                x_range = self.p.x_range or (-0.5, 0.5)
+                y_range = self.p.y_range or (-0.5, 0.5)
             else:
-                raise
-
-
-class ZiplineTestCase(with_metaclass(DebugMROMeta, TestCase)):
-    """
-    Shared extensions to core unittest.TestCase.
-
-    Overrides the default unittest setUp/tearDown functions with versions that
-    use ExitStack to correctly clean up resources, even in the face of
-    exceptions that occur during setUp/setUpClass.
-
-    Subclasses **should not override setUp or setUpClass**!
-
-    Instead, they should implement `init_instance_fixtures` for per-test-method
-    resources, and `init_class_fixtures` for per-class resources.
-
-    Resources that need to be cleaned up should be registered using
-    either `enter_{class,instance}_context` or `add_{class,instance}_callback}.
-    """
-    _in_setup = False
-
-    @final
-    @classmethod
-    def setUpClass(cls):
-        # Hold a set of all the "static" attributes on the class. These are
-        # things that are not populated after the class was created like
-        # methods or other class level attributes.
-        cls._static_class_attributes = set(vars(cls))
-        cls._class_teardown_stack = ExitStack()
-        try:
-            cls._base_init_fixtures_was_called = False
-            cls.init_class_fixtures()
-            assert cls._base_init_fixtures_was_called, (
-                "ZiplineTestCase.init_class_fixtures() was not called.\n"
-                "This probably means that you overrode init_class_fixtures"
-                " without calling super()."
-            )
-        except:
-            cls.tearDownClass()
-            raise
-
-    @classmethod
-    def init_class_fixtures(cls):
-        """
-        Override and implement this classmethod to register resources that
-        should be created and/or torn down on a per-class basis.
-
-        Subclass implementations of this should always invoke this with super()
-        to ensure that fixture mixins work properly.
-        """
-        if cls._in_setup:
-            raise ValueError(
-                'Called init_class_fixtures from init_instance_fixtures.'
-                ' Did you write super(..., self).init_class_fixtures() instead'
-                ' of super(..., self).init_instance_fixtures()?',
-            )
-        cls._base_init_fixtures_was_called = True
-
-    @final
-    @classmethod
-    def tearDownClass(cls):
-        # We need to get this before it's deleted by the loop.
-        stack = cls._class_teardown_stack
-        for name in set(vars(cls)) - cls._static_class_attributes:
-            # Remove all of the attributes that were added after the class was
-            # constructed. This cleans up any large test data that is class
-            # scoped while still allowing subclasses to access class level
-            # attributes.
-            delattr(cls, name)
-        stack.close()
-
-    @final
-    @classmethod
-    def enter_class_context(cls, context_manager):
-        """
-        Enter a context manager to be exited during the tearDownClass
-        """
-        if cls._in_setup:
-            raise ValueError(
-                'Attempted to enter a class context in init_instance_fixtures.'
-                '
-Did you mean to call enter_instance_context?',
-            )
-        return cls._class_teardown_stack.enter_context(context_manager)
-
-    @final
-    @classmethod
-    def add_class_callback(cls, callback, *args, **kwargs):
-        """
-        Register a callback to be executed during tearDownClass.
-
-        Parameters
-        ----------
-        callback : callable
-            The callback to invoke at the end of the test suite.
-        """
-        if cls._in_setup:
-            raise ValueError(
-                'Attempted to add a class callback in init_instance_fixtures.'
-                '
-Did you mean to call add_instance_callback?',
-            )
-        return cls._class_teardown_stack.callback(callback, *args, **kwargs)
-
-    @final
-    def setUp(self):
-        type(self)._in_setup = True
-        self._pre_setup_attrs = set(vars(self))
-        self._instance_teardown_stack = ExitStack()
-        try:
-            self._init_instance_fixtures_was_called = False
-            self.init_instance_fixtures()
-            assert self._init_instance_fixtures_was_called, (
-                "ZiplineTestCase.init_instance_fixtures() was not"
-                " called.\n"
-                "This probably means that you overrode"
-                " init_instance_fixtures without calling super()."
-            )
-        except:
-            self.tearDown()
-            raise
-        finally:
-            type(self)._in_setup = False
-
-    def init_instance_fixtures(self):
-        self._init_instance_fixtures_was_called = True
-
-    @final
-    def tearDown(self):
-        # We need to get this before it's deleted by the loop.
-        stack = self._instance_teardown_stack
-        for attr in set(vars(self)) - self._pre_setup_attrs:
-            delattr(self, attr)
-        stack.close()
-
-    @final
-    def enter_instance_context(self, context_manager):
-        """
-        Enter a context manager that should be exited during tearDown.
-        """
-        return self._instance_teardown_stack.enter_context(context_manager)
-
-    @final
-    def add_instance_callback(self, callback):
-        """
-        Register a callback to be executed during tearDown.
-
-        Parameters
-        ----------
-        callback : callable
-            The callback to invoke at the end of each test.
-        """
-        return self._instance_teardown_stack.callback(callback)
-
-
-def alias(attr_name):
-    """Make a fixture attribute an alias of another fixture's attribute by
-    default.
-
-    Parameters
-    ----------
-    attr_name : str
-        The name of the attribute to alias.
-
-    Returns
-    -------
-    p : classproperty
-        A class property that does the property aliasing.
-
-    Examples
-    --------
-    >>> class C(object):
-    ...     attr = 1
-    ...
-    >>> class D(C):
-    ...     attr_alias = alias('attr')
-    ...
-    >>> D.attr
-    1
-    >>> D.attr_alias
-    1
-    >>> class E(D):
-    ...     attr_alias = 2
-    ...
-    >>> E.attr
-    1
-    >>> E.attr_alias
-    2
-    """
-    return classproperty(flip(getattr, attr_name))
-
-
-class WithDefaultDateBounds(with_metaclass(DebugMROMeta, object)):
-    """
-    ZiplineTestCase mixin which makes it possible to synchronize date bounds
-    across fixtures.
-
-    This fixture should always be the last fixture in bases of any fixture or
-    test case that uses it.
-
-    Attributes
-    ----------
-    START_DATE : datetime
-    END_DATE : datetime
-        The date bounds to be used for fixtures that want to have consistent
-        dates.
-    """
-    START_DATE = pd.Timestamp('2006-01-03', tz='utc')
-    END_DATE = pd.Timestamp('2006-12-29', tz='utc')
-
-
-class WithLogger(object):
-    """
-    ZiplineTestCase mixin providing cls.log_handler as an instance-level
-    fixture.
-
-    After init_instance_fixtures has been called `self.log_handler` will be a
-    new ``logbook.NullHandler``.
-
-    Methods
-    -------
-    make_log_handler() -> logbook.LogHandler
-        A class method which constructs the new log handler object. By default
-        this will construct a ``NullHandler``.
-    """
-    make_log_handler = NullHandler
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithLogger, cls).init_class_fixtures()
-        cls.log = Logger()
-        cls.log_handler = cls.enter_class_context(
-            cls.make_log_handler().applicationbound(),
-        )
-
-
-class WithAssetFinder(WithDefaultDateBounds):
-    """
-    ZiplineTestCase mixin providing cls.asset_finder as a class-level fixture.
-
-    After init_class_fixtures has been called, `cls.asset_finder` is populated
-    with an AssetFinder.
-
-    Attributes
-    ----------
-    ASSET_FINDER_EQUITY_SIDS : iterable[int]
-        The default sids to construct equity data for.
-    ASSET_FINDER_EQUITY_SYMBOLS : iterable[str]
-        The default symbols to use for the equities.
-    ASSET_FINDER_EQUITY_START_DATE : datetime
-        The default start date to create equity data for. This defaults to
-        ``START_DATE``.
-    ASSET_FINDER_EQUITY_END_DATE : datetime
-        The default end date to create equity data for. This defaults to
-        ``END_DATE``.
-    ASSET_FINDER_EQUITY_NAMES: iterable[str]
-        The default names to use for the equities.
-    ASSET_FINDER_EQUITY_EXCHANGE : str
-        The default exchange to assign each equity.
-    ASSET_FINDER_COUNTRY_CODE : str
-        The default country code to assign each exchange.
-
-    Methods
-    -------
-    make_equity_info() -> pd.DataFrame
-        A class method which constructs the dataframe of equity info to write
-        to the class's asset db. By default this is empty.
-    make_futures_info() -> pd.DataFrame
-        A class method which constructs the dataframe of futures contract info
-        to write to the class's asset db. By default this is empty.
-    make_exchanges_info() -> pd.DataFrame
-        A class method which constructs the dataframe of exchange information
-        to write to the class's assets db. By default this is empty.
-    make_root_symbols_info() -> pd.DataFrame
-        A class method which constructs the dataframe of root symbols
-        information to write to the class's assets db. By default this is
-        empty.
-    make_asset_finder_db_url() -> string
-        A class method which returns the URL at which to create the SQLAlchemy
-        engine. By default provides a URL for an in-memory database.
-    make_asset_finder() -> pd.DataFrame
-        A class method which constructs the actual asset finder object to use
-        for the class. If this method is overridden then the ``make_*_info``
-        methods may not be respected.
-
-    See Also
-    --------
-    zipline.testing.make_simple_equity_info
-    zipline.testing.make_jagged_equity_info
-    zipline.testing.make_rotating_equity_info
-    zipline.testing.make_future_info
-    zipline.testing.make_commodity_future_info
-    """
-    ASSET_FINDER_EQUITY_SIDS = ord('A'), ord('B'), ord('C')
-    ASSET_FINDER_EQUITY_SYMBOLS = None
-    ASSET_FINDER_EQUITY_NAMES = None
-    ASSET_FINDER_EQUITY_EXCHANGE = 'TEST'
-    ASSET_FINDER_EQUITY_START_DATE = alias('START_DATE')
-    ASSET_FINDER_EQUITY_END_DATE = alias('END_DATE')
-    ASSET_FINDER_FUTURE_CHAIN_PREDICATES = CHAIN_PREDICATES
-    ASSET_FINDER_COUNTRY_CODE = '??'
-
-    @classmethod
-    def _make_info(cls, *args):
-        return None
-
-    make_futures_info = _make_info
-    make_exchanges_info = _make_info
-    make_root_symbols_info = _make_info
-    make_equity_supplementary_mappings = _make_info
-
-    del _make_info
-
-    @classmethod
-    def make_equity_info(cls):
-        return make_simple_equity_info(
-            cls.ASSET_FINDER_EQUITY_SIDS,
-            cls.ASSET_FINDER_EQUITY_START_DATE,
-            cls.ASSET_FINDER_EQUITY_END_DATE,
-            cls.ASSET_FINDER_EQUITY_SYMBOLS,
-            cls.ASSET_FINDER_EQUITY_NAMES,
-            cls.ASSET_FINDER_EQUITY_EXCHANGE,
-        )
-
-    @classmethod
-    def make_asset_finder_db_url(cls):
-        return 'sqlite:///:memory:'
-
-    @classmethod
-    def make_asset_finder(cls):
-        """Returns a new AssetFinder
-
-        Returns
-        -------
-        asset_finder : zipline.assets.AssetFinder
-        """
-        equities = cls.make_equity_info()
-        futures = cls.make_futures_info()
-        root_symbols = cls.make_root_symbols_info()
-
-        exchanges = cls.make_exchanges_info(equities, futures, root_symbols)
-        if exchanges is None:
-            exchange_names = [
-                df['exchange']
-                for df in (equities, futures, root_symbols)
-                if df is not None
-            ]
-            if exchange_names:
-                exchanges = pd.DataFrame({
-                    'exchange': pd.concat(exchange_names).unique(),
-                    'country_code': cls.ASSET_FINDER_COUNTRY_CODE,
-                })
-
-        return cls.enter_class_context(tmp_asset_finder(
-            url=cls.make_asset_finder_db_url(),
-            equities=equities,
-            futures=futures,
-            exchanges=exchanges,
-            root_symbols=root_symbols,
-            equity_supplementary_mappings=(
-                cls.make_equity_supplementary_mappings()
-            ),
-            future_chain_predicates=cls.ASSET_FINDER_FUTURE_CHAIN_PREDICATES,
-        ))
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithAssetFinder, cls).init_class_fixtures()
-        cls.asset_finder = cls.make_asset_finder()
-
-    @classlazyval
-    def all_assets(cls):
-        """A list of Assets for all sids in cls.asset_finder.
-        """
-        return cls.asset_finder.retrieve_all(cls.asset_finder.sids)
-
-    @classlazyval
-    def exchange_names(cls):
-        """A list of canonical exchange names for all exchanges in this suite.
-        """
-        infos = itervalues(cls.asset_finder.exchange_info)
-        return sorted(i.canonical_name for i in infos)
-
-    @classlazyval
-    def assets_by_calendar(cls):
-        """A dict from calendar -> list of assets with that calendar.
-        """
-        return groupby(lambda a: get_calendar(a.exchange), cls.all_assets)
-
-    @classlazyval
-    def all_calendars(cls):
-        """A list of all calendars for assets in this test suite.
-        """
-        return list(cls.assets_by_calendar)
-
-
-class WithTradingCalendars(object):
-    """
-    ZiplineTestCase mixin providing cls.trading_calendar,
-    cls.all_trading_calendars, cls.trading_calendar_for_asset_type as a
-    class-level fixture.
-
-    After ``init_class_fixtures`` has been called:
-    - `cls.trading_calendar` is populated with a default of the nyse trading
-    calendar for compatibility with existing tests
-    - `cls.all_trading_calendars` is populated with the trading calendars
-    keyed by name,
-    - `cls.trading_calendar_for_asset_type` is populated with the trading
-    calendars keyed by the asset type which uses the respective calendar.
-
-    Attributes
-    ----------
-    TRADING_CALENDAR_STRS : iterable
-        iterable of identifiers of the calendars to use.
-    TRADING_CALENDAR_FOR_ASSET_TYPE : dict
-        A dictionary which maps asset type names to the calendar associated
-        with that asset type.
-    """
-    TRADING_CALENDAR_STRS = ('NYSE',)
-    TRADING_CALENDAR_FOR_ASSET_TYPE = {Equity: 'NYSE', Future: 'us_futures'}
-    # For backwards compatibility, exisitng tests and fixtures refer to
-    # `trading_calendar` with the assumption that the value is the NYSE
-    # calendar.
-    TRADING_CALENDAR_PRIMARY_CAL = 'NYSE'
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithTradingCalendars, cls).init_class_fixtures()
-
-        cls.trading_calendars = {}
-
-        for cal_str in (
-            set(cls.TRADING_CALENDAR_STRS) |
-            {cls.TRADING_CALENDAR_PRIMARY_CAL}
-        ):
-            # Set name to allow aliasing.
-            calendar = get_calendar(cal_str)
-            setattr(cls,
-                    '{0}_calendar'.format(cal_str.lower()), calendar)
-            cls.trading_calendars[cal_str] = calendar
-
-        type_to_cal = iteritems(cls.TRADING_CALENDAR_FOR_ASSET_TYPE)
-        for asset_type, cal_str in type_to_cal:
-            calendar = get_calendar(cal_str)
-            cls.trading_calendars[asset_type] = calendar
-
-        cls.trading_calendar = (
-            cls.trading_calendars[cls.TRADING_CALENDAR_PRIMARY_CAL]
-        )
-
-
-_MARKET_DATA_DIR = os.path.join(zipline_dir, 'resources', 'market_data')
-
-
-@remember_last
-def read_checked_in_benchmark_data():
-    symbol = 'SPY'
-    filename = get_benchmark_filename(symbol)
-    source_path = os.path.join(_MARKET_DATA_DIR, filename)
-    benchmark_returns = pd.read_csv(
-        source_path,
-        parse_dates=[0],
-        index_col=0,
-        header=None,
-    ).tz_localize('UTC')
-    return benchmark_returns.iloc[:, 0]
-
-
-class WithBenchmarkReturns(WithDefaultDateBounds,
-                           WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.benchmark_returns as a class-level
-    attribute.
-    """
-    _default_treasury_curves = None
-
-    @classproperty
-    def BENCHMARK_RETURNS(cls):
-        benchmark_returns = read_checked_in_benchmark_data()
-
-        # Zipline ordinarily uses cached benchmark returns and treasury
-        # curves data, but when running the zipline tests this cache is not
-        # always updated to include the appropriate dates required by both
-        # the futures and equity calendars. In order to create more
-        # reliable and consistent data throughout the entirety of the
-        # tests, we read static benchmark returns and treasury curve csv
-        # files from source. If a test using this fixture attempts to run
-        # outside of the static date range of the csv files, raise an
-        # exception warning the user to either update the csv files in
-        # source or to use a date range within the current bounds.
-        static_start_date = benchmark_returns.index[0].date()
-        static_end_date = benchmark_returns.index[-1].date()
-        warning_message = (
-            'The WithBenchmarkReturns fixture uses static data between '
-            '{static_start} and {static_end}. To use a start and end date '
-            'of {given_start} and {given_end} you will have to update the '
-            'files in {resource_dir} to include the missing dates.'.format(
-                static_start=static_start_date,
-                static_end=static_end_date,
-                given_start=cls.START_DATE.date(),
-                given_end=cls.END_DATE.date(),
-                resource_dir=_MARKET_DATA_DIR,
-            )
-        )
-        if cls.START_DATE.date() < static_start_date or \
-                cls.END_DATE.date() > static_end_date:
-            raise AssertionError(warning_message)
-
-        return benchmark_returns
-
-
-class WithSimParams(WithDefaultDateBounds):
-    """
-    ZiplineTestCase mixin providing cls.sim_params as a class level fixture.
-
-    Attributes
-    ----------
-    SIM_PARAMS_CAPITAL_BASE : float
-    SIM_PARAMS_DATA_FREQUENCY : {'daily', 'minute'}
-    SIM_PARAMS_EMISSION_RATE : {'daily', 'minute'}
-        Forwarded to ``SimulationParameters``.
-
-    SIM_PARAMS_START : datetime
-    SIM_PARAMS_END : datetime
-        Forwarded to ``SimulationParameters``. If not
-        explicitly overridden these will be ``START_DATE`` and ``END_DATE``
-
-    Methods
-    -------
-    make_simparams(**overrides)
-        Construct a ``SimulationParameters`` using the defaults defined by
-        fixture configuration attributes. Any parameters to
-        ``SimulationParameters`` can be overridden by passing them by keyword.
-
-    See Also
-    --------
-    zipline.finance.trading.SimulationParameters
-    """
-    SIM_PARAMS_CAPITAL_BASE = 1.0e5
-    SIM_PARAMS_DATA_FREQUENCY = 'daily'
-    SIM_PARAMS_EMISSION_RATE = 'daily'
-
-    SIM_PARAMS_START = alias('START_DATE')
-    SIM_PARAMS_END = alias('END_DATE')
-
-    @classmethod
-    def make_simparams(cls, **overrides):
-        kwargs = dict(
-            start_session=cls.SIM_PARAMS_START,
-            end_session=cls.SIM_PARAMS_END,
-            capital_base=cls.SIM_PARAMS_CAPITAL_BASE,
-            data_frequency=cls.SIM_PARAMS_DATA_FREQUENCY,
-            emission_rate=cls.SIM_PARAMS_EMISSION_RATE,
-            trading_calendar=cls.trading_calendar,
-        )
-        kwargs.update(overrides)
-        return SimulationParameters(**kwargs)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithSimParams, cls).init_class_fixtures()
-        cls.sim_params = cls.make_simparams()
-
-
-class WithTradingSessions(WithDefaultDateBounds, WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.trading_days, cls.all_trading_sessions
-    as a class-level fixture.
-
-    After init_class_fixtures has been called, `cls.all_trading_sessions`
-    is populated with a dictionary of calendar name to the DatetimeIndex
-    containing the calendar trading days ranging from:
-
-    (DATA_MAX_DAY - (cls.TRADING_DAY_COUNT) -> DATA_MAX_DAY)
-
-    `cls.trading_days`, for compatibility with existing tests which make the
-    assumption that trading days are equity only, defaults to the nyse trading
-    sessions.
-
-    Attributes
-    ----------
-    DATA_MAX_DAY : datetime
-        The most recent trading day in the calendar.
-    TRADING_DAY_COUNT : int
-        The number of days to put in the calendar. The default value of
-        ``TRADING_DAY_COUNT`` is 126 (half a trading-year). Inheritors can
-        override TRADING_DAY_COUNT to request more or less data.
-    """
-    DATA_MIN_DAY = alias('START_DATE')
-    DATA_MAX_DAY = alias('END_DATE')
-
-    # For backwards compatibility, exisitng tests and fixtures refer to
-    # `trading_days` with the assumption that the value is days of the NYSE
-    # calendar.
-    trading_days = alias('nyse_sessions')
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithTradingSessions, cls).init_class_fixtures()
-
-        cls.trading_sessions = {}
-
-        for cal_str in cls.TRADING_CALENDAR_STRS:
-            trading_calendar = cls.trading_calendars[cal_str]
-            sessions = trading_calendar.sessions_in_range(
-                cls.DATA_MIN_DAY, cls.DATA_MAX_DAY)
-            # Set name for aliasing.
-            setattr(cls,
-                    '{0}_sessions'.format(cal_str.lower()), sessions)
-            cls.trading_sessions[cal_str] = sessions
-
-
-class WithTmpDir(object):
-    """
-    ZiplineTestCase mixing providing cls.tmpdir as a class-level fixture.
-
-    After init_class_fixtures has been called, `cls.tmpdir` is populated with
-    a `testfixtures.TempDirectory` object whose path is `cls.TMP_DIR_PATH`.
-
-    Attributes
-    ----------
-    TMP_DIR_PATH : str
-        The path to the new directory to create. By default this is None
-        which will create a unique directory in /tmp.
-    """
-    TMP_DIR_PATH = None
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithTmpDir, cls).init_class_fixtures()
-        cls.tmpdir = cls.enter_class_context(
-            tmp_dir(path=cls.TMP_DIR_PATH),
-        )
-
-
-class WithInstanceTmpDir(object):
-    """
-    ZiplineTestCase mixing providing self.tmpdir as an instance-level fixture.
-
-    After init_instance_fixtures has been called, `self.tmpdir` is populated
-    with a `testfixtures.TempDirectory` object whose path is
-    `cls.TMP_DIR_PATH`.
-
-    Attributes
-    ----------
-    INSTANCE_TMP_DIR_PATH : str
-        The path to the new directory to create. By default this is None
-        which will create a unique directory in /tmp.
-    """
-    INSTANCE_TMP_DIR_PATH = None
-
-    def init_instance_fixtures(self):
-        super(WithInstanceTmpDir, self).init_instance_fixtures()
-        self.instance_tmpdir = self.enter_instance_context(
-            tmp_dir(path=self.INSTANCE_TMP_DIR_PATH),
-        )
-
-
-class WithEquityDailyBarData(WithAssetFinder, WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.make_equity_daily_bar_data.
-
-    Attributes
-    ----------
-    EQUITY_DAILY_BAR_START_DATE : Timestamp
-        The date at to which to start creating data. This defaults to
-        ``START_DATE``.
-    EQUITY_DAILY_BAR_END_DATE = Timestamp
-        The end date up to which to create data. This defaults to ``END_DATE``.
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE : bool
-        If this flag is set, `make_equity_daily_bar_data` will read data from
-        the minute bars defined by `WithEquityMinuteBarData`.
-        The current default is `False`, but could be `True` in the future.
-
-    Methods
-    -------
-    make_equity_daily_bar_data() -> iterable[(int, pd.DataFrame)]
-        A class method that returns an iterator of (sid, dataframe) pairs
-        which will be written to the bcolz files that the class's
-        ``BcolzDailyBarReader`` will read from. By default this creates
-        some simple synthetic data with
-        :func:`~zipline.testing.create_daily_bar_data`
-
-    See Also
-    --------
-    WithEquityMinuteBarData
-    zipline.testing.create_daily_bar_data
-    """
-    EQUITY_DAILY_BAR_START_DATE = alias('START_DATE')
-    EQUITY_DAILY_BAR_END_DATE = alias('END_DATE')
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE = None
-
-    @classproperty
-    def EQUITY_DAILY_BAR_LOOKBACK_DAYS(cls):
-        # If we're sourcing from minute data, then we almost certainly want the
-        # minute bar calendar to be aligned with the daily bar calendar, so
-        # re-use the same lookback parameter.
-        if cls.EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE:
-            return cls.EQUITY_MINUTE_BAR_LOOKBACK_DAYS
-        else:
-            return 0
-
-    @classmethod
-    def _make_equity_daily_bar_from_minute(cls):
-        assert issubclass(cls, WithEquityMinuteBarData), \
-            "Can't source daily data from minute without minute data!"
-        assets = cls.asset_finder.retrieve_all(cls.asset_finder.equities_sids)
-        minute_data = dict(cls.make_equity_minute_bar_data())
-        for asset in assets:
-            yield asset.sid, minute_frame_to_session_frame(
-                minute_data[asset.sid],
-                cls.trading_calendars[Equity])
-
-    @classmethod
-    def make_equity_daily_bar_data(cls):
-        # Requires a WithEquityMinuteBarData to come before in the MRO.
-        # Resample that data so that daily and minute bar data are aligned.
-        if cls.EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE:
-            return cls._make_equity_daily_bar_from_minute()
-        else:
-            return create_daily_bar_data(
-                cls.equity_daily_bar_days,
-                cls.asset_finder.equities_sids,
-            )
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithEquityDailyBarData, cls).init_class_fixtures()
-        trading_calendar = cls.trading_calendars[Equity]
-
-        if trading_calendar.is_session(cls.EQUITY_DAILY_BAR_START_DATE):
-            first_session = cls.EQUITY_DAILY_BAR_START_DATE
-        else:
-            first_session = trading_calendar.minute_to_session_label(
-                pd.Timestamp(cls.EQUITY_DAILY_BAR_START_DATE)
-            )
-
-        if cls.EQUITY_DAILY_BAR_LOOKBACK_DAYS > 0:
-            first_session = trading_calendar.sessions_window(
-                first_session,
-                -1 * cls.EQUITY_DAILY_BAR_LOOKBACK_DAYS
-            )[0]
-
-        days = trading_calendar.sessions_in_range(
-            first_session,
-            cls.EQUITY_DAILY_BAR_END_DATE,
-        )
-
-        cls.equity_daily_bar_days = days
-
-
-class WithFutureDailyBarData(WithAssetFinder, WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.make_future_daily_bar_data.
-
-    Attributes
-    ----------
-    FUTURE_DAILY_BAR_START_DATE : Timestamp
-        The date at to which to start creating data. This defaults to
-        ``START_DATE``.
-    FUTURE_DAILY_BAR_END_DATE = Timestamp
-        The end date up to which to create data. This defaults to ``END_DATE``.
-    FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE : bool
-        If this flag is set, `make_future_daily_bar_data` will read data from
-        the minute bars defined by `WithFutureMinuteBarData`.
-        The current default is `False`, but could be `True` in the future.
-
-    Methods
-    -------
-    make_future_daily_bar_data() -> iterable[(int, pd.DataFrame)]
-        A class method that returns an iterator of (sid, dataframe) pairs
-        which will be written to the bcolz files that the class's
-        ``BcolzDailyBarReader`` will read from. By default this creates
-        some simple synthetic data with
-        :func:`~zipline.testing.create_daily_bar_data`
-
-    See Also
-    --------
-    WithFutureMinuteBarData
-    zipline.testing.create_daily_bar_data
-    """
-    FUTURE_DAILY_BAR_USE_FULL_CALENDAR = False
-    FUTURE_DAILY_BAR_START_DATE = alias('START_DATE')
-    FUTURE_DAILY_BAR_END_DATE = alias('END_DATE')
-    FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE = None
-
-    @classproperty
-    def FUTURE_DAILY_BAR_LOOKBACK_DAYS(cls):
-        # If we're sourcing from minute data, then we almost certainly want the
-        # minute bar calendar to be aligned with the daily bar calendar, so
-        # re-use the same lookback parameter.
-        if cls.FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE:
-            return cls.FUTURE_MINUTE_BAR_LOOKBACK_DAYS
-        else:
-            return 0
-
-    @classmethod
-    def _make_future_daily_bar_from_minute(cls):
-        assert issubclass(cls, WithFutureMinuteBarData), \
-            "Can't source daily data from minute without minute data!"
-        assets = cls.asset_finder.retrieve_all(cls.asset_finder.futures_sids)
-        minute_data = dict(cls.make_future_minute_bar_data())
-        for asset in assets:
-            yield asset.sid, minute_frame_to_session_frame(
-                minute_data[asset.sid],
-                cls.trading_calendars[Future])
-
-    @classmethod
-    def make_future_daily_bar_data(cls):
-        # Requires a WithFutureMinuteBarData to come before in the MRO.
-        # Resample that data so that daily and minute bar data are aligned.
-        if cls.FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE:
-            return cls._make_future_daily_bar_from_minute()
-        else:
-            return create_daily_bar_data(
-                cls.future_daily_bar_days,
-                cls.asset_finder.futures_sids,
-            )
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithFutureDailyBarData, cls).init_class_fixtures()
-        trading_calendar = cls.trading_calendars[Future]
-        if cls.FUTURE_DAILY_BAR_USE_FULL_CALENDAR:
-            days = trading_calendar.all_sessions
-        else:
-            if trading_calendar.is_session(cls.FUTURE_DAILY_BAR_START_DATE):
-                first_session = cls.FUTURE_DAILY_BAR_START_DATE
+                if self.p.expand or not self.p.x_range:
+                    x_range = self.p.x_range or element.range(x)
+                else:
+                    x0, x1 = self.p.x_range
+                    ex0, ex1 = element.range(x)
+                    x_range = np.max([x0, ex0]), np.min([x1, ex1])
+                if x_range[0] == x_range[1]:
+                    x_range = (x_range[0]-0.5, x_range[0]+0.5)
+                    
+                if self.p.expand or not self.p.y_range:
+                    y_range = self.p.y_range or element.range(y)
+                else:
+                    y0, y1 = self.p.y_range
+                    ey0, ey1 = element.range(y)
+                    y_range = np.max([y0, ey0]), np.min([y1, ey1])
+            width, height = self.p.width, self.p.height
+        (xstart, xend), (ystart, yend) = x_range, y_range
+
+        xtype = 'numeric'
+        if isinstance(xstart, datetime_types) or isinstance(xend, datetime_types):
+            xstart, xend = dt_to_int(xstart, 'ns'), dt_to_int(xend, 'ns')
+            xtype = 'datetime'
+        elif not np.isfinite(xstart) and not np.isfinite(xend):
+            if element.get_dimension_type(x) in datetime_types:
+                xstart, xend = 0, 10000
+                xtype = 'datetime'
             else:
-                first_session = trading_calendar.minute_to_session_label(
-                    pd.Timestamp(cls.FUTURE_DAILY_BAR_START_DATE)
-                )
-
-            if cls.FUTURE_DAILY_BAR_LOOKBACK_DAYS > 0:
-                first_session = trading_calendar.sessions_window(
-                    first_session,
-                    -1 * cls.FUTURE_DAILY_BAR_LOOKBACK_DAYS
-                )[0]
-
-            days = trading_calendar.sessions_in_range(
-                first_session,
-                cls.FUTURE_DAILY_BAR_END_DATE,
-            )
-
-        cls.future_daily_bar_days = days
-
-
-class WithBcolzEquityDailyBarReader(WithEquityDailyBarData, WithTmpDir):
-    """
-    ZiplineTestCase mixin providing cls.bcolz_daily_bar_path,
-    cls.bcolz_daily_bar_ctable, and cls.bcolz_equity_daily_bar_reader
-    class level fixtures.
-
-    After init_class_fixtures has been called:
-    - `cls.bcolz_daily_bar_path` is populated with
-      `cls.tmpdir.getpath(cls.BCOLZ_DAILY_BAR_PATH)`.
-    - `cls.bcolz_daily_bar_ctable` is populated with data returned from
-      `cls.make_equity_daily_bar_data`. By default this calls
-      :func:`zipline.pipeline.loaders.synthetic.make_equity_daily_bar_data`.
-    - `cls.bcolz_equity_daily_bar_reader` is a daily bar reader
-       pointing to the directory that was just written to.
-
-    Attributes
-    ----------
-    BCOLZ_DAILY_BAR_PATH : str
-        The path inside the tmpdir where this will be written.
-    EQUITY_DAILY_BAR_LOOKBACK_DAYS : int
-        The number of days of data to add before the first day. This is used
-        when a test needs to use history, in which case this should be set to
-        the largest history window that will be
-        requested.
-    EQUITY_DAILY_BAR_USE_FULL_CALENDAR : bool
-        If this flag is set the ``equity_daily_bar_days`` will be the full
-        set of trading days from the trading environment. This flag overrides
-        ``EQUITY_DAILY_BAR_LOOKBACK_DAYS``.
-    BCOLZ_DAILY_BAR_READ_ALL_THRESHOLD : int
-        If this flag is set, use the value as the `read_all_threshold`
-        parameter to BcolzDailyBarReader, otherwise use the default
-        value.
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE : bool
-        If this flag is set, `make_equity_daily_bar_data` will read data from
-        the minute bar reader defined by a `WithBcolzEquityMinuteBarReader`.
-
-    Methods
-    -------
-    make_bcolz_daily_bar_rootdir_path() -> string
-        A class method that returns the path for the rootdir of the daily
-        bars ctable. By default this is a subdirectory BCOLZ_DAILY_BAR_PATH in
-        the shared temp directory.
-
-    See Also
-    --------
-    WithBcolzEquityMinuteBarReader
-    WithDataPortal
-    zipline.testing.create_daily_bar_data
-    """
-    BCOLZ_DAILY_BAR_PATH = 'daily_equity_pricing.bcolz'
-    BCOLZ_DAILY_BAR_READ_ALL_THRESHOLD = None
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE = False
-    # allows WithBcolzEquityDailyBarReaderFromCSVs to call the
-    # `write_csvs`method without needing to reimplement `init_class_fixtures`
-    _write_method_name = 'write'
-    # What to do when data being written is invalid, e.g. nan, inf, etc.
-    # options are: 'warn', 'raise', 'ignore'
-    INVALID_DATA_BEHAVIOR = 'warn'
-
-    @classmethod
-    def make_bcolz_daily_bar_rootdir_path(cls):
-        return cls.tmpdir.makedir(cls.BCOLZ_DAILY_BAR_PATH)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithBcolzEquityDailyBarReader, cls).init_class_fixtures()
-
-        cls.bcolz_daily_bar_path = p = cls.make_bcolz_daily_bar_rootdir_path()
-        days = cls.equity_daily_bar_days
-
-        trading_calendar = cls.trading_calendars[Equity]
-        cls.bcolz_daily_bar_ctable = t = getattr(
-            BcolzDailyBarWriter(p, trading_calendar, days[0], days[-1]),
-            cls._write_method_name,
-        )(
-            cls.make_equity_daily_bar_data(),
-            invalid_data_behavior=cls.INVALID_DATA_BEHAVIOR
-        )
-
-        if cls.BCOLZ_DAILY_BAR_READ_ALL_THRESHOLD is not None:
-            cls.bcolz_equity_daily_bar_reader = BcolzDailyBarReader(
-                t, cls.BCOLZ_DAILY_BAR_READ_ALL_THRESHOLD)
-        else:
-            cls.bcolz_equity_daily_bar_reader = BcolzDailyBarReader(t)
-
-
-class WithBcolzFutureDailyBarReader(WithFutureDailyBarData, WithTmpDir):
-    """
-    ZiplineTestCase mixin providing cls.bcolz_daily_bar_path,
-    cls.bcolz_daily_bar_ctable, and cls.bcolz_future_daily_bar_reader
-    class level fixtures.
-
-    After init_class_fixtures has been called:
-    - `cls.bcolz_daily_bar_path` is populated with
-      `cls.tmpdir.getpath(cls.BCOLZ_DAILY_BAR_PATH)`.
-    - `cls.bcolz_daily_bar_ctable` is populated with data returned from
-      `cls.make_future_daily_bar_data`. By default this calls
-      :func:`zipline.pipeline.loaders.synthetic.make_future_daily_bar_data`.
-    - `cls.bcolz_future_daily_bar_reader` is a daily bar reader
-       pointing to the directory that was just written to.
-
-    Attributes
-    ----------
-    BCOLZ_DAILY_BAR_PATH : str
-        The path inside the tmpdir where this will be written.
-    FUTURE_DAILY_BAR_LOOKBACK_DAYS : int
-        The number of days of data to add before the first day. This is used
-        when a test needs to use history, in which case this should be set to
-        the largest history window that will be
-        requested.
-    FUTURE_DAILY_BAR_USE_FULL_CALENDAR : bool
-        If this flag is set the ``future_daily_bar_days`` will be the full
-        set of trading days from the trading environment. This flag overrides
-        ``FUTURE_DAILY_BAR_LOOKBACK_DAYS``.
-    BCOLZ_FUTURE_DAILY_BAR_READ_ALL_THRESHOLD : int
-        If this flag is set, use the value as the `read_all_threshold`
-        parameter to BcolzDailyBarReader, otherwise use the default
-        value.
-    FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE : bool
-        If this flag is set, `make_future_daily_bar_data` will read data from
-        the minute bar reader defined by a `WithBcolzFutureMinuteBarReader`.
-
-    Methods
-    -------
-    make_bcolz_daily_bar_rootdir_path() -> string
-        A class method that returns the path for the rootdir of the daily
-        bars ctable. By default this is a subdirectory BCOLZ_DAILY_BAR_PATH in
-        the shared temp directory.
-
-    See Also
-    --------
-    WithBcolzFutureMinuteBarReader
-    WithDataPortal
-    zipline.testing.create_daily_bar_data
-    """
-    BCOLZ_FUTURE_DAILY_BAR_PATH = 'daily_future_pricing.bcolz'
-    BCOLZ_FUTURE_DAILY_BAR_READ_ALL_THRESHOLD = None
-    FUTURE_DAILY_BAR_SOURCE_FROM_MINUTE = False
-
-    # What to do when data being written is invalid, e.g. nan, inf, etc.
-    # options are: 'warn', 'raise', 'ignore'
-    BCOLZ_FUTURE_DAILY_BAR_INVALID_DATA_BEHAVIOR = 'warn'
-
-    BCOLZ_FUTURE_DAILY_BAR_WRITE_METHOD_NAME = 'write'
-
-    @classmethod
-    def make_bcolz_future_daily_bar_rootdir_path(cls):
-        return cls.tmpdir.makedir(cls.BCOLZ_FUTURE_DAILY_BAR_PATH)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithBcolzFutureDailyBarReader, cls).init_class_fixtures()
-
-        p = cls.make_bcolz_future_daily_bar_rootdir_path()
-        cls.future_bcolz_daily_bar_path = p
-        days = cls.future_daily_bar_days
-
-        trading_calendar = cls.trading_calendars[Future]
-        cls.future_bcolz_daily_bar_ctable = t = getattr(
-            BcolzDailyBarWriter(p, trading_calendar, days[0], days[-1]),
-            cls.BCOLZ_FUTURE_DAILY_BAR_WRITE_METHOD_NAME,
-        )(
-            cls.make_future_daily_bar_data(),
-            invalid_data_behavior=(
-                cls.BCOLZ_FUTURE_DAILY_BAR_INVALID_DATA_BEHAVIOR
-            )
-        )
-
-        if cls.BCOLZ_FUTURE_DAILY_BAR_READ_ALL_THRESHOLD is not None:
-            cls.bcolz_future_daily_bar_reader = BcolzDailyBarReader(
-                t, cls.BCOLZ_FUTURE_DAILY_BAR_READ_ALL_THRESHOLD)
-        else:
-            cls.bcolz_future_daily_bar_reader = BcolzDailyBarReader(t)
-
-
-class WithBcolzEquityDailyBarReaderFromCSVs(WithBcolzEquityDailyBarReader):
-    """
-    ZiplineTestCase mixin that provides
-    cls.bcolz_equity_daily_bar_reader from a mapping of sids to CSV
-    file paths.
-    """
-    _write_method_name = 'write_csvs'
-
-
-def _trading_days_for_minute_bars(calendar,
-                                  start_date,
-                                  end_date,
-                                  lookback_days):
-    first_session = calendar.minute_to_session_label(start_date)
-
-    if lookback_days > 0:
-        first_session = calendar.sessions_window(
-            first_session,
-            -1 * lookback_days
-        )[0]
-
-    return calendar.sessions_in_range(first_session, end_date)
-
-
-class WithHDF5EquityDailyBarReader(WithEquityDailyBarData, WithTmpDir):
-    """
-    ZiplineTestCase mixin providing cls.hdf5_daily_bar_path and
-    cls.hdf5_equity_daily_bar_reader class level fixtures.
-
-    After init_class_fixtures has been called:
-    - `cls.hdf5_daily_bar_path` is populated with
-      `cls.tmpdir.getpath(cls.HDF5_DAILY_BAR_PATH)`.
-    - The file at `cls.hdf5_daily_bar_path` is populated with data returned
-      from `cls.make_equity_daily_bar_data`. By default this calls
-      :func:`zipline.pipeline.loaders.synthetic.make_equity_daily_bar_data`.
-    - `cls.hdf5_equity_daily_bar_reader` is a daily bar reader pointing
-      to the file that was just written to.
-
-    Attributes
-    ----------
-    HDF5_DAILY_BAR_PATH : str
-        The path inside the tmpdir where this will be written.
-    HDF5_DAILY_BAR_COUNTRY_CODE : str
-        The ISO 3166 alpha-2 country code for the country to write/read.
-    EQUITY_DAILY_BAR_LOOKBACK_DAYS : int
-        The number of days of data to add before the first day. This is used
-        when a test needs to use history, in which case this should be set to
-        the largest history window that will be
-        requested.
-    EQUITY_DAILY_BAR_USE_FULL_CALENDAR : bool
-        If this flag is set the ``equity_daily_bar_days`` will be the full
-        set of trading days from the trading environment. This flag overrides
-        ``EQUITY_DAILY_BAR_LOOKBACK_DAYS``.
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE : bool
-        If this flag is set, `make_equity_daily_bar_data` will read data from
-        the minute bar reader defined by a `WithBcolzEquityMinuteBarReader`.
-
-    Methods
-    -------
-    make_hdf5_daily_bar_path() -> string
-        A class method that returns the path for the rootdir of the daily
-        bars ctable. By default this is a subdirectory HDF5_DAILY_BAR_PATH in
-        the shared temp directory.
-
-    See Also
-    --------
-    WithDataPortal
-    zipline.testing.create_daily_bar_data
-    """
-    HDF5_DAILY_BAR_PATH = 'daily_equity_pricing.h5'
-    HDF5_DAILY_BAR_COUNTRY_CODE = 'US'
-    EQUITY_DAILY_BAR_SOURCE_FROM_MINUTE = False
-
-    @classmethod
-    def make_hdf5_daily_bar_path(cls):
-        return cls.tmpdir.getpath(cls.HDF5_DAILY_BAR_PATH)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithHDF5EquityDailyBarReader, cls).init_class_fixtures()
-
-        cls.hdf5_daily_bar_path = p = cls.make_hdf5_daily_bar_path()
-
-        f = HDF5DailyBarWriter(p, date_chunk_size=30).write_from_sid_df_pairs(
-            cls.HDF5_DAILY_BAR_COUNTRY_CODE,
-            cls.make_equity_daily_bar_data(),
-        )
-
-        cls.hdf5_equity_daily_bar_reader = (
-            MultiCountryHDF5DailyBarReader.from_file(f)
-        )
-
-
-class WithEquityMinuteBarData(WithAssetFinder, WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.equity_minute_bar_days.
-
-    After init_class_fixtures has been called:
-    - `cls.equity_minute_bar_days` has the range over which data has been
-       generated.
-
-    Attributes
-    ----------
-    EQUITY_MINUTE_BAR_LOOKBACK_DAYS : int
-        The number of days of data to add before the first day.
-        This is used when a test needs to use history, in which case this
-        should be set to the largest history window that will be requested.
-    EQUITY_MINUTE_BAR_START_DATE : Timestamp
-        The date at to which to start creating data. This defaults to
-        ``START_DATE``.
-    EQUITY_MINUTE_BAR_END_DATE = Timestamp
-        The end date up to which to create data. This defaults to ``END_DATE``.
-
-    Methods
-    -------
-    make_equity_minute_bar_data() -> iterable[(int, pd.DataFrame)]
-        Classmethod producing an iterator of (sid, minute_data) pairs.
-        The default implementation invokes
-        zipline.testing.core.create_minute_bar_data.
-
-    See Also
-    --------
-    WithEquityDailyBarData
-    zipline.testing.create_minute_bar_data
-    """
-    EQUITY_MINUTE_BAR_LOOKBACK_DAYS = 0
-    EQUITY_MINUTE_BAR_START_DATE = alias('START_DATE')
-    EQUITY_MINUTE_BAR_END_DATE = alias('END_DATE')
-
-    @classmethod
-    def make_equity_minute_bar_data(cls):
-        trading_calendar = cls.trading_calendars[Equity]
-        return create_minute_bar_data(
-            trading_calendar.minutes_for_sessions_in_range(
-                cls.equity_minute_bar_days[0],
-                cls.equity_minute_bar_days[-1],
-            ),
-            cls.asset_finder.equities_sids,
-        )
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithEquityMinuteBarData, cls).init_class_fixtures()
-        trading_calendar = cls.trading_calendars[Equity]
-        cls.equity_minute_bar_days = _trading_days_for_minute_bars(
-            trading_calendar,
-            pd.Timestamp(cls.EQUITY_MINUTE_BAR_START_DATE),
-            pd.Timestamp(cls.EQUITY_MINUTE_BAR_END_DATE),
-            cls.EQUITY_MINUTE_BAR_LOOKBACK_DAYS
-        )
-
-
-class WithFutureMinuteBarData(WithAssetFinder, WithTradingCalendars):
-    """
-    ZiplineTestCase mixin providing cls.future_minute_bar_days.
-
-    After init_class_fixtures has been called:
-    - `cls.future_minute_bar_days` has the range over which data has been
-       generated.
-
-    Attributes
-    ----------
-    FUTURE_MINUTE_BAR_LOOKBACK_DAYS : int
-        The number of days of data to add before the first day.
-        This is used when a test needs to use history, in which case this
-        should be set to the largest history window that will be requested.
-    FUTURE_MINUTE_BAR_START_DATE : Timestamp
-        The date at to which to start creating data. This defaults to
-        ``START_DATE``.
-    FUTURE_MINUTE_BAR_END_DATE = Timestamp
-        The end date up to which to create data. This defaults to ``END_DATE``.
-
-    Methods
-    -------
-    make_future_minute_bar_data() -> iterable[(int, pd.DataFrame)]
-        A class method that returns a dict mapping sid to dataframe
-        which will be written to into the the format of the inherited
-        class which writes the minute bar data for use by a reader.
-        By default this creates some simple sythetic data with
-        :func:`~zipline.testing.create_minute_bar_data`
-
-    See Also
-    --------
-    zipline.testing.create_minute_bar_data
-    """
-    FUTURE_MINUTE_BAR_LOOKBACK_DAYS = 0
-    FUTURE_MINUTE_BAR_START_DATE = alias('START_DATE')
-    FUTURE_MINUTE_BAR_END_DATE = alias('END_DATE')
-
-    @classmethod
-    def make_future_minute_bar_data(cls):
-        trading_calendar = get_calendar('us_futures')
-        return create_minute_bar_data(
-            trading_calendar.minutes_for_sessions_in_range(
-                cls.future_minute_bar_days[0],
-                cls.future_minute_bar_days[-1],
-            ),
-            cls.asset_finder.futures_sids,
-        )
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithFutureMinuteBarData, cls).init_class_fixtures()
-        trading_calendar = get_calendar('us_futures')
-        cls.future_minute_bar_days = _trading_days_for_minute_bars(
-            trading_calendar,
-            pd.Timestamp(cls.FUTURE_MINUTE_BAR_START_DATE),
-            pd.Timestamp(cls.FUTURE_MINUTE_BAR_END_DATE),
-            cls.FUTURE_MINUTE_BAR_LOOKBACK_DAYS
-        )
-
-
-class WithBcolzEquityMinuteBarReader(WithEquityMinuteBarData, WithTmpDir):
-    """
-    ZiplineTestCase mixin providing cls.bcolz_minute_bar_path,
-    cls.bcolz_minute_bar_ctable, and cls.bcolz_equity_minute_bar_reader
-    class level fixtures.
-
-    After init_class_fixtures has been called:
-    - `cls.bcolz_minute_bar_path` is populated with
-      `cls.tmpdir.getpath(cls.BCOLZ_MINUTE_BAR_PATH)`.
-    - `cls.bcolz_minute_bar_ctable` is populated with data returned from
-      `cls.make_equity_minute_bar_data`. By default this calls
-      :func:`zipline.pipeline.loaders.synthetic.make_equity_minute_bar_data`.
-    - `cls.bcolz_equity_minute_bar_reader` is a minute bar reader
-       pointing to the directory that was just written to.
-
-    Attributes
-    ----------
-    BCOLZ_MINUTE_BAR_PATH : str
-        The path inside the tmpdir where this will be written.
-
-    Methods
-    -------
-    make_bcolz_minute_bar_rootdir_path() -> string
-        A class method that returns the path for the directory that contains
-        the minute bar ctables. By default this is a subdirectory
-        BCOLZ_MINUTE_BAR_PATH in the shared temp directory.
-
-    See Also
-    --------
-    WithBcolzEquityDailyBarReader
-    WithDataPortal
-    zipline.testing.create_minute_bar_data
-    """
-    BCOLZ_EQUITY_MINUTE_BAR_PATH = 'minute_equity_pricing'
-
-    @classmethod
-    def make_bcolz_equity_minute_bar_rootdir_path(cls):
-        return cls.tmpdir.makedir(cls.BCOLZ_EQUITY_MINUTE_BAR_PATH)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithBcolzEquityMinuteBarReader, cls).init_class_fixtures()
-        cls.bcolz_equity_minute_bar_path = p = \
-            cls.make_bcolz_equity_minute_bar_rootdir_path()
-        days = cls.equity_minute_bar_days
-
-        writer = BcolzMinuteBarWriter(
-            p,
-            cls.trading_calendars[Equity],
-            days[0],
-            days[-1],
-            US_EQUITIES_MINUTES_PER_DAY
-        )
-        writer.write(cls.make_equity_minute_bar_data())
-
-        cls.bcolz_equity_minute_bar_reader = \
-            BcolzMinuteBarReader(p)
-
-
-class WithBcolzFutureMinuteBarReader(WithFutureMinuteBarData, WithTmpDir):
-    """
-    ZiplineTestCase mixin providing cls.bcolz_minute_bar_path,
-    cls.bcolz_minute_bar_ctable, and cls.bcolz_equity_minute_bar_reader
-    class level fixtures.
-
-    After init_class_fixtures has been called:
-    - `cls.bcolz_minute_bar_path` is populated with
-      `cls.tmpdir.getpath(cls.BCOLZ_MINUTE_BAR_PATH)`.
-    - `cls.bcolz_minute_bar_ctable` is populated with data returned from
-      `cls.make_equity_minute_bar_data`. By default this calls
-      :func:`zipline.pipeline.loaders.synthetic.make_equity_minute_bar_data`.
-    - `cls.bcolz_equity_minute_bar_reader` is a minute bar reader
-       pointing to the directory that was just written to.
-
-    Attributes
-    ----------
-    BCOLZ_FUTURE_MINUTE_BAR_PATH : str
-        The path inside the tmpdir where this will be written.
-
-    Methods
-    -------
-    make_bcolz_minute_bar_rootdir_path() -> string
-        A class method that returns the path for the directory that contains
-        the minute bar ctables. By default this is a subdirectory
-        BCOLZ_MINUTE_BAR_PATH in the shared temp directory.
-
-    See Also
-    --------
-    WithBcolzEquityDailyBarReader
-    WithDataPortal
-    zipline.testing.create_minute_bar_data
-    """
-    BCOLZ_FUTURE_MINUTE_BAR_PATH = 'minute_future_pricing'
-    OHLC_RATIOS_PER_SID = None
-
-    @classmethod
-    def make_bcolz_future_minute_bar_rootdir_path(cls):
-        return cls.tmpdir.makedir(cls.BCOLZ_FUTURE_MINUTE_BAR_PATH)
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithBcolzFutureMinuteBarReader, cls).init_class_fixtures()
-        trading_calendar = get_calendar('us_futures')
-        cls.bcolz_future_minute_bar_path = p = \
-            cls.make_bcolz_future_minute_bar_rootdir_path()
-        days = cls.future_minute_bar_days
-
-        writer = BcolzMinuteBarWriter(
-            p,
-            trading_calendar,
-            days[0],
-            days[-1],
-            FUTURES_MINUTES_PER_DAY,
-            ohlc_ratios_per_sid=cls.OHLC_RATIOS_PER_SID,
-        )
-        writer.write(cls.make_future_minute_bar_data())
-
-        cls.bcolz_future_minute_bar_reader = \
-            BcolzMinuteBarReader(p)
-
-
-class WithConstantEquityMinuteBarData(WithEquityMinuteBarData):
-
-    EQUITY_MINUTE_CONSTANT_LOW = 3.0
-    EQUITY_MINUTE_CONSTANT_OPEN = 4.0
-    EQUITY_MINUTE_CONSTANT_CLOSE = 5.0
-    EQUITY_MINUTE_CONSTANT_HIGH = 6.0
-    EQUITY_MINUTE_CONSTANT_VOLUME = 100.0
-
-    @classmethod
-    def make_equity_minute_bar_data(cls):
-        trading_calendar = cls.trading_calendars[Equity]
-
-        sids = cls.asset_finder.equities_sids
-        minutes = trading_calendar.minutes_for_sessions_in_range(
-            cls.equity_minute_bar_days[0],
-            cls.equity_minute_bar_days[-1],
-        )
-        frame = pd.DataFrame(
-            {
-                'open': cls.EQUITY_MINUTE_CONSTANT_OPEN,
-                'high': cls.EQUITY_MINUTE_CONSTANT_HIGH,
-                'low': cls.EQUITY_MINUTE_CONSTANT_LOW,
-                'close': cls.EQUITY_MINUTE_CONSTANT_CLOSE,
-                'volume': cls.EQUITY_MINUTE_CONSTANT_VOLUME,
-            },
-            index=minutes,
-        )
-
-        return ((sid, frame) for sid in sids)
-
-
-class WithConstantFutureMinuteBarData(WithFutureMinuteBarData):
-
-    FUTURE_MINUTE_CONSTANT_LOW = 3.0
-    FUTURE_MINUTE_CONSTANT_OPEN = 4.0
-    FUTURE_MINUTE_CONSTANT_CLOSE = 5.0
-    FUTURE_MINUTE_CONSTANT_HIGH = 6.0
-    FUTURE_MINUTE_CONSTANT_VOLUME = 100.0
-
-    @classmethod
-    def make_future_minute_bar_data(cls):
-        trading_calendar = cls.trading_calendars[Future]
-
-        sids = cls.asset_finder.futures_sids
-        minutes = trading_calendar.minutes_for_sessions_in_range(
-            cls.future_minute_bar_days[0],
-            cls.future_minute_bar_days[-1],
-        )
-        frame = pd.DataFrame(
-            {
-                'open': cls.FUTURE_MINUTE_CONSTANT_OPEN,
-                'high': cls.FUTURE_MINUTE_CONSTANT_HIGH,
-                'low': cls.FUTURE_MINUTE_CONSTANT_LOW,
-                'close': cls.FUTURE_MINUTE_CONSTANT_CLOSE,
-                'volume': cls.FUTURE_MINUTE_CONSTANT_VOLUME,
-            },
-            index=minutes,
-        )
-
-        return ((sid, frame) for sid in sids)
-
-
-class WithAdjustmentReader(WithBcolzEquityDailyBarReader):
-    """
-    ZiplineTestCase mixin providing cls.adjustment_reader as a class level
-    fixture.
-
-    After init_class_fixtures has been called, `cls.adjustment_reader` will be
-    populated with a new SQLiteAdjustmentReader object. The data that will be
-    written can be passed by overriding `make_{field}_data` where field may
-    be `splits`, `mergers` `dividends`, or `stock_dividends`.
-    The daily bar reader used for this adjustment reader may be customized
-    by overriding `make_adjustment_writer_equity_daily_bar_reader`.
-    This is useful to providing a `MockDailyBarReader`.
-
-    Methods
-    -------
-    make_splits_data() -> pd.DataFrame
-        A class method that returns a dataframe of splits data to write to the
-        class's adjustment db. By default this is empty.
-    make_mergers_data() -> pd.DataFrame
-        A class method that returns a dataframe of mergers data to write to the
-        class's adjustment db. By default this is empty.
-    make_dividends_data() -> pd.DataFrame
-        A class method that returns a dataframe of dividends data to write to
-        the class's adjustment db. By default this is empty.
-    make_stock_dividends_data() -> pd.DataFrame
-        A class method that returns a dataframe of stock dividends data to
-        write to the class's adjustment db. By default this is empty.
-    make_adjustment_db_conn_str() -> string
-        A class method that returns the sqlite3 connection string for the
-        database in to which the adjustments will be written. By default this
-        is an in-memory database.
-    make_adjustment_writer_equity_daily_bar_reader() -> pd.DataFrame
-        A class method that returns the daily bar reader to use for the class's
-        adjustment writer. By default this is the class's actual
-        ``bcolz_equity_daily_bar_reader`` as inherited from
-        ``WithBcolzEquityDailyBarReader``. This should probably not be
-          overridden; however, some tests used a ``MockDailyBarReader``
-         for this.
-    make_adjustment_writer(conn: sqlite3.Connection) -> AdjustmentWriter
-        A class method that constructs the adjustment which will be used
-        to write the data into the connection to be used by the class's
-        adjustment reader.
-
-    See Also
-    --------
-    zipline.testing.MockDailyBarReader
-    """
-    @classmethod
-    def _make_data(cls):
-        return None
-
-    make_splits_data = _make_data
-    make_mergers_data = _make_data
-    make_dividends_data = _make_data
-    make_stock_dividends_data = _make_data
-
-    del _make_data
-
-    @classmethod
-    def make_adjustment_writer(cls, conn):
-        return SQLiteAdjustmentWriter(
-            conn,
-            cls.make_adjustment_writer_equity_daily_bar_reader(),
-            cls.equity_daily_bar_days,
-        )
-
-    @classmethod
-    def make_adjustment_writer_equity_daily_bar_reader(cls):
-        return cls.bcolz_equity_daily_bar_reader
-
-    @classmethod
-    def make_adjustment_db_conn_str(cls):
-        return ':memory:'
-
-    @classmethod
-    def init_class_fixtures(cls):
-        super(WithAdjustmentReader, cls).init_class_fixtures()
-        conn = sqlite3.connect(cls.make_adjustment_db_conn_str())
-        cls.make_adjustment_writer(conn).write(
-            splits=cls.make_splits_data(),
-            mergers=cls.make_mergers_data(),
-            dividends=cls.make_dividends_data(),
-            stock_dividends=cls.make_stock_dividends_data(),
-        )
-        cls.adjustment_reader = SQLiteAdjustmentReader(conn)
-
-
-class WithUSEquityPricingPipelineEngine(WithAdjustmentReader,
-                                        WithTradingSessions):
-    """
-    Mixin providing the following as a class-level fixtures.
-        - cls.data_root_dir
-        - cls.findata_dir
-        - cls.pipeline_engine
-        - cls.adjustments_db_path
-
-    """
-
-    @classmethod
-    def init_class_fixtures(cls):
-        cls.data_root_dir = cls.enter_class_context(tmp_dir())
-        cls.findata_dir = cls.data_root_dir.makedir('findata')
-        super(WithUSEquityPricingPipelineEngine, cls).init_class_fixtures()
-
-        loader = USEquityPricingLoader(
-            cls.bcolz_equity_daily_bar_reader,
-            SQLiteAdjustmentReader(cls.adjustments_db_path),
-        )
-
-        def get_loader(column):
-            if column in USEquityPricing.columns:
-                return loader
+                xstart, xend = 0, 1
+        elif xstart == xend:
+            xstart, xend = (xstart-0.5, xend+0.5)
+        x_range = (xstart, xend)
+
+        ytype = 'numeric'
+        if isinstance(ystart, datetime_types) or isinstance(yend, datetime_types):
+            ystart, yend = dt_to_int(ystart, 'ns'), dt_to_int(yend, 'ns')
+            ytype = 'datetime'
+        elif not np.isfinite(ystart) and not np.isfinite(yend):
+            if element.get_dimension_type(y) in datetime_types:
+                xstart, xend = 0, 10000
+                xtype = 'datetime'
             else:
-                raise AssertionError("No loader registered for %s" % column)
+                ystart, yend = 0, 1
+        elif ystart == yend:
+            ystart, yend = (ystart-0.5, yend+0.5)
+        y_range = (ystart, yend)
 
-        cls.pipeline_engine = SimplePipelineEngine(
-            get_loader=get_loader,
-            asset_finder=cls.asset_finder,
-            default_domain=US_EQUITIES,
-        )
+        # Compute highest allowed sampling density
+        xspan = xend - xstart
+        yspan = yend - ystart
+        if self.p.x_sampling:
+            width = int(min([(xspan/self.p.x_sampling), width]))
+        if self.p.y_sampling:
+            height = int(min([(yspan/self.p.y_sampling), height]))
+        xunit, yunit = float(xspan)/width, float(yspan)/height
+        xs, ys = (np.linspace(xstart+xunit/2., xend-xunit/2., width),
+                  np.linspace(ystart+yunit/2., yend-yunit/2., height))
+
+        return (x_range, y_range), (xs, ys), (width, height), (xtype, ytype)
+
+
+
+class aggregate(ResamplingOperation):
+    """
+    aggregate implements 2D binning for any valid HoloViews Element
+    type using datashader. I.e., this operation turns a HoloViews
+    Element or overlay of Elements into an Image or an overlay of
+    Images by rasterizing it. This allows quickly aggregating large
+    datasets computing a fixed-sized representation independent
+    of the original dataset size.
+
+    By default it will simply count the number of values in each bin
+    but other aggregators can be supplied implementing mean, max, min
+    and other reduction operations.
+
+    The bins of the aggregate are defined by the width and height and
+    the x_range and y_range. If x_sampling or y_sampling are supplied
+    the operation will ensure that a bin is no smaller than the minimum
+    sampling distance by reducing the width and height when zoomed in
+    beyond the minimum sampling distance.
+
+    By default, the PlotSize stream is applied when this operation
+    is used dynamically, which means that the height and width
+    will automatically be set to match the inner dimensions of
+    the linked plot.
+    """
+
+    aggregator = param.ClassSelector(class_=ds.reductions.Reduction,
+                                     default=ds.count())
 
     @classmethod
-    def make_adjustment_db_conn_str(cls):
-        cls.adjustments_db_path = os.path.join(
-            cls.findata_dir,
-            'adjustments',
-            cls.END_DATE.strftime("%Y-%m-%d-adjustments.db")
-        )
-        ensure_directory(os.path.dirname(cls.adjustments_db_path))
-        return cls.adjustments_db_path
+    def get_agg_data(cls, obj, category=None):
+        """
+        Reduces any Overlay or NdOverlay of Elements into a single
+        xarray Dataset that can be aggregated.
+        """
+        paths = []
+        if isinstance(obj, Graph):
+            obj = obj.edgepaths
+        kdims = list(obj.kdims)
+        vdims = list(obj.vdims)
+        dims = obj.dimensions()[:2]
+        if isinstance(obj, Path):
+            glyph = 'line'
+            for p in obj.split(datatype='dataframe'):
+                paths.append(p)
+        elif isinstance(obj, CompositeOverlay):
+            element = None
+            for key, el in obj.data.items():
+                x, y, element, glyph = cls.get_agg_data(el)
+                dims = (x, y)
+                df = PandasInterface.as_dframe(element)
+                if isinstance(obj, NdOverlay):
+                    df = df.assign(**dict(zip(obj.dimensions('key', True), key)))
+                paths.append(df)
+            if element is None:
+                dims = None
+            else:
+                kdims += element.kdims
+                vdims = element.vdims
+        elif isinstance(obj, Element):
+            glyph = 'line' if isinstance(obj, Curve) else 'points'
+            paths.append(PandasInterface.as_dframe(obj))
+
+        if dims is None or len(dims) != 2:
+            return None, None, None, None
+        else:
+            x, y = dims
+
+        if len(paths) > 1:
+            if glyph == 'line':
+                path = paths[0][:1]
+                if isinstance(path, dd.DataFrame):
+                    path = path.compute()
+                empty = path.copy()
+                empty.iloc[0, :] = (np.NaN,) * empty.shape[1]
+                paths = [elem for p in paths for elem in (p, empty)][:-1]
+            if all(isinstance(path, dd.DataFrame) for path in paths):
+                df = dd.concat(paths)
+            else:
+                paths = [p.compute() if isinstance(p, dd.DataFrame) else p for p in paths]
+                df = pd.concat(paths)
+        else:
+            df = paths[0]
+        if category and df[category].dtype.name != 'category':
+            df[category] = df[category].astype('category')
+
+        if any(df[d.name].dtype.kind == 'M' for d in (x, y)):
+            df = df.copy()
+        for d in (x, y):
+            if df[d.name].dtype.kind == 'M':
+                df[d.name] = df[d.name].astype('datetime64[ns]').astype('int64') * 1000.
+        return x, y, Dataset(df, kdims=kdims, vdims=vdims), glyph
 
 
-class WithSeededRandomPipelineEngine(WithTradingSessions, WithAssetFinder):
+    def _aggregate_ndoverlay(self, element, agg_fn):
+        """
+        Optimized aggregation for NdOverlay objects by aggregating each
+        Element in an NdOverlay individually avoiding having to concatenate
+        items in the NdOverlay. Works by summing sum and count aggregates and
+        applying appropriate masking for NaN values. Mean aggregation
+        is also supported by dividing sum and count aggregates. count_cat
+        aggregates are grouped by the categorical dimension and a separate
+        aggregate for each category is generated.
+        """
+        # Compute overall bounds
+        x, y = element.last.dimensions()[0:2]
+        info = self._get_sampling(element, x, y)
+        (x_range, y_range), (xs, ys), (width, height), (xtype, ytype) = info
+        agg_params = dict({k: v for k, v in self.p.items() if k in aggregate.params()},
+                          x_range=x_range, y_range=y_range)
+
+        # Optimize categorical counts by aggregating them individually
+        if isinstance(agg_fn, ds.count_cat):
+            agg_params.update(dict(dynamic=False, aggregator=ds.count()))
+            agg_fn1 = aggregate.instance(**agg_params)
+            if element.ndims == 1:
+                grouped = element
+            else:
+                grouped = element.groupby([agg_fn.column], container_type=NdOverlay,
+                                          group_type=NdOverlay)
+            return grouped.clone({k: agg_fn1(v) for k, v in grouped.items()})
+
+        # Create aggregate instance for sum, count operations, breaking mean
+        # into two aggregates
+        column = agg_fn.column or 'Count'
+        if isinstance(agg_fn, ds.mean):
+            agg_fn1 = aggregate.instance(**dict(agg_params, aggregator=ds.sum(column)))
+            agg_fn2 = aggregate.instance(**dict(agg_params, aggregator=ds.count()))
+        else:
+            agg_fn1 = aggregate.instance(**agg_params)
+            agg_fn2 = None
+        is_sum = isinstance(agg_fn1.aggregator, ds.sum)
+
+        # Accumulate into two aggregates and mask
+        agg, agg2, mask = None, None, None
+        mask = None
+        for v in element:
+            # Compute aggregates and mask
+            new_agg = agg_fn1.process_element(v, None)
+            if is_sum:
+                new_mask = np.isnan(new_agg.data[column].values)
+                new_agg.data = new_agg.data.fillna(0)
+            if agg_fn2:
+                new_agg2 = agg_fn2.process_element(v, None)
+
+            if agg is None:
+                agg = new_agg
+                if is_sum: mask = new_mask
+                if agg_fn2: agg2 = new_agg2
+            else:
+                agg.data += new_agg.data
+                if is_sum: mask &= new_mask
+                if agg_fn2: agg2.data += new_agg2.data
+
+        # Divide sum by count to compute mean
+        if agg2 is not None:
+            agg2.data.rename({'Count': agg_fn.column}, inplace=True)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                agg.data /= agg2.data
+
+        # Fill masked with with NaNs
+        if is_sum:
+            agg.data[column].values[mask] = np.NaN
+        return agg
+
+
+    def _process(self, element, key=None):
+        agg_fn = self.p.aggregator
+        category = agg_fn.column if isinstance(agg_fn, ds.count_cat) else None
+
+        if (isinstance(element, NdOverlay) and
+            ((isinstance(agg_fn, (ds.count, ds.sum, ds.mean)) and agg_fn.column not in element.kdims) or
+             (isinstance(agg_fn, ds.count_cat) and agg_fn.column in element.kdims))):
+            return self._aggregate_ndoverlay(element, agg_fn)
+
+        if element._plot_id in self._precomputed:
+            x, y, data, glyph = self._precomputed[element._plot_id]
+        else:
+            x, y, data, glyph = self.get_agg_data(element, category)
+        if self.p.precompute:
+            self._precomputed[element._plot_id] = x, y, data, glyph
+        (x_range, y_range), (xs, ys), (width, height), (xtype, ytype) = self._get_sampling(element, x, y)
+
+        if x is None or y is None:
+            xarray = xr.DataArray(np.full((height, width), np.NaN, dtype=np.float32),
+                                  dims=['y', 'x'], coords={'x': xs, 'y': ys})
+            return self.p.element_type(xarray)
+
+        cvs = ds.Canvas(plot_width=width, plot_height=height,
+                        x_range=x_range, y_range=y_range)
+
+        column = agg_fn.column if agg_fn else None
+        if column:
+            dims = [d for d in element.dimensions('ranges') if d == column]
+            if not dims:
+                raise ValueError("Aggregation column %s not found on %s element. "
+                                 "Ensure the aggregator references an existing "
+                name = '%s Count' % agg_fn.column
+            vdims = [dims[0](column)]
+                                 "dimension." % (column,element))
+            if isinstance(agg_fn, ds.count_cat):
+                name = '%s Count' % column
+            vdims = [dims[0](name)]
+        else:
+            vdims = Dimension('Count')
+        params = dict(get_param_values(element), kdims=[x, y],
+                      datatype=['xarray'], vdims=vdims)
+
+        dfdata = PandasInterface.as_dframe(data)
+        agg = getattr(cvs, glyph)(dfdata, x.name, y.name, self.p.aggregator)
+        if 'x_axis' in agg.coords and 'y_axis' in agg.coords:
+            agg = agg.rename({'x_axis': x, 'y_axis': y})
+        if xtype == 'datetime':
+            agg[x.name] = (agg[x.name]/10e5).astype('datetime64[us]')
+        if ytype == 'datetime':
+            agg[y.name] = (agg[y.name]/10e5).astype('datetime64[us]')
+
+        if agg.ndim == 2:
+            # Replacing x and y coordinates to avoid numerical precision issues
+            eldata = agg if ds_version > '0.5.0' else (xs, ys, agg.data)
+            return self.p.element_type(eldata, **params)
+        else:
+            layers = {}
+            for c in agg.coords[column].data:
+                cagg = agg.sel(**{column: c})
+                eldata = cagg if ds_version > '0.5.0' else (xs, ys, cagg.data)
+                layers[c] = self.p.element_type(eldata, **dict(params, vdims=vdims))
+            return NdOverlay(layers, kdims=[data.get_dimension(column)])
+
+
+
+class regrid(ResamplingOperation):
     """
-    ZiplineTestCase mixin providing class-level fixtures for running pipelines
-    against deterministically-generated random data.
-
-    Attributes
-    ----------
-    SEEDED_RANDOM_PIPELINE_SEED : int
-        Fixture input. Random seed used to initialize the random state loader.
-    seeded_random_loader : SeededRandomLoader
-        Fixture output. Loader capable of providing columns for
-        zipline.pipeline.data.testing.TestingDataSet.
-    seeded_random_engine : SimplePipelineEngine
-        Fixture output.  A pipeline engine that will use seeded_random_loader
-        as its only data provider.
-
-    Methods
-    -------
-    run_pipeline(start_date, end_date)
-        Run a pipeline with self.seeded_random_engine.
-
-    See Also
-    --------
-    zipline.pipeline.loaders.synthetic.SeededRandomLoader
-    zipline.pipeline.loaders.testing.make_seeded_random_loader
-    zipline.pipeline.engine.SimplePipelineEngine
+    regrid allows resampling a HoloViews Image type using specified
+    up- and downsampling functions defined using the aggregator and
+    interpolation parameters respectively. By default upsampling is
+    disabled to avoid unnecessarily upscaling an image that has to be
+    sent to the browser. Also disables expanding the image beyond its
+    original bounds avoiding unneccessarily padding the output array
+    with nan values.
     """
-    SEEDED_RANDOM_PIPELINE_SEED = 42
-    SEEDED_RANDOM_PIPELINE_DEFAULT_DOMAIN = GENERIC
+
+    aggregator = param.ObjectSelector(default='mean',
+        objects=['first', 'last', 'mean', 'mode', 'std', 'var', 'min', 'max'], doc="""
+        Aggregation method.
+        """)
+
+    expand = param.Boolean(default=False, doc="""
+       Whether the x_range and y_range should be allowed to expand
+       beyond the extent of the data.  Setting this value to True is
+       useful for the case where you want to ensure a certain size of
+       output grid, e.g. if you are doing masking or other arithmetic
+       on the grids.  A value of False ensures that the grid is only
+       just as large as it needs to be to contain the data, which will
+       be faster and use less memory if the resulting aggregate is
+       being overlaid on a much larger background.""")
+
+    interpolation = param.ObjectSelector(default='nearest',
+        objects=['linear', 'nearest'], doc="""
+        Interpolation method""")
+
+    upsample = param.Boolean(default=False, doc="""
+        Whether to allow upsampling if the source array is smaller
+        than the requested array. Setting this value to True will
+        enable upsampling using the interpolation method, when the
+        requested width and height are larger than what is available
+        on the source grid. If upsampling is disabled (the default)
+        the width and height are clipped to what is available on the
+        source array.""")
+
+    def _get_xarrays(self, element, coords, xtype, ytype):
+        x, y = element.kdims
+        dims = [y.name, x.name]
+        irregular = any(element.interface.irregular(element, d)
+                        for d in dims)
+        if irregular:
+            coord_dict = {x.name: (('y', 'x'), coords[0]),
+                          y.name: (('y', 'x'), coords[1])}
+        else:
+            coord_dict = {x.name: coords[0], y.name: coords[1]}
+
+        arrays = {}
+        for vd in element.vdims:
+            if element.interface is XArrayInterface:
+                xarr = element.data[vd.name]
+                if 'datetime' in (xtype, ytype):
+                    xarr = xarr.copy()
+                if dims != xarr.dims and not irregular:
+                    xarr = xarr.transpose(*dims)
+            elif irregular:
+                arr = element.dimension_values(vd, flat=False)
+                xarr = xr.DataArray(arr, coords=coord_dict, dims=['y', 'x'])
+            else:
+                arr = element.dimension_values(vd, flat=False)
+                xarr = xr.DataArray(arr, coords=coord_dict, dims=dims)
+            if xtype == "datetime":
+                xarr[x.name] = [dt_to_int(v, 'ns') for v in xarr[x.name].values]
+            if ytype == "datetime":
+                xarr[y.name] = [dt_to_int(v, 'ns') for v in xarr[y.name].values]
+            arrays[vd.name] = xarr
+        return arrays
+
+
+    def _process(self, element, key=None):
+        if ds_version <= '0.5.0':
+            raise RuntimeError('regrid operation requires datashader>=0.6.0')
+
+        x, y = element.kdims
+        coords = tuple(element.dimension_values(d, expanded=False)
+                       for d in [x, y])
+        info = self._get_sampling(element, x, y)
+        (x_range, y_range), _, (width, height), (xtype, ytype) = info
+        arrays = self._get_xarrays(element, coords, xtype, ytype)
+
+        # Disable upsampling if requested
+        (xstart, xend), (ystart, yend) = (x_range, y_range)
+        xspan, yspan = (xend-xstart), (yend-ystart)
+        if not self.p.upsample and self.p.target is None:
+            (x0, x1), (y0, y1) = element.range(0), element.range(1)
+            if isinstance(x0, datetime_types):
+                x0, x1 = dt_to_int(x0, 'ns'), dt_to_int(x1, 'ns')
+            if isinstance(y0, datetime_types):
+                y0, y1 = dt_to_int(y0, 'ns'), dt_to_int(y1, 'ns')
+            exspan, eyspan = (x1-x0), (y1-y0)
+            width = min([int((xspan/exspan) * len(coords[0])), width])
+            height = min([int((yspan/eyspan) * len(coords[1])), height])
+
+        # Get expanded or bounded ranges
+        cvs = ds.Canvas(plot_width=width, plot_height=height,
+                        x_range=x_range, y_range=y_range)
+        regridded = {}
+        for vd, xarr in arrays.items():
+            rarray = cvs.raster(xarr, upsample_method=self.p.interpolation,
+                                downsample_method=self.p.aggregator)
+            if xtype == "datetime":
+                rarray[x.name] = (rarray[x.name]/10e5).astype('datetime64[us]')
+            if ytype == "datetime":
+                rarray[y.name] = (rarray[y.name]/10e5).astype('datetime64[us]')
+            regridded[vd] = rarray
+
+        regridded = xr.Dataset(regridded)
+        if xtype == 'datetime':
+            xstart, xend = (np.array([xstart, xend])/10e5).astype('datetime64[us]')
+        if ytype == 'datetime':
+            ystart, yend = (np.array([ystart, yend])/10e5).astype('datetime64[us]')
+        bbox = BoundingBox(points=[(xstart, ystart), (xend, yend)])
+        return element.clone(regridded, bounds=bbox,
+                             datatype=['xarray']+element.datatype)
+
+
+class trimesh_rasterize(aggregate):
+    """
+    Rasterize the TriMesh element using the supplied aggregator. If
+    the TriMesh nodes or edges define a value dimension will plot
+    filled and shaded polygons otherwise returns a wiremesh of the
+    data.
+    """
+
+    aggregator = param.ClassSelector(class_=ds.reductions.Reduction,
+                                     default=None)
+
+    interpolation = param.ObjectSelector(default='bilinear',
+                                         objects=['bilinear', None], doc="""
+        The interpolation method to apply during rasterization.""")
+
+    def _precompute(self, element):
+        from datashader.utils import mesh
+        if element.vdims:
+            simplices = element.dframe([0, 1, 2, 3])
+            verts = element.nodes.dframe([0, 1])
+        elif element.nodes.vdims:
+            simplices = element.dframe([0, 1, 2])
+            verts = element.nodes.dframe([0, 1, 3])
+        return {'mesh': mesh(verts, simplices), 'simplices': simplices,
+                'vertices': verts}
+
+
+    def _process(self, element, key=None):
+        if isinstance(element, TriMesh):
+            x, y = element.nodes.kdims[:2]
+        else:
+            x, y = element.kdims
+        info = self._get_sampling(element, x, y)
+        (x_range, y_range), _, (width, height), (xtype, ytype) = info
+        cvs = ds.Canvas(plot_width=width, plot_height=height,
+                        x_range=x_range, y_range=y_range)
+
+        if not (element.vdims or element.nodes.vdims):
+            return aggregate._process(self, element, key)
+        elif element._plot_id in self._precomputed:
+            precomputed = self._precomputed[element._plot_id]
+        else:
+            precomputed = self._precompute(element)
+        simplices = precomputed['simplices']
+        pts = precomputed['vertices']
+        mesh = precomputed['mesh']
+        if self.p.precompute:
+            self._precomputed = {element._plot_id: precomputed}
+
+        vdim = element.vdims[0] if element.vdims else element.nodes.vdims[0]
+        interpolate = bool(self.p.interpolation)
+        agg = cvs.trimesh(pts, simplices, agg=self.p.aggregator,
+                          interp=interpolate, mesh=mesh)
+        params = dict(get_param_values(element), kdims=[x, y],
+                      datatype=['xarray'], vdims=[vdim])
+        return Image(agg, **params)
+
+
+
+class quadmesh_rasterize(trimesh_rasterize):
+    """
+    Rasterize the QuadMesh element using the supplied aggregator.
+    Simply converts to a TriMesh and let's trimesh_rasterize
+    handle the actual rasterization.
+    """
+
+    def _precompute(self, element):
+        return super(quadmesh_rasterize, self)._precompute(element.trimesh())
+
+
+
+class rasterize(ResamplingOperation):
+    """
+    Rasterize is a high-level operation which will rasterize any
+    Element or combination of Elements aggregating it with the supplied
+    aggregator and interpolation method.
+
+    The default aggregation method depends on the type of Element but
+    usually defaults to the count of samples in each bin, other
+    aggregators can be supplied implementing mean, max, min and other
+    reduction operations.
+
+    The bins of the aggregate are defined by the width and height and
+    the x_range and y_range. If x_sampling or y_sampling are supplied
+    the operation will ensure that a bin is no smaller than the minimum
+    sampling distance by reducing the width and height when zoomed in
+    beyond the minimum sampling distance.
+
+    By default, the PlotSize and RangeXY streams are applied when this
+    operation is used dynamically, which means that the width, height,
+    x_range and y_range will automatically be set to match the inner
+    dimensions of the linked plot and the ranges of the axes.
+    """
+
+    aggregator = param.ClassSelector(class_=ds.reductions.Reduction,
+                                     default=None)
+
+    interpolation = param.ObjectSelector(default='bilinear',
+                                         objects=['bilinear', None], doc="""
+        The interpolation method to apply during rasterization.""")
+
+    def _process(self, element, key=None):
+        # Get input Images to avoid multiple rasterization
+        imgs = element.traverse(lambda x: x, [Image])
+
+        # Rasterize TriMeshes
+        tri_params = dict({k: v for k, v in self.p.items()
+                           if k in aggregate.params()}, dynamic=False)
+        trirasterize = trimesh_rasterize.instance(**tri_params)
+        trirasterize._precomputed = self._precomputed
+        element = element.map(trirasterize, TriMesh)
+        self._precomputed = trirasterize._precomputed
+
+        # Rasterize QuadMesh
+        quad_params = dict({k: v for k, v in self.p.items()
+                           if k in aggregate.params()}, dynamic=False)
+        quadrasterize = quadmesh_rasterize.instance(**quad_params)
+        quadrasterize._precomputed = self._precomputed
+        element = element.map(quadrasterize, QuadMesh)
+        self._precomputed = quadrasterize._precomputed
+
+        # Rasterize NdOverlay of objects
+        agg_params = dict({k: v for k, v in self.p.items()
+                           if k in aggregate.params()}, dynamic=False)
+        dsrasterize = aggregate.instance(**agg_params)
+        dsrasterize._precomputed = self._precomputed
+        predicate = lambda x: (isinstance(x, NdOverlay) and
+                               issubclass(x.type, Dataset)
+                               and not issubclass(x.type, Image))
+        element = element.map(dsrasterize, predicate)
+
+        # Rasterize other Dataset types
+        predicate = lambda x: (isinstance(x, Dataset) and
+                               (not isinstance(x, Image) or x in imgs))
+        element = element.map(dsrasterize, predicate)
+        self._precomputed = dsrasterize._precomputed
+
+        return element
+
+
+
+class shade(Operation):
+    """
+    shade applies a normalization function followed by colormapping to
+    an Image or NdOverlay of Images, returning an RGB Element.
+    The data must be in the form of a 2D or 3D DataArray, but NdOverlays
+    of 2D Images will be automatically converted to a 3D array.
+
+    In the 2D case data is normalized and colormapped, while a 3D
+    array representing categorical aggregates will be supplied a color
+    key for each category. The colormap (cmap) may be supplied as an
+    Iterable or a Callable.
+    """
+
+    cmap = param.ClassSelector(class_=(Iterable, Callable, dict), doc="""
+        Iterable or callable which returns colors as hex colors
+        or web color names (as defined by datashader), to be used
+        for the colormap of single-layer datashader output. 
+        Callable type must allow mapping colors between 0 and 1.
+        The default value of None reverts to Datashader's default
+        colormap.""")
+
+    color_key = param.ClassSelector(class_=(Iterable, Callable, dict), doc="""
+        Iterable or callable which returns colors as hex colors, to
+        be used for the color key of categorical datashader output.
+        Callable type must allow mapping colors between 0 and 1.""")
+
+    normalization = param.ClassSelector(default='eq_hist',
+                                        class_=(basestring, Callable),
+                                        doc="""
+        The normalization operation applied before colormapping.
+        Valid options include 'linear', 'log', 'eq_hist', 'cbrt',
+        and any valid transfer function that accepts data, mask, nbins
+        arguments.""")
+
+    clims = param.NumericTuple(default=None, length=2, doc="""
+        Min and max data values to use for colormap interpolation, when
+        wishing to override autoranging.
+        """)
+
+    link_inputs = param.Boolean(default=True, doc="""
+        By default, the link_inputs parameter is set to True so that
+        when applying shade, backends that support linked streams
+        update RangeXY streams on the inputs of the shade operation.
+        Disable when you do not want the resulting plot to be interactive,
+        e.g. when trying to display an interactive plot a second time.""")
+
+    min_alpha = param.Number(default=40, doc="""
+        The minimum alpha value to use for non-empty pixels when doing
+        colormapping, in [0, 255].  Use a higher value to avoid
+        undersaturation, i.e. poorly visible low-value datapoints, at
+        the expense of the overall dynamic range..""")
 
     @classmethod
-    def init_class_fixtures(cls):
-        super(WithSeededRandomPipelineEngine, cls).init_class_fixtures()
-        cls._sids = cls.asset_finder.sids
-        cls.seeded_random_loader = loader = make_seeded_random_loader(
-            cls.SEEDED_RANDOM_PIPELINE_SEED,
-            cls.trading_days,
-            cls._sids,
-        )
-        cls.seeded_random_engine = SimplePipelineEngine(
-            get_loader=lambda column: loader,
-            asset_finder=cls.asset_finder,
-            default_domain=cls.SEEDED_RANDOM_PIPELINE_DEFAULT_DOMAIN,
-        )
-
-    def raw_expected_values(self, column, start_date, end_date):
+    def concatenate(cls, overlay):
         """
-        Get an array containing the raw values we expect to be produced for the
-        given dates between start_date and end_date, inclusive.
+        Concatenates an NdOverlay of Image types into a single 3D
+        xarray Dataset.
         """
-        all_values = self.seeded_random_loader.values(
-            column.dtype,
-            self.trading_days,
-            self._sids,
-        )
-        row_slice = self.trading_days.slice_indexer(start_date, end_date)
-        return all_values[row_slice]
-
-    def run_pipeline(self, pipeline, start_date, end_date):
-        """
-        Run a pipeline with self.seeded_random_engine.
-        """
-        if start_date not in self.trading_days:
-            raise AssertionError("Start date not in calendar: %s" % start_date)
-        if end_date not in self.trading_days:
-            raise AssertionError("End date not in calendar: %s" % end_date)
-        return self.seeded_random_engine.run_pipeline(
-            pipeline,
-            start_date,
-            end_date,
-        )
+        if not isinstance(overlay, NdOverlay):
+            raise ValueError('Only NdOverlays can be concatenated')
+        xarr = xr.concat([v.data.transpose() for v in overlay.values()],
+                         pd.Index(overlay.keys(), name=overlay.kdims[0].name))
+        params = dict(get_param_values(overlay.last),
+                      vdims=overlay.last.vdims,
+                      kdims=overlay.kdims+overlay.last.kdims)
+        return Dataset(xarr.transpose(), datatype=['xarray'], **params)
 
 
-class WithDataPortal(WithAdjustmentReader,
-                     # Ordered so that bcolz minute reader is used first.
-                     WithBcolzEquityMinuteBarReader,
-                     WithBcolzFutureMinuteBarReader):
-    """
-    ZiplineTestCase mixin providing self.data_portal as an instance level
-    fixture.
-
-    After init_instance_fixtures has been called, `self.data_portal` will be
-    populated with a new data portal created by passing in the class's
-    trading env, `cls.bcolz_equity_minute_bar_reader`,
-    `cls.bcolz_equity_daily_bar_reader`, and `cls.adjustment_reader`.
-
-    Attributes
-    ----------
-    DATA_PORTAL_USE_DAILY_DATA : bool
-        Should the daily bar reader be used? Defaults to True.
-    DATA_PORTAL_USE_MINUTE_DATA : bool
-        Should the minute bar reader be used? Defaults to True.
-    DATA_PORTAL_USE_ADJUSTMENTS : bool
-        Should the adjustment reader be used? Defaults to True.
-
-    Methods
-    -------
-    make_data_portal() -> DataPortal
-        Method which returns the data portal to be used for each test case.
-        If this is overridden, the ``DATA_PORTAL_USE_*`` attributes may not
-        be respected.
-    """
-    DATA_PORTAL_USE_DAILY_DATA = True
-    DATA_PORTAL_USE_MINUTE_DATA = True
-    DATA_PORTAL_USE_ADJUSTMENTS = True
-
-    DATA_PORTAL_FIRST_TRADING_DAY = None
-
-    DATA_PORTAL_LAST_AVAILABLE_SESSION = None
-    DATA_PORTAL_LAST_AVAILABLE_MINUTE = None
-
-    DATA_PORTAL_MINUTE_HISTORY_PREFETCH = DEFAULT_MINUTE_HISTORY_PREFETCH
-    DATA_PORTAL_DAILY_HISTORY_PREFETCH = DEFAULT_DAILY_HISTORY_PREFETCH
-
-    def make_data_portal(self):
-        if self.DATA_PORTAL_FIRST_TRADING_DAY is None:
-            if self.DATA_PORTAL_USE_MINUTE_DATA:
-                self.DATA_PORTAL_FIRST_TRADING_DAY = (
-                    self.bcolz_equity_minute_bar_reader.
-                    first_trading_day)
-            elif self.DATA_PORTAL_USE_DAILY_DATA:
-                self.DATA_PORTAL_FIRST_TRADING_DAY = (
-                    self.bcolz_equity_daily_bar_reader.
-                    first_trading_day)
-
-        return DataPortal(
-            self.asset_finder,
-            self.trading_calendar,
-            first_trading_day=self.DATA_PORTAL_FIRST_TRADING_DAY,
-            equity_daily_reader=(
-                self.bcolz_equity_daily_bar_reader
-                if self.DATA_PORTAL_USE_DAILY_DATA else
-                None
-            ),
-            equity_minute_reader=(
-                self.bcolz_equity_minute_bar_reader
-                if self.DATA_PORTAL_USE_MINUTE_DATA else
-                None
-            ),
-            adjustment_reader=(
-                self.adjustment_reader
-                if self.DATA_PORTAL_USE_ADJUSTMENTS else
-                None
-            ),
-            future_minute_reader=(
-                self.bcolz_future_minute_bar_reader
-                if self.DATA_PORTAL_USE_MINUTE_DATA else
-                None
-            ),
-            future_daily_reader=(
-                MinuteResampleSessionBarReader(
-                    self.bcolz_future_minute_bar_reader.trading_calendar,
-                    self.bcolz_future_minute_bar_reader)
-                if self.DATA_PORTAL_USE_MINUTE_DATA else None
-            ),
-            last_available_session=self.DATA_PORTAL_LAST_AVAILABLE_SESSION,
-            last_available_minute=self.DATA_PORTAL_LAST_AVAILABLE_MINUTE,
-            minute_history_prefetch_length=self.
-            DATA_PORTAL_MINUTE_HISTORY_PREFETCH,
-            daily_history_prefetch_length=self.
-            DATA_PORTAL_DAILY_HISTORY_PREFETCH,
-        )
-
-    def init_instance_fixtures(self):
-        super(WithDataPortal, self).init_instance_fixtures()
-        self.data_portal = self.make_data_portal()
-
-
-class WithResponses(object):
-    """
-    ZiplineTestCase mixin that provides self.responses as an instance
-    fixture.
-
-    After init_instance_fixtures has been called, `self.responses` will be
-    a new `responses.RequestsMock` object. Users may add new endpoints to this
-    with the `self.responses.add` method.
-    """
-    def init_instance_fixtures(self):
-        super(WithResponses, self).init_instance_fixtures()
-        self.responses = self.enter_instance_context(
-            responses.RequestsMock(),
-        )
-
-
-class WithCreateBarData(WithDataPortal):
-
-    CREATE_BARDATA_DATA_FREQUENCY = 'minute'
-
-    def create_bardata(self, simulation_dt_func, restrictions=None):
-        return BarData(
-            self.data_portal,
-            simulation_dt_func,
-            self.CREATE_BARDATA_DATA_FREQUENCY,
-            self.trading_calendar,
-            restrictions or NoRestrictions()
-        )
-
-
-class WithMakeAlgo(WithBenchmarkReturns,
-                   WithSimParams,
-                   WithLogger,
-                   WithDataPortal):
-    """
-    ZiplineTestCase mixin that provides a ``make_algo`` method.
-    """
-    START_DATE = pd.Timestamp('2014-12-29', tz='UTC')
-    END_DATE = pd.Timestamp('2015-1-05', tz='UTC')
-    SIM_PARAMS_DATA_FREQUENCY = 'minute'
-    DEFAULT_ALGORITHM_CLASS = TradingAlgorithm
-
-    @classproperty
-    def BENCHMARK_SID(cls):
-        """The sid to use as a benchmark.
-
-        Can be overridden to use an alternative benchmark.
-        """
-        return cls.asset_finder.sids[0]
-
-    def merge_with_inherited_algo_kwargs(self,
-                                         overriding_type,
-                                         suite_overrides,
-                                         method_overrides):
-        """
-        Helper for subclasses overriding ``make_algo_kwargs``.
-
-        A common pattern for tests using `WithMakeAlgoKwargs` is that a
-        particular test suite has a set of default keywords it wants to use
-        everywhere, but also accepts test-specific overrides.
-
-        Test suites that fit that pattern can call this method and pass the
-        test class, suite-specific overrides, and method-specific overrides,
-        and this method takes care of fetching parent class overrides and
-        merging them with the suite- and instance-specific overrides.
-
-        Parameters
-        ----------
-        overriding_type : type
-            The type from which we're being called. This is forwarded to
-            super().make_algo_kwargs()
-        suite_overrides : dict
-            Keywords which should take precedence over kwargs returned by
-            super(overriding_type, self).make_algo_kwargs().  These are
-            generally keyword arguments that are constant within a test suite.
-        method_overrides : dict
-            Keywords which should take precedence over `suite_overrides` and
-            superclass kwargs.  These are generally keyword arguments that are
-            overridden on a per-test basis.
-        """
-        # NOTE: This is a weird invocation of super().
-        # Our goal here is to provide the behavior that the caller would get if
-        # they called super() in the normal way, so that we dispatch to the
-        # make_algo_kwargs() for the parent of the type that's calling
-        # into us. We achieve that goal by requiring the caller to tell us
-        # what type they're calling us from.
-        return super(overriding_type, self).make_algo_kwargs(
-            **merge(suite_overrides, method_overrides)
-        )
-
-    def make_algo_kwargs(self, **overrides):
-        if self.BENCHMARK_SID is None:
-            overrides.setdefault('benchmark_returns', self.BENCHMARK_RETURNS)
-        return merge(
-            {
-                'sim_params': self.sim_params,
-                'data_portal': self.data_portal,
-                'benchmark_sid': self.BENCHMARK_SID,
-            },
-            overrides,
-        )
-
-    def make_algo(self, algo_class=None, **overrides):
-        if algo_class is None:
-            algo_class = self.DEFAULT_ALGORITHM_CLASS
-        return algo_class(**self.make_algo_kwargs(**overrides))
-
-    def run_algorithm(self, **overrides):
-        """
-        Create and run an TradingAlgorithm in memory.
-        """
-        return self.make_algo(**overrides).run()
-
-
-class WithWerror(object):
     @classmethod
-    def init_class_fixtures(cls):
-        cls.enter_class_context(warnings.catch_warnings())
-        warnings.simplefilter('error')
+    def uint32_to_uint8(cls, img):
+        """
+        Cast uint32 RGB image to 4 uint8 channels.
+        """
+        return np.flipud(img.view(dtype=np.uint8).reshape(img.shape + (4,)))
 
-        super(WithWerror, cls).init_class_fixtures()
+
+    @classmethod
+    def rgb2hex(cls, rgb):
+        """
+        Convert RGB(A) tuple to hex.
+        """
+        if len(rgb) > 3:
+            rgb = rgb[:-1]
+        return "#{0:02x}{1:02x}{2:02x}".format(*(int(v*255) for v in rgb))
 
 
-register_calendar_alias("TEST", "NYSE")
+    @classmethod
+    def to_xarray(cls, element):
+        if issubclass(element.interface, XArrayInterface):
+            return element
+        data = tuple(element.dimension_values(kd, expanded=False)
+                     for kd in element.kdims)
+        data += tuple(element.dimension_values(vd, flat=False)
+                      for vd in element.vdims)
+        dtypes = [dt for dt in element.datatype if dt != 'xarray']
+        return element.clone(data, datatype=['xarray']+dtypes)
+
+
+    def _process(self, element, key=None):
+        element = element.map(self.to_xarray, Image)
+        if isinstance(element, NdOverlay):
+            bounds = element.last.bounds
+            element = self.concatenate(element)
+        elif isinstance(element, Overlay):
+            return element.map(self._process, [Element])
+        else:
+            bounds = element.bounds
+
+        vdim = element.vdims[0].name
+        array = element.data[vdim]
+        kdims = element.kdims
+
+        # Compute shading options depending on whether
+        # it is a categorical or regular aggregate
+        shade_opts = dict(how=self.p.normalization, min_alpha=self.p.min_alpha)
+        if element.ndims > 2:
+            kdims = element.kdims[1:]
+            categories = array.shape[-1]
+            if not self.p.color_key:
+                pass
+            elif isinstance(self.p.color_key, dict):
+                shade_opts['color_key'] = self.p.color_key
+            elif isinstance(self.p.color_key, Iterable):
+                shade_opts['color_key'] = [c for i, c in
+                                           zip(range(categories), self.p.color_key)]
+            else:
+                colors = [self.p.color_key(s) for s in np.linspace(0, 1, categories)]
+                shade_opts['color_key'] = map(self.rgb2hex, colors)
+        elif not self.p.cmap:
+            pass
+        elif isinstance(self.p.cmap, Callable):
+            colors = [self.p.cmap(s) for s in np.linspace(0, 1, 256)]
+            shade_opts['cmap'] = map(self.rgb2hex, colors)
+        else:
+            shade_opts['cmap'] = self.p.cmap
+
+        if self.p.clims:
+            shade_opts['span'] = self.p.clims
+        elif ds_version > '0.5.0' and self.p.normalization != 'eq_hist':
+            shade_opts['span'] = element.range(vdim)
+
+        for d in kdims:
+            if array[d.name].dtype.kind == 'M':
+                array[d.name] = array[d.name].astype('datetime64[ns]').astype('int64') * 10e-4
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
+            if np.isnan(array.data).all():
+                arr = np.zeros(array.data.shape, dtype=np.uint32)
+                img = array.copy()
+                img.data = arr
+            else:
+                img = tf.shade(array, **shade_opts)
+        params = dict(get_param_values(element), kdims=kdims,
+                      bounds=bounds, vdims=RGB.vdims[:])
+        return RGB(self.uint32_to_uint8(img.data), **params)
+
+
+
+class datashade(rasterize, shade):
+    """
+    Applies the aggregate and shade operations, aggregating all
+    elements in the supplied object and then applying normalization
+    and colormapping the aggregated data returning RGB elements.
+
+    See aggregate and shade operations for more details.
+    """
+
+    def _process(self, element, key=None):
+        agg = rasterize._process(self, element, key)
+        shaded = shade._process(self, agg, key)
+        return shaded
+
+
+
+class stack(Operation):
+    """
+    The stack operation allows compositing multiple RGB Elements using
+    the defined compositing operator.
+    """
+
+    compositor = param.ObjectSelector(objects=['add', 'over', 'saturate', 'source'],
+                                      default='over', doc="""
+        Defines how the compositing operation combines the images""")
+
+    def uint8_to_uint32(self, element):
+        img = np.dstack([element.dimension_values(d, flat=False)
+                         for d in element.vdims])
+        if img.shape[2] == 3: # alpha channel not included
+            alpha = np.ones(img.shape[:2])
+            if img.dtype.name == 'uint8':
+                alpha = (alpha*255).astype('uint8')
+            img = np.dstack([img, alpha])
+        if img.dtype.name != 'uint8':
+            img = (img*255).astype(np.uint8)
+        N, M, _ = img.shape
+        return img.view(dtype=np.uint32).reshape((N, M))
+
+    def _process(self, overlay, key=None):
+        if not isinstance(overlay, CompositeOverlay):
+            return overlay
+        elif len(overlay) == 1:
+            return overlay.last if isinstance(overlay, NdOverlay) else overlay.get(0)
+
+        imgs = []
+        for rgb in overlay:
+            if not isinstance(rgb, RGB):
+                raise TypeError('stack operation expect RGB type elements, '
+                                'not %s name.' % type(rgb).__name__)
+            rgb = rgb.rgb
+            dims = [kd.name for kd in rgb.kdims][::-1]
+            coords = {kd.name: rgb.dimension_values(kd, False)
+                      for kd in rgb.kdims}
+            imgs.append(tf.Image(self.uint8_to_uint32(rgb), coords=coords, dims=dims))
+
+        try:
+            imgs = xr.align(*imgs, join='exact')
+        except ValueError:
+            raise ValueError('RGB inputs to stack operation could not be aligned, '
+                             'ensure they share the same grid sampling.')
+
+        stacked = tf.stack(*imgs, how=self.p.compositor)
+        arr = shade.uint32_to_uint8(stacked.data)[::-1]
+        data = (coords[dims[1]], coords[dims[0]], arr[:, :, 0],
+                arr[:, :, 1], arr[:, :, 2])
+        if arr.shape[-1] == 4:
+            data = data + (arr[:, :, 3],)
+        return rgb.clone(data, datatype=[rgb.interface.datatype]+rgb.datatype)
+
+
+
+class dynspread(Operation):
+    """
+    Spreading expands each pixel in an Image based Element a certain
+    number of pixels on all sides according to a given shape, merging
+    pixels using a specified compositing operator. This can be useful
+    to make sparse plots more visible. Dynamic spreading determines
+    how many pixels to spread based on a density heuristic.
+
+    See the datashader documentation for more detail:
+
+    http://datashader.readthedocs.io/en/latest/api.html#datashader.transfer_functions.dynspread
+    """
+
+    how = param.ObjectSelector(default='source',
+                               objects=['source', 'over',
+                                        'saturate', 'add'], doc="""
+        The name of the compositing operator to use when combining
+        pixels.""")
+
+    max_px = param.Integer(default=3, doc="""
+        Maximum number of pixels to spread on all sides.""")
+
+    shape = param.ObjectSelector(default='circle', objects=['circle', 'square'],
+                                 doc="""
+        The shape to spread by. Options are 'circle' [default] or 'square'.""")
+
+    threshold = param.Number(default=0.5, bounds=(0,1), doc="""
+        When spreading, determines how far to spread.
+        Spreading starts at 1 pixel, and stops when the fraction
+        of adjacent non-empty pixels reaches this threshold.
+        Higher values give more spreading, up to the max_px
+        allowed.""")
+
+    link_inputs = param.Boolean(default=True, doc="""
+        By default, the link_inputs parameter is set to True so that
+        when applying dynspread, backends that support linked streams
+        update RangeXY streams on the inputs of the dynspread operation.
+        Disable when you do not want the resulting plot to be interactive,
+        e.g. when trying to display an interactive plot a second time.""")
+
+    @classmethod
+    def uint8_to_uint32(cls, img):
+        shape = img.shape
+        flat_shape = np.multiply.reduce(shape[:2])
+        rgb = img.reshape((flat_shape, 4)).view('uint32').reshape(shape[:2])
+        return rgb
+
+
+    def _apply_dynspread(self, array):
+        img = tf.Image(array)
+        return tf.dynspread(img, max_px=self.p.max_px,
+                            threshold=self.p.threshold,
+                            how=self.p.how, shape=self.p.shape).data
+
+
+    def _process(self, element, key=None):
+        if not isinstance(element, RGB):
+            raise ValueError('dynspread can only be applied to RGB Elements.')
+        rgb = element.rgb
+        new_data = {kd.name: rgb.dimension_values(kd, expanded=False)
+                    for kd in rgb.kdims}
+        rgbarray = np.dstack([element.dimension_values(vd, flat=False)
+                              for vd in element.vdims])
+        data = self.uint8_to_uint32(rgbarray)
+        array = self._apply_dynspread(data)
+        img = datashade.uint32_to_uint8(array)
+        for i, vd in enumerate(element.vdims):
+            if i < img.shape[-1]:
+                new_data[vd.name] = np.flipud(img[..., i])
+        return element.clone(new_data)
+
+
+def split_dataframe(path_df):
+    """
+    Splits a dataframe of paths separated by NaNs into individual
+    dataframes.
+    """
+    splits = np.where(path_df.iloc[:, 0].isnull())[0]+1
+    return [df for df in np.split(path_df, splits) if len(df) > 1]
+
+
+class _connect_edges(Operation):
+
+    split = param.Boolean(default=False, doc="""
+        Determines whether bundled edges will be split into individual edges
+        or concatenated with NaN separators.""")
+
+    def _bundle(self, position_df, edges_df):
+        raise NotImplementedError('_connect edges is an abstract baseclass '
+                                  'and does not implement any actual bundling.')
+
+    def _process(self, element, key=None):
+        index = element.nodes.kdims[2].name
+        rename_edges = {d.name: v for d, v in zip(element.kdims[:2], ['source', 'target'])}
+        rename_nodes = {d.name: v for d, v in zip(element.nodes.kdims[:2], ['x', 'y'])}
+        position_df = element.nodes.redim(**rename_nodes).dframe([0, 1, 2]).set_index(index)
+        edges_df = element.redim(**rename_edges).dframe([0, 1])
+        paths = self._bundle(position_df, edges_df)
+        paths = paths.rename(columns={v: k for k, v in rename_nodes.items()})
+        paths = split_dataframe(paths) if self.p.split else [paths]
+        return element.clone((element.data, element.nodes, paths))
+
+
+class bundle_graph(_connect_edges, hammer_bundle):
+    """
+    Iteratively group edges and return as paths suitable for datashading.
+
+    Breaks each edge into a path with multiple line segments, and
+    iteratively curves this path to bundle edges into groups.
+    """
+
+    def _bundle(self, position_df, edges_df):
+        from datashader.bundling import hammer_bundle
+        return hammer_bundle.__call__(self, position_df, edges_df, **self.p)
+
+
+class directly_connect_edges(_connect_edges, connect_edges):
+    """
+    Given a Graph object will directly connect all nodes.
+    """
+
+    def _bundle(self, position_df, edges_df):
+        return connect_edges.__call__(self, position_df, edges_df)

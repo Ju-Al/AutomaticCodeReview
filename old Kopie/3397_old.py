@@ -1,13 +1,4 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-def init_callbacks(source_descs, callback_pickler):
-    if callback_pickler is not None:
-        for source_desc in source_descs.values():
-            source_desc.source = callback_pickler.loads(source_desc.source)
-    callbacks = {
-        context_i : get_source_from_desc(source_desc)
-        for context_i, source_desc in source_descs.items()}
-    return callbacks
-
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -338,7 +329,14 @@ def get_source_from_desc(source_descs):
     raise RuntimeError("Unsupported source type")
 
 
-class WorkerContext:
+def init_callbacks(source_descs, callback_pickler):
+    if callback_pickler is not None:
+        for source_desc in source_descs.values():
+            source_desc.source = callback_pickler.loads(source_desc.source)
+    callbacks = {
+        context_i : get_source_from_desc(source_desc)
+        for context_i, source_desc in source_descs.items()}
+    return callbacks
     """Initializes structures necessary for a worker process to receive,
     compute and send back tasks based on the arguments passed to the worker
     entry point at the process start"""

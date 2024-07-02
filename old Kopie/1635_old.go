@@ -1,20 +1,4 @@
 // Copyright 2016 Keybase Inc. All rights reserved.
-	err = func() error {
-		k.lock.RLock()
-		defer k.lock.RUnlock()
-
-		for _, p := range k.protocols {
-			err := server.Register(p)
-			switch err.(type) {
-			case nil, rpc.AlreadyRegisteredError:
-			default:
-				return err
-			}
-		}
-		return nil
-	}()
-	if err != nil {
-		return err
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -322,7 +306,22 @@ func (k *KeybaseDaemonRPC) AddProtocols(protocols []rpc.Protocol) {
 func (k *KeybaseDaemonRPC) OnConnect(ctx context.Context,
 	conn *rpc.Connection, rawClient rpc.GenericClient,
 	server *rpc.Server) (err error) {
-	k.lock.Lock()
+	err = func() error {
+		k.lock.RLock()
+		defer k.lock.RUnlock()
+
+		for _, p := range k.protocols {
+			err := server.Register(p)
+			switch err.(type) {
+			case nil, rpc.AlreadyRegisteredError:
+			default:
+				return err
+			}
+		return nil
+	}()
+	if err != nil {
+		return err
+		}
 	defer k.lock.Unlock()
 
 	for _, p := range k.protocols {

@@ -1072,7 +1072,6 @@ flatpak_transaction_set_disable_dependencies (FlatpakTransaction *self,
   priv->disable_deps = disable_dependencies;
 }
 
-/**
  * flatpak_transaction_set_disable_related:
  * @self: a #FlatpakTransaction
  * @disable_related: whether to avoid adding related refs

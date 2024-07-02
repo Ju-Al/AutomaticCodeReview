@@ -170,9 +170,6 @@ public class MediaDatabase extends Database {
 
 		// Audio Metadata
 		dropTableAndConstraint(connection, MediaTableAudiotracks.TABLE_NAME);
-	}
-
-	/**
 	 * Returns the MediaDatabase instance.
 	 * Will create the database instance as needed.
 	 *

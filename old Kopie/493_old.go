@@ -1,13 +1,5 @@
 package business
 
-	deployments, err := in.k8s.GetDeployments(namespace)
-	for _, deployment := range deployments.Items {
-		selector, _ := in.k8s.GetDeploymentSelector(namespace, deployment.Name)
-		mPods.Parse(dPods.Items)
-// GetWorkload is the API handler to fetch details of an specific workload
-func (in *WorkloadService) GetWorkload(namespace string, workloadName string) (*models.Workload, error) {
-	deployment, err := in.k8s.GetDeploymentDetails(namespace, workloadName)
-		return &models.Workload{}, err
 import (
 	"github.com/kiali/kiali/kubernetes"
 	"github.com/kiali/kiali/services/models"
@@ -21,7 +13,14 @@ type WorkloadService struct {
 
 // GetWorkloadList is the API handler to fetch the list of workloads in a given namespace
 func (in *WorkloadService) GetWorkloadList(namespace string) (models.WorkloadList, error) {
-	ds, err := in.k8s.GetDeployments(namespace, "")
+	for _, deployment := range deployments.Items {
+		selector, _ := in.k8s.GetDeploymentSelector(namespace, deployment.Name)
+		mPods.Parse(dPods.Items)
+// GetWorkload is the API handler to fetch details of an specific workload
+func (in *WorkloadService) GetWorkload(namespace string, workloadName string) (*models.Workload, error) {
+	deployment, err := in.k8s.GetDeploymentDetails(namespace, workloadName)
+		return &models.Workload{}, err
+	deployments, err := in.k8s.GetDeployments(namespace)
 	if err != nil {
 		return models.WorkloadList{}, err
 	}

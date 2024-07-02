@@ -101,7 +101,6 @@ type browseListing struct {
 
 	// If ≠0 then Items have been limited to that many elements.
 	ItemsLimitedTo int
-
 	// If ≠0 then Items starting from that many elements.
 	ItemsFrom int
 }

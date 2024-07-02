@@ -869,8 +869,6 @@ public class JobCoordinationService {
 
     NodeEngineImpl nodeEngine() {
         return nodeEngine;
-    }
-
     CompletableFuture<Void> submitToCoordinatorThread(Runnable action) {
         return submitToCoordinatorThread(() -> {
             action.run();

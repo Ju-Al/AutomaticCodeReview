@@ -90,8 +90,6 @@ class LocalFileSystem(FileSystem):
             shutil.rmtree(path)
         else:
             os.remove(path)
-
-    def rename(self, *args, **kwargs):
         """
         Calls ``move()``
         """

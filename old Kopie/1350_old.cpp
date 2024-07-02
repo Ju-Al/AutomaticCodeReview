@@ -1,7 +1,4 @@
 // Copyright 2017 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-#endif // ifdef _WIN32
-    // Try to load the default XML file.
-    loadXMLFile(DEFAULT_FASTRTPS_PROFILES);
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -173,8 +170,9 @@ void XMLProfileManager::loadDefaultXMLFile()
     if (getenv_s(&size, file_path, size, DEFAULT_FASTRTPS_ENV_VARIABLE) == 0 && size > 0)
     {
         loadXMLFile(file_path);
-    }
-
+#endif // ifdef _WIN32
+    // Try to load the default XML file.
+    loadXMLFile(DEFAULT_FASTRTPS_PROFILES);
     char skip_xml[1];
     size = 1;
     error_t ret = getenv_s(&size, skip_xml, size, "SKIP_DEFAULT_XML_FILE");

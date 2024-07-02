@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { useAppContext } from '../context/app';
 
 export const SHIMMER_TYPE_SUFFIX = '_SHIMMER';
 

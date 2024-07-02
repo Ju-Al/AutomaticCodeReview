@@ -1,5 +1,4 @@
 /*
-            return Collections.emptyList();
  * Copyright 2019 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -199,7 +198,7 @@ public class IncrementalRuleCodegen extends AbstractGenerator {
 
         if (modelBuilder.hasErrors()) {
             ApplicationGenerator.logger.error( modelBuilder.getErrors().toString() );
-            throw new RuleCodegenError();
+            return Collections.emptyList();
         }
 
         boolean hasRuleUnits = false;

@@ -182,7 +182,6 @@ this.uicontrol = (function() {
     },
     onDownloadPreview: () => {
       sendEvent(`download-${captureType.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}`, "download-preview-button");
-
       // Downloaded shots don't have dimension limits
       if (captureType === "fullPageTruncated") {
         selectedPos = new Selection(

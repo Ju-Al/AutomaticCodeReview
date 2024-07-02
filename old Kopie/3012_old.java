@@ -70,7 +70,6 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<RowData> {
     return wrapper;
   }
 
-  RowData projectDeleteData(RowData data) {
     wrapper.wrap(data);
     GenericRowData newRowData = new GenericRowData(data.getRowKind(), equalityFieldIds.size());
     for (int i = 0; i < equalityFieldIds.size(); i++) {

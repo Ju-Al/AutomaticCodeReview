@@ -502,7 +502,6 @@ function neve_is_new_widget_editor() {
 	return ( defined( 'GUTENBERG_VERSION' ) && version_compare( GUTENBERG_VERSION, '10.6.2', '>' ) ) || version_compare( substr( get_bloginfo( 'version' ), 0, 3 ), '5.8', '>=' );
 }
 
-/**
  * Check that the active WordPress version is greater than the passed value.
  *
  * @param string $version The default check is for `5.8` other values are accepted.

@@ -1,7 +1,4 @@
 /*
-        AbstractTable table = tableFilter.getTable();
-        table.fire(session, Trigger.DELETE, true);
-        table.lock(session, true, false);
  * Copyright 2004-2014 H2 Group. Multiple-Licensed under the MPL 2.0,
  * and the EPL 1.0 (http://h2database.com/html/license.html).
  * Initial Developer: H2 Group
@@ -56,7 +53,9 @@ public class Delete extends Prepared {
     public int update() {
         tableFilter.startQuery(session);
         tableFilter.reset();
-        Table table = tableFilter.getTable();
+        table.fire(session, Trigger.DELETE, true);
+        table.lock(session, true, false);
+        AbstractTable table = tableFilter.getTable();
         session.getUser().checkRight(table, Right.DELETE);
         Table resolvedTable = table;
         resolvedTable.fire(session, Trigger.DELETE, true);

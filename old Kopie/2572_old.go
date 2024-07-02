@@ -1,5 +1,4 @@
 // Copyright 2021 Dolthub, Inc.
-	src        mvdata.TableDataLocation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -185,6 +184,7 @@ type dumpOptions struct {
 
 type tableOptions struct {
 	tableName  string
+	src        mvdata.TableDataLocation
 	dest       mvdata.DataLocation
 	srcOptions interface{}
 }

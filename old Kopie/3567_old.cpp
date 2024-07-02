@@ -332,7 +332,6 @@ namespace detail {
   SurfaceVector FoundationKiva_Impl::surfaces() const {
     return getObject<ModelObject>().getModelObjectSources<Surface>(Surface::iddObjectType());
   }
-  
   // TODO: this field shouldn't even exist in the IDD
   unsigned int FoundationKiva_Impl::numberofCustomBlocks() const {
     return numExtensibleGroups();

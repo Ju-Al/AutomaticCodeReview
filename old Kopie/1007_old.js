@@ -373,7 +373,6 @@ class Frame extends React.Component {
                 { ...this.props } />
     }
 
-    let trashOrFlagButton = null;
     if (this.props.isOwner) {
       trashOrFlagButton = <img src={ this.props.staticLink("img/garbage-bin.png") } />;
     } else {

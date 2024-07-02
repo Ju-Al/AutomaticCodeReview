@@ -1,6 +1,5 @@
 package workload
 
-	subscriber := h.Manager.Subscribe(selectors)
 import (
 	"context"
 	"crypto/x509"
@@ -59,7 +58,7 @@ func (h *Handler) FetchX509SVID(_ *workload.X509SVIDRequest, stream workload.Spi
 
 	selectors := attestor.New(&config).Attest(pid)
 
-	subscriber := h.Manager.NewSubscriber(selectors)
+	subscriber := h.Manager.Subscribe(selectors)
 	defer subscriber.Finish()
 
 	for {

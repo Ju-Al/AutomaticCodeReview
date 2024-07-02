@@ -1,7 +1,4 @@
 # Copyright 2000 Andrew Dalke.
-        """Initialize the class."""
-        if isinstance(data, str):  # TODO - What about unicode?
-        elif isinstance(data, (Seq, int, float)):
 # Copyright 2000-2002 Brad Chapman.
 # Copyright 2004-2005, 2010 by M de Hoon.
 # Copyright 2007-2020 by Peter Cock.
@@ -1708,7 +1705,9 @@ class MutableSeq:
     """
 
     def __init__(self, data):
-        """Create a MutableSeq object."""
+        """Initialize the class."""
+        elif isinstance(data, (Seq, int, float)):
+        if isinstance(data, str):  # TODO - What about unicode?
         if isinstance(data, array.array):
             if data.typecode != "u":
                 raise ValueError(

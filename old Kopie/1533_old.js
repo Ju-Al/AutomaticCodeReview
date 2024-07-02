@@ -1,9 +1,4 @@
 /**
- * Find all blocks in workspace.  No particular order.
-Blockly.Workspace.prototype.getAllBlocks = function() {
-  var blocks = this.getTopBlocks(false);
-  for (var i = 0; i < blocks.length; i++) {
-    blocks.push.apply(blocks, blocks[i].getChildren());
  * @license
  * Visual Blocks Editor
  *
@@ -265,7 +260,11 @@ Blockly.Workspace.prototype.getTopComments = function(ordered) {
 };
 
 /**
- * Find all blocks in workspace.  Blocks are optionally sorted
+Blockly.Workspace.prototype.getAllBlocks = function() {
+  var blocks = this.getTopBlocks(false);
+  for (var i = 0; i < blocks.length; i++) {
+    blocks.push.apply(blocks, blocks[i].getChildren());
+ * Find all blocks in workspace.  No particular order.
  * by position; top to bottom (with slight LTR or RTL bias).
  * @param {boolean} ordered Sort the list if true.
  * @return {!Array.<!Blockly.Block>} Array of blocks.

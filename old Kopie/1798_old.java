@@ -1,9 +1,5 @@
 /*
-    byte[] pass;
-    pass = zooCache.get(zpath);
-    boolean result = ZKSecurityTool.checkPass(pt.getPassword(), pass);
-      pass = zooCache.get(zpath);
-      result = ZKSecurityTool.checkPass(pt.getPassword(), pass);
+  public static final String PW_HASH_ALGORITHM = "SHA-256";
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -21,258 +17,106 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.server.security.handler;
+package org.apache.accumulo.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.TreeSet;
+public class Constants {
 
-import org.apache.accumulo.core.Constants;
-import org.apache.accumulo.core.client.AccumuloException;
-import org.apache.accumulo.core.client.AccumuloSecurityException;
-import org.apache.accumulo.core.client.security.tokens.AuthenticationToken;
-import org.apache.accumulo.core.client.security.tokens.PasswordToken;
-import org.apache.accumulo.core.clientImpl.thrift.SecurityErrorCode;
-import org.apache.accumulo.fate.zookeeper.ZooCache;
-import org.apache.accumulo.fate.zookeeper.ZooReaderWriter;
-import org.apache.accumulo.fate.zookeeper.ZooUtil.NodeExistsPolicy;
-import org.apache.accumulo.fate.zookeeper.ZooUtil.NodeMissingPolicy;
-import org.apache.accumulo.server.ServerContext;
-import org.apache.zookeeper.KeeperException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+  public static final String VERSION = FilteredConstants.VERSION;
 
-// Utility class for adding all authentication info into ZK
-public final class ZKAuthenticator implements Authenticator {
-  private static final Logger log = LoggerFactory.getLogger(ZKAuthenticator.class);
+  // Zookeeper locations
+  public static final String ZROOT = "/accumulo";
+  public static final String ZINSTANCES = "/instances";
 
-  private ServerContext context;
-  private String ZKUserPath;
-  private ZooCache zooCache;
+  public static final String ZTABLES = "/tables";
+  public static final byte[] ZTABLES_INITIAL_ID = {'0'};
+  public static final String ZTABLE_NAME = "/name";
+  public static final String ZTABLE_CONF = "/conf";
+  public static final String ZTABLE_STATE = "/state";
+  public static final String ZTABLE_FLUSH_ID = "/flush-id";
+  public static final String ZTABLE_COMPACT_ID = "/compact-id";
+  public static final String ZTABLE_COMPACT_CANCEL_ID = "/compact-cancel-id";
+  public static final String ZTABLE_NAMESPACE = "/namespace";
 
-  @Override
-  public void initialize(ServerContext context) {
-    this.context = context;
-    zooCache = new ZooCache(context.getZooReaderWriter(), null);
-    ZKUserPath = Constants.ZROOT + "/" + context.getInstanceID() + "/users";
-    checkOutdatedHashes();
-  }
+  public static final String ZNAMESPACES = "/namespaces";
+  public static final String ZNAMESPACE_NAME = "/name";
+  public static final String ZNAMESPACE_CONF = "/conf";
 
-  private void checkOutdatedHashes() {
-    try {
-      listUsers().forEach(user -> {
-        String zpath = ZKUserPath + "/" + user;
-        byte[] zkData = zooCache.get(zpath);
-        if (ZKSecurityTool.isOutdatedPass(zkData)) {
-          log.warn("Found user(s) with outdated password hash. These will be re-hashed"
-              + " on successful authentication.");
-          return;
-        }
-      });
-    } catch (NullPointerException e) {
-      // initializeSecurity was not called yet, there could be no outdated passwords stored
-    }
-  }
+  public static final String ZMASTERS = "/masters";
+  public static final String ZMASTER_LOCK = ZMASTERS + "/lock";
+  public static final String ZMASTER_GOAL_STATE = ZMASTERS + "/goal_state";
+  public static final String ZMASTER_REPLICATION_COORDINATOR_ADDR = ZMASTERS + "/repl_coord_addr";
+  public static final String ZMASTER_TICK = ZMASTERS + "/tick";
 
-  @Override
-  public void initializeSecurity(String principal, byte[] token) {
-    try {
-      // remove old settings from zookeeper first, if any
-      ZooReaderWriter zoo = context.getZooReaderWriter();
-      synchronized (zooCache) {
-        zooCache.clear();
-        if (zoo.exists(ZKUserPath)) {
-          zoo.recursiveDelete(ZKUserPath, NodeMissingPolicy.SKIP);
-          log.info("Removed {}/ from zookeeper", ZKUserPath);
-        }
+  public static final String ZGC = "/gc";
+  public static final String ZGC_LOCK = ZGC + "/lock";
 
-        // prep parent node of users with root username
-        zoo.putPersistentData(ZKUserPath, principal.getBytes(UTF_8), NodeExistsPolicy.FAIL);
+  public static final String ZMONITOR = "/monitor";
+  public static final String ZMONITOR_LOCK = ZMONITOR + "/lock";
+  public static final String ZMONITOR_HTTP_ADDR = ZMONITOR + "/http_addr";
 
-        constructUser(principal, ZKSecurityTool.createPass(token));
-      }
-    } catch (KeeperException | AccumuloException | InterruptedException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new RuntimeException(e);
-    }
-  }
+  public static final String ZCONFIG = "/config";
+
+  public static final String ZTSERVERS = "/tservers";
+
+  public static final String ZDEAD = "/dead";
+  public static final String ZDEADTSERVERS = ZDEAD + "/tservers";
+
+  public static final String ZTRACERS = "/tracers";
+
+  public static final String ZPROBLEMS = "/problems";
+
+  public static final String BULK_ARBITRATOR_TYPE = "bulkTx";
+
+  public static final String ZFATE = "/fate";
+
+  public static final String ZNEXT_FILE = "/next_file";
+
+  public static final String ZBULK_FAILED_COPYQ = "/bulk_failed_copyq";
+
+  public static final String ZHDFS_RESERVATIONS = "/hdfs_reservations";
+  public static final String ZRECOVERY = "/recovery";
 
   /**
-   * Sets up the user in ZK for the provided user. No checking for existence is done here, it should
-   * be done before calling.
+   * Base znode for storing secret keys that back delegation tokens
    */
-  private void constructUser(String user, byte[] pass)
-      throws KeeperException, InterruptedException {
-    synchronized (zooCache) {
-      zooCache.clear();
-      ZooReaderWriter zoo = context.getZooReaderWriter();
-      zoo.putPrivatePersistentData(ZKUserPath + "/" + user, pass, NodeExistsPolicy.FAIL);
-    }
-  }
+  public static final String ZDELEGATION_TOKEN_KEYS = "/delegation_token_keys";
 
-  @Override
-  public Set<String> listUsers() {
-    return new TreeSet<>(zooCache.getChildren(ZKUserPath));
-  }
+  public static final String ZTABLE_LOCKS = "/table_locks";
 
-  @Override
-  public void createUser(String principal, AuthenticationToken token)
-      throws AccumuloSecurityException {
-    try {
-      if (!(token instanceof PasswordToken))
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
-      PasswordToken pt = (PasswordToken) token;
-      constructUser(principal, ZKSecurityTool.createPass(pt.getPassword()));
-    } catch (KeeperException e) {
-      if (e.code().equals(KeeperException.Code.NODEEXISTS))
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.USER_EXISTS, e);
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.CONNECTION_ERROR, e);
-    } catch (InterruptedException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new RuntimeException(e);
-    } catch (AccumuloException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.DEFAULT_SECURITY_ERROR, e);
-    }
-  }
+  public static final String BULK_PREFIX = "b-";
+  public static final String BULK_RENAME_FILE = "renames.json";
+  public static final String BULK_LOAD_MAPPING = "loadmap.json";
 
-  /**
-   * Creates user with outdated password hash for testing
-   *
-   * @deprecated since 2.1.0, only present for testing DO NOT USE!
-   */
-  public void createOutdatedUser(String principal, AuthenticationToken token)
-      throws AccumuloSecurityException {
-    try {
-      if (!(token instanceof PasswordToken))
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
-      PasswordToken pt = (PasswordToken) token;
-      constructUser(principal, ZKSecurityTool.createOutdatedPass(pt.getPassword()));
-    } catch (KeeperException e) {
-      if (e.code().equals(KeeperException.Code.NODEEXISTS))
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.USER_EXISTS, e);
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.CONNECTION_ERROR, e);
-    } catch (InterruptedException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new RuntimeException(e);
-    } catch (AccumuloException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.DEFAULT_SECURITY_ERROR, e);
-    }
-  }
+  public static final String CLONE_PREFIX = "c-";
+  public static final byte[] CLONE_PREFIX_BYTES = CLONE_PREFIX.getBytes(UTF_8);
 
-  @Override
-  public void dropUser(String user) throws AccumuloSecurityException {
-    try {
-      synchronized (zooCache) {
-        zooCache.clear();
-        context.getZooReaderWriter().recursiveDelete(ZKUserPath + "/" + user,
-            NodeMissingPolicy.FAIL);
-      }
-    } catch (InterruptedException e) {
-      log.error("{}", e.getMessage(), e);
-      throw new RuntimeException(e);
-    } catch (KeeperException e) {
-      if (e.code().equals(KeeperException.Code.NONODE)) {
-        throw new AccumuloSecurityException(user, SecurityErrorCode.USER_DOESNT_EXIST, e);
-      }
-      log.error("{}", e.getMessage(), e);
-      throw new AccumuloSecurityException(user, SecurityErrorCode.CONNECTION_ERROR, e);
-    }
-  }
+  // this affects the table client caching of metadata
+  public static final int SCAN_BATCH_SIZE = 1000;
 
-  @Override
-  public void changePassword(String principal, AuthenticationToken token)
-      throws AccumuloSecurityException {
-    if (!(token instanceof PasswordToken))
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
-    PasswordToken pt = (PasswordToken) token;
-    if (userExists(principal)) {
-      try {
-        synchronized (zooCache) {
-          zooCache.clear(ZKUserPath + "/" + principal);
-          context.getZooReaderWriter().putPrivatePersistentData(ZKUserPath + "/" + principal,
-              ZKSecurityTool.createPass(pt.getPassword()), NodeExistsPolicy.OVERWRITE);
-        }
-      } catch (KeeperException e) {
-        log.error("{}", e.getMessage(), e);
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.CONNECTION_ERROR, e);
-      } catch (InterruptedException e) {
-        log.error("{}", e.getMessage(), e);
-        throw new RuntimeException(e);
-      } catch (AccumuloException e) {
-        log.error("{}", e.getMessage(), e);
-        throw new AccumuloSecurityException(principal, SecurityErrorCode.DEFAULT_SECURITY_ERROR, e);
-      }
-    } else
-      // user doesn't exist
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.USER_DOESNT_EXIST);
-  }
+  // Scanners will default to fetching 3 batches of Key/Value pairs before asynchronously
+  // fetching the next batch.
+  public static final long SCANNER_DEFAULT_READAHEAD_THRESHOLD = 3L;
 
-  @Override
-  public boolean userExists(String user) {
-    return zooCache.get(ZKUserPath + "/" + user) != null;
-  }
+  // Security configuration
+  public static final String PW_HASH_ALGORITHM = "SHA-512";
+  public static final String PW_HASH_ALGORITHM_OUTDATED = "SHA-256";
 
-  @Override
-  public boolean validSecurityHandlers() {
-    return true;
-  }
+  public static final int MAX_DATA_TO_PRINT = 64;
+  public static final String CORE_PACKAGE_NAME = "org.apache.accumulo.core";
+  public static final String MAPFILE_EXTENSION = "map";
+  public static final String GENERATED_TABLET_DIRECTORY_PREFIX = "t-";
 
-  @Override
-  public boolean authenticateUser(String principal, AuthenticationToken token)
-      throws AccumuloSecurityException {
-    if (!(token instanceof PasswordToken))
-      throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
-    PasswordToken pt = (PasswordToken) token;
-    byte[] zkData;
-    String zpath = ZKUserPath + "/" + principal;
-    zkData = zooCache.get(zpath);
-    boolean result = authenticateUser(principal, pt, zkData);
-    if (!result) {
-      zooCache.clear(zpath);
-      zkData = zooCache.get(zpath);
-      result = authenticateUser(principal, pt, zkData);
-    }
-    return result;
-  }
+  public static final String EXPORT_METADATA_FILE = "metadata.bin";
+  public static final String EXPORT_TABLE_CONFIG_FILE = "table_config.txt";
+  public static final String EXPORT_FILE = "exportMetadata.zip";
+  public static final String EXPORT_INFO_FILE = "accumulo_export_info.txt";
 
-  private boolean authenticateUser(String principal, PasswordToken pt, byte[] zkData) {
-    if (zkData == null) {
-      return false;
-    }
+  public static final String HDFS_TABLES_DIR = "/tables";
 
-    // if the hash does not match the outdated format use Crypt to verify it
-    if (!ZKSecurityTool.isOutdatedPass(zkData)) {
-      return ZKSecurityTool.checkCryptPass(pt.getPassword(), zkData);
-    }
+  public static final int DEFAULT_VISIBILITY_CACHE_SIZE = 1000;
 
-    if (!ZKSecurityTool.checkPass(pt.getPassword(), zkData)) {
-      // if password does not match we are done
-      return false;
-    }
-
-    // if the password is correct we have to update the stored hash with new algorithm
-    try {
-      changePassword(principal, pt);
-      return true;
-    } catch (AccumuloSecurityException e) {
-      log.error("Failed to update hashed user password for user: {}", principal, e);
-    }
-    return false;
-  }
-
-  @Override
-  public Set<Class<? extends AuthenticationToken>> getSupportedTokenTypes() {
-    Set<Class<? extends AuthenticationToken>> cs = new HashSet<>();
-    cs.add(PasswordToken.class);
-    return cs;
-  }
-
-  @Override
-  public boolean validTokenClass(String tokenClass) {
-    return tokenClass.equals(PasswordToken.class.getName());
-  }
+  public static final int MAX_TABLE_NAME_LEN = 1024;
+  public static final int MAX_NAMESPACE_LEN = 1024;
 }

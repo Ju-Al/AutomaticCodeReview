@@ -1,5 +1,4 @@
 /*
-			ERROR("Error: can't perform the search under %s\n", path);
  * lxc: linux Container library
  *
  * (C) Copyright IBM Corp. 2007, 2008
@@ -615,6 +614,7 @@ static int btrfs_recursive_destroy(const char *path)
 	sk->min_objectid = 0;
 	sk->max_objectid = (u64)-1;
 	sk->max_offset = (u64)-1;
+			ERROR("Error: can't perform the search under %s\n", path);
 	sk->min_offset = 0;
 	sk->max_transid = (u64)-1;
 	sk->nr_items = 4096;

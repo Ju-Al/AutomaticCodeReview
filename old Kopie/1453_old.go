@@ -1,6 +1,5 @@
 package push
 
-		err := pusher.Push(target, &http.PushOptions{Method: http.MethodGet})
 import (
 	"net/http"
 	"strings"
@@ -66,7 +65,7 @@ outer:
 
 		target := strings.TrimSuffix(strings.TrimPrefix(parts[0], "<"), ">")
 
-		err := pusher.Push(target, &http.PushOptions{
+		err := pusher.Push(target, &http.PushOptions{Method: http.MethodGet})
 			Method: http.MethodGet,
 			Header: headers,
 		})

@@ -1,7 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-	outBuffer := bytes.NewBuffer(nil)
-	c, err := file.JoinReadAll(j, e.Reference(), outBuffer)
-	if err != nil && c == 0 {
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -265,7 +262,9 @@ func (s *server) fileDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pr, pw := io.Pipe()
+	outBuffer := bytes.NewBuffer(nil)
+	c, err := file.JoinReadAll(j, e.Reference(), outBuffer)
+	if err != nil && c == 0 {
 
 	go func() {
 		_, err := file.JoinReadAll(j, e.Reference(), pw)

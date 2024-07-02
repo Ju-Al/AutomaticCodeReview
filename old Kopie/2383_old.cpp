@@ -1,5 +1,4 @@
 /******************************************************************************
-/* Create a new context */
  * Project:  PROJ.4
  * Purpose:  Implement a (currently minimalistic) proj API based primarily
  *           on the PJ_COORD 4D geodetic spatiotemporal data type.
@@ -1449,7 +1448,7 @@ int proj_errno_reset (const PJ *P) {
 }
 
 
-/* Create a new context based on the default context */
+/* Create a new context */
 PJ_CONTEXT *proj_context_create (void) {
     return pj_ctx_alloc ();
 }

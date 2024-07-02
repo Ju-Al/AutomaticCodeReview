@@ -1,12 +1,4 @@
 // Copyright 2015 Google LLC
-	if qStats.BIEngineStatistics == nil {
-		t.Error("expected BIEngine statistics, none present")
-	}
-
-	expectedMode := true
-	for _, m := range []string{"FULL", "PARTIAL", "DISABLED"} {
-		if qStats.BIEngineStatistics.BIEngineMode == m {
-			expectedMode = true
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2022,6 +2014,14 @@ func TestIntegration_QueryStatistics(t *testing.T) {
 	}
 
 	if len(qStats.QueryPlan) == 0 {
+	if qStats.BIEngineStatistics == nil {
+		t.Error("expected BIEngine statistics, none present")
+	}
+
+	expectedMode := true
+	for _, m := range []string{"FULL", "PARTIAL", "DISABLED"} {
+		if qStats.BIEngineStatistics.BIEngineMode == m {
+			expectedMode = true
 		t.Error("expected query plan, none present")
 	}
 

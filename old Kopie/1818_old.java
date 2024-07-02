@@ -1,6 +1,4 @@
 /*
-    ExecutorService tp =
-        threads == 0 ? Executors.newCachedThreadPool() : Executors.newFixedThreadPool(threads);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -888,7 +886,8 @@ public class Master extends AbstractServer
       gatherTableInformation(Set<TServerInstance> currentServers) {
     final long rpcTimeout = getConfiguration().getTimeInMillis(Property.GENERAL_RPC_TIMEOUT);
     int threads = getConfiguration().getCount(Property.MASTER_STATUS_THREAD_POOL_SIZE);
-    ExecutorService tp = threads == 0
+    ExecutorService tp =
+        threads == 0 ? Executors.newCachedThreadPool() : Executors.newFixedThreadPool(threads);
         ? Executors.newCachedThreadPool(new NamingThreadFactory("GatherTableInformation"))
         : Executors.newFixedThreadPool(threads, new NamingThreadFactory("GatherTableInformation"));
     long start = System.currentTimeMillis();

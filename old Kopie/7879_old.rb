@@ -44,7 +44,6 @@ module Pod
         @dirs
       end
 
-      # List all files and directories under {dir}. This method could be executed recursively.
       #
       # @param  [Pathname] dir directory to traverse
       #

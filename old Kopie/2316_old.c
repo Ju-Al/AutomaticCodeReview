@@ -55,8 +55,6 @@ int s2n_read_in_bytes(struct s2n_connection *conn, struct s2n_stuffer *output, u
             S2N_ERROR(S2N_ERR_IO);
         }
         conn->wire_bytes_in += r;
-    }
-
     return S2N_SUCCESS;
 }
 

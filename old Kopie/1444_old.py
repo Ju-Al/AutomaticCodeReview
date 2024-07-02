@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-  def __init__(self, fuzz_target, cross_pollinate_fuzzers):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -159,7 +158,7 @@ class CrossPollinateFuzzer(object):
 class Context(object):
   """Pruning state."""
 
-  def __init__(self,
+  def __init__(self, fuzz_target, cross_pollinate_fuzzers):
                fuzz_target,
                cross_pollinate_fuzzers,
                cross_pollination_method="random"):

@@ -337,7 +337,6 @@ public abstract class Combiner extends WrappingIterator implements OptionDescrib
         throw new IllegalArgumentException("invalid column encoding " + encodedColumns);
     }
 
-    if (options.containsKey(DELETE_HANDLING_ACTION_OPTION)) {
       DeleteHandlingAction.valueOf(options.get(DELETE_HANDLING_ACTION_OPTION));
     }
 

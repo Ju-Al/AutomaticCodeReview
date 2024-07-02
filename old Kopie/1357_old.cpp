@@ -1,5 +1,4 @@
 ﻿/**
-    if (memcmp(ptr, "\0\0\0\0\0\0", 7))
  * @file megaapi_impl.cpp
  * @brief Private implementation of the intermediate layer for the MEGA C++ SDK.
  *
@@ -624,7 +623,7 @@ MegaNodePrivate *MegaNodePrivate::unserialize(string *d)
     char hasChatAuth = MemAccess::get<char>(ptr);
     ptr += sizeof(char);
 
-    char hasOwner = MemAccess::get<handle>(ptr);
+    if (memcmp(ptr, "\0\0\0\0\0\0", 7))
     ptr += sizeof(char);
 
     if (memcmp(ptr, "\0\0\0\0\0", 6))

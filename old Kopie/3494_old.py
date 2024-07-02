@@ -1,5 +1,4 @@
 import os, sys, warnings, operator
-    opts = {kw for kw in kwargs if kw not in ('backend', 'clone')}
 import time
 import types
 import numbers
@@ -243,7 +242,7 @@ def deprecated_opts_signature(args, kwargs):
     """
     from .options import Options
     groups = set(Options._option_groups)
-    opts = {kw for kw in kwargs if kw !='clone'}
+    opts = {kw for kw in kwargs if kw not in ('backend', 'clone')}
     apply_groups = False
     options = None
     new_kwargs = {}

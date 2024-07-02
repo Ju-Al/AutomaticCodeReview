@@ -1,1172 +1,832 @@
-# -*- coding: utf-8 -*-
-    # Jobs are disabled if we see more than disable_failures failures in disable_window seconds.
-    disable_failures = parameter.IntParameter(default=999999999,
-                                              config_path=dict(section='scheduler', name='disable-num-failures'))
-#
-# Copyright 2012-2015 Spotify AB
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-"""
-The system for scheduling tasks and executing them in order.
-Deals with dependencies, priorities, resources, etc.
-The :py:class:`~luigi.worker.Worker` pulls tasks from the scheduler (usually over the REST interface) and executes them.
-See :doc:`/central_scheduler` for more info.
-"""
+# vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
+# Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+#
+# This file is part of qutebrowser.
+#
+# qutebrowser is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qutebrowser is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Other utilities which don't fit anywhere else."""
+
+import io
+import sys
+import enum
+import json
+import os.path
 import collections
-import inspect
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 import functools
+import contextlib
 import itertools
-import logging
-import os
-import re
-import time
+import socket
 
-from luigi import six
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QKeySequence, QColor, QClipboard
+from PyQt5.QtWidgets import QApplication
+import pkg_resources
 
-from luigi import configuration
-from luigi import notifications
-from luigi import parameter
-from luigi import task_history as history
-from luigi.task_status import DISABLED, DONE, FAILED, PENDING, RUNNING, SUSPENDED, UNKNOWN
-from luigi.task import Config
-
-logger = logging.getLogger(__name__)
-
-UPSTREAM_RUNNING = 'UPSTREAM_RUNNING'
-UPSTREAM_MISSING_INPUT = 'UPSTREAM_MISSING_INPUT'
-UPSTREAM_FAILED = 'UPSTREAM_FAILED'
-UPSTREAM_DISABLED = 'UPSTREAM_DISABLED'
-
-UPSTREAM_SEVERITY_ORDER = (
-    '',
-    UPSTREAM_RUNNING,
-    UPSTREAM_MISSING_INPUT,
-    UPSTREAM_FAILED,
-    UPSTREAM_DISABLED,
-)
-UPSTREAM_SEVERITY_KEY = UPSTREAM_SEVERITY_ORDER.index
-STATUS_TO_UPSTREAM_MAP = {
-    FAILED: UPSTREAM_FAILED,
-    RUNNING: UPSTREAM_RUNNING,
-    PENDING: UPSTREAM_MISSING_INPUT,
-    DISABLED: UPSTREAM_DISABLED,
-}
-
-TASK_FAMILY_RE = re.compile(r'([^(_]+)[(_]')
-
-RPC_METHODS = {}
-
-_retry_policy_fields = [
-    "retry_count",
-    "disable_hard_timeout",
-    "disable_window",
-]
-RetryPolicy = collections.namedtuple("RetryPolicy", _retry_policy_fields)
+import qutebrowser
+from qutebrowser.utils import qtutils, log
+from qutebrowser.commands import cmdexc
 
 
-def _get_empty_retry_policy():
-    return RetryPolicy(*[None] * len(_retry_policy_fields))
+fake_clipboard = None
+log_clipboard = False
 
 
-def rpc_method(**request_args):
-    def _rpc_method(fn):
-        # If request args are passed, return this function again for use as
-        # the decorator function with the request args attached.
-        fn_args = inspect.getargspec(fn)
+class SelectionUnsupportedError(Exception):
 
-        assert not fn_args.varargs
-        assert fn_args.args[0] == 'self'
-        all_args = fn_args.args[1:]
-        defaults = dict(zip(reversed(all_args), reversed(fn_args.defaults or ())))
-        required_args = frozenset(arg for arg in all_args if arg not in defaults)
-        fn_name = fn.__name__
-
-        @functools.wraps(fn)
-        def rpc_func(self, *args, **kwargs):
-            actual_args = defaults.copy()
-            actual_args.update(dict(zip(all_args, args)))
-            actual_args.update(kwargs)
-            if not all(arg in actual_args for arg in required_args):
-                raise TypeError('{} takes {} arguments ({} given)'.format(
-                    fn_name, len(all_args), len(actual_args)))
-            return self._request('/api/{}'.format(fn_name), actual_args, **request_args)
-
-        RPC_METHODS[fn_name] = rpc_func
-        return fn
-
-    return _rpc_method
+    """Raised if [gs]et_clipboard is used and selection=True is unsupported."""
 
 
-class scheduler(Config):
-    # TODO(erikbern): the config_path is needed for backwards compatilibity. We
-    # should drop the compatibility at some point
-    retry_delay = parameter.FloatParameter(default=900.0)
-    remove_delay = parameter.FloatParameter(default=600.0)
-    worker_disconnect_delay = parameter.FloatParameter(default=60.0)
-    state_path = parameter.Parameter(default='/var/lib/luigi-server/state.pickle')
-
-    # Jobs are disabled if we see more than retry_count failures in disable_window seconds.
-    # These disables last for disable_persist seconds.
-    disable_window = parameter.IntParameter(default=3600,
-                                            config_path=dict(section='scheduler', name='disable-window-seconds'))
-    retry_count = parameter.IntParameter(default=999999999,
-                                         config_path=dict(section='scheduler', name='disable-num-failures'))
-    disable_hard_timeout = parameter.IntParameter(default=999999999,
-                                                  config_path=dict(section='scheduler', name='disable-hard-timeout'))
-    disable_persist = parameter.IntParameter(default=86400,
-                                             config_path=dict(section='scheduler', name='disable-persist-seconds'))
-    max_shown_tasks = parameter.IntParameter(default=100000)
-    max_graph_nodes = parameter.IntParameter(default=100000)
-
-    record_task_history = parameter.BoolParameter(default=False)
-
-    prune_on_get_work = parameter.BoolParameter(default=False)
-
-    def _get_retry_policy(self):
-        return RetryPolicy(self.retry_count, self.disable_hard_timeout, self.disable_window)
-
-
-class Failures(object):
-    """
-    This class tracks the number of failures in a given time window.
-
-    Failures added are marked with the current timestamp, and this class counts
-    the number of failures in a sliding time window ending at the present.
-    """
-
-    def __init__(self, window):
-        """
-        Initialize with the given window.
-
-        :param window: how long to track failures for, as a float (number of seconds).
-        """
-        self.window = window
-        self.failures = collections.deque()
-        self.first_failure_time = None
-
-    def add_failure(self):
-        """
-        Add a failure event with the current timestamp.
-        """
-        failure_time = time.time()
-
-        if not self.first_failure_time:
-            self.first_failure_time = failure_time
-
-        self.failures.append(failure_time)
-
-    def num_failures(self):
-        """
-        Return the number of failures in the window.
-        """
-        min_time = time.time() - self.window
-
-        while self.failures and self.failures[0] < min_time:
-            self.failures.popleft()
-
-        return len(self.failures)
-
-    def clear(self):
-        """
-        Clear the failure queue.
-        """
-        self.failures.clear()
-
-
-def _get_default(x, default):
-    if x is not None:
-        return x
+def elide(text, length):
+    """Elide text so it uses a maximum of length chars."""
+    if length < 1:
+        raise ValueError("length must be >= 1!")
+    if len(text) <= length:
+        return text
     else:
-        return default
+        return text[:length - 1] + '\u2026'
 
 
-class Task(object):
-    def __init__(self, task_id, status, deps, resources=None, priority=0, family='', module=None,
-                 params=None, tracking_url=None, status_message=None, retry_policy=None):
-        self.id = task_id
-        self.stakeholders = set()  # workers ids that are somehow related to this task (i.e. don't prune while any of these workers are still active)
-        self.workers = set()  # workers ids that can perform task - task is 'BROKEN' if none of these workers are active
-        if deps is None:
-            self.deps = set()
+def elide_filename(filename, length):
+    """Elide a filename to the given length.
+
+    The difference to the elide() is that the text is removed from
+    the middle instead of from the end. This preserves file name extensions.
+    Additionally, standard ASCII dots are used ("...") instead of the unicode
+    "…" (U+2026) so it works regardless of the filesystem encoding.
+
+    This function does not handle path separators.
+
+    Args:
+        filename: The filename to elide.
+        length: The maximum length of the filename, must be at least 3.
+
+    Return:
+        The elided filename.
+    """
+    elidestr = '...'
+    if length < len(elidestr):
+        raise ValueError('length must be greater or equal to 3')
+    if len(filename) <= length:
+        return filename
+    # Account for '...'
+    length -= len(elidestr)
+    left = length // 2
+    right = length - left
+    if right == 0:
+        return filename[:left] + elidestr
+    else:
+        return filename[:left] + elidestr + filename[-right:]
+
+
+def compact_text(text, elidelength=None):
+    """Remove leading whitespace and newlines from a text and maybe elide it.
+
+    Args:
+        text: The text to compact.
+        elidelength: To how many chars to elide.
+    """
+    lines = []
+    for line in text.splitlines():
+        lines.append(line.strip())
+    out = ''.join(lines)
+    if elidelength is not None:
+        out = elide(out, elidelength)
+    return out
+
+
+def read_file(filename, binary=False):
+    """Get the contents of a file contained with qutebrowser.
+
+    Args:
+        filename: The filename to open as string.
+        binary: Whether to return a binary string.
+                If False, the data is UTF-8-decoded.
+
+    Return:
+        The file contents as string.
+    """
+    if hasattr(sys, 'frozen'):
+        # cx_Freeze doesn't support pkg_resources :(
+        fn = os.path.join(os.path.dirname(sys.executable), filename)
+        if binary:
+            with open(fn, 'rb') as f:
+                return f.read()
         else:
-            self.deps = set(deps)
-        self.status = status  # PENDING, RUNNING, FAILED or DONE
-        self.time = time.time()  # Timestamp when task was first added
-        self.updated = self.time
-        self.retry = None
-        self.remove = None
-        self.worker_running = None  # the worker id that is currently running the task or None
-        self.time_running = None  # Timestamp when picked up by worker
-        self.expl = None
-        self.priority = priority
-        self.resources = _get_default(resources, {})
-        self.family = family
-        self.module = module
-        self.params = _get_default(params, {})
+            with open(fn, 'r', encoding='utf-8') as f:
+                return f.read()
+    else:
+        data = pkg_resources.resource_string(qutebrowser.__name__, filename)
+        if not binary:
+            data = data.decode('UTF-8')
+        return data
 
-        self.retry_policy = _get_default(retry_policy, _get_empty_retry_policy())
-        self.failures = Failures(self.retry_policy.disable_window)
-        self.tracking_url = tracking_url
-        self.status_message = status_message
-        self.scheduler_disable_time = None
-        self.runnable = False
+
+def resource_filename(filename):
+    """Get the absolute filename of a file contained with qutebrowser.
+
+    Args:
+        filename: The filename.
+
+    Return:
+        The absolute filename.
+    """
+    if hasattr(sys, 'frozen'):
+        return os.path.join(os.path.dirname(sys.executable), filename)
+    return pkg_resources.resource_filename(qutebrowser.__name__, filename)
+
+
+def actute_warning():
+    """Display a warning about the dead_actute issue if needed."""
+    # WORKAROUND (remove this when we bump the requirements to 5.3.0)
+    # Non Linux OS' aren't affected
+    if not sys.platform.startswith('linux'):
+        return
+    # If no compose file exists for some reason, we're not affected
+    if not os.path.exists('/usr/share/X11/locale/en_US.UTF-8/Compose'):
+        return
+    # Qt >= 5.3 doesn't seem to be affected
+    try:
+        if qtutils.version_check('5.3.0'):
+            return
+    except ValueError:  # pragma: no cover
+        pass
+    try:
+        with open('/usr/share/X11/locale/en_US.UTF-8/Compose', 'r',
+                  encoding='utf-8') as f:
+            for line in f:
+                if '<dead_actute>' in line:
+                    if sys.stdout is not None:
+                        sys.stdout.flush()
+                    print("Note: If you got a 'dead_actute' warning above, "
+                          "that is not a bug in qutebrowser! See "
+                          "https://bugs.freedesktop.org/show_bug.cgi?id=69476 "
+                          "for details.")
+                    break
+    except OSError:
+        log.init.exception("Failed to read Compose file")
+
+
+def _get_color_percentage(a_c1, a_c2, a_c3, b_c1, b_c2, b_c3, percent):
+    """Get a color which is percent% interpolated between start and end.
+
+    Args:
+        a_c1, a_c2, a_c3: Start color components (R, G, B / H, S, V / H, S, L)
+        b_c1, b_c2, b_c3: End color components (R, G, B / H, S, V / H, S, L)
+        percent: Percentage to interpolate, 0-100.
+                 0: Start color will be returned.
+                 100: End color will be returned.
+
+    Return:
+        A (c1, c2, c3) tuple with the interpolated color components.
+    """
+    if not 0 <= percent <= 100:
+        raise ValueError("percent needs to be between 0 and 100!")
+    out_c1 = round(a_c1 + (b_c1 - a_c1) * percent / 100)
+    out_c2 = round(a_c2 + (b_c2 - a_c2) * percent / 100)
+    out_c3 = round(a_c3 + (b_c3 - a_c3) * percent / 100)
+    return (out_c1, out_c2, out_c3)
+
+
+def interpolate_color(start, end, percent, colorspace=QColor.Rgb):
+    """Get an interpolated color value.
+
+    Args:
+        start: The start color.
+        end: The end color.
+        percent: Which value to get (0 - 100)
+        colorspace: The desired interpolation color system,
+                    QColor::{Rgb,Hsv,Hsl} (from QColor::Spec enum)
+                    If None, start is used except when percent is 100.
+
+    Return:
+        The interpolated QColor, with the same spec as the given start color.
+    """
+    qtutils.ensure_valid(start)
+    qtutils.ensure_valid(end)
+
+    if colorspace is None:
+        if percent == 100:
+            return QColor(*end.getRgb())
+        else:
+            return QColor(*start.getRgb())
+
+    out = QColor()
+    if colorspace == QColor.Rgb:
+        a_c1, a_c2, a_c3, _alpha = start.getRgb()
+        b_c1, b_c2, b_c3, _alpha = end.getRgb()
+        components = _get_color_percentage(a_c1, a_c2, a_c3, b_c1, b_c2, b_c3,
+                                           percent)
+        out.setRgb(*components)
+    elif colorspace == QColor.Hsv:
+        a_c1, a_c2, a_c3, _alpha = start.getHsv()
+        b_c1, b_c2, b_c3, _alpha = end.getHsv()
+        components = _get_color_percentage(a_c1, a_c2, a_c3, b_c1, b_c2, b_c3,
+                                           percent)
+        out.setHsv(*components)
+    elif colorspace == QColor.Hsl:
+        a_c1, a_c2, a_c3, _alpha = start.getHsl()
+        b_c1, b_c2, b_c3, _alpha = end.getHsl()
+        components = _get_color_percentage(a_c1, a_c2, a_c3, b_c1, b_c2, b_c3,
+                                           percent)
+        out.setHsl(*components)
+    else:
+        raise ValueError("Invalid colorspace!")
+    out = out.convertTo(start.spec())
+    qtutils.ensure_valid(out)
+    return out
+
+
+def format_seconds(total_seconds):
+    """Format a count of seconds to get a [H:]M:SS string."""
+    prefix = '-' if total_seconds < 0 else ''
+    hours, rem = divmod(abs(round(total_seconds)), 3600)
+    minutes, seconds = divmod(rem, 60)
+    chunks = []
+    if hours:
+        chunks.append(str(hours))
+        min_format = '{:02}'
+    else:
+        min_format = '{}'
+    chunks.append(min_format.format(minutes))
+    chunks.append('{:02}'.format(seconds))
+    return prefix + ':'.join(chunks)
+
+
+def format_timedelta(td):
+    """Format a timedelta to get a "1h 5m 1s" string."""
+    prefix = '-' if td.total_seconds() < 0 else ''
+    hours, rem = divmod(abs(round(td.total_seconds())), 3600)
+    minutes, seconds = divmod(rem, 60)
+    chunks = []
+    if hours:
+        chunks.append('{}h'.format(hours))
+    if minutes:
+        chunks.append('{}m'.format(minutes))
+    if seconds or not chunks:
+        chunks.append('{}s'.format(seconds))
+    return prefix + ' '.join(chunks)
+
+
+def format_size(size, base=1024, suffix=''):
+    """Format a byte size so it's human readable.
+
+    Inspired by http://stackoverflow.com/q/1094841
+    """
+    prefixes = ['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+    if size is None:
+        return '?.??' + suffix
+    for p in prefixes:
+        if -base < size < base:
+            return '{:.02f}{}{}'.format(size, p, suffix)
+        size /= base
+    return '{:.02f}{}{}'.format(size, prefixes[-1], suffix)
+
+
+def key_to_string(key):
+    """Convert a Qt::Key member to a meaningful name.
+
+    Args:
+        key: A Qt::Key member.
+
+    Return:
+        A name of the key as a string.
+    """
+    special_names_str = {
+        # Some keys handled in a weird way by QKeySequence::toString.
+        # See https://bugreports.qt.io/browse/QTBUG-40030
+        # Most are unlikely to be ever needed, but you never know ;)
+        # For dead/combining keys, we return the corresponding non-combining
+        # key, as that's easier to add to the config.
+        'Key_Blue': 'Blue',
+        'Key_Calendar': 'Calendar',
+        'Key_ChannelDown': 'Channel Down',
+        'Key_ChannelUp': 'Channel Up',
+        'Key_ContrastAdjust': 'Contrast Adjust',
+        'Key_Dead_Abovedot': '˙',
+        'Key_Dead_Abovering': '˚',
+        'Key_Dead_Acute': '´',
+        'Key_Dead_Belowdot': 'Belowdot',
+        'Key_Dead_Breve': '˘',
+        'Key_Dead_Caron': 'ˇ',
+        'Key_Dead_Cedilla': '¸',
+        'Key_Dead_Circumflex': '^',
+        'Key_Dead_Diaeresis': '¨',
+        'Key_Dead_Doubleacute': '˝',
+        'Key_Dead_Grave': '`',
+        'Key_Dead_Hook': 'Hook',
+        'Key_Dead_Horn': 'Horn',
+        'Key_Dead_Iota': 'Iota',
+        'Key_Dead_Macron': '¯',
+        'Key_Dead_Ogonek': '˛',
+        'Key_Dead_Semivoiced_Sound': 'Semivoiced Sound',
+        'Key_Dead_Tilde': '~',
+        'Key_Dead_Voiced_Sound': 'Voiced Sound',
+        'Key_Exit': 'Exit',
+        'Key_Green': 'Green',
+        'Key_Guide': 'Guide',
+        'Key_Info': 'Info',
+        'Key_LaunchG': 'LaunchG',
+        'Key_LaunchH': 'LaunchH',
+        'Key_MediaLast': 'MediaLast',
+        'Key_Memo': 'Memo',
+        'Key_MicMute': 'Mic Mute',
+        'Key_Mode_switch': 'Mode switch',
+        'Key_Multi_key': 'Multi key',
+        'Key_PowerDown': 'Power Down',
+        'Key_Red': 'Red',
+        'Key_Settings': 'Settings',
+        'Key_SingleCandidate': 'Single Candidate',
+        'Key_ToDoList': 'Todo List',
+        'Key_TouchpadOff': 'Touchpad Off',
+        'Key_TouchpadOn': 'Touchpad On',
+        'Key_TouchpadToggle': 'Touchpad toggle',
+        'Key_Yellow': 'Yellow',
+        'Key_Alt': 'Alt',
+        'Key_AltGr': 'AltGr',
+        'Key_Control': 'Control',
+        'Key_Direction_L': 'Direction L',
+        'Key_Direction_R': 'Direction R',
+        'Key_Hyper_L': 'Hyper L',
+        'Key_Hyper_R': 'Hyper R',
+        'Key_Meta': 'Meta',
+        'Key_Shift': 'Shift',
+        'Key_Super_L': 'Super L',
+        'Key_Super_R': 'Super R',
+        'Key_unknown': 'Unknown',
+    }
+    # We now build our real special_names dict from the string mapping above.
+    # The reason we don't do this directly is that certain Qt versions don't
+    # have all the keys, so we want to ignore AttributeErrors.
+    special_names = {}
+    for k, v in special_names_str.items():
+        try:
+            special_names[getattr(Qt, k)] = v
+        except AttributeError:
+            pass
+    # Now we check if the key is any special one - if not, we use
+    # QKeySequence::toString.
+    try:
+        return special_names[key]
+    except KeyError:
+        name = QKeySequence(key).toString()
+        morphings = {
+            'Backtab': 'Tab',
+            'Esc': 'Escape',
+        }
+        if name in morphings:
+            return morphings[name]
+        else:
+            return name
+
+
+def keyevent_to_string(e):
+    """Convert a QKeyEvent to a meaningful name.
+
+    Args:
+        e: A QKeyEvent.
+
+    Return:
+        A name of the key (combination) as a string or
+        None if only modifiers are pressed..
+    """
+    if sys.platform == 'darwin':
+        # Qt swaps Ctrl/Meta on OS X, so we switch it back here so the user can
+        # use it in the config as expected. See:
+        # https://github.com/The-Compiler/qutebrowser/issues/110
+        # http://doc.qt.io/qt-5.4/osx-issues.html#special-keys
+        modmask2str = collections.OrderedDict([
+            (Qt.MetaModifier, 'Ctrl'),
+            (Qt.AltModifier, 'Alt'),
+            (Qt.ControlModifier, 'Meta'),
+            (Qt.ShiftModifier, 'Shift'),
+        ])
+    else:
+        modmask2str = collections.OrderedDict([
+            (Qt.ControlModifier, 'Ctrl'),
+            (Qt.AltModifier, 'Alt'),
+            (Qt.MetaModifier, 'Meta'),
+            (Qt.ShiftModifier, 'Shift'),
+        ])
+    modifiers = (Qt.Key_Control, Qt.Key_Alt, Qt.Key_Shift, Qt.Key_Meta,
+                 Qt.Key_AltGr, Qt.Key_Super_L, Qt.Key_Super_R, Qt.Key_Hyper_L,
+                 Qt.Key_Hyper_R, Qt.Key_Direction_L, Qt.Key_Direction_R)
+    if e.key() in modifiers:
+        # Only modifier pressed
+        return None
+    mod = e.modifiers()
+    parts = []
+    for (mask, s) in modmask2str.items():
+        if mod & mask and s not in parts:
+            parts.append(s)
+    parts.append(key_to_string(e.key()))
+    return '+'.join(parts)
+
+
+class KeyInfo:
+
+    """Stores information about a key, like used in a QKeyEvent.
+
+    Attributes:
+        key: Qt::Key
+        modifiers: Qt::KeyboardModifiers
+        text: str
+    """
+
+    def __init__(self, key, modifiers, text):
+        self.key = key
+        self.modifiers = modifiers
+        self.text = text
 
     def __repr__(self):
-        return "Task(%r)" % vars(self)
+        # Meh, dependency cycle...
+        from qutebrowser.utils.debug import qenum_key
+        if self.modifiers is None:
+            modifiers = None
+        else:
+            #modifiers = qflags_key(Qt, self.modifiers)
+            modifiers = hex(int(self.modifiers))
+        return get_repr(self, constructor=True, key=qenum_key(Qt, self.key),
+                        modifiers=modifiers, text=self.text)
 
-    def add_failure(self):
-        self.failures.add_failure()
+    def __eq__(self, other):
+        return (self.key == other.key and self.modifiers == other.modifiers and
+                self.text == other.text)
 
-    def has_excessive_failures(self):
-        if self.failures.first_failure_time is not None:
-            if (time.time() >= self.failures.first_failure_time + self.retry_policy.disable_hard_timeout):
-                return True
 
-        logger.debug('%s task num failures is %s and limit is %s', self.id, self.failures.num_failures(), self.retry_policy.retry_count)
-        if self.failures.num_failures() >= self.retry_policy.retry_count:
-            logger.debug('%s task num failures limit(%s) is exceeded', self.id, self.retry_policy.retry_count)
-            return True
+class KeyParseError(Exception):
 
+    """Raised by _parse_single_key/parse_keystring on parse errors."""
+
+    def __init__(self, keystr, error):
+        super().__init__("Could not parse {!r}: {}".format(keystr, error))
+
+
+def is_special_key(keystr):
+    """True if keystr is a 'special' keystring (e.g. <ctrl-x> or <space>)."""
+    return keystr.startswith('<') and keystr.endswith('>')
+
+
+def _parse_single_key(keystr):
+    """Convert a single key string to a (Qt.Key, Qt.Modifiers, text) tuple."""
+    if is_special_key(keystr):
+        # Special key
+        keystr = keystr[1:-1]
+    elif len(keystr) == 1:
+        # vim-like key
+        pass
+    else:
+        raise KeyParseError(keystr, "Expecting either a single key or a "
+                            "<Ctrl-x> like keybinding.")
+
+    seq = QKeySequence(normalize_keystr(keystr), QKeySequence.PortableText)
+    if len(seq) != 1:
+        raise KeyParseError(keystr, "Got {} keys instead of 1.".format(
+            len(seq)))
+    result = seq[0]
+
+    if result == Qt.Key_unknown:
+        raise KeyParseError(keystr, "Got unknown key.")
+
+    modifier_mask = int(Qt.ShiftModifier | Qt.ControlModifier |
+                        Qt.AltModifier | Qt.MetaModifier | Qt.KeypadModifier |
+                        Qt.GroupSwitchModifier)
+    assert Qt.Key_unknown & ~modifier_mask == Qt.Key_unknown
+
+    modifiers = result & modifier_mask
+    key = result & ~modifier_mask
+
+    if len(keystr) == 1 and keystr.isupper():
+        modifiers |= Qt.ShiftModifier
+
+    assert key != 0, key
+    key = Qt.Key(key)
+    modifiers = Qt.KeyboardModifiers(modifiers)
+
+    # Let's hope this is accurate...
+    if len(keystr) == 1 and not modifiers:
+        text = keystr
+    elif len(keystr) == 1 and modifiers == Qt.ShiftModifier:
+        text = keystr.upper()
+    else:
+        text = ''
+
+    return KeyInfo(key, modifiers, text)
+
+
+def parse_keystring(keystr):
+    """Parse a keystring like <Ctrl-x> or xyz and return a KeyInfo list."""
+    if is_special_key(keystr):
+        return [_parse_single_key(keystr)]
+    else:
+        return [_parse_single_key(char) for char in keystr]
+
+
+def normalize_keystr(keystr):
+    """Normalize a keystring like Ctrl-Q to a keystring like Ctrl+Q.
+
+    Args:
+        keystr: The key combination as a string.
+
+    Return:
+        The normalized keystring.
+    """
+    keystr = keystr.lower()
+    replacements = (
+        ('control', 'ctrl'),
+        ('windows', 'meta'),
+        ('mod1', 'alt'),
+        ('mod4', 'meta'),
+    )
+    for (orig, repl) in replacements:
+        keystr = keystr.replace(orig, repl)
+    for mod in ['ctrl', 'meta', 'alt', 'shift']:
+        keystr = keystr.replace(mod + '-', mod + '+')
+    return keystr
+
+
+class FakeIOStream(io.TextIOBase):
+
+    """A fake file-like stream which calls a function for write-calls."""
+
+    def __init__(self, write_func):
+        super().__init__()
+        self.write = write_func
+
+
+@contextlib.contextmanager
+def fake_io(write_func):
+    """Run code with stdout and stderr replaced by FakeIOStreams.
+
+    Args:
+        write_func: The function to call when write is called.
+    """
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    fake_stderr = FakeIOStream(write_func)
+    fake_stdout = FakeIOStream(write_func)
+    sys.stderr = fake_stderr
+    sys.stdout = fake_stdout
+    try:
+        yield
+    finally:
+        # If the code we did run did change sys.stdout/sys.stderr, we leave it
+        # unchanged. Otherwise, we reset it.
+        if sys.stdout is fake_stdout:
+            sys.stdout = old_stdout
+        if sys.stderr is fake_stderr:
+            sys.stderr = old_stderr
+
+
+@contextlib.contextmanager
+def disabled_excepthook():
+    """Run code with the exception hook temporarily disabled."""
+    old_excepthook = sys.excepthook
+    sys.excepthook = sys.__excepthook__
+    try:
+        yield
+    finally:
+        # If the code we did run did change sys.excepthook, we leave it
+        # unchanged. Otherwise, we reset it.
+        if sys.excepthook is sys.__excepthook__:
+            sys.excepthook = old_excepthook
+
+
+class prevent_exceptions:  # pylint: disable=invalid-name
+
+    """Decorator to ignore and log exceptions.
+
+    This needs to be used for some places where PyQt segfaults on exceptions or
+    silently ignores them.
+
+    We used to re-raise the exception with a single-shot QTimer in a similar
+    case, but that lead to a strange problem with a KeyError with some random
+    jinja template stuff as content. For now, we only log it, so it doesn't
+    pass 100% silently.
+
+    This could also be a function, but as a class (with a "wrong" name) it's
+    much cleaner to implement.
+
+    Attributes:
+        _retval: The value to return in case of an exception.
+        _predicate: The condition which needs to be True to prevent exceptions
+    """
+
+    def __init__(self, retval, predicate=True):
+        """Save decorator arguments.
+
+        Gets called on parse-time with the decorator arguments.
+
+        Args:
+            See class attributes.
+        """
+        self._retval = retval
+        self._predicate = predicate
+
+    def __call__(self, func):
+        """Called when a function should be decorated.
+
+        Args:
+            func: The function to be decorated.
+
+        Return:
+            The decorated function.
+        """
+        if not self._predicate:
+            return func
+
+        retval = self._retval
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except BaseException:
+                log.misc.exception("Error in {}".format(qualname(func)))
+                return retval
+
+        return wrapper
+
+
+def is_enum(obj):
+    """Check if a given object is an enum."""
+    try:
+        return issubclass(obj, enum.Enum)
+    except TypeError:
         return False
 
-    @property
-    def pretty_id(self):
-        param_str = ', '.join('{}={}'.format(key, value) for key, value in self.params.items())
-        return '{}({})'.format(self.family, param_str)
 
+def get_repr(obj, constructor=False, **attrs):
+    """Get a suitable __repr__ string for an object.
 
-class Worker(object):
+    Args:
+        obj: The object to get a repr for.
+        constructor: If True, show the Foo(one=1, two=2) form instead of
+                     <Foo one=1 two=2>.
+        attrs: The attributes to add.
     """
-    Structure for tracking worker activity and keeping their references.
+    cls = qualname(obj.__class__)
+    parts = []
+    items = sorted(attrs.items())
+    for name, val in items:
+        parts.append('{}={!r}'.format(name, val))
+    if constructor:
+        return '{}({})'.format(cls, ', '.join(parts))
+    else:
+        if parts:
+            return '<{} {}>'.format(cls, ' '.join(parts))
+        else:
+            return '<{}>'.format(cls)
+
+
+def qualname(obj):
+    """Get the fully qualified name of an object.
+
+    Based on twisted.python.reflect.fullyQualifiedName.
+
+    Should work with:
+        - functools.partial objects
+        - functions
+        - classes
+        - methods
+        - modules
     """
+    if isinstance(obj, functools.partial):
+        obj = obj.func
 
-    def __init__(self, worker_id, last_active=None):
-        self.id = worker_id
-        self.reference = None  # reference to the worker in the real world. (Currently a dict containing just the host)
-        self.last_active = last_active or time.time()  # seconds since epoch
-        self.last_get_work = None
-        self.started = time.time()  # seconds since epoch
-        self.tasks = set()  # task objects
-        self.info = {}
-        self.disabled = False
+    if hasattr(obj, '__module__'):
+        prefix = '{}.'.format(obj.__module__)
+    else:
+        prefix = ''
 
-    def add_info(self, info):
-        self.info.update(info)
-
-    def update(self, worker_reference, get_work=False):
-        if worker_reference:
-            self.reference = worker_reference
-        self.last_active = time.time()
-        if get_work:
-            self.last_get_work = time.time()
-
-    def prune(self, config):
-        # Delete workers that haven't said anything for a while (probably killed)
-        if self.last_active + config.worker_disconnect_delay < time.time():
-            return True
-
-    def get_pending_tasks(self, state):
-        """
-        Get PENDING (and RUNNING) tasks for this worker.
-
-        You have to pass in the state for optimization reasons.
-        """
-        if len(self.tasks) < state.num_pending_tasks():
-            return six.moves.filter(lambda task: task.status in [PENDING, RUNNING],
-                                    self.tasks)
-        else:
-            return state.get_pending_tasks()
-
-    def is_trivial_worker(self, state):
-        """
-        If it's not an assistant having only tasks that are without
-        requirements.
-
-        We have to pass the state parameter for optimization reasons.
-        """
-        if self.assistant:
-            return False
-        return all(not task.resources for task in self.get_pending_tasks(state))
-
-    @property
-    def assistant(self):
-        return self.info.get('assistant', False)
-
-    def __str__(self):
-        return self.id
+    if hasattr(obj, '__qualname__'):
+        return '{}{}'.format(prefix, obj.__qualname__)
+    elif hasattr(obj, '__name__'):
+        return '{}{}'.format(prefix, obj.__name__)
+    else:
+        return repr(obj)
 
 
-class SimpleTaskState(object):
+def raises(exc, func, *args):
+    """Check if a function raises a given exception.
+
+    Args:
+        exc: A single exception or an iterable of exceptions.
+        func: A function to call.
+        *args: The arguments to pass to the function.
+
+    Returns:
+        True if the exception was raised, False otherwise.
     """
-    Keep track of the current state and handle persistance.
-
-    The point of this class is to enable other ways to keep state, eg. by using a database
-    These will be implemented by creating an abstract base class that this and other classes
-    inherit from.
-    """
-
-    def __init__(self, state_path):
-        self._state_path = state_path
-        self._tasks = {}  # map from id to a Task object
-        self._status_tasks = collections.defaultdict(dict)
-        self._active_workers = {}  # map from id to a Worker object
-
-    def get_state(self):
-        return self._tasks, self._active_workers
-
-    def set_state(self, state):
-        self._tasks, self._active_workers = state
-
-    def dump(self):
-        try:
-            with open(self._state_path, 'wb') as fobj:
-                pickle.dump(self.get_state(), fobj)
-        except IOError:
-            logger.warning("Failed saving scheduler state", exc_info=1)
-        else:
-            logger.info("Saved state in %s", self._state_path)
-
-    # prone to lead to crashes when old state is unpickled with updated code. TODO some kind of version control?
-    def load(self):
-        if os.path.exists(self._state_path):
-            logger.info("Attempting to load state from %s", self._state_path)
-            try:
-                with open(self._state_path, 'rb') as fobj:
-                    state = pickle.load(fobj)
-            except BaseException:
-                logger.exception("Error when loading state. Starting from empty state.")
-                return
-
-            self.set_state(state)
-            self._status_tasks = collections.defaultdict(dict)
-            for task in six.itervalues(self._tasks):
-                self._status_tasks[task.status][task.id] = task
-        else:
-            logger.info("No prior state file exists at %s. Starting with empty state", self._state_path)
-
-    def get_active_tasks(self, status=None):
-        if status:
-            for task in six.itervalues(self._status_tasks[status]):
-                yield task
-        else:
-            for task in six.itervalues(self._tasks):
-                yield task
-
-    def get_running_tasks(self):
-        return six.itervalues(self._status_tasks[RUNNING])
-
-    def get_pending_tasks(self):
-        return itertools.chain.from_iterable(six.itervalues(self._status_tasks[status])
-                                             for status in [PENDING, RUNNING])
-
-    def num_pending_tasks(self):
-        """
-        Return how many tasks are PENDING + RUNNING. O(1).
-        """
-        return len(self._status_tasks[PENDING]) + len(self._status_tasks[RUNNING])
-
-    def get_task(self, task_id, default=None, setdefault=None):
-        if setdefault:
-            task = self._tasks.setdefault(task_id, setdefault)
-            self._status_tasks[task.status][task.id] = task
-            return task
-        else:
-            return self._tasks.get(task_id, default)
-
-    def has_task(self, task_id):
-        return task_id in self._tasks
-
-    def re_enable(self, task, config=None):
-        task.scheduler_disable_time = None
-        task.failures.clear()
-        if config:
-            self.set_status(task, FAILED, config)
-            task.failures.clear()
-
-    def set_status(self, task, new_status, config=None):
-        if new_status == FAILED:
-            assert config is not None
-
-        if new_status == DISABLED and task.status == RUNNING:
-            return
-
-        if task.status == DISABLED:
-            if new_status == DONE:
-                self.re_enable(task)
-
-            # don't allow workers to override a scheduler disable
-            elif task.scheduler_disable_time is not None and new_status != DISABLED:
-                return
-
-        if new_status == FAILED and task.status != DISABLED:
-            task.add_failure()
-            if task.has_excessive_failures():
-                task.scheduler_disable_time = time.time()
-                new_status = DISABLED
-                notifications.send_error_email(
-                    'Luigi Scheduler: DISABLED {task} due to excessive failures'.format(task=task.id),
-                    '{task} failed {failures} times in the last {window} seconds, so it is being '
-                    'disabled for {persist} seconds'.format(
-                        failures=task.retry_policy.retry_count,
-                        task=task.id,
-                        window=config.disable_window,
-                        persist=config.disable_persist,
-                    ))
-        elif new_status == DISABLED:
-            task.scheduler_disable_time = None
-
-        if new_status != task.status:
-            self._status_tasks[task.status].pop(task.id)
-            self._status_tasks[new_status][task.id] = task
-            task.status = new_status
-            task.updated = time.time()
-
-    def fail_dead_worker_task(self, task, config, assistants):
-        # If a running worker disconnects, tag all its jobs as FAILED and subject it to the same retry logic
-        if task.status == RUNNING and task.worker_running and task.worker_running not in task.stakeholders | assistants:
-            logger.info("Task %r is marked as running by disconnected worker %r -> marking as "
-                        "FAILED with retry delay of %rs", task.id, task.worker_running,
-                        config.retry_delay)
-            task.worker_running = None
-            self.set_status(task, FAILED, config)
-            task.retry = time.time() + config.retry_delay
-
-    def update_status(self, task, config):
-        # Mark tasks with no remaining active stakeholders for deletion
-        if (not task.stakeholders) and (task.remove is None) and (task.status != RUNNING):
-            # We don't check for the RUNNING case, because that is already handled
-            # by the fail_dead_worker_task function.
-            logger.debug("Task %r has no stakeholders anymore -> might remove "
-                         "task in %s seconds", task.id, config.remove_delay)
-            task.remove = time.time() + config.remove_delay
-
-        # Re-enable task after the disable time expires
-        if task.status == DISABLED and task.scheduler_disable_time is not None:
-            if time.time() - task.scheduler_disable_time > config.disable_persist:
-                self.re_enable(task, config)
-
-        # Reset FAILED tasks to PENDING if max timeout is reached, and retry delay is >= 0
-        if task.status == FAILED and config.retry_delay >= 0 and task.retry < time.time():
-            self.set_status(task, PENDING, config)
-
-    def may_prune(self, task):
-        return task.remove and time.time() > task.remove
-
-    def inactivate_tasks(self, delete_tasks):
-        # The terminology is a bit confusing: we used to "delete" tasks when they became inactive,
-        # but with a pluggable state storage, you might very well want to keep some history of
-        # older tasks as well. That's why we call it "inactivate" (as in the verb)
-        for task in delete_tasks:
-            task_obj = self._tasks.pop(task)
-            self._status_tasks[task_obj.status].pop(task)
-
-    def get_active_workers(self, last_active_lt=None, last_get_work_gt=None):
-        for worker in six.itervalues(self._active_workers):
-            if last_active_lt is not None and worker.last_active >= last_active_lt:
-                continue
-            last_get_work = getattr(worker, 'last_get_work', None)
-            if last_get_work_gt is not None and (
-                            last_get_work is None or last_get_work <= last_get_work_gt):
-                continue
-            yield worker
-
-    def get_assistants(self, last_active_lt=None):
-        return filter(lambda w: w.assistant, self.get_active_workers(last_active_lt))
-
-    def get_worker_ids(self):
-        return self._active_workers.keys()  # only used for unit tests
-
-    def get_worker(self, worker_id):
-        return self._active_workers.setdefault(worker_id, Worker(worker_id))
-
-    def inactivate_workers(self, delete_workers):
-        # Mark workers as inactive
-        for worker in delete_workers:
-            self._active_workers.pop(worker)
-        self._remove_workers_from_tasks(delete_workers)
-
-    def _remove_workers_from_tasks(self, workers, remove_stakeholders=True):
-        for task in self.get_active_tasks():
-            if remove_stakeholders:
-                task.stakeholders.difference_update(workers)
-            task.workers.difference_update(workers)
-
-    def disable_workers(self, workers):
-        self._remove_workers_from_tasks(workers, remove_stakeholders=False)
-        for worker in workers:
-            self.get_worker(worker).disabled = True
-
-
-class Scheduler(object):
-    """
-    Async scheduler that can handle multiple workers, etc.
-
-    Can be run locally or on a server (using RemoteScheduler + server.Server).
-    """
-
-    def __init__(self, config=None, resources=None, task_history_impl=None, **kwargs):
-        """
-        Keyword Arguments:
-        :param config: an object of class "scheduler" or None (in which the global instance will be used)
-        :param resources: a dict of str->int constraints
-        :param task_history_impl: ignore config and use this object as the task history
-        """
-        self._config = config or scheduler(**kwargs)
-        self._state = SimpleTaskState(self._config.state_path)
-
-        if task_history_impl:
-            self._task_history = task_history_impl
-        elif self._config.record_task_history:
-            from luigi import db_task_history  # Needs sqlalchemy, thus imported here
-            self._task_history = db_task_history.DbTaskHistory()
-        else:
-            self._task_history = history.NopHistory()
-        self._resources = resources or configuration.get_config().getintdict('resources')  # TODO: Can we make this a Parameter?
-        self._make_task = functools.partial(Task, retry_policy=self._config._get_retry_policy())
-        self._worker_requests = {}
-
-    def load(self):
-        self._state.load()
-
-    def dump(self):
-        self._state.dump()
-
-    @rpc_method()
-    def prune(self):
-        logger.info("Starting pruning of task graph")
-        self._prune_workers()
-        self._prune_tasks()
-        logger.info("Done pruning task graph")
-
-    def _prune_workers(self):
-        remove_workers = []
-        for worker in self._state.get_active_workers():
-            if worker.prune(self._config):
-                logger.debug("Worker %s timed out (no contact for >=%ss)", worker, self._config.worker_disconnect_delay)
-                remove_workers.append(worker.id)
-
-        self._state.inactivate_workers(remove_workers)
-
-    def _prune_tasks(self):
-        assistant_ids = set(w.id for w in self._state.get_assistants())
-        remove_tasks = []
-
-        for task in self._state.get_active_tasks():
-            self._state.fail_dead_worker_task(task, self._config, assistant_ids)
-            self._state.update_status(task, self._config)
-            if self._state.may_prune(task):
-                logger.info("Removing task %r", task.id)
-                remove_tasks.append(task.id)
-
-        self._state.inactivate_tasks(remove_tasks)
-
-    def update(self, worker_id, worker_reference=None, get_work=False):
-        """
-        Keep track of whenever the worker was last active.
-        """
-        worker = self._state.get_worker(worker_id)
-        worker.update(worker_reference, get_work=get_work)
-        return not getattr(worker, 'disabled', False)
-
-    def _update_priority(self, task, prio, worker):
-        """
-        Update priority of the given task.
-
-        Priority can only be increased.
-        If the task doesn't exist, a placeholder task is created to preserve priority when the task is later scheduled.
-        """
-        task.priority = prio = max(prio, task.priority)
-        for dep in task.deps or []:
-            t = self._state.get_task(dep)
-            if t is not None and prio > t.priority:
-                self._update_priority(t, prio, worker)
-
-    @rpc_method()
-    def add_task(self, task_id=None, status=PENDING, runnable=True,
-                 deps=None, new_deps=None, expl=None, resources=None,
-                 priority=0, family='', module=None, params=None,
-                 assistant=False, tracking_url=None, worker=None,
-                 retry_policy_dict=None, deps_retry_policy_dicts=None, **kwargs):
-        """
-        * add task identified by task_id if it doesn't exist
-        * if deps is not None, update dependency list
-        * update status of task
-        * add additional workers/stakeholders
-        * update priority when needed
-        """
-        assert worker is not None
-        worker_id = worker
-        worker_enabled = self.update(worker_id)
-
-        if worker_enabled:
-            _default_task = self._make_task(
-                task_id=task_id, status=PENDING, deps=deps, resources=resources,
-                priority=priority, family=family, module=module, params=params,
-                retry_policy=self._generate_retry_policy(retry_policy_dict)
-            )
-        else:
-            _default_task = None
-
-        task = self._state.get_task(task_id, setdefault=_default_task)
-
-        if task is None or (task.status != RUNNING and not worker_enabled):
-            return
-
-        # for setting priority, we'll sometimes create tasks with unset family and params
-        if not task.family:
-            task.family = family
-        if not getattr(task, 'module', None):
-            task.module = module
-        if not task.params:
-            task.params = _get_default(params, {})
-
-        if tracking_url is not None or task.status != RUNNING:
-            task.tracking_url = tracking_url
-
-        if task.remove is not None:
-            task.remove = None  # unmark task for removal so it isn't removed after being added
-
-        if expl is not None:
-            task.expl = expl
-
-        if not (task.status == RUNNING and status == PENDING) or new_deps:
-            # don't allow re-scheduling of task while it is running, it must either fail or succeed first
-            if status == PENDING or status != task.status:
-                # Update the DB only if there was a acctual change, to prevent noise.
-                # We also check for status == PENDING b/c that's the default value
-                # (so checking for status != task.status woule lie)
-                self._update_task_history(task, status)
-            self._state.set_status(task, PENDING if status == SUSPENDED else status, self._config)
-            if status == FAILED:
-                task.retry = self._retry_time(task, self._config)
-
-        if deps is not None:
-            task.deps = set(deps)
-
-        if new_deps is not None:
-            task.deps.update(new_deps)
-
-        if resources is not None:
-            task.resources = resources
-
-        if worker_enabled and not assistant:
-            task.stakeholders.add(worker_id)
-
-            # Task dependencies might not exist yet. Let's create dummy tasks for them for now.
-            # Otherwise the task dependencies might end up being pruned if scheduling takes a long time
-            deps_retry_policy_dicts = _get_default(deps_retry_policy_dicts, {})
-            for dep in task.deps or []:
-                t = self._state.get_task(dep, setdefault=self._make_task(task_id=dep, status=UNKNOWN, deps=None, priority=priority,
-                                                                         retry_policy=self._generate_retry_policy(
-                                                                             deps_retry_policy_dicts.get(dep))))
-                t.stakeholders.add(worker_id)
-
-        self._update_priority(task, priority, worker_id)
-
-        if runnable and status != FAILED and worker_enabled:
-            task.workers.add(worker_id)
-            self._state.get_worker(worker_id).tasks.add(task)
-            task.runnable = runnable
-
-    @rpc_method()
-    def add_worker(self, worker, info, **kwargs):
-        self._state.get_worker(worker).add_info(info)
-
-    @rpc_method()
-    def disable_worker(self, worker):
-        self._state.disable_workers({worker})
-
-    @rpc_method()
-    def update_resources(self, **resources):
-        if self._resources is None:
-            self._resources = {}
-        self._resources.update(resources)
-
-    def _generate_retry_policy(self, task_retry_policy_dict):
-        retry_policy_dict = self._config._get_retry_policy()._asdict()
-        retry_policy_dict.update({k: v for k, v in six.iteritems(_get_default(task_retry_policy_dict, {})) if v is not None})
-        return RetryPolicy(**retry_policy_dict)
-
-    def _has_resources(self, needed_resources, used_resources):
-        if needed_resources is None:
-            return True
-
-        available_resources = self._resources or {}
-        for resource, amount in six.iteritems(needed_resources):
-            if amount + used_resources[resource] > available_resources.get(resource, 1):
-                return False
+    try:
+        func(*args)
+    except exc:
         return True
+    else:
+        return False
 
-    def _used_resources(self):
-        used_resources = collections.defaultdict(int)
-        if self._resources is not None:
-            for task in self._state.get_active_tasks(status=RUNNING):
-                if task.resources:
-                    for resource, amount in six.iteritems(task.resources):
-                        used_resources[resource] += amount
-        return used_resources
 
-    def _rank(self, task):
-        """
-        Return worker's rank function for task scheduling.
+def force_encoding(text, encoding):
+    """Make sure a given text is encodable with the given encoding.
 
-        :return:
-        """
+    This replaces all chars not encodable with question marks.
+    """
+    return text.encode(encoding, errors='replace').decode(encoding)
 
-        return task.priority, -task.time
 
-    def _schedulable(self, task):
-        if task.status != PENDING:
-            return False
-        for dep in task.deps:
-            dep_task = self._state.get_task(dep, default=None)
-            if dep_task is None or dep_task.status != DONE:
-                return False
-        return True
+def sanitize_filename(name, replacement='_'):
+    """Replace invalid filename characters.
 
-    def _retry_time(self, task, config):
-        return time.time() + config.retry_delay
+    Note: This should be used for the basename, as it also removes the path
+    separator.
 
-    @rpc_method(allow_null=False)
-    def get_work(self, host=None, assistant=False, current_tasks=None, worker=None, **kwargs):
-        # TODO: remove any expired nodes
+    Args:
+        name: The filename.
+        replacement: The replacement character (or None).
+    """
+    if replacement is None:
+        replacement = ''
+    # Bad characters taken from Windows, there are even fewer on Linux
+    # See also
+    # https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words
+    bad_chars = '\\/:*?"<>|'
+    for bad_char in bad_chars:
+        name = name.replace(bad_char, replacement)
+    return name
 
-        # Algo: iterate over all nodes, find the highest priority node no dependencies and available
-        # resources.
 
-        # Resource checking looks both at currently available resources and at which resources would
-        # be available if all running tasks died and we rescheduled all workers greedily. We do both
-        # checks in order to prevent a worker with many low-priority tasks from starving other
-        # workers with higher priority tasks that share the same resources.
+def newest_slice(iterable, count):
+    """Get an iterable for the n newest items of the given iterable.
 
-        # TODO: remove tasks that can't be done, figure out if the worker has absolutely
-        # nothing it can wait for
+    Args:
+        count: How many elements to get.
+               0: get no items:
+               n: get the n newest items
+              -1: get all items
+    """
+    if count < -1:
+        raise ValueError("count can't be smaller than -1!")
+    elif count == 0:
+        return []
+    elif count == -1 or len(iterable) < count:
+        return iterable
+    else:
+        return itertools.islice(iterable, len(iterable) - count, len(iterable))
 
-        if self._config.prune_on_get_work:
-            self.prune()
 
-        assert worker is not None
-        worker_id = worker
-        # Return remaining tasks that have no FAILED descendants
-        self.update(worker_id, {'host': host}, get_work=True)
-        if assistant:
-            self.add_worker(worker_id, [('assistant', assistant)])
+def set_clipboard(data, selection=False):
+    """Set the clipboard to some given data."""
+    if selection and not supports_selection():
+        raise SelectionUnsupportedError
+    if log_clipboard:
+        what = 'primary selection' if selection else 'clipboard'
+        log.misc.debug("Setting fake {}: {}".format(what, json.dumps(data)))
+    else:
+        mode = QClipboard.Selection if selection else QClipboard.Clipboard
+        QApplication.clipboard().setText(data, mode=mode)
 
-        best_task = None
-        if current_tasks is not None:
-            ct_set = set(current_tasks)
-            for task in sorted(self._state.get_running_tasks(), key=self._rank):
-                if task.worker_running == worker_id and task.id not in ct_set:
-                    best_task = task
 
-        locally_pending_tasks = 0
-        running_tasks = []
-        upstream_table = {}
+def get_clipboard(selection=False):
+    """Get data from the clipboard."""
+    global fake_clipboard
+    if selection and not supports_selection():
+        raise SelectionUnsupportedError
 
-        greedy_resources = collections.defaultdict(int)
-        n_unique_pending = 0
+    if fake_clipboard is not None:
+        data = fake_clipboard
+        fake_clipboard = None
+    else:
+        mode = QClipboard.Selection if selection else QClipboard.Clipboard
+        data = QApplication.clipboard().text(mode=mode)
 
-        worker = self._state.get_worker(worker_id)
-        if worker.is_trivial_worker(self._state):
-            relevant_tasks = worker.get_pending_tasks(self._state)
-            used_resources = collections.defaultdict(int)
-            greedy_workers = dict()  # If there's no resources, then they can grab any task
-        else:
-            relevant_tasks = self._state.get_pending_tasks()
-            used_resources = self._used_resources()
-            activity_limit = time.time() - self._config.worker_disconnect_delay
-            active_workers = self._state.get_active_workers(last_get_work_gt=activity_limit)
-            greedy_workers = dict((worker.id, worker.info.get('workers', 1))
-                                  for worker in active_workers)
-        tasks = list(relevant_tasks)
-        tasks.sort(key=self._rank, reverse=True)
+    if not data.strip():
+        raise cmdexc.CommandError("{} is empty.".format(target))
+    log.misc.debug("{} contained: {!r}".format(target, data))
 
-        for task in tasks:
-            in_workers = (assistant and getattr(task, 'runnable', bool(task.workers))) or worker_id in task.workers
-            if task.status == RUNNING and in_workers:
-                # Return a list of currently running tasks to the client,
-                # makes it easier to troubleshoot
-                other_worker = self._state.get_worker(task.worker_running)
-                more_info = {'task_id': task.id, 'worker': str(other_worker)}
-                if other_worker is not None:
-                    more_info.update(other_worker.info)
-                    running_tasks.append(more_info)
+    return data
 
-            if task.status == PENDING and in_workers:
-                upstream_status = self._upstream_status(task.id, upstream_table)
-                if upstream_status != UPSTREAM_DISABLED:
-                    locally_pending_tasks += 1
-                    if len(task.workers) == 1 and not assistant:
-                        n_unique_pending += 1
 
-            if best_task:
-                continue
+def supports_selection():
+    """Check if the OS supports primary selection."""
+    return QApplication.clipboard().supportsSelection()
 
-            if task.status == RUNNING and (task.worker_running in greedy_workers):
-                greedy_workers[task.worker_running] -= 1
-                for resource, amount in six.iteritems((task.resources or {})):
-                    greedy_resources[resource] += amount
 
-            if self._schedulable(task) and self._has_resources(task.resources, greedy_resources):
-                if in_workers and self._has_resources(task.resources, used_resources):
-                    best_task = task
-                else:
-                    workers = itertools.chain(task.workers, [worker_id]) if assistant else task.workers
-                    for task_worker in workers:
-                        if greedy_workers.get(task_worker, 0) > 0:
-                            # use up a worker
-                            greedy_workers[task_worker] -= 1
-
-                            # keep track of the resources used in greedy scheduling
-                            for resource, amount in six.iteritems((task.resources or {})):
-                                greedy_resources[resource] += amount
-
-                            break
-
-        reply = {'n_pending_tasks': locally_pending_tasks,
-                 'running_tasks': running_tasks,
-                 'task_id': None,
-                 'n_unique_pending': n_unique_pending}
-
-        if best_task:
-            self._state.set_status(best_task, RUNNING, self._config)
-            best_task.worker_running = worker_id
-            best_task.time_running = time.time()
-            self._update_task_history(best_task, RUNNING, host=host)
-
-            reply['task_id'] = best_task.id
-            reply['task_family'] = best_task.family
-            reply['task_module'] = getattr(best_task, 'module', None)
-            reply['task_params'] = best_task.params
-
-        return reply
-
-    @rpc_method(attempts=1)
-    def ping(self, **kwargs):
-        worker_id = kwargs['worker']
-        self.update(worker_id)
-
-    def _upstream_status(self, task_id, upstream_status_table):
-        if task_id in upstream_status_table:
-            return upstream_status_table[task_id]
-        elif self._state.has_task(task_id):
-            task_stack = [task_id]
-
-            while task_stack:
-                dep_id = task_stack.pop()
-                dep = self._state.get_task(dep_id)
-                if dep:
-                    if dep.status == DONE:
-                        continue
-                    if dep_id not in upstream_status_table:
-                        if dep.status == PENDING and dep.deps:
-                            task_stack += [dep_id] + list(dep.deps)
-                            upstream_status_table[dep_id] = ''  # will be updated postorder
-                        else:
-                            dep_status = STATUS_TO_UPSTREAM_MAP.get(dep.status, '')
-                            upstream_status_table[dep_id] = dep_status
-                    elif upstream_status_table[dep_id] == '' and dep.deps:
-                        # This is the postorder update step when we set the
-                        # status based on the previously calculated child elements
-                        upstream_severities = list(upstream_status_table.get(a_task_id) for a_task_id in dep.deps if a_task_id in upstream_status_table) or ['']
-                        status = min(upstream_severities, key=UPSTREAM_SEVERITY_KEY)
-                        upstream_status_table[dep_id] = status
-            return upstream_status_table[dep_id]
-
-    def _serialize_task(self, task_id, include_deps=True, deps=None):
-        task = self._state.get_task(task_id)
-        ret = {
-            'display_name': task.pretty_id,
-            'status': task.status,
-            'workers': list(task.workers),
-            'worker_running': task.worker_running,
-            'time_running': getattr(task, "time_running", None),
-            'start_time': task.time,
-            'last_updated': getattr(task, "updated", task.time),
-            'params': task.params,
-            'name': task.family,
-            'priority': task.priority,
-            'resources': task.resources,
-            'tracking_url': getattr(task, "tracking_url", None),
-            'status_message': getattr(task, "status_message", None)
-        }
-        if task.status == DISABLED:
-            ret['re_enable_able'] = task.scheduler_disable_time is not None
-        if include_deps:
-            ret['deps'] = list(task.deps if deps is None else deps)
-        return ret
-
-    @rpc_method()
-    def graph(self, **kwargs):
-        self.prune()
-        serialized = {}
-        seen = set()
-        for task in self._state.get_active_tasks():
-            serialized.update(self._traverse_graph(task.id, seen))
-        return serialized
-
-    def _filter_done(self, task_ids):
-        for task_id in task_ids:
-            task = self._state.get_task(task_id)
-            if task is None or task.status != DONE:
-                yield task_id
-
-    def _traverse_graph(self, root_task_id, seen=None, dep_func=None, include_done=True):
-        """ Returns the dependency graph rooted at task_id
-
-        This does a breadth-first traversal to find the nodes closest to the
-        root before hitting the scheduler.max_graph_nodes limit.
-
-        :param root_task_id: the id of the graph's root
-        :return: A map of task id to serialized node
-        """
-
-        if seen is None:
-            seen = set()
-        elif root_task_id in seen:
-            return {}
-
-        if dep_func is None:
-            def dep_func(t):
-                return t.deps
-
-        seen.add(root_task_id)
-        serialized = {}
-        queue = collections.deque([root_task_id])
-        while queue:
-            task_id = queue.popleft()
-
-            task = self._state.get_task(task_id)
-            if task is None or not task.family:
-                logger.debug('Missing task for id [%s]', task_id)
-
-                # NOTE : If a dependency is missing from self._state there is no way to deduce the
-                #        task family and parameters.
-                family_match = TASK_FAMILY_RE.match(task_id)
-                family = family_match.group(1) if family_match else UNKNOWN
-                params = {'task_id': task_id}
-                serialized[task_id] = {
-                    'deps': [],
-                    'status': UNKNOWN,
-                    'workers': [],
-                    'start_time': UNKNOWN,
-                    'params': params,
-                    'name': family,
-                    'display_name': task_id,
-                    'priority': 0,
-                }
-            else:
-                deps = dep_func(task)
-                if not include_done:
-                    deps = list(self._filter_done(deps))
-                serialized[task_id] = self._serialize_task(task_id, deps=deps)
-                for dep in sorted(deps):
-                    if dep not in seen:
-                        seen.add(dep)
-                        queue.append(dep)
-
-            if task_id != root_task_id:
-                del serialized[task_id]['display_name']
-            if len(serialized) >= self._config.max_graph_nodes:
-                break
-
-        return serialized
-
-    @rpc_method()
-    def dep_graph(self, task_id, include_done=True, **kwargs):
-        self.prune()
-        if not self._state.has_task(task_id):
-            return {}
-        return self._traverse_graph(task_id, include_done=include_done)
-
-    @rpc_method()
-    def inverse_dep_graph(self, task_id, include_done=True, **kwargs):
-        self.prune()
-        if not self._state.has_task(task_id):
-            return {}
-        inverse_graph = collections.defaultdict(set)
-        for task in self._state.get_active_tasks():
-            for dep in task.deps:
-                inverse_graph[dep].add(task.id)
-        return self._traverse_graph(
-            task_id, dep_func=lambda t: inverse_graph[t.id], include_done=include_done)
-
-    @rpc_method()
-    def task_list(self, status='', upstream_status='', limit=True, search=None, **kwargs):
-        """
-        Query for a subset of tasks by status.
-        """
-        self.prune()
-        result = {}
-        upstream_status_table = {}  # used to memoize upstream status
-        if search is None:
-            def filter_func(_):
-                return True
-        else:
-            terms = search.split()
-
-            def filter_func(t):
-                return all(term in t.pretty_id for term in terms)
-        for task in filter(filter_func, self._state.get_active_tasks(status)):
-            if task.status != PENDING or not upstream_status or upstream_status == self._upstream_status(task.id, upstream_status_table):
-                serialized = self._serialize_task(task.id, False)
-                result[task.id] = serialized
-        if limit and len(result) > self._config.max_shown_tasks:
-            return {'num_tasks': len(result)}
-        return result
-
-    def _first_task_display_name(self, worker):
-        task_id = worker.info.get('first_task', '')
-        if self._state.has_task(task_id):
-            return self._state.get_task(task_id).pretty_id
-        else:
-            return task_id
-
-    @rpc_method()
-    def worker_list(self, include_running=True, **kwargs):
-        self.prune()
-        workers = [
-            dict(
-                name=worker.id,
-                last_active=worker.last_active,
-                started=getattr(worker, 'started', None),
-                first_task_display_name=self._first_task_display_name(worker),
-                **worker.info
-            ) for worker in self._state.get_active_workers()]
-        workers.sort(key=lambda worker: worker['started'], reverse=True)
-        if include_running:
-            running = collections.defaultdict(dict)
-            num_pending = collections.defaultdict(int)
-            num_uniques = collections.defaultdict(int)
-            for task in self._state.get_pending_tasks():
-                if task.status == RUNNING and task.worker_running:
-                    running[task.worker_running][task.id] = self._serialize_task(task.id, False)
-                elif task.status == PENDING:
-                    for worker in task.workers:
-                        num_pending[worker] += 1
-                    if len(task.workers) == 1:
-                        num_uniques[list(task.workers)[0]] += 1
-            for worker in workers:
-                tasks = running[worker['name']]
-                worker['num_running'] = len(tasks)
-                worker['num_pending'] = num_pending[worker['name']]
-                worker['num_uniques'] = num_uniques[worker['name']]
-                worker['running'] = tasks
-        return workers
-
-    @rpc_method()
-    def resource_list(self):
-        """
-        Resources usage info and their consumers (tasks).
-        """
-        self.prune()
-        resources = [
-            dict(
-                name=resource,
-                num_total=r_dict['total'],
-                num_used=r_dict['used']
-            ) for resource, r_dict in six.iteritems(self.resources())]
-        if self._resources is not None:
-            consumers = collections.defaultdict(dict)
-            for task in self._state.get_running_tasks():
-                if task.status == RUNNING and task.resources:
-                    for resource, amount in six.iteritems(task.resources):
-                        consumers[resource][task.id] = self._serialize_task(task.id, False)
-            for resource in resources:
-                tasks = consumers[resource['name']]
-                resource['num_consumer'] = len(tasks)
-                resource['running'] = tasks
-        return resources
-
-    def resources(self):
-        ''' get total resources and available ones '''
-        used_resources = self._used_resources()
-        ret = collections.defaultdict(dict)
-        for resource, total in six.iteritems(self._resources):
-            ret[resource]['total'] = total
-            if resource in used_resources:
-                ret[resource]['used'] = used_resources[resource]
-            else:
-                ret[resource]['used'] = 0
-        return ret
-
-    @rpc_method()
-    def task_search(self, task_str, **kwargs):
-        """
-        Query for a subset of tasks by task_id.
-
-        :param task_str:
-        :return:
-        """
-        self.prune()
-        result = collections.defaultdict(dict)
-        for task in self._state.get_active_tasks():
-            if task.id.find(task_str) != -1:
-                serialized = self._serialize_task(task.id, False)
-                result[task.status][task.id] = serialized
-        return result
-
-    @rpc_method()
-    def re_enable_task(self, task_id):
-        serialized = {}
-        task = self._state.get_task(task_id)
-        if task and task.status == DISABLED and task.scheduler_disable_time:
-            self._state.re_enable(task, self._config)
-            serialized = self._serialize_task(task_id)
-        return serialized
-
-    @rpc_method()
-    def fetch_error(self, task_id, **kwargs):
-        if self._state.has_task(task_id):
-            task = self._state.get_task(task_id)
-            return {"taskId": task_id, "error": task.expl, 'displayName': task.pretty_id}
-        else:
-            return {"taskId": task_id, "error": ""}
-
-    @rpc_method()
-    def set_task_status_message(self, task_id, status_message):
-        if self._state.has_task(task_id):
-            task = self._state.get_task(task_id)
-            task.status_message = status_message
-
-    @rpc_method()
-    def get_task_status_message(self, task_id):
-        if self._state.has_task(task_id):
-            task = self._state.get_task(task_id)
-            return {"taskId": task_id, "statusMessage": task.status_message}
-        else:
-            return {"taskId": task_id, "statusMessage": ""}
-
-    def _update_task_history(self, task, status, host=None):
-        try:
-            if status == DONE or status == FAILED:
-                successful = (status == DONE)
-                self._task_history.task_finished(task, successful)
-            elif status == PENDING:
-                self._task_history.task_scheduled(task)
-            elif status == RUNNING:
-                self._task_history.task_started(task, host)
-        except BaseException:
-            logger.warning("Error saving Task history", exc_info=True)
-
-    @property
-    def task_history(self):
-        # Used by server.py to expose the calls
-        return self._task_history
+def random_port():
+    """Get a random free port."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('localhost', 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port

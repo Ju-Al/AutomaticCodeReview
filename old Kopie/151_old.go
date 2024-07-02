@@ -1,94 +1,305 @@
-package extract
+// Copyright (C) 2019 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package config
 
 import (
-	"encoding/hex"
-
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
-
-	"github.com/onflow/flow-go/cmd/util/cmd/common"
-	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/module/metrics"
-	"github.com/onflow/flow-go/storage/badger"
+	"fmt"
+	"time"
 )
 
-var (
-	flagExecutionStateDir string
-	flagOutputDir         string
-	flagBlockHash         string
-	flagStateCommitment   string
-	flagDatadir           string
-)
+var defaultLocal = defaultLocalV4
 
-var Cmd = &cobra.Command{
-	Use:   "execution-state-extract",
-	Short: "Reads WAL files and generates the checkpoint containing state commitment for given block hash",
-	Run:   run,
+const configVersion = uint32(4)
+
+// !!! WARNING !!!
+//
+// These versioned structures need to be maintained CAREFULLY and treated
+// like UNIVERSAL CONSTANTS - they should not be modified once committed.
+//
+// Add fields or change defaults in a new defaultLocalV# instance,
+// bump the version number (configVersion), and add appropriate migration and tests.
+//
+// EXCEPTION: If you are adding a new value whose default value is it's implicit default value
+//            it is safe / acceptable to add it without bumping the Config version.
+//
+// CLARIFICATION:
+//
+// If you need to add a parameter that has a default value different from its
+// zero value (eg int != 0, string != ""), you must bump the Config version.
+//
+// If you need to change a parameter's default, you must bump the Config version AND
+// provide a migration implementation.
+//
+// !!! WARNING !!!
+
+var defaultLocalV4 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               4,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	BroadcastConnectionsLimit:             -1,
+	AnnounceParticipationKey:              true,
+	PriorityPeers:                         map[string]bool{},
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 50,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	TxSyncServeResponseSize:               1000000,
+	ConnectionsRateLimitingWindowSeconds:  1,
+	ConnectionsRateLimitingCount:          10,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
 }
 
-func init() {
-	Cmd.Flags().StringVar(&flagExecutionStateDir, "execution-state-dir", "",
-		"Execution Node state dir (where WAL logs are written")
-	_ = Cmd.MarkFlagRequired("execution-state-dir")
-
-	Cmd.Flags().StringVar(&flagOutputDir, "output-dir", "",
-		"Directory to write new Execution State to")
-	_ = Cmd.MarkFlagRequired("block-hash")
-	_ = Cmd.MarkFlagRequired("datadir")
-	blockID, err := flow.HexStringToIdentifier(flagBlockHash)
-	if err != nil {
-		log.Fatal().Err(err).Msg("malformed block hash")
-	}
-	db := common.InitStorage(flagDatadir)
-	defer db.Close()
-	cache := &metrics.NoopCollector{}
-	commits := badger.NewCommits(cache, db)
-	stateCommitment, err := getStateCommitment(commits, blockID)
-	if err != nil {
-		log.Fatal().Err(err).Msg("cannot get state commitment for block")
-	_ = Cmd.MarkFlagRequired("output-dir")
-		"state commitment (hex-encoded, 64 characters)")
-
-	Cmd.Flags().StringVar(&flagBlockHash, "block-hash", "",
-		"Block hash (hex-encoded, 64 characters)")
-
-	Cmd.Flags().StringVar(&flagDatadir, "datadir", "",
-		"directory that stores the protocol state")
+var defaultLocalV3 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               3,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 50,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	ReservedFDs:                           256,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	TxSyncServeResponseSize:               1000000,
+	IsIndexerActive:                       false,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
 }
 
-func run(*cobra.Command, []string) {
-	var stateCommitment []byte
+var defaultLocalV2 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               2,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogSizeLimit:                          1073741824,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	ReservedFDs:                           256,
+	SuggestedFeeBlockHistory:              3,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+}
 
-	if len(flagBlockHash) > 0 {
-		blockID, err := flow.HexStringToIdentifier(flagBlockHash)
-		if err != nil {
-			log.Fatal().Err(err).Msg("malformed block hash")
-		}
+var defaultLocalV1 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               1,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4, // Was 1
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000, // Was -1
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogSizeLimit:                          1073741824,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute, // Was 60ns
+	SuggestedFeeBlockHistory:              3,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+}
 
-		db := common.InitStorage(flagDatadir)
-		defer db.Close()
+var defaultLocalV0 = Local{
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+	Version:                               0,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  1,
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              -1,
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogSizeLimit:                          1073741824,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         60,
+	SuggestedFeeBlockHistory:              3,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            50000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	// DO NOT MODIFY THIS STRUCTURE IN ANY WAY - See WARNING at top of file
+}
 
-		cache := &metrics.NoopCollector{}
-		commits := badger.NewCommits(cache, db)
-
-		stateCommitment, err = getStateCommitment(commits, blockID)
-		if err != nil {
-			log.Fatal().Err(err).Msg("cannot get state commitment for block")
-		}
+func migrate(cfg Local) (newCfg Local, err error) {
+	newCfg = cfg
+	if cfg.Version == configVersion {
+		return
 	}
 
-	if len(flagStateCommitment) > 0 {
-		var err error
-		stateCommitment, err = hex.DecodeString(flagStateCommitment)
-		if err != nil {
-			log.Fatal().Err(err).Msg("cannot get decode the state commitment")
+	if cfg.Version > configVersion {
+		err = fmt.Errorf("unexpected config version: %d", cfg.Version)
+		return
+	}
+
+	// For now, manually perform migration.
+	// When we have more time, we can use reflection to migrate from initial
+	// version to latest version (progressively applying defaults)
+	// Migrate 0 -> 1
+	if newCfg.Version == 0 {
+		if newCfg.BaseLoggerDebugLevel == defaultLocalV0.BaseLoggerDebugLevel {
+			newCfg.BaseLoggerDebugLevel = defaultLocalV1.BaseLoggerDebugLevel
 		}
+		if newCfg.IncomingConnectionsLimit == defaultLocalV0.IncomingConnectionsLimit {
+			newCfg.IncomingConnectionsLimit = defaultLocalV1.IncomingConnectionsLimit
+		}
+		if newCfg.ReconnectTime == defaultLocalV0.ReconnectTime {
+			newCfg.ReconnectTime = defaultLocalV1.ReconnectTime
+		}
+		newCfg.Version = 1
+	}
+	// Migrate 1 -> 2
+	if newCfg.Version == 1 {
+		if newCfg.ReservedFDs == defaultLocalV1.ReservedFDs {
+			newCfg.ReservedFDs = defaultLocalV2.ReservedFDs
+		}
+		newCfg.Version = 2
+	}
+	// Migrate 2 -> 3
+	if newCfg.Version == 2 {
+		if newCfg.MaxConnectionsPerIP == defaultLocalV2.MaxConnectionsPerIP {
+			newCfg.MaxConnectionsPerIP = defaultLocalV3.MaxConnectionsPerIP
+		}
+		if newCfg.CatchupParallelBlocks == defaultLocalV2.CatchupParallelBlocks {
+			newCfg.CatchupParallelBlocks = defaultLocalV3.CatchupParallelBlocks
+		}
+		newCfg.Version = 3
+	}
+	// Migrate 3 -> 4
+	if newCfg.Version == 3 {
+		if newCfg.BroadcastConnectionsLimit == defaultLocalV3.BroadcastConnectionsLimit {
+			newCfg.BroadcastConnectionsLimit = defaultLocalV4.BroadcastConnectionsLimit
+		}
+		if newCfg.AnnounceParticipationKey == defaultLocalV3.AnnounceParticipationKey {
+			newCfg.AnnounceParticipationKey = defaultLocalV4.AnnounceParticipationKey
+		}
+		if newCfg.PriorityPeers == nil {
+			newCfg.PriorityPeers = map[string]bool{}
+		}
+			newCfg.ConnectionsRateLimitingWindowSeconds = defaultLocalV4.ConnectionsRateLimitingWindowSeconds
+		}
+		if newCfg.ConnectionsRateLimitingCount == defaultLocalV3.ConnectionsRateLimitingCount {
+			newCfg.ConnectionsRateLimitingCount = defaultLocalV4.ConnectionsRateLimitingCount
+		}
+		newCfg.Version = 4
 	}
 
-	log.Info().Msgf("Block state commitment: %s", hex.EncodeToString(stateCommitment))
-
-	err := extractExecutionState(flagExecutionStateDir, stateCommitment, flagOutputDir, log.Logger)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("error extracting the execution state: %s", err.Error())
+	if newCfg.Version != configVersion {
+		err = fmt.Errorf("failed to migrate config version %d (stuck at %d) to latest %d", cfg.Version, newCfg.Version, configVersion)
 	}
+	return
 }

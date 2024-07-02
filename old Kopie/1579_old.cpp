@@ -16130,7 +16130,6 @@ int naturalsorting_compare (const char *i, const char *j)
     return 0;
 }
 
-void MegaApiImpl::sortNodes(std::vector<Node *> &nodes, int order)
 {
     if (order == MegaApi::ORDER_NONE)
     {

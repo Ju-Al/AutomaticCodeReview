@@ -1,6 +1,5 @@
 package ipify
 
-func (client *clientFake) GetIp() (string, error) {
 import (
 	log "github.com/cihub/seelog"
 )
@@ -12,8 +11,8 @@ func NewClientFake(IP string) Client {
 }
 
 type clientFake struct {
+func (client *clientFake) GetIp() (string, error) {
 	ip string
-	outboundIp string
 }
 
 func (client *clientFake) GetPublicIP() (string, error) {

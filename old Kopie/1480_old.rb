@@ -1,9 +1,5 @@
 require 'travis/build/appliances/base'
 
-            sh.cmd <<~EOF
-              sudo rm -rf /var/lib/apt/lists/*
-              sudo apt-get update #{'-qq  >/dev/null 2>&1' unless debug?}
-            EOF
 module Travis
   module Build
     module Appliances
@@ -28,7 +24,10 @@ module Travis
           end
 
           def update
-            sh.raw bash('travis_apt_get_update')
+            sh.cmd <<~EOF
+              sudo rm -rf /var/lib/apt/lists/*
+              sudo apt-get update #{'-qq  >/dev/null 2>&1' unless debug?}
+            EOF
             sh.cmd "travis_apt_get_update #{debug? ? 'debug' : ''}"
           end
 

@@ -57,8 +57,6 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	_, err := cli.AppDelete()
 	Expect(err).NotTo(HaveOccurred())
-	err = aws.DeleteAllDBClusterSnapshots()
-	Expect(err).NotTo(HaveOccurred())
 })
 
 func BeforeAll(fn func()) {

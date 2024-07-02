@@ -52,7 +52,6 @@ public final class Util {
         return new MemoizingSupplier<>(onceSupplier);
     }
 
-    public static <T> Supplier<T> concurrentMemoize(Supplier<T> onceSupplier) {
         return new ConcurrentMemoizingSupplier<T>(onceSupplier);
     }
 

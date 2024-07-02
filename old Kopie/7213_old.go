@@ -1,6 +1,4 @@
 // Copyright (c) 2021 Gitpod GmbH. All rights reserved.
-			MaxAgeMs: 259200000,
-			Secret:   "Important!Really-Change-This-Key!", // todo(sje): how best to do this?
 // Licensed under the GNU Affero General Public License (AGPL).
 // See License-AGPL.txt in the project root for license information.
 
@@ -49,6 +47,8 @@ func configmap(ctx *common.RenderContext) ([]runtime.Object, error) {
 		LicenseFile:           license,
 		WorkspaceHeartbeat: WorkspaceHeartbeat{
 			IntervalSeconds: 60,
+			MaxAgeMs: 259200000,
+			Secret:   "Important!Really-Change-This-Key!", // todo(sje): how best to do this?
 			TimeoutSeconds:  300,
 		},
 		WorkspaceDefaults: WorkspaceDefaults{

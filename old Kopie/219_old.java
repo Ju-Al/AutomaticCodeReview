@@ -1,6 +1,4 @@
 /*
-    void send(final Message msg, final MessageQueue mq, final SendCallback sendCallback)
-        throws MQClientException, RemotingException, InterruptedException;
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -53,7 +51,8 @@ public interface MQProducer extends MQAdmin {
     SendResult send(final Message msg, final MessageQueue mq, final long timeout)
         throws MQClientException, RemotingException, MQBrokerException, InterruptedException;
 
-    void send(final Message msg, final MessageQueue mq, final SendCallback sendCallback);
+    void send(final Message msg, final MessageQueue mq, final SendCallback sendCallback)
+        throws MQClientException, RemotingException, InterruptedException;
 
     void send(final Message msg, final MessageQueue mq, final SendCallback sendCallback, long timeout);
 

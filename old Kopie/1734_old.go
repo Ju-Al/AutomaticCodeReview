@@ -135,7 +135,6 @@ func (o *CreateOptions) Validate(c *cobra.Command, args []string, f client.Facto
 		return err
 	}
 
-	if o.FromSchedule != "" {
 		if (len(o.IncludeNamespaces) > 1 || o.IncludeNamespaces[0] != "*") ||
 			len(o.ExcludeNamespaces) > 0 || len(o.IncludeResources) > 0 ||
 			len(o.ExcludeResources) > 0 || o.Selector.LabelSelector != nil ||

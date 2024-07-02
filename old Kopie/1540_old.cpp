@@ -94,7 +94,6 @@ void OverlayPrivateWin::setActive(bool active) {
 
 		if (m_active) {
 			startHelper(m_helper_process);
-			startHelper(m_helper64_process);
 		} else {
 			m_helper_process->terminate();
 			m_helper64_process->terminate();

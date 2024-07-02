@@ -1,5 +1,4 @@
 /***************************************************************************
-        if ( activeHumanColors == 0 || ( activeHumanColors == 1 && activeHumanColors == activeColors ) ) {
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -420,7 +419,7 @@ fheroes2::GameMode GameOver::Result::LocalCheckGameOver()
         }
     }
     else {
-        // There are no active human-controlled players left, game over
+        if ( activeHumanColors == 0 || ( activeHumanColors == 1 && activeHumanColors == activeColors ) ) {
         if ( activeHumanColors == 0 ) {
             AGG::ResetMixer();
             Video::ShowVideo( "LOSE.SMK", Video::VideoAction::LOOP_VIDEO );

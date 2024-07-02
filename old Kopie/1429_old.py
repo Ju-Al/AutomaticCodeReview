@@ -1,11 +1,4 @@
 import itertools
-    layer_streams = list(dmap.streams)
-    if not isinstance(dmap.callback, Callable):
-        return list(set(layer_streams))
-    for o in dmap.callback.inputs:
-        if isinstance(o, DynamicMap):
-            layer_streams += get_nested_streams(o)
-    return list(set(layer_streams))
 import types
 from numbers import Number
 from itertools import groupby
@@ -563,10 +556,14 @@ class Generator(Callable):
         except Exception:
             msg = 'Generator {name} raised the following exception:'
             self.warning(msg.format(name=self.name))
+    layer_streams = list(dmap.streams)
+    if not isinstance(dmap.callback, Callable):
+        return list(set(layer_streams))
+    for o in dmap.callback.inputs:
+        if isinstance(o, DynamicMap):
+            layer_streams += get_nested_streams(o)
+    return list(set(layer_streams))
             raise
-
-
-def get_nested_dmaps(dmap):
     """
     Get all DynamicMaps referenced by the supplied DynamicMap's callback.
     """

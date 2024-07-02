@@ -1,9 +1,4 @@
 // @flow
-                <Tooltip
-                  skin={TooltipSkin}
-                  tip="Clear"
-                  className={styles.clearSearch}
-                  isOpeningUpward={!isClearTooltipOpeningDownward}
 import React, { Component } from 'react';
 import SVGInline from 'react-svg-inline';
 import { defineMessages, intlShape } from 'react-intl';
@@ -117,7 +112,11 @@ export class StakePoolsSearch extends Component<Props> {
           {this.hasSearchClearButton && (
             <div className={clearSearchClasses}>
               {this.hasSearchClearButton && (
-                <PopOver
+                <Tooltip
+                  skin={TooltipSkin}
+                  tip="Clear"
+                  className={styles.clearSearch}
+                  isOpeningUpward={!isClearTooltipOpeningDownward}
                   content="Clear"
                   contentClassName={styles.clearSearch}
                   placement={!isClearTooltipOpeningDownward ? 'top': 'bottom'}

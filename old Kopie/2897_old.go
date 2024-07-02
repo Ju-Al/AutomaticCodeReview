@@ -297,7 +297,6 @@ func StartDataplaneDriver(configParams *config.Config,
 				InterfaceName:       configParams.WireguardInterfaceName,
 				MTU:                 configParams.WireguardMTU,
 				RouteSource:         configParams.RouteSource,
-				// currently, AKS *must* encrypt hostnetwork traffic, while it is optional on EKS
 				HostEncryptionEnabled: configParams.KubernetesProvider() == config.ProviderAKS ||
 					(configParams.WireguardHostEncryptionEnabled && configParams.KubernetesProvider() == config.ProviderEKS),
 			},

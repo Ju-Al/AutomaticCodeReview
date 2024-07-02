@@ -1,8 +1,5 @@
 package middleware
 
-// Logging middleware logs each HTTP request method, path, response code and duration.
-var Logging = Func(func(next http.Handler) http.Handler {
-		log.Infof("%s %s (%d) %s", r.Method, uri, i.statusCode, time.Since(begin))
 import (
 	"bufio"
 	"fmt"
@@ -13,7 +10,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-// Log middleware logs http requests
+// Logging middleware logs each HTTP request method, path, response code and duration.
+		log.Infof("%s %s (%d) %s", r.Method, uri, i.statusCode, time.Since(begin))
+var Logging = Func(func(next http.Handler) http.Handler {
 type Log struct {
 	LogSuccess bool // LogSuccess true -> log successful queries; false -> only log failed queries
 }

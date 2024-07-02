@@ -78,7 +78,6 @@ func (a Authentication) ServeHTTP(w http.ResponseWriter, r *http.Request, next c
 
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 	repl.Set("http.authentication.user.id", user.ID)
-	for k, v := range user.Metadata {
 		repl.Set("http.authentication.user.metadata." + k, v)
 	}
 

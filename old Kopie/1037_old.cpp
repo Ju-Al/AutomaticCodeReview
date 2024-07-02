@@ -1,5 +1,4 @@
 /******************************************************************************
-            msg_error(this) << "WARNING: Unknown keyword " << kw ;
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -899,7 +898,7 @@ bool LegacyVTKReader::readFile(const char* filename)
         }
         else if (!kw.empty())
         {
-            msg_warning(this) << "WARNING: Unknown keyword " << kw ;
+            msg_error(this) << "WARNING: Unknown keyword " << kw ;
         }
 
         msg_info(this) << "LNG: " << inputCellDataVector.size() ;

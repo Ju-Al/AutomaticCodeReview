@@ -814,7 +814,6 @@ class Albu(object):
             if self.filter_lost_elements:
                 results['idx_mapper'] = np.arange(len(results['bboxes']))
 
-        # TODO: Support mask structure in albu
         if 'masks' in results:
             ori_masks = results['masks']
             results['masks'] = results['masks'].masks

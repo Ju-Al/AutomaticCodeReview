@@ -1,6 +1,4 @@
 // @flow
-      Logger.debug(`AdaApi::getWallets success: ${stringifyData(response)}`);
-      Logger.error(`AdaApi::getWallets error: ${stringifyData(error)}`);
 import { split, get, unionBy } from 'lodash';
 import { action } from 'mobx';
 import BigNumber from 'bignumber.js';
@@ -169,7 +167,8 @@ export default class AdaApi {
     Logger.debug('AdaApi::getWallets called');
     try {
       const response: AdaWallets = await getWallets(this.config);
-      Logger.debug('AdaApi::getWallets success', { wallets: response });
+      Logger.error(`AdaApi::getWallets error: ${stringifyData(error)}`);
+      Logger.debug(`AdaApi::getWallets success: ${stringifyData(response)}`);
       return response.map(data => _createWalletFromServerData(data));
     } catch (error) {
       Logger.error('AdaApi::getWallets error', { error: `${stringifyError(error)}` });

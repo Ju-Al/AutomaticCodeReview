@@ -1,197 +1,396 @@
-// Copyright 2018 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package pubsub
+package agent
 
 import (
 	"context"
-	"io"
-	"sync"
+	"fmt"
+	"io/ioutil"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
-	gax "github.com/googleapis/gax-go/v2"
-	pb "google.golang.org/genproto/googleapis/pubsub/v1"
-	"google.golang.org/grpc"
+	systemd "github.com/coreos/go-systemd/daemon"
+	"github.com/pkg/errors"
+	"github.com/rancher/k3s/pkg/agent/config"
+	"github.com/rancher/k3s/pkg/agent/containerd"
+	"github.com/rancher/k3s/pkg/agent/flannel"
+	"github.com/rancher/k3s/pkg/agent/netpol"
+	"github.com/rancher/k3s/pkg/agent/proxy"
+	"github.com/rancher/k3s/pkg/agent/syssetup"
+	"github.com/rancher/k3s/pkg/agent/tunnel"
+	"github.com/rancher/k3s/pkg/cgroups"
+	"github.com/rancher/k3s/pkg/cli/cmds"
+	"github.com/rancher/k3s/pkg/clientaccess"
+	cp "github.com/rancher/k3s/pkg/cloudprovider"
+	"github.com/rancher/k3s/pkg/daemons/agent"
+	daemonconfig "github.com/rancher/k3s/pkg/daemons/config"
+	"github.com/rancher/k3s/pkg/daemons/executor"
+	"github.com/rancher/k3s/pkg/nodeconfig"
+	"github.com/rancher/k3s/pkg/rootless"
+	"github.com/rancher/k3s/pkg/util"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/controller-manager/app"
+	app2 "k8s.io/kubernetes/cmd/kube-proxy/app"
+	kubeproxyconfig "k8s.io/kubernetes/pkg/proxy/apis/config"
+	utilsnet "k8s.io/utils/net"
+	utilpointer "k8s.io/utils/pointer"
 )
 
-// A pullStream supports the methods of a StreamingPullClient, but re-opens
-// the stream on a retryable error.
-type pullStream struct {
-	ctx  context.Context
-	open func() (pb.Subscriber_StreamingPullClient, error)
+const (
+	dockershimSock = "unix:///var/run/dockershim.sock"
+	containerdSock = "unix:///run/k3s/containerd/containerd.sock"
+)
 
-	mu  sync.Mutex
-	spc *pb.Subscriber_StreamingPullClient
-	err error // permanent error
+// setupCriCtlConfig creates the crictl config file and populates it
+// with the given data from config.
+func setupCriCtlConfig(cfg cmds.Agent, nodeConfig *daemonconfig.Node) error {
+	cre := nodeConfig.ContainerRuntimeEndpoint
+	if cre == "" {
+		switch {
+		case cfg.Docker:
+			cre = dockershimSock
+		default:
+			cre = containerdSock
+		}
+	}
+
+	agentConfDir := filepath.Join(cfg.DataDir, "agent", "etc")
+	if _, err := os.Stat(agentConfDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(agentConfDir, 0700); err != nil {
+			return err
+		}
+	}
+
+	crp := "runtime-endpoint: " + cre + "\n"
+	return ioutil.WriteFile(agentConfDir+"/crictl.yaml", []byte(crp), 0600)
 }
 
-// for testing
-type streamingPullFunc func(context.Context, ...gax.CallOption) (pb.Subscriber_StreamingPullClient, error)
+func run(ctx context.Context, cfg cmds.Agent, proxy proxy.Proxy) error {
+	nodeConfig := config.Get(ctx, cfg, proxy)
 
-func newPullStream(ctx context.Context, streamingPull streamingPullFunc, subName string, maxOutstandingMessages, maxOutstandingBytes int, maxDurationPerLeaseExtension time.Duration) *pullStream {
-	ctx = withSubscriptionKey(ctx, subName)
-	return &pullStream{
-		ctx: ctx,
-		open: func() (pb.Subscriber_StreamingPullClient, error) {
-			spc, err := streamingPull(ctx, gax.WithGRPCOptions(grpc.MaxCallRecvMsgSize(maxSendRecvBytes)))
-			if err == nil {
-				recordStat(ctx, StreamRequestCount, 1)
-				streamAckDeadline := int32(maxDurationPerLeaseExtension / time.Second)
-				// By default, maxDurationPerLeaseExtension, aka MaxExtensionPeriod, is disabled,
-				// so in these cases, use a healthy default of 60 seconds.
-				if streamAckDeadline <= 0 {
-					streamAckDeadline = 60
-				}
-				err = spc.Send(&pb.StreamingPullRequest{
-					Subscription: subName,
-					// We modack messages when we receive them, so this value doesn't matter too much.
-					StreamAckDeadlineSeconds: streamAckDeadline,
-					MaxOutstandingMessages:   int64(maxOutstandingMessages),
-					MaxOutstandingBytes:      int64(maxOutstandingBytes),
-				})
-			}
-			if err != nil {
-				return nil, err
-			}
-			return spc, nil
-		},
+	dualCluster, err := utilsnet.IsDualStackCIDRs(nodeConfig.AgentConfig.ClusterCIDRs)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate cluster-cidr")
 	}
+	dualService, err := utilsnet.IsDualStackCIDRs(nodeConfig.AgentConfig.ServiceCIDRs)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate service-cidr")
+	}
+	dualNode, err := utilsnet.IsDualStackIPs(nodeConfig.AgentConfig.NodeIPs)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate node-ip")
+	}
+
+	enableIPv6 := dualCluster || dualService || dualNode
+	conntrackConfig, err := getConntrackConfig(nodeConfig)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate kube-proxy conntrack configuration")
+	}
+	syssetup.Configure(enableIPv6, conntrackConfig)
+
+	if err := setupCriCtlConfig(cfg, nodeConfig); err != nil {
+		return err
+	}
+
+	if err := executor.Bootstrap(ctx, nodeConfig, cfg); err != nil {
+		return err
+	}
+
+	if !nodeConfig.NoFlannel {
+		if err := flannel.Prepare(ctx, nodeConfig); err != nil {
+			return err
+		}
+	}
+
+	if !nodeConfig.Docker && nodeConfig.ContainerRuntimeEndpoint == "" {
+		if err := containerd.Run(ctx, nodeConfig); err != nil {
+			return err
+		}
+	}
+	notifySocket := os.Getenv("NOTIFY_SOCKET")
+	os.Unsetenv("NOTIFY_SOCKET")
+
+	if err := setupTunnelAndRunAgent(ctx, nodeConfig, cfg, proxy); err != nil {
+		return err
+	}
+
+	os.Setenv("NOTIFY_SOCKET", notifySocket)
+	systemd.SdNotify(true, "READY=1\n")
+
+	coreClient, err := coreClient(nodeConfig.AgentConfig.KubeConfigKubelet)
+	if err != nil {
+		return err
+	}
+
+	app.WaitForAPIServer(coreClient, 30*time.Second)
+
+	if !nodeConfig.NoFlannel {
+		if err := flannel.Run(ctx, nodeConfig, coreClient.CoreV1().Nodes()); err != nil {
+			return err
+		}
+	}
+
+	if err := configureNode(ctx, &nodeConfig.AgentConfig, coreClient.CoreV1().Nodes()); err != nil {
+		return err
+	}
+
+	if !nodeConfig.AgentConfig.DisableNPC {
+		if err := netpol.Run(ctx, nodeConfig); err != nil {
+			return err
+		}
+	}
+
+	<-ctx.Done()
+	return ctx.Err()
 }
 
-// get returns either a valid *StreamingPullClient (SPC), or a permanent error.
-// If the argument is nil, this is the first call for an RPC, and the current
-// SPC will be returned (or a new one will be opened). Otherwise, this call is a
-// request to re-open the stream because of a retryable error, and the argument
-// is a pointer to the SPC that returned the error.
-func (s *pullStream) get(spc *pb.Subscriber_StreamingPullClient) (*pb.Subscriber_StreamingPullClient, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// A stored error is permanent.
-	if s.err != nil {
-		return nil, s.err
-	}
-	// If the context is done, so are we.
-	s.err = s.ctx.Err()
-	if s.err != nil {
-		return nil, s.err
+// getConntrackConfig uses the kube-proxy code to parse the user-provided kube-proxy-arg values, and
+// extract the conntrack settings so that K3s can set them itself. This allows us to soft-fail when
+// running K3s in Docker, where kube-proxy is no longer allowed to set conntrack sysctls on newer kernels.
+// When running rootless, we do not attempt to set conntrack sysctls - this behavior is copied from kubeadm.
+func getConntrackConfig(nodeConfig *daemonconfig.Node) (*kubeproxyconfig.KubeProxyConntrackConfiguration, error) {
+	ctConfig := &kubeproxyconfig.KubeProxyConntrackConfiguration{
+		MaxPerCore:            utilpointer.Int32Ptr(0),
+		Min:                   utilpointer.Int32Ptr(0),
+		TCPEstablishedTimeout: &metav1.Duration{},
+		TCPCloseWaitTimeout:   &metav1.Duration{},
 	}
 
-	// If the current and argument SPCs differ, return the current one. This subsumes two cases:
-	// 1. We have an SPC and the caller is getting the stream for the first time.
-	// 2. The caller wants to retry, but they have an older SPC; we've already retried.
-	if spc != s.spc {
-		return s.spc, nil
+	if nodeConfig.AgentConfig.Rootless {
+		return ctConfig, nil
 	}
-	// Either this is the very first call on this stream (s.spc == nil), or we have a valid
-	// retry request. Either way, open a new stream.
-	// The lock is held here for a long time, but it doesn't matter because no callers could get
-	// anything done anyway.
-	s.spc = new(pb.Subscriber_StreamingPullClient)
-	*s.spc, s.err = s.openWithRetry() // Any error from openWithRetry is permanent.
-	return s.spc, s.err
+
+	cmd := app2.NewProxyCommand()
+	if err := cmd.ParseFlags(daemonconfig.GetArgsList(map[string]string{}, nodeConfig.AgentConfig.ExtraKubeProxyArgs)); err != nil {
+		return nil, err
+	}
+	maxPerCore, err := cmd.Flags().GetInt32("conntrack-max-per-core")
+	if err != nil {
+		return nil, err
+	}
+	ctConfig.MaxPerCore = &maxPerCore
+	min, err := cmd.Flags().GetInt32("conntrack-min")
+	if err != nil {
+		return nil, err
+	}
+	ctConfig.Min = &min
+	establishedTimeout, err := cmd.Flags().GetDuration("conntrack-tcp-timeout-established")
+	if err != nil {
+		return nil, err
+	}
+	ctConfig.TCPEstablishedTimeout.Duration = establishedTimeout
+	closeWaitTimeout, err := cmd.Flags().GetDuration("conntrack-tcp-timeout-close-wait")
+	if err != nil {
+		return nil, err
+	}
+	ctConfig.TCPCloseWaitTimeout.Duration = closeWaitTimeout
+	return ctConfig, nil
 }
 
-func (s *pullStream) openWithRetry() (pb.Subscriber_StreamingPullClient, error) {
-	r := defaultRetryer{}
+func coreClient(cfg string) (kubernetes.Interface, error) {
+	restConfig, err := clientcmd.BuildConfigFromFlags("", cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return kubernetes.NewForConfig(restConfig)
+}
+
+func Run(ctx context.Context, cfg cmds.Agent) error {
+	if err := cgroups.Validate(); err != nil {
+		return err
+	}
+
+	if cfg.Rootless && !cfg.RootlessAlreadyUnshared {
+		if err := rootless.Rootless(cfg.DataDir); err != nil {
+			return err
+		}
+	}
+
+	agentDir := filepath.Join(cfg.DataDir, "agent")
+	if err := os.MkdirAll(agentDir, 0700); err != nil {
+		return err
+	}
+
+	proxy, err := proxy.NewSupervisorProxy(ctx, !cfg.DisableLoadBalancer, agentDir, cfg.ServerURL, cfg.LBServerPort)
+	if err != nil {
+		return err
+	}
+
 	for {
-		recordStat(s.ctx, StreamOpenCount, 1)
-		spc, err := s.open()
-		bo, shouldRetry := r.Retry(err)
-		if err != nil && shouldRetry {
-			recordStat(s.ctx, StreamRetryCount, 1)
-			if err := gax.Sleep(s.ctx, bo); err != nil {
-				return nil, err
+		newToken, err := clientaccess.ParseAndValidateTokenForUser(proxy.SupervisorURL(), cfg.Token, "node")
+		if err != nil {
+			logrus.Error(err)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(2 * time.Second):
 			}
 			continue
 		}
-		return spc, err
+		cfg.Token = newToken.String()
+		break
 	}
+
+	if err := run(ctx, cfg, proxy); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (s *pullStream) call(f func(pb.Subscriber_StreamingPullClient) error, opts ...gax.CallOption) error {
-	var settings gax.CallSettings
-	for _, opt := range opts {
-		opt.Resolve(&settings)
-	}
-	var r gax.Retryer = &defaultRetryer{}
-	if settings.Retry != nil {
-		r = settings.Retry()
+func configureNode(ctx context.Context, agentConfig *daemonconfig.Agent, nodes v1.NodeInterface) error {
+	count := 0
+	for {
+		node, err := nodes.Get(ctx, agentConfig.NodeName, metav1.GetOptions{})
+		if err != nil {
+			if count%30 == 0 {
+				logrus.Infof("Waiting for kubelet to be ready on node %s: %v", agentConfig.NodeName, err)
+			}
+			count++
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		updateNode := false
+		if labels, changed := updateMutableLabels(agentConfig, node.Labels); changed {
+			node.Labels = labels
+			updateNode = true
+		}
+
+		if !agentConfig.DisableCCM {
+			if annotations, changed := updateAddressAnnotations(agentConfig, node.Annotations); changed {
+				node.Annotations = annotations
+				updateNode = true
+			}
+			if labels, changed := updateLegacyAddressLabels(agentConfig, node.Labels); changed {
+				node.Labels = labels
+				updateNode = true
+			}
+		}
+
+		// inject node config
+		if changed, err := nodeconfig.SetNodeConfigAnnotations(node); err != nil {
+			return err
+		} else if changed {
+			updateNode = true
+		}
+
+		if updateNode {
+			if _, err := nodes.Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+				logrus.Infof("Failed to update node %s: %v", agentConfig.NodeName, err)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second):
+					continue
+				}
+			}
+			logrus.Infof("labels have been set successfully on node: %s", agentConfig.NodeName)
+		} else {
+			logrus.Infof("labels have already set on node: %s", agentConfig.NodeName)
+		}
+
+		break
 	}
 
-	var (
-		spc *pb.Subscriber_StreamingPullClient
-		err error
-	)
-	for {
-		spc, err = s.get(spc)
-		if err != nil {
+	return nil
+}
+
+func updateMutableLabels(agentConfig *daemonconfig.Agent, nodeLabels map[string]string) (map[string]string, bool) {
+	result := map[string]string{}
+
+	for _, m := range agentConfig.NodeLabels {
+		var (
+			v string
+			p = strings.SplitN(m, `=`, 2)
+			k = p[0]
+		)
+		if len(p) > 1 {
+			v = p[1]
+		}
+		result[k] = v
+	}
+	result = labels.Merge(nodeLabels, result)
+	return result, !equality.Semantic.DeepEqual(nodeLabels, result)
+}
+
+func updateLegacyAddressLabels(agentConfig *daemonconfig.Agent, nodeLabels map[string]string) (map[string]string, bool) {
+	ls := labels.Set(nodeLabels)
+	if ls.Has(cp.InternalIPKey) || ls.Has(cp.HostnameKey) {
+		result := map[string]string{
+			cp.InternalIPKey: agentConfig.NodeIP,
+			cp.HostnameKey:   agentConfig.NodeName,
+		}
+
+		if agentConfig.NodeExternalIP != "" {
+			result[cp.ExternalIPKey] = agentConfig.NodeExternalIP
+		}
+
+		result = labels.Merge(nodeLabels, result)
+		return result, !equality.Semantic.DeepEqual(nodeLabels, result)
+	}
+	return nil, false
+}
+
+func updateAddressAnnotations(agentConfig *daemonconfig.Agent, nodeAnnotations map[string]string) (map[string]string, bool) {
+	result := map[string]string{
+		cp.InternalIPKey: util.JoinIPs(agentConfig.NodeIPs),
+		cp.HostnameKey:   agentConfig.NodeName,
+	}
+
+	if agentConfig.NodeExternalIP != "" {
+		result[cp.ExternalIPKey] = util.JoinIPs(agentConfig.NodeExternalIPs)
+	}
+
+	result = labels.Merge(nodeAnnotations, result)
+	return result, !equality.Semantic.DeepEqual(nodeAnnotations, result)
+}
+
+// setupTunnelAndRunAgent should start the setup tunnel before starting kubelet and kubeproxy
+// there are special case for etcd agents, it will wait until it can find the apiaddress from
+// the address channel and update the proxy with the servers addresses, if in rke2 we need to
+// start the agent before the tunnel is setup to allow kubelet to start first and start the pods
+func setupTunnelAndRunAgent(ctx context.Context, nodeConfig *daemonconfig.Node, cfg cmds.Agent, proxy proxy.Proxy) error {
+	var agentRan bool
+	if cfg.ETCDAgent {
+		// only in rke2 run the agent before the tunnel setup and check for that later in the function
+		if proxy.IsAPIServerLBEnabled() {
+			if err := agent.Agent(&nodeConfig.AgentConfig); err != nil {
+				return err
+			}
+			agentRan = true
+		}
+		select {
+		case address := <-cfg.APIAddressCh:
+			cfg.ServerURL = address
+			u, err := url.Parse(cfg.ServerURL)
+			if err != nil {
+				logrus.Warn(err)
+			}
+			proxy.Update([]string{fmt.Sprintf("%s:%d", u.Hostname(), nodeConfig.ServerHTTPSPort)})
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	} else if cfg.ClusterReset && proxy.IsAPIServerLBEnabled() {
+		if err := agent.Agent(&nodeConfig.AgentConfig); err != nil {
 			return err
 		}
-		start := time.Now()
-		err = f(*spc)
-		if err != nil {
-			bo, shouldRetry := r.Retry(err)
-			if shouldRetry {
-				recordStat(s.ctx, StreamRetryCount, 1)
-				if time.Since(start) < 30*time.Second { // don't sleep if we've been blocked for a while
-					if err := gax.Sleep(s.ctx, bo); err != nil {
-						return err
-					}
-				}
-				continue
-			}
-			s.mu.Lock()
-			s.err = err
-			s.mu.Unlock()
-		}
+		agentRan = true
+	}
+
+	if err := tunnel.Setup(ctx, nodeConfig, proxy); err != nil {
 		return err
 	}
-}
-
-func (s *pullStream) Send(req *pb.StreamingPullRequest) error {
-	return s.call(func(spc pb.Subscriber_StreamingPullClient) error {
-		recordStat(s.ctx, AckCount, int64(len(req.AckIds)))
-		zeroes := 0
-		for _, mds := range req.ModifyDeadlineSeconds {
-			if mds == 0 {
-				zeroes++
-			}
-		}
-		recordStat(s.ctx, NackCount, int64(zeroes))
-		recordStat(s.ctx, ModAckCount, int64(len(req.ModifyDeadlineSeconds)-zeroes))
-		recordStat(s.ctx, StreamRequestCount, 1)
-		return spc.Send(req)
-	})
-}
-
-func (s *pullStream) Recv() (*pb.StreamingPullResponse, error) {
-	var res *pb.StreamingPullResponse
-	err := s.call(func(spc pb.Subscriber_StreamingPullClient) error {
-		var err error
-		recordStat(s.ctx, StreamResponseCount, 1)
-		res, err = spc.Recv()
-		return err
-	}, gax.WithRetry(func() gax.Retryer { return &streamingPullRetryer{defaultRetryer: &defaultRetryer{}} }))
-	return res, err
-}
-
-func (s *pullStream) CloseSend() error {
-	err := s.call(func(spc pb.Subscriber_StreamingPullClient) error {
-		return spc.CloseSend()
-	})
-	s.mu.Lock()
-	s.err = io.EOF // should not be retried
-	s.mu.Unlock()
-	return err
+	if !agentRan {
+		return agent.Agent(&nodeConfig.AgentConfig)
+	}
+	return nil
 }

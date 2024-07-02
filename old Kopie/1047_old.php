@@ -1411,8 +1411,6 @@ class Sensei_Teacher {
         return $wp_query;
 
     } // end limit_teacher_edit_screen_post_types()
-
-
     /**
      * Sensei_Teacher::restrict_posts_menu_page()
      *

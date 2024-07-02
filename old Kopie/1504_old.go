@@ -154,7 +154,6 @@ func (i *TransactionInvocator) Process(
 	// 	panic(err)
 	// }
 
-	// disable the limit checks on states
 	sth.SetEnforceInteractionLimits(false)
 
 	// try to deduct fees even if there is an error.

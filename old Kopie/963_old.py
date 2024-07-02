@@ -1,10 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        pbc = kwargs.pop('pbc', MDAnalysis.core.flags['use_pbc'])
-
-        if pbc:
-            eigenval, eigenvec = eig(atomgroup.moment_of_inertia(pbc=True))
-        else:
-            eigenval, eigenvec = eig(atomgroup.moment_of_inertia(pbc=False))
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- http://www.MDAnalysis.org
@@ -753,7 +747,12 @@ class Masses(AtomAttr):
         .. versionchanged:: 0.8 Added *pbc* keyword
         """
         atomgroup = group.atoms
-        pbc = kwargs.pop('pbc', flags['use_pbc'])
+        pbc = kwargs.pop('pbc', MDAnalysis.core.flags['use_pbc'])
+
+        if pbc:
+            eigenval, eigenvec = eig(atomgroup.moment_of_inertia(pbc=True))
+        else:
+            eigenval, eigenvec = eig(atomgroup.moment_of_inertia(pbc=False))
         e_val, e_vec = np.linalg.eig(atomgroup.moment_of_inertia(pbc=pbc))
 
         # Sort

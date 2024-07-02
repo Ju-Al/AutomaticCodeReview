@@ -240,7 +240,6 @@ export default class StakingStore extends Store {
     this.getStakePoolsData(true);
   };
 
-  @action _getStakingInfoWasOpen = async () => {
     const stakingInfoWasOpen = await this.api.localStorage.getStakingInfoWasOpen();
     runInAction(() => {
       this.stakingInfoWasOpen = stakingInfoWasOpen || false;

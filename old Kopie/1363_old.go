@@ -351,7 +351,6 @@ func (ds *Plugin) GetNodeSelectors(ctx context.Context,
 	callCounter := ds_telemetry.StartGetNodeSelectorsCall(ds.prepareMetricsForCall())
 	defer callCounter.Done(&err)
 
-	if ds.roDb != nil {
 		return getNodeSelectors(ctx, ds.roDb, req)
 	}
 	return getNodeSelectors(ctx, ds.db, req)

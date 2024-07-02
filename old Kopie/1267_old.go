@@ -126,7 +126,6 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 		d.Dataplane.FailNextRestore = false
 		return nil, errors.New("Simulated failure")
 	}
-	if d.Dataplane.FailAllRestores {
 		return nil, errors.New("Simulated failure")
 	}
 

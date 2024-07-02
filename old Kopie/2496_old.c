@@ -247,7 +247,6 @@ int main(int argc, char **argv)
     pid_t h2o_pid = -1;
     while ((c = getopt(argc, argv, "hdrlp:t:s:w:")) != -1) {
         switch (c) {
-        case 'H':
             tracer.reset(create_http_tracer());
             break;
         case 'p':

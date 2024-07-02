@@ -199,9 +199,6 @@ void optimizer::clear_gradient() {
   }
   m_gradient_status = optimizer_gradient_status::cleared;
   m_gradient_sources.clear();
-}
-
-AbsDistMat& optimizer::get_gradient_buffer(DataType& buf_scale,
                                            bool allreduce_needed) {
   if (m_gradient == nullptr) {
     LBANN_ERROR("attempted to access gradient before it is set up");

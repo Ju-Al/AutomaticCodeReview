@@ -281,7 +281,6 @@ class Vector(object):
         a = self._ar / numpy.array(x)
         return Vector(a)
 
-    __truediv__ = __div__
 
     def __pow__(self, other):
         """Return VectorxVector (cross product) or Vectorxscalar."""

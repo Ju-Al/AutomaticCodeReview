@@ -1,5 +1,4 @@
 <?php
-
 declare( strict_types=1 );
 
 namespace WP_Rocket\Tests\Unit\inc\Engine\Optimization\DeferJS\DeferJS;

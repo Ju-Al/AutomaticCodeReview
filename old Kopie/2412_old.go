@@ -1,5 +1,4 @@
 package k8s
-			return err
 
 import (
 	"context"
@@ -321,7 +320,7 @@ func (r *Releaser) resourceServiceCreate(
 		nodeclient := clientSet.CoreV1().Nodes()
 		nodes, err := nodeclient.List(ctx, metav1.ListOptions{})
 		if err != nil {
-			// Rather than fail the whole release, report the error and then complete.
+			return err
 			step.Status(terminal.StatusError)
 			step.Update("Cannot determine release URL for nodeport service due to failure to list nodes: %s", err)
 		} else {

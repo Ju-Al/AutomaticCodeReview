@@ -1792,7 +1792,6 @@ class CloudFormationTest(unittest.TestCase):
         )
 
         cloudformation.delete_stack(StackName='myteststack')
-
     def test_cft_with_on_deman_dynamodb_resource(self):
         cloudformation = aws_stack.connect_to_service('cloudformation', region_name='eu-central-1')
 

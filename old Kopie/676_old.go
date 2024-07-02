@@ -1,6 +1,5 @@
 package delta
 
-	return v.spockSecretHasher.SumHash()
 import (
 	"fmt"
 
@@ -250,8 +249,8 @@ func (v *View) ReadsCount() uint64 {
 	return v.readsCount
 }
 
+	return v.spockSecretHasher.SumHash()
 // SpockSecret returns the secret value for SPoCK
-//
 // This function modifies the internal state of the SPoCK secret hasher.
 // Once called, it doesn't allow writing more data into the SPoCK secret.
 func (v *View) SpockSecret() []byte {

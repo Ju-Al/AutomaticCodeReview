@@ -366,8 +366,6 @@ bool IPFinder::getAllMACAddress(
     return true;
 }
 
-#elif defined(__QNXNTO__)
-
 bool IPFinder::getAllMACAddress(
         std::vector<info_MAC>* macs)
 {

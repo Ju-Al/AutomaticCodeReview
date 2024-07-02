@@ -1,5 +1,4 @@
 <?php
-     * @param boolean $detachedCopy
 namespace Neos\ContentRepository\Domain\Model;
 
 /*
@@ -1658,8 +1657,8 @@ class Node implements NodeInterface, CacheAwareInterface, TraversableNodeInterfa
      * otherwise.
      *
      * @param NodeInterface $referenceNode
-     * @param string $nodeName
      * @param boolean $detachedCopy
+     * @param string $nodeName
      * @return NodeInterface
      * @throws NodeConstraintException
      * @throws NodeExistsException

@@ -1,5 +1,4 @@
 const { shim } = require('lib/shim.js');
-					response = await shim.uploadBlob(url, options);
 const { stringify } = require('query-string');
 const { time } = require('lib/time-utils.js');
 const { Logger } = require('lib/logger.js');
@@ -223,7 +222,7 @@ class OneDriveApi {
 			let response = null;
 			try {
 				if (options.source == 'file' && (method == 'POST' || method == 'PUT')) {
-					response = options.fileType == 'small' ? await shim.uploadBlob(url, options) : await this.uploadBigFile(url, options);
+					response = await shim.uploadBlob(url, options);
 				} else if (options.target == 'string') {
 					response = await shim.fetch(url, options);
 				} else {

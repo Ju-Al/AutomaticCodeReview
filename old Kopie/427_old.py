@@ -1,14 +1,5 @@
 from __future__ import absolute_import
 
-if TH_VERSION.version[0] == 0:
-    # TODO(minjie): note this does not support autograd on the `x` tensor.
-    #               should adopt a workaround using custom op.
-    def spmm(x, y):
-        return th.spmm(x, y)
-else:
-    # torch v1.0+
-    def spmm(x, y):
-        return th.sparse.mm(x, y)
 from distutils.version import LooseVersion
 
 import torch as th
@@ -144,7 +135,15 @@ def zeros_like(input):
 def ones(shape, dtype, ctx):
     return th.ones(shape, dtype=dtype, device=ctx)
 
-def spmm(x, y):
+if TH_VERSION.version[0] == 0:
+    # TODO(minjie): note this does not support autograd on the `x` tensor.
+    #               should adopt a workaround using custom op.
+    def spmm(x, y):
+        return th.spmm(x, y)
+else:
+    # torch v1.0+
+    def spmm(x, y):
+        return th.sparse.mm(x, y)
     dst, src = x._indices()
     # scatter index
     index = dst.view(-1, 1).expand(-1, y.shape[1])

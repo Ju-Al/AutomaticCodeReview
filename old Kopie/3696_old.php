@@ -1,5 +1,4 @@
 <?php
-
 namespace Drupal\datastore\Controller;
 
 use Drupal\datastore\Service\DatastoreQuery;

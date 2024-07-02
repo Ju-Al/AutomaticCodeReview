@@ -288,9 +288,6 @@ Workspace ForwardTranslator::translateModelPrivate( model::Model & model, bool f
     if (!pv.surface()){
       LOG(Warn, "GeneratorPhotovoltaic " << pv.name().get() << " is not referenced by any surface, it will not be translated.");
       pv.remove();
-    }
-  }
-  
   // Remove orphan Storage
   for (auto& storage : model.getModelObjects<ElectricalStorage>()) {
     if (!storage.electricLoadCenterDistribution()){

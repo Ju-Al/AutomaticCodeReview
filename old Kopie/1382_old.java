@@ -154,7 +154,6 @@ public class SingleMediaActivity extends SharedMediaActivity implements ImageAda
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         imageWidth = metrics.widthPixels;
         imageHeight = metrics.heightPixels;
-        handler = new Handler();
         runnable = new Runnable() {
             @Override
             public void run() {

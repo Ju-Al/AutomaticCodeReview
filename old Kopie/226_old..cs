@@ -86,7 +86,6 @@ static class Program
         string appName = Environment.GetCommandLineArgs()[0];
         Console.WriteLine("{0} [/log] - compiles sources in current direcotry. optionally logs diagnostics info.", appName);
         Console.WriteLine("{0} /target:library - compiles sources in current directory into dll.", appName);
-        Console.WriteLine("{0} /recurse:<wildcard> - compiles sources in current directory and subdirectories according to the wildcard specifications.", appName);
         Console.WriteLine("{0} /clean - deletes tools, packages, and bin project subdirectories.", appName);
         Console.WriteLine("{0} /new   - creates template sources for a new console app", appName);
         Console.WriteLine("{0} /edit  - starts code editor", appName);

@@ -1,18 +1,4 @@
 /**
-    @Override
-    public Object visit(ASTName node, Object data) {
-        // TODO: handle cases where static fields are accessed in a fully qualified way
-        //       make sure it handles same name classes and packages
-        // TODO: handle generic static field cases
-        Class<?> accessingClass = getEnclosingTypeDeclarationClass(node);
-        String[] dotSplitImage = node.getImage().split("\\.");
-        ASTArguments astArguments = getSuffixMethodArgs(node);
-        ASTArgumentList astArgumentList = null;
-        int methodArgsArity = 0;
-        if (astArguments != null) {
-            astArgumentList = astArguments.getFirstChildOfType(ASTArgumentList.class);
-        if (astArgumentList != null) {
-            methodArgsArity = astArgumentList.jjtGetNumChildren();
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -357,7 +343,20 @@ public class ClassTypeResolver extends JavaParserVisitorAdapter {
         return super.visit(node, data);
     }
 
-    /**
+    @Override
+    public Object visit(ASTName node, Object data) {
+        // TODO: handle cases where static fields are accessed in a fully qualified way
+        //       make sure it handles same name classes and packages
+        Class<?> accessingClass = getEnclosingTypeDeclarationClass(node);
+        String[] dotSplitImage = node.getImage().split("\\.");
+        ASTArguments astArguments = getSuffixMethodArgs(node);
+        ASTArgumentList astArgumentList = null;
+        int methodArgsArity = 0;
+        if (astArguments != null) {
+            astArgumentList = astArguments.getFirstChildOfType(ASTArgumentList.class);
+        if (astArgumentList != null) {
+            methodArgsArity = astArgumentList.jjtGetNumChildren();
+        // TODO: handle generic static field cases
      * Set's the node's type to the found Class in the node's name (if there is a class to be found).
      *
      * @param node

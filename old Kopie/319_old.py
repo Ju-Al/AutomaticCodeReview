@@ -1,6 +1,4 @@
 import logging
-        obj.prepare()
-        self.assertRaises(RuntimeWarning, obj.post_process)
 import sys
 import time
 
@@ -128,7 +126,8 @@ class TestLocustIOExecutor(BZTestCase):
                 "script": __dir__() + "/../locust/simple.py"
             }
         })
-        self.obj.prepare()
+        obj.prepare()
+        self.assertRaises(RuntimeWarning, obj.post_process)
         self.assertRaises(RuntimeWarning, self.obj.post_process)
 
     def test_build_script(self):

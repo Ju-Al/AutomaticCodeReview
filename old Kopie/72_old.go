@@ -1,6 +1,5 @@
 package blockchain
 
-	log.Printf(ctx, "localHeight:%v\n", localHeight)
 import (
 	"context"
 	"encoding/json"
@@ -211,7 +210,7 @@ func (a *BlockchainReactor) finalizeTxWait(ctx context.Context, txTemplate *txbu
 	localHeight := a.chain.Height()
 	generatorHeight := localHeight
 
-	log.WithField("localHeight:", localHeight).Info()
+	log.Printf(ctx, "localHeight:%v\n", localHeight)
 	// Remember this height in case we retry this submit call.
 	/*height, err := recordSubmittedTx(ctx, a.db, txTemplate.Transaction.ID, generatorHeight)
 	if err != nil {

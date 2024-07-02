@@ -1,6 +1,4 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	return cf.deploy(newEnvStackConfig(env, cf.box))
-func (cf CloudFormation) deploy(stackConfig stackConfiguration) error {
 // SPDX-License-Identifier: Apache-2.0
 
 // Package cloudformation provides functionality to deploy archer resources with AWS CloudFormation.
@@ -47,7 +45,8 @@ func New(sess *session.Session) CloudFormation {
 // If the change set to create the stack cannot be executed, returns a ErrNotExecutableChangeSet.
 // Otherwise, returns a wrapped error.
 func (cf CloudFormation) DeployEnvironment(env *archer.DeployEnvironmentInput) error {
-	return cf.Deploy(newEnvStackConfig(env, cf.box))
+func (cf CloudFormation) deploy(stackConfig stackConfiguration) error {
+	return cf.deploy(newEnvStackConfig(env, cf.box))
 }
 
 // Deploy delpoys an entity that can be serialized into a Cloudformation template

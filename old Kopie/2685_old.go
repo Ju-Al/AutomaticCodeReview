@@ -1,74 +1,55 @@
-package printer
+package gcp
+
 import (
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
-	"github.com/vmware-tanzu/octant/internal/testutil"
-	"github.com/vmware-tanzu/octant/pkg/view/component"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/spire/pkg/common/agentpathtemplate"
+	"github.com/spiffe/spire/pkg/common/idutil"
+	"gopkg.in/square/go-jose.v2/jwt"
 )
 
-func Test_createConditionsTableErrs(t *testing.T) {
-	// No status found
-	noStatus := unstructured.Unstructured{Object: map[string]interface{}{"noStatus": nil}}
-	table, ok, err := createConditionsTable(noStatus, "", nil)
-	assert.Nil(t, err)
-	assert.False(t, ok)
-	assert.Nil(t, table)
+const (
+	PluginName = "gcp_iit"
+)
 
-	// Bad status, not a map[string]interface{}
-	badStatus := unstructured.Unstructured{Object: map[string]interface{}{"status": 1}}
-	table, ok, err = createConditionsTable(badStatus, "", nil)
-	assert.EqualError(t, err, ".status accessor error: 1 is of the type int, expected map[string]interface{}")
-	assert.False(t, ok)
-	assert.Nil(t, table)
+// DefaultAgentPathTemplate is the default text/template
+var DefaultAgentPathTemplate = agentpathtemplate.MustParse("/{{ .PluginName }}/{{ .ProjectID }}/{{ .InstanceID }}")
 
-	// No conditions found
-	noConditions := unstructured.Unstructured{Object: map[string]interface{}{"status": map[string]interface{}{"noConditions": nil}}}
-	table, ok, err = createConditionsTable(noConditions, "", nil)
-	assert.Nil(t, err)
-	assert.False(t, ok)
-	assert.NotNil(t, table)
+type IdentityToken struct {
+	jwt.Claims
+
+	AuthorizedParty string `json:"azp"`
+	Google          Google `json:"google"`
 }
 
-func Test_createPodConditionsView(t *testing.T) {
-	now := metav1.Time{Time: time.Now()}
+type Google struct {
+	ComputeEngine ComputeEngine `json:"compute_engine"`
+}
 
-	pod := testutil.CreatePod("pod")
-	pod.Status.Conditions = []corev1.PodCondition{
-		{
-			Type:               corev1.PodInitialized,
-			Status:             corev1.ConditionTrue,
-			LastTransitionTime: now,
-			LastProbeTime:      now,
-			Message:            "message",
-			Reason:             "reason",
-		},
+type ComputeEngine struct {
+	ProjectID                 string `json:"project_id"`
+	ProjectNumber             int64  `json:"project_number"`
+	Zone                      string `json:"zone"`
+	InstanceID                string `json:"instance_id"`
+	InstanceName              string `json:"instance_name"`
+	InstanceCreationTimestamp int64  `json:"instance_creation_timestamp"`
+}
+
+type agentPathTemplateData struct {
+	ComputeEngine
+	PluginName string
+}
+
+// MakeSpiffeID makes an agent spiffe ID. The ID always has a host value equal to the given trust domain,
+// the path is created using the given agentPathTemplate which is given access to a fully populated
+// ComputeEngine object.
+func MakeAgentID(td spiffeid.TrustDomain, agentPathTemplate *agentpathtemplate.Template, computeEngine ComputeEngine) (spiffeid.ID, error) {
+	agentPath, err := agentPathTemplate.Execute(agentPathTemplateData{
+		ComputeEngine: computeEngine,
+		PluginName:    PluginName,
+	})
+	if err != nil {
+		return spiffeid.ID{}, err
 	}
 
-	u := toUnstructured(t, pod)
-	got, ok, err := createConditionsTable(*u, "", podConditionColumns)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	cols := component.NewTableCols("Type", "Reason", "Status", "Message", "Last Probe", "Last Transition")
-	expected := component.NewTable("Conditions", "There are no conditions!", cols)
-
-	expected.Add([]component.TableRow{
-		{
-			"Type":            component.NewText("Initialized"),
-			"Status":          component.NewText("True"),
-			"Last Transition": component.NewTimestamp(now.Time),
-			"Last Probe":      component.NewTimestamp(now.Time),
-			"Message":         component.NewText("message"),
-			"Reason":          component.NewText("reason"),
-		},
-	}...)
-
-	component.AssertEqual(t, expected, got)
+	return idutil.AgentID(td, agentPath)
 }

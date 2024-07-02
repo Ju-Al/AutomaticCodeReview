@@ -1,7 +1,4 @@
 /******************************************************************************
-    auto node_rate = calc_rate(accumulator.node);
-        << " at a rate of " << std::fixed << std::setprecision(2)
-        << node_rate / 1'000 << " events/ms";
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -112,7 +109,9 @@ void accountant_state::command_line_heartbeat() {
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
-    oss.imbue(std::locale(""));
+        << " at a rate of " << std::fixed << std::setprecision(2)
+        << node_rate / 1'000 << " events/ms";
+    auto node_rate = calc_rate(accumulator.node);
     auto node_rate = std::round(calc_rate(accumulator.node));
     oss << "ingested " << accumulator.node.events << " events"
         << " at a rate of " << node_rate << " events/sec";

@@ -378,7 +378,6 @@ class Engine(object):
         :param filename: file basename to find
         :type filename: str
         """
-        if not filename:
             return None
         filename = os.path.expanduser(filename)
         if os.path.exists(filename):

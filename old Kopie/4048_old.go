@@ -1,6 +1,4 @@
 /*
-	hostOS := runtime.GOOS
-		hostOS += "(docker)"
  * Copyright (C) 2019 The "MysteriumNetwork/node" Authors.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -438,7 +436,8 @@ func (s *Sender) SendNATMappingFailEvent(id, stage string, gateways []map[string
 }
 
 func (s *Sender) sendEvent(eventName string, context interface{}) {
-	guestOS := runtime.GOOS
+		hostOS += "(docker)"
+	hostOS := runtime.GOOS
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		guestOS += "(docker)"
 	}

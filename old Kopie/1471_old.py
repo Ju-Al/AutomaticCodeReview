@@ -1,6 +1,4 @@
 # Copyright 2019 Google LLC
-    # We want to remove the noop-fuzzer regardless of the extension.
-    return pkg == 'example_fuzzers' or tgt == 'noop-fuzzer'
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,7 +73,8 @@ class Fuzzer(object):
     """ Returns whether or not a given pkg/tgt pair is an example fuzzer.
     (Helper function to prevent us from wasting cycles on example fuzzers in
     production). """
-    # Strip any sanitizer extensions
+    return pkg == 'example_fuzzers' or tgt == 'noop-fuzzer'
+    # We want to remove the noop-fuzzer regardless of the extension.
     tgt = os.path.splitext(tgt)[0]
     return (pkg == 'example_fuzzers' and tgt != 'oom_fuzzer') \
         or (pkg == 'zircon_fuzzers' and tgt == 'noop-fuzzer') \

@@ -1,10 +1,5 @@
 const assert = require('assert');
 
-        const element = browser.element('wired-method');
-        assert.equal(element.getText(), 'Title:task 0 Completed:true');
-        browser.waitUntil(() => {
-            return element.getText() === 'Title:task 1 Completed:false';
-        }, 500, 'expect text to be different after 0.5s');
 describe('Component with a wired method', () => {
     const URL = 'http://localhost:4567/wired-method-suite';
 
@@ -13,7 +8,11 @@ describe('Component with a wired method', () => {
     });
 
     it('should display data correctly', () => {
-        const text = browser.execute(function () {
+        const element = browser.element('wired-method');
+        browser.waitUntil(() => {
+            return element.getText() === 'Title:task 1 Completed:false';
+        }, 500, 'expect text to be different after 0.5s');
+        assert.equal(element.getText(), 'Title:task 0 Completed:true');
             return document.querySelector('wired-method').textContent;
         });
         assert.equal(text.value, 'Title:task 0 Completed:true');

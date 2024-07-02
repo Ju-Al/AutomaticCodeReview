@@ -110,7 +110,6 @@ public class MailService extends CoreService {
 
                 K9.BACKGROUND_OPS bOps = K9.getBackgroundOps();
 
-                //dhgonsalves: this is where I'd need to make my change
                 switch (bOps) {
                 case NEVER:
                     doBackground = false;

@@ -1,5 +1,4 @@
 // +build linux darwin
-
 package monitor
 
 import (

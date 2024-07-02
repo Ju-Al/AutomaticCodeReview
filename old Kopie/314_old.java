@@ -1,13 +1,5 @@
 package vn.mbm.phimp.me.gallery;
 
-                Intent shareIntent=new Intent();
-                shareIntent.putExtra("image-path", filePath.get(position));
-                shareIntent.putExtra("aspectX", 0);
-                shareIntent.putExtra("aspectY", 0);
-                shareIntent.putExtra("scale", true);
-                shareIntent.putExtra("activityName", "PhimpMeGallery");
-                startActivityForResult(shareIntent, 1);
-                Log.d("Pawan", "Share");
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -314,7 +306,15 @@ public class PhimpMeGallery extends AppCompatActivity implements View.OnClickLis
                 builder.show();
                 break;
             case R.id.fabshare:
-                /*Intent shareIntent=new Intent();
+
+                shareIntent.putExtra("image-path", filePath.get(position));
+                shareIntent.putExtra("aspectX", 0);
+                shareIntent.putExtra("aspectY", 0);
+                shareIntent.putExtra("scale", true);
+                shareIntent.putExtra("activityName", "PhimpMeGallery");
+                startActivityForResult(shareIntent, 1);
+                Log.d("Pawan", "Share");
+                Intent shareIntent=new Intent();
                 shareIntent.setClass(PhimpMeGallery.this, SendFileActivity.class);
 
                 startActivityForResult(shareIntent, 1);

@@ -1758,9 +1758,6 @@ void AirLoopHVAC::resetDesignSupplyAirFlowRate() {
 
 void AirLoopHVAC::autosizeDesignSupplyAirFlowRate() {
   getImpl<detail::AirLoopHVAC_Impl>()->autosizeDesignSupplyAirFlowRate();
-}
-
-
 
 /** Presure Drop Adjustments **/  
 double AirLoopHVAC::baselinePressureDropAdjustment() const {

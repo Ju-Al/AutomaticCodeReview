@@ -1,5 +1,5 @@
 ﻿using System;
-                    return new BaseTimeZoneParser();using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -248,7 +248,7 @@ namespace Microsoft.Recognizers.Text.DataDrivenTests
                 case DateTimeParsers.Holiday:
                     return new BaseHolidayParser(new EnglishHolidayParserConfiguration());
                 case DateTimeParsers.TimeZone:
-                    return new BaseTimezoneParser();
+                    return new BaseTimeZoneParser();                    return new BaseTimezoneParser();
                 case DateTimeParsers.Set:
                     return new BaseSetParser(new EnglishSetParserConfiguration(commonConfiguration));
                 case DateTimeParsers.Merged:

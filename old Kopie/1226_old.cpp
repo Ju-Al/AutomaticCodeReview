@@ -109,7 +109,6 @@ int main(int argc, char* argv[]) {
     CHECK(test_hipDeviceGetAttribute(deviceId, hipDeviceAttributeMaxSharedMemoryPerMultiprocessor,
                                      props.maxSharedMemoryPerMultiProcessor));
     CHECK(test_hipDeviceGetAttribute(deviceId, hipDeviceAttributeIntegrated, props.integrated));
-
     CHECK(test_hipDeviceGetAttribute(deviceId, hipDeviceAttributeMaxTexture1D, props.maxTexture1D));
     CHECK(test_hipDeviceGetAttribute(deviceId, hipDeviceAttributeMaxTexture2DDimX, props.maxTexture2D[0]));
     CHECK(test_hipDeviceGetAttribute(deviceId, hipDeviceAttributeMaxTexture2DDimY, props.maxTexture2D[1]));

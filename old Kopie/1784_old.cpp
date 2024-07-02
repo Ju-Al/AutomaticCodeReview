@@ -1,5 +1,4 @@
 /***************************************************************************
-        while ( ( isLooped || currentFrame < video.frameCount() ) && le.HandleEvents() ) {
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -72,7 +71,7 @@ namespace Video
         const uint8_t selectionColor = 51;
 
         LocalEvent & le = LocalEvent::Get();
-        while ( ( isLooped || currentFrame <= video.frameCount() ) && le.HandleEvents() ) {
+        while ( ( isLooped || currentFrame < video.frameCount() ) && le.HandleEvents() ) {
             if ( roi.empty() ) {
                 if ( le.KeyPress() || le.MouseClickLeft() || le.MouseClickMiddle() || le.MouseClickRight() )
                     break;

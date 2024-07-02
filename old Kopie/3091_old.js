@@ -1,5 +1,4 @@
 'use strict';
-
 var bitcore = require('bitcore-lib-doge');
 var Inventory = require('../inventory');
 

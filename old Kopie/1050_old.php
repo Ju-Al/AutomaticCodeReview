@@ -1,5 +1,4 @@
 <?php
-                    $patron['phone'] = utf8_encode($row['PHONE_NUMBER']);
 /**
  * Voyager ILS Driver
  *
@@ -1978,7 +1977,6 @@ EOT;
                     $patron['lastname'] = utf8_encode($row['LAST_NAME']);
                 }
                 if (!empty($row['PHONE_NUMBER'])) {
-                    if ('Primary' === $row['PHONE_DESC']) {
                         $patron['phone'] = utf8_encode($row['PHONE_NUMBER']);
                     } elseif ('Mobile' === $row['PHONE_DESC']) {
                         $patron['mobile_phone'] = utf8_encode($row['PHONE_NUMBER']);

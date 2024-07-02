@@ -97,7 +97,6 @@ static void on_read(h2o_socket_t *sock, const char *err)
 
 static void init_async(h2o_multithread_queue_t *queue, h2o_loop_t *loop)
 {
-#ifdef H2O_ASYNC_NOTIFY_USING_EVENTFD
     int fd;
 
     fd = cloexec_nblock_eventfd();

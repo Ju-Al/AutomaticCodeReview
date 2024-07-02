@@ -650,9 +650,6 @@ Transaction.prototype.parse = function (parser) {
 
   this.lock_time = parser.word32le();
   this.calcHash();
-};
-
-/*
  * _selectUnspent
  *
  *  Selects some unspend outputs for later usage in tx inputs

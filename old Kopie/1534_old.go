@@ -98,8 +98,6 @@ var _ = Describe("IPSetType", func() {
 	})
 	It("should panic on bad IP", func() {
 		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
-	})
-	It("should panic on bad IP,port", func() {
 		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar") }).To(Panic())
 	})
 	It("should panic on bad IP,port (IP)", func() {

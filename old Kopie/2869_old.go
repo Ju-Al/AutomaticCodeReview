@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-func (l *LoadBalancedWebServiceConfig) Validate() error {
 // SPDX-License-Identifier: Apache-2.0
 
 package manifest
@@ -8,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+func (l *LoadBalancedWebServiceConfig) Validate() error {
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 

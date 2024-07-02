@@ -1,6 +1,5 @@
 package smoketest
 
-		Users []user.User
 import (
 	"encoding/json"
 	"testing"
@@ -41,7 +40,7 @@ func TestGraphQLUsers(t *testing.T) {
 	}
 
 	var res struct {
-		Users struct {
+		Users []user.User
 			Nodes []struct {
 				ID string `json:"id"`
 			} `json:"nodes"`

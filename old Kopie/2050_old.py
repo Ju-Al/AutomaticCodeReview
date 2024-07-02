@@ -1,5 +1,4 @@
 def pytest_addoption(parser):
-    """specify comma-delimited list of kernel names to limit test"""
     parser.addoption("--kname", action="store", help="kernel name")
 
 def pytest_generate_tests(metafunc):

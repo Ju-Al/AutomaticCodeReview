@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-            self.acknowledge()
 """
     celery.worker.request
     ~~~~~~~~~~~~~~~~~~~~~
@@ -353,7 +352,7 @@ class Request(object):
                 )
         # (acks_late) acknowledge after result stored.
         if self.task.acks_late:
-            if isinstance(exc, WorkerLostError):
+            self.acknowledge()
                 self.reject(True)
             else:
                 self.acknowledge()

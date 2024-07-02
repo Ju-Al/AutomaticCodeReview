@@ -1,5 +1,4 @@
 /*
- * Downsized version of activity_trace_async.cpp in:
  *     $(CUDA_HOME)/extras/CUPTI/samples 
  *
  * Copyright 2011-2015 NVIDIA Corporation. All rights reserved

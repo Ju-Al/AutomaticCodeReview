@@ -1,5 +1,4 @@
 from django.conf import settings
-            queryset = queryset.filter(title__icontains=data['title'])
 from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponseRedirect
@@ -147,7 +146,7 @@ class ProductListView(PartnerProductFilterMixin, SingleTableView):
             # that contain the UPC.
 
             # Look up all matches (child products, products not allowed to access) ...
-            matches_upc = Product.objects.filter(Q(upc__iexact=data['upc']) | Q(children__upc__iexact=data['upc']))
+            matches_upc = Product.objects.filter(upc__iexact=data['upc'])
 
             # ... and use that to pick all standalone or parent products that the user is
             # allowed to access.

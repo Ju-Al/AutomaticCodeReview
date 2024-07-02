@@ -113,7 +113,6 @@ module Beaker
         end
       #cleanup phase
       rescue => e
-        begin
           if @options[:fail_mode].to_s =~ /slow/
             run_suite(:pre_cleanup)
           end

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-            disable_window=self._config.disable_window)
 #
 # Copyright 2012-2015 Spotify AB
 #
@@ -550,7 +549,7 @@ class CentralPlannerScheduler(Scheduler):
         self._make_task = functools.partial(
             Task, disable_failures=self._config.disable_failures,
             disable_hard_timeout=self._config.disable_hard_timeout,
-            disable_window=self._config.disable_window,
+            disable_window=self._config.disable_window)
             upstream_status_when_all=self._config.upstream_status_when_all
         )
         self._worker_requests = {}

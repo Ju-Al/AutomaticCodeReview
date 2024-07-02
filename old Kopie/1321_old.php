@@ -1,6 +1,4 @@
 <?php
- * Add HTTP protocol to an url that does not have
-	if ( strpos( $url, 'http://' ) === false && strpos( $url, 'https://' ) === false ) {
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 
 /**
@@ -111,7 +109,8 @@ function rocket_remove_url_protocol( $url, $no_dots = false ) {
 }
 
 /**
- * Add HTTP protocol to an url that does not have and add host if missing too
+	if ( strpos( $url, 'http://' ) === false && strpos( $url, 'https://' ) === false ) {
+ * Add HTTP protocol to an url that does not have
  *
  * @since 2.2.1
  *

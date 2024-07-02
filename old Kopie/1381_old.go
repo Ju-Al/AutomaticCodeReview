@@ -1,9 +1,4 @@
 // Copyright The OpenTelemetry Authors
-	if o == nil {
-		return aggregator.NewInconsistentAggregatorError(c, oa)
-	}
-	o.points, c.points = c.points, nil
-	o.sum, c.sum = c.sum, 0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,9 +97,13 @@ func (c *Aggregator) Points() ([]number.Number, error) {
 // the empty set, taking a lock to prevent concurrent Update() calls.
 func (c *Aggregator) SynchronizedMove(oa export.Aggregator, desc *metric.Descriptor) error {
 	o, _ := oa.(*Aggregator)
+	if o == nil {
+		return aggregator.NewInconsistentAggregatorError(c, oa)
+	}
 
 	c.lock.Lock()
-	if o != nil {
+	o.points, c.points = c.points, nil
+	o.sum, c.sum = c.sum, 0
 		o.points = c.points
 		o.sum = c.sum
 	}

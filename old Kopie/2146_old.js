@@ -17,7 +17,6 @@ export default class Step1ConfigurationContainer extends Component<Props> {
 
   render() {
     const { onClose, onBack, stores, actions } = this.props;
-    const { isSynced, syncPercentage } = stores.networkStatus;
     const { allWallets } = stores.wallets;
     const {
       redeemWallet,

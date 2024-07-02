@@ -1,5 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-        ('less', '<'),
+
 # Copyright 2014-2019 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -277,7 +277,7 @@ def _parse_special_key(keystr):
         ('command', 'meta'),
         ('cmd', 'meta'),
         ('mod1', 'alt'),
-    )
+        ('less', '<'),    )
     for (orig, repl) in replacements:
         keystr = keystr.replace(orig, repl)
 

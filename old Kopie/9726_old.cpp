@@ -1,6 +1,4 @@
 /*
- * @pre thistype < NUM_INDUSTRYTYPES
-	assert(thistype < NUM_INDUSTRYTYPES);
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -117,7 +115,8 @@ IndustryType GetIndustryType(TileIndex tile)
  * This will ensure at once : proper access and
  * not allowing modifications of it.
  * @param thistype of industry (which is the index in _industry_specs)
- * @pre thistype <= NUM_INDUSTRYTYPES
+	assert(thistype < NUM_INDUSTRYTYPES);
+ * @pre thistype < NUM_INDUSTRYTYPES
  * @return a pointer to the corresponding industry spec
  */
 const IndustrySpec *GetIndustrySpec(IndustryType thistype)

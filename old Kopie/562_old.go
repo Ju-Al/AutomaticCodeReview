@@ -1,6 +1,5 @@
 package node
 
-		computeHash(computedHash, n)
 import (
 	"bytes"
 	"encoding/hex"
@@ -206,7 +205,7 @@ func (n *Node) verifyCachedHashRecursive(computedHash *[]byte) bool {
 	}
 
 	if n.hashValue != nil {
-		n.computeAndStoreMyHash(&n.hashValue)
+		computeHash(computedHash, n)
 		return bytes.Equal(n.hashValue, *computedHash)
 	}
 	return true

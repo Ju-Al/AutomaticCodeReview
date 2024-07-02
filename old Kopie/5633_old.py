@@ -1,6 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-    def open_file(self, cmdline=None):
 # Copyright 2014-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -621,7 +620,7 @@ class AbstractDownloadItem(QObject):
         raise NotImplementedError
 
     @pyqtSlot()
-    def open_file(self, cmdline=None, open_dir=False):
+    def open_file(self, cmdline=None):
         """Open the downloaded file.
 
         Args:

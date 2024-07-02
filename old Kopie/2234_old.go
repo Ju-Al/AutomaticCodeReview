@@ -136,9 +136,6 @@ func (pctx *processContext) gcpCredentials(ctx context.Context) (*google.Credent
 	// TODO(light): google.DefaultCredentials uses Getenv directly, so it is
 	// difficult to disentangle to use processContext.
 	return gcp.DefaultCredentials(ctx)
-}
-
-func (pctx *processContext) Logf(format string, a ...interface{}) {
 	pctx.errlog.Printf(format, a...)
 }
 

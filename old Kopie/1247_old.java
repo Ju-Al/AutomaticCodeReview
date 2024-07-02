@@ -1,8 +1,5 @@
 // Copyright (c) 2014-2019 K Team. All Rights Reserved.
 
-        prod1 = Production(KLabel(p.getKLabel(kore), immutable(p.getParams())), sort,
-                Seq(NonTerminal(elementSort), Terminal(userList.getSeparator()), NonTerminal(sort)),
-                attrs.add("right"));
 package org.kframework.kore.convertors;
 
 import com.google.common.collect.Sets;
@@ -306,7 +303,8 @@ public class KILtoKORE extends KILTransformation<Object> {
         org.kframework.definition.Production prod1, prod3;
 
         // Es ::= E "," Es
-        if (bisonLists) {
+        prod1 = Production(KLabel(p.getKLabel(kore), immutable(p.getParams())), sort,
+                Seq(NonTerminal(elementSort), Terminal(userList.getSeparator()), NonTerminal(sort)),
           prod1 = Production(KLabel(p.getKLabel(kore), immutable(p.getParams())), sort,
                   Seq(NonTerminal(sort), Terminal(userList.getSeparator()), NonTerminal(elementSort)),
                   attrs.add("right"));

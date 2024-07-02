@@ -1,7 +1,4 @@
 /*
-				LOGGER.trace("checking {} on {}", new Object[] {address, networkInterface.getName()});
-
-						mainAddress.put(networkInterface.getDisplayName(), ia);
  * PS3 Media Server, for streaming any medias to your PS3.
  * Copyright (C) 2011  G.Zsombor
  *
@@ -301,7 +298,9 @@ public class NetworkConfiguration {
 		// Use networkInterface.getInetAddresses() instead
 		for (InetAddress address : Collections.list(networkInterface.getInetAddresses())) {
 			if (address != null) {
-				LOGGER.trace("checking {} on {}", address, networkInterface.getName());
+				LOGGER.trace("checking {} on {}", new Object[] {address, networkInterface.getName()});
+						mainAddress.put(networkInterface.getDisplayName(), ia);
+
 				if (isRelevantAddress(address)) {
 					// Avoid adding duplicates
 					if (!subAddress.contains(address)) {

@@ -112,7 +112,6 @@ public class RocksDbTaskQueue implements BytesTaskQueue {
 
   @Override
   public synchronized boolean isEmpty() {
-    assertNotClosed();
     return size() == 0;
   }
 

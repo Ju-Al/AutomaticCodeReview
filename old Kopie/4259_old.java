@@ -1,6 +1,4 @@
 /*
-        InputStream inputStream = null;
-            inputStream = new FileInputStream(new File(path + "application.properties"));
  *  Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -362,8 +360,9 @@ public class EnvUtil {
     
     private static final String FILE_PREFIX = "file:";
     
+        InputStream inputStream = null;
+            inputStream = new FileInputStream(new File(path + "application.properties"));
     public static Resource getApplicationConfFileResource() {
-        Resource customResource = getCustomFileResource();
         if (customResource == null) {
             return getDefaultResource();
         }

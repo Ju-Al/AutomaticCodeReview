@@ -1,7 +1,4 @@
 # Windows Azure Linux Agent
-            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
-                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
-
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -265,7 +262,9 @@ class UpdateHandler(object):
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}; " \
+            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
+                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
+
                           u"Python version: {4}.{5}.{6}".format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__,
                                                                 self.osutil.service_name, PY_VERSION_MAJOR,
                                                                 PY_VERSION_MINOR, PY_VERSION_MICRO)

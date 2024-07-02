@@ -1,6 +1,5 @@
 #include "Serialize.h"
 
-    if (version >= 1) {
 #include "MultiplayerCommon.h"
 #include "../universe/System.h"
 
@@ -54,7 +53,7 @@ void SaveGameUIData::serialize(Archive& ar, const unsigned int version)
         & BOOST_SERIALIZATION_NVP(map_zoom_steps_in)
         & BOOST_SERIALIZATION_NVP(fleets_exploring);
 
-    if (version >= 2) {
+    if (version >= 1) {
         ar & BOOST_SERIALIZATION_NVP(obsolete_ui_event_count);
         ar & BOOST_SERIALIZATION_NVP(ordered_ship_design_ids_and_obsolete);
         ar & BOOST_SERIALIZATION_NVP(ordered_ship_hull_and_obsolete);

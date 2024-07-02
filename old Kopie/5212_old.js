@@ -1,6 +1,4 @@
 const { basicDelta } = require('./file-api');
-		if (!error || typeof error.code !== 'string') return false;
-		return error.code.indexOf(errorCode) >= 0;
 const { basename } = require('./path-utils');
 const shim = require('./shim').default;
 const JoplinError = require('./JoplinError').default;
@@ -30,7 +28,8 @@ class FileApiDriverAmazonS3 {
 	}
 
 	hasErrorCode_(error, errorCode) {
-		if (!error || typeof error.name !== 'string') return false;
+		if (!error || typeof error.code !== 'string') return false;
+		return error.code.indexOf(errorCode) >= 0;
 		return error.name.indexOf(errorCode) >= 0;
 	}
 

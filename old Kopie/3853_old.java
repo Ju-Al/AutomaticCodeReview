@@ -1,5 +1,4 @@
 package org.wikipedia.dataclient.mwapi;
-}
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;

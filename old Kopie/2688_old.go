@@ -1,14 +1,5 @@
 package service
 
-func createMetadataStorage(cfg *config.Config, logger log.Logger) storage.Repo {
-	// for now we detect the used storage implementation based on which storage is configured
-	// the config with defaults needs to be checked last
-	if cfg.Repo.Disk.Path != "" {
-		return storage.NewDiskRepo(cfg, logger)
-	}
-	repo, err := storage.NewCS3Repo(cfg)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("cs3 storage was configured but failed to start")
 import (
 	"context"
 	"path"
@@ -433,7 +424,15 @@ func (s Service) createDefaultGroups(withDemoGroups bool) (err error) {
 	return nil
 }
 
-func createMetadataStorage(cfg *config.Config, logger log.Logger) (storage.Repo, error) {
+func createMetadataStorage(cfg *config.Config, logger log.Logger) storage.Repo {
+	// for now we detect the used storage implementation based on which storage is configured
+	// the config with defaults needs to be checked last
+	if cfg.Repo.Disk.Path != "" {
+		return storage.NewDiskRepo(cfg, logger)
+	}
+	repo, err := storage.NewCS3Repo(cfg)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cs3 storage was configured but failed to start")
 	switch strings.ToLower(cfg.Repo.Backend) {
 	case "disk":
 		return storage.NewDiskRepo(cfg, logger), nil

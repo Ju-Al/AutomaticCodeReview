@@ -1,5 +1,4 @@
 /*	EQEMu: Everquest Server Emulator
-		} else {
 	Copyright (C) 2001-2003 EQEMu Development Team (http://eqemulator.net)
 
 	This program is free software; you can redistribute it and/or modify
@@ -638,7 +637,7 @@ bool Client::MemorizeSpellFromItem(uint32 item_id) {
 				SummonItem(item_id);
 				return false;
 			}
-		}
+		} else {
 		else {
 			Message(Chat::Red, "You already know this spell.");
 			SummonItem(item_id);

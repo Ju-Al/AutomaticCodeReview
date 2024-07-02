@@ -52,7 +52,6 @@ module Mongo
           cursor_document ? cursor_document[CURSOR_ID] : 0
         end
 
-        # Get the post batch resume token for the result
         #
         # @api private
         def post_batch_resume_token

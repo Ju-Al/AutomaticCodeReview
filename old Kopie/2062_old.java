@@ -1,5 +1,4 @@
 /*
-     * @param factorySupplier supplier to obtain JMS connection factory
  * Copyright (c) 2008-2020, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1040,8 +1039,8 @@ public final class Sources {
      * that case you can use {@linkplain #jmsQueueBuilder(SupplierEx) the
      * builder} and add a projection.
      *
-     * @param name            the name of the queue
      * @param factorySupplier supplier to obtain JMS connection factory
+     * @param name            the name of the queue
      */
     @Nonnull
     public static StreamSource<Message> jmsQueue(

@@ -1,6 +1,5 @@
 package convert
 
-	data, err := json.Marshal(serializable)
 import (
 	"encoding/json"
 	"errors"
@@ -371,7 +370,7 @@ func SnapshotToBytes(snapshot protocol.Snapshot) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := json.Marshal(serializable.Encodable())
+	data, err := json.Marshal(serializable)
 	if err != nil {
 		return nil, err
 	}

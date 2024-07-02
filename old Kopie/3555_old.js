@@ -1,20 +1,4 @@
 /**
-        try {
-            versionBanner = projectConfig.section('staging').buildId;
-            if (!versionBanner || versionBanner.trim().length === 0) {
-                throw new Error('invalid build id');
-            }
-        } catch (error) {
-            try {
-                versionBanner = require('child_process')
-                    .execSync('git describe --long --always --dirty=-dev')
-                    .toString();
-            } catch (e) {
-                versionBanner = `${
-                    require(path.resolve(context, './package.json')).version
-                }-[hash]`;
-            }
-        }
  * @module Buildpack/WebpackTools
  */
 const debug = require('debug')('pwa-buildpack:createClientConfig');
@@ -215,7 +199,22 @@ async function getClientConfig(opts) {
         }
     } else if (mode === 'production') {
         let versionBanner = '';
-        const packageJson = require(path.resolve(context, './package.json'));
+        try {
+            versionBanner = projectConfig.section('staging').buildId;
+            if (!versionBanner || versionBanner.trim().length === 0) {
+                throw new Error('invalid build id');
+            }
+        } catch (error) {
+            try {
+                versionBanner = require('child_process')
+                    .execSync('git describe --long --always --dirty=-dev')
+                    .toString();
+            } catch (e) {
+                versionBanner = `${
+                    require(path.resolve(context, './package.json')).version
+                }-[hash]`;
+            }
+        }
         const packageRegex = /^@magento|^@apollo/;
         const pwaStudioVersions = {
             'pwa-studio': packageJson.version,

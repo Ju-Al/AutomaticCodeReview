@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-                    categories={categories}
 import { shape, string } from 'prop-types';
 import { useNavigation } from '@magento/peregrine/lib/talons/Navigation/useNavigation';
 
@@ -64,13 +63,13 @@ const Navigation = props => {
             <div className={bodyClassName}>
                 <CategoryTree
                     categoryId={categoryId}
+                    categories={categories}
                     onNavigate={handleClose}
                     setCategoryId={setCategoryId}
                     updateCategories={catalogActions.updateCategories}
                 />
             </div>
             <div className={classes.footer}>
-                <StoreSwitcher mobileView={true} />
                 <AuthBar
                     disabled={hasModal}
                     showMyAccount={showMyAccount}

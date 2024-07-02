@@ -490,7 +490,6 @@ module Beaker
             end
 
           rescue Exception => teardown_exception
-            if !host.is_pe?
               dump_puppet_log(host)
             end
 

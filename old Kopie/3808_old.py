@@ -1,5 +1,4 @@
 from django.conf import settings
-        return self.model.objects.browsable().all()
 from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponseRedirect
@@ -637,7 +636,7 @@ class ProductLookupView(ObjectLookupView):
     model = Product
 
     def get_queryset(self):
-        return self.model.objects.browsable_dashboard_recommended().all()
+        return self.model.objects.browsable().all()
 
     def lookup_filter(self, qs, term):
         return qs.filter(Q(title__icontains=term)

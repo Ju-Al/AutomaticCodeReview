@@ -1,5 +1,4 @@
 # Copyright 2018 Microsoft Corporation
-            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -289,7 +288,7 @@ class CGroupsTelemetry(object):
         limits = {}
 
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
-            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_TRACKED_NAME
+            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
             limits[cgroup_name] = collector.cgroup.threshold
 

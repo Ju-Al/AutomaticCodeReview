@@ -3,7 +3,6 @@ import { useHistory, useRouteMatch } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { useCartContext } from '@magento/peregrine/lib/context/cart';
 
-/**
  * Validates if GraphQl error is critical
  * @ignore
  *

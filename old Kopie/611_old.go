@@ -1,5 +1,4 @@
 // Copyright (c) Microsoft Corporation.
-	if !isRootFS {
 // Licensed under the MIT License.
 
 package installutils
@@ -409,7 +408,7 @@ func PopulateInstallRoot(installChroot *safechroot.Chroot, packagesToInstall []s
 	}
 
 	hostname := config.Hostname
-	if !isRootFS && mountPointToFsTypeMap[rootMountPoint] != "overlay" {
+	if !isRootFS {
 		// Add /etc/hostname
 		err = updateHostname(installChroot.RootDir(), hostname)
 		if err != nil {

@@ -1,11 +1,10 @@
 package business
 
-	osv1 "github.com/openshift/api/project/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 import (
 	"testing"
 
-	osproj_v1 "github.com/openshift/api/project/v1"
+	osv1 "github.com/openshift/api/project/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kiali/kiali/config"

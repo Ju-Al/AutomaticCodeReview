@@ -1,8 +1,4 @@
 // vis2k:
-            lastPosition = targetComponent.transform.position;
-            lastRotation = targetComponent.transform.rotation;
-
-            return moved || rotated;
 // base class for NetworkTransform and NetworkTransformChild.
 // New method is simple and stupid. No more 1500 lines of code.
 //
@@ -301,7 +297,10 @@ namespace Mirror
             bool rotated = lastRotation != targetComponent.transform.rotation;
 
             // save last for next frame to compare
-            bool change = moved || rotated;
+            lastPosition = targetComponent.transform.position;
+            lastRotation = targetComponent.transform.rotation;
+
+            return moved || rotated;
             if (change)
             {
                 lastPosition = targetComponent.transform.position;

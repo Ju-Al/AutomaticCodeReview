@@ -1,5 +1,4 @@
 <?php
-/**
  * Elements styles block support.
  *
  * @package WordPress

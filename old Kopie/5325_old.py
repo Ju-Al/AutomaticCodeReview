@@ -233,7 +233,6 @@ def main():
     print(f'Totally gathered {len(publish_model_infos)} models')
     mmcv.dump(models, osp.join(models_out, 'model_info.json'))
 
-    pwc_infos = convert_model_info_to_pwc(model_infos)
     with open(osp.join(models_out, 'metafile.yml'), 'w') as f:
         ordered_yaml_dump(pwc_infos, f, encoding='utf-8')
 

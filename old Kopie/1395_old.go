@@ -1,339 +1,685 @@
-package dkg
+package ceb
 
-			err := b.dkgContractClient.Broadcast(bcastMsg)
 import (
-	"bytes"
 	"context"
-	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"testing"
 	"time"
 
-	"github.com/onflow/flow-go/engine"
+	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/stretchr/testify/require"
 
-	"github.com/sethvargo/go-retry"
-
-	"github.com/rs/zerolog"
-
-	"github.com/onflow/flow-go/crypto"
-	"github.com/onflow/flow-go/model/fingerprint"
-	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/model/messages"
-	"github.com/onflow/flow-go/module"
+	"github.com/hashicorp/waypoint-plugin-sdk/component"
+	sdkpb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
+	"github.com/hashicorp/waypoint/internal/server"
+	pb "github.com/hashicorp/waypoint/internal/server/gen"
+	"github.com/hashicorp/waypoint/internal/server/singleprocess"
 )
 
-// retryMax is the maximum number of times the broker will attempt to broadcast
-// a message or publish a result
-const retryMax = 8
+// Test that our child process is restarted with an env var change.
+func TestConfig_envVarChange(t *testing.T) {
+	require := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-// retryMilliseconds is the number of milliseconds to wait between retries
-const retryMilliseconds = 1000 * time.Millisecond
+	// Start up the server
+	restartCh := make(chan struct{})
+	impl := singleprocess.TestImpl(t)
+	client := server.TestServer(t, impl,
+		server.TestWithContext(ctx),
+		server.TestWithRestart(restartCh),
+	)
 
-// Broker is an implementation of the DKGBroker interface which is intended to
-// be used in conjuction with the DKG MessagingEngine for private messages, and
-// with the DKG smart-contract for broadcast messages.
-type Broker struct {
+	// Create a temporary directory for our test
+	td, err := ioutil.TempDir("", "test")
+	require.NoError(err)
+	defer os.RemoveAll(td)
+	path := filepath.Join(td, "hello")
+
+	// Start the CEB
+	ceb := testRun(t, context.Background(), &testRunOpts{
+		Client: client,
+		Helper: "write-env",
+		HelperEnv: map[string]string{
+			"HELPER_PATH": path,
+			"TEST_VALUE":  "",
+		},
+	})
+
+	// The child should still start up
+	require.Eventually(func() bool {
+		_, err := ioutil.ReadFile(path)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Get our deployment
+	deployment, err := client.GetDeployment(ctx, &pb.GetDeploymentRequest{
+		Ref: &pb.Ref_Operation{
+			Target: &pb.Ref_Operation_Id{
+				Id: ceb.DeploymentId(),
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Change our config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name:  "TEST_VALUE",
+				Value: &pb.ConfigVar_Static{Static: "hello"},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	var data []byte
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "hello")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Set our config again but to the same value
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name:  "TEST_VALUE",
+				Value: &pb.ConfigVar_Static{Static: "hello"},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	time.Sleep(1 * time.Second)
+	data2, err := ioutil.ReadFile(path)
+	require.NoError(err)
+	require.Equal(data, data2)
+}
+func TestConfig_fileChange(t *testing.T) {
+	require := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start up the server
+	restartCh := make(chan struct{})
+	impl := singleprocess.TestImpl(t)
+	client := server.TestServer(t, impl,
+		server.TestWithContext(ctx),
+		server.TestWithRestart(restartCh),
+	)
+
+	// Create a temporary directory for our test
+	td, err := ioutil.TempDir("", "test")
+	require.NoError(err)
+	defer os.RemoveAll(td)
+
+	path := filepath.Join(td, "hello")
+	fooPath := filepath.Join(td, "foo.txt")
+
+	// Start the CEB
+	ceb := testRun(t, context.Background(), &testRunOpts{
+		Client: client,
+		Helper: "read-file",
+		HelperEnv: map[string]string{
+			"HELPER_PATH": path,
+			"READ_PATH":   fooPath,
+		},
+	})
+
+	// The child should still start up
+	require.Eventually(func() bool {
+		_, err := ioutil.ReadFile(path)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Get our deployment
+	deployment, err := client.GetDeployment(ctx, &pb.GetDeploymentRequest{
+		Ref: &pb.Ref_Operation{
+			Target: &pb.Ref_Operation_Id{
+				Id: ceb.DeploymentId(),
+			},
+		},
+	})
+	require.NoError(err)
+
+	client.SetMetadata(ctx, &pb.MetadataSetRequest{
+		Scope: &pb.MetadataSetRequest_Application{
+			Application: deployment.Application,
+		},
+		Value: &pb.MetadataSetRequest_FileChangeSignal{
+			FileChangeSignal: "USR2",
+		},
+	})
+
+	// Change our config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name:       fooPath,
+				NameIsPath: true,
+				Value:      &pb.ConfigVar_Static{Static: "via config"},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	var data []byte
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "via config")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Set our config again but to the same value
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name:       fooPath,
+				NameIsPath: true,
+				Value:      &pb.ConfigVar_Static{Static: "via config"},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	time.Sleep(1 * time.Second)
+	data2, err := ioutil.ReadFile(path)
+	require.NoError(err)
+	require.Equal(data, data2)
+}
+
+// Test that we read dynamic config variables.
+func TestConfig_dynamicSuccess(t *testing.T) {
+	require := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Short refresh so we can test changing values
+	testChConfigRefresh(t, 100*time.Millisecond)
+
+	// Create our test config source
+	testSource := &testConfigSourcer{
+		readValue: map[string]string{"key": "hello"},
+	}
+
+	// Start up the server
+	impl := singleprocess.TestImpl(t)
+	client := server.TestServer(t, impl,
+		server.TestWithContext(ctx),
+	)
+
+	// Create a temporary directory for our test
+	td, err := ioutil.TempDir("", "test")
+	require.NoError(err)
+	defer os.RemoveAll(td)
+	path := filepath.Join(td, "hello")
+
+	// Start the CEB
+	ceb := testRun(t, context.Background(), &testRunOpts{
+		Client: client,
+		Helper: "write-env",
+		HelperEnv: map[string]string{
+			"HELPER_PATH": path,
+			"TEST_VALUE":  "original",
+		},
+		ConfigPlugins: map[string]component.ConfigSourcer{
+			"cloud": testSource,
+		},
+	})
+
+	// The child should still start up
+	require.Eventually(func() bool {
+		_, err := ioutil.ReadFile(path)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Get our deployment
+	deployment, err := client.GetDeployment(ctx, &pb.GetDeploymentRequest{
+		Ref: &pb.Ref_Operation{
+			Target: &pb.Ref_Operation_Id{
+				Id: ceb.DeploymentId(),
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Change our config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name: "TEST_VALUE",
+				Value: &pb.ConfigVar_Dynamic{
+					Dynamic: &pb.ConfigVar_DynamicVal{
+						From: "cloud",
+						Config: map[string]string{
+							"key": "key",
+						},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	var data []byte
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "hello")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Change the value and make sure we get it
+	testSource.Lock()
+	testSource.readValue["key"] = "goodbye"
+	testSource.Unlock()
+
+	// The child should change
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "goodbye")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// We should've called Stop once: exactly for the first read
+	testSource.Lock()
+	val := testSource.stopCount
+	testSource.Unlock()
+	require.Equal(1, val)
+
+	// Unset our dynamic config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name: "TEST_VALUE",
+				Value: &pb.ConfigVar_Unset{
+					Unset: &empty.Empty{},
+				},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should change
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "original")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// We should call stop once more to end the previous run
+	testSource.Lock()
+	val = testSource.stopCount
+	testSource.Unlock()
+	require.Equal(2, val)
+}
+
+// Test that we read dynamic config variables where the source
+// takes a configuration.
+func TestConfig_dynamicConfigurable(t *testing.T) {
+	require := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Short refresh so we can test changing values
+	testChConfigRefresh(t, 100*time.Millisecond)
+
+	// Create our test config source
+	testSource := &testConfigSourcerWithConfig{}
+
+	// Start up the server
+	impl := singleprocess.TestImpl(t)
+	client := server.TestServer(t, impl,
+		server.TestWithContext(ctx),
+	)
+
+	// Create a temporary directory for our test
+	td, err := ioutil.TempDir("", "test")
+	require.NoError(err)
+	defer os.RemoveAll(td)
+	path := filepath.Join(td, "hello")
+
+	// Start the CEB
+	ceb := testRun(t, context.Background(), &testRunOpts{
+		Client: client,
+		Helper: "write-env",
+		HelperEnv: map[string]string{
+			"HELPER_PATH": path,
+			"TEST_VALUE":  "original",
+		},
+		ConfigPlugins: map[string]component.ConfigSourcer{
+			"cloud": testSource,
+		},
+	})
+
+	// The child should still start up
+	require.Eventually(func() bool {
+		_, err := ioutil.ReadFile(path)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Get our deployment
+	deployment, err := client.GetDeployment(ctx, &pb.GetDeploymentRequest{
+		Ref: &pb.Ref_Operation{
+			Target: &pb.Ref_Operation_Id{
+				Id: ceb.DeploymentId(),
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Set the config for our source
+	_, err = client.SetConfigSource(ctx, &pb.SetConfigSourceRequest{
+		ConfigSource: &pb.ConfigSource{
+			Scope: &pb.ConfigSource_Global{
+				Global: &pb.Ref_Global{},
+			},
+
+			Type: "cloud",
+
+			Config: map[string]string{
+				"value": "flower",
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Change our config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name: "TEST_VALUE",
+				Value: &pb.ConfigVar_Dynamic{
+					Dynamic: &pb.ConfigVar_DynamicVal{
+						From: "cloud",
+					},
+				},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should still start up
+	var data []byte
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "flower")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Change the value and make sure we get it
+	_, err = client.SetConfigSource(ctx, &pb.SetConfigSourceRequest{
+		ConfigSource: &pb.ConfigSource{
+			Scope: &pb.ConfigSource_Global{
+				Global: &pb.Ref_Global{},
+			},
+
+			Type: "cloud",
+
+			Config: map[string]string{
+				"value": "leaf",
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should change
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "leaf")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// We should've called Stop twice: once for the first read and
+	// then again when we changed the configuration.
+	require.Equal(uint32(2), testSource.StopCount())
+
+	// Unset our dynamic config
+	_, err = client.SetConfig(ctx, &pb.ConfigSetRequest{
+		Variables: []*pb.ConfigVar{
+			{
+				Scope: &pb.ConfigVar_Application{
+					Application: deployment.Application,
+				},
+				Name: "TEST_VALUE",
+				Value: &pb.ConfigVar_Unset{
+					Unset: &empty.Empty{},
+				},
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should change
+	require.Eventually(func() bool {
+		var err error
+		data, err = ioutil.ReadFile(path)
+		return err == nil && strings.Contains(string(data), "original")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// We should call stop once more to end the previous run
+	require.Equal(uint32(3), testSource.StopCount())
+}
+
+// When a dynamic source is unused and we set a configuration,
+// it should not impact our process.
+func TestConfig_dynamicConfigurableUnused(t *testing.T) {
+	require := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Short refresh so we can test changing values
+	testChConfigRefresh(t, 100*time.Millisecond)
+
+	// Create our test config source
+	testSource := &testConfigSourcerWithConfig{}
+
+	// Start up the server
+	impl := singleprocess.TestImpl(t)
+	client := server.TestServer(t, impl,
+		server.TestWithContext(ctx),
+	)
+
+	// Create a temporary directory for our test
+	td, err := ioutil.TempDir("", "test")
+	require.NoError(err)
+	defer os.RemoveAll(td)
+	path := filepath.Join(td, "hello")
+
+	// Start the CEB
+	ceb := testRun(t, context.Background(), &testRunOpts{
+		Client: client,
+		Helper: "write-env",
+		HelperEnv: map[string]string{
+			"HELPER_PATH": path,
+			"TEST_VALUE":  "original",
+		},
+		ConfigPlugins: map[string]component.ConfigSourcer{
+			"cloud": testSource,
+		},
+	})
+
+	// The child should still start up
+	require.Eventually(func() bool {
+		_, err := ioutil.ReadFile(path)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Get our deployment
+	_, err = client.GetDeployment(ctx, &pb.GetDeploymentRequest{
+		Ref: &pb.Ref_Operation{
+			Target: &pb.Ref_Operation_Id{
+				Id: ceb.DeploymentId(),
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Set the config for our source
+	_, err = client.SetConfigSource(ctx, &pb.SetConfigSourceRequest{
+		ConfigSource: &pb.ConfigSource{
+			Scope: &pb.ConfigSource_Global{
+				Global: &pb.Ref_Global{},
+			},
+
+			Type: "cloud",
+
+			Config: map[string]string{
+				"value": "flower",
+			},
+		},
+	})
+	require.NoError(err)
+
+	// The child should start up
+	var pid string
+	require.Eventually(func() bool {
+		var err error
+		data, err := ioutil.ReadFile(path)
+		if err == nil && strings.Contains(string(data), "original") {
+			parts := strings.Split(string(data), ",")
+			pid = parts[0]
+			return true
+		}
+
+		return false
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Change the value
+	_, err = client.SetConfigSource(ctx, &pb.SetConfigSourceRequest{
+		ConfigSource: &pb.ConfigSource{
+			Scope: &pb.ConfigSource_Global{
+				Global: &pb.Ref_Global{},
+			},
+
+			Type: "cloud",
+
+			Config: map[string]string{
+				"value": "leaf",
+			},
+		},
+	})
+	require.NoError(err)
+
+	// Sleep for a bit and ensure we have the same value
+	{
+		time.Sleep(1 * time.Second)
+		data, err := ioutil.ReadFile(path)
+		require.NoError(err)
+		require.True(strings.HasPrefix(string(data), pid))
+	}
+}
+
+// testChConfigRefresh changes the amount of time between config refreshes.
+// A test cleanup function is automatically registered to revert.
+func testChConfigRefresh(t *testing.T, d time.Duration) {
+	old := appConfigRefreshPeriod
+	appConfigRefreshPeriod = d
+	t.Cleanup(func() { appConfigRefreshPeriod = old })
+}
+
+type testConfigSourcer struct {
 	sync.Mutex
-	log                     zerolog.Logger
-	unit                    *engine.Unit
-	dkgInstanceID           string                     // unique identifier of the current dkg run (prevent replay attacks)
-	committee               flow.IdentityList          // IDs of DKG members
-	me                      module.Local               // used for signing bcast messages
-	myIndex                 int                        // index of this instance in the committee
-	dkgContractClients      []module.DKGContractClient // array of clients to communicate with the DKG smart contract in priority order for fallbacks during retries
-	activeDKGContractClient int                        // index of the dkg contract client that is currently in use
-	tunnel                  *BrokerTunnel              // channels through which the broker communicates with the network engine
-	privateMsgCh            chan messages.DKGMessage   // channel to forward incoming private messages to consumers
-	broadcastMsgCh          chan messages.DKGMessage   // channel to forward incoming broadcast messages to consumers
-	messageOffset           uint                       // offset for next broadcast messages to fetch
-	shutdownCh              chan struct{}              // channel to stop the broker from listening
-	broadcasts              uint                       // broadcasts counts the number of successful broadcasts
+
+	stopCount int
+	readValue map[string]string
 }
 
-// NewBroker instantiates a new epoch-specific broker capable of communicating
-// with other nodes via a network engine and dkg smart-contract.
-func NewBroker(
-	log zerolog.Logger,
-	dkgInstanceID string,
-	committee flow.IdentityList,
-	me module.Local,
-	myIndex int,
-	dkgContractClients []module.DKGContractClient,
-	tunnel *BrokerTunnel) *Broker {
+func (s *testConfigSourcer) ReadFunc() interface{} {
+	return func(reqs []*component.ConfigRequest) ([]*sdkpb.ConfigSource_Value, error) {
+		s.Lock()
+		defer s.Unlock()
 
-	b := &Broker{
-		log:                log.With().Str("component", "broker").Str("dkg_instance_id", dkgInstanceID).Logger(),
-		unit:               engine.NewUnit(),
-		dkgInstanceID:      dkgInstanceID,
-		committee:          committee,
-		me:                 me,
-		myIndex:            myIndex,
-		dkgContractClients: dkgContractClients,
-		tunnel:             tunnel,
-		privateMsgCh:       make(chan messages.DKGMessage),
-		broadcastMsgCh:     make(chan messages.DKGMessage),
-		shutdownCh:         make(chan struct{}),
-	}
-
-	go b.listen()
-
-	return b
-}
-
-// dkgContractClient returns active dkg contract client
-func (b *Broker) dkgContractClient() module.DKGContractClient {
-	return b.dkgContractClients[b.activeDKGContractClient]
-}
-
-func (b *Broker) updateActiveDKGContractClient() {
-	// if we have reached the end of our array start from beginning
-	if b.activeDKGContractClient == len(b.dkgContractClients)-1 {
-		b.activeDKGContractClient = 0
-		return
-	}
-
-	b.activeDKGContractClient++
-}
-
-/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Implement DKGBroker
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-// GetIndex returns the index of this node in the committee list.
-func (b *Broker) GetIndex() int {
-	return b.myIndex
-}
-
-// PrivateSend sends a DKGMessage to a destination over a private channel. It
-// appends the current DKG instance ID to the message.
-func (b *Broker) PrivateSend(dest int, data []byte) {
-	if dest >= len(b.committee) || dest < 0 {
-		b.log.Error().Msgf("destination id out of range: %d", dest)
-		return
-	}
-	dkgMessageOut := messages.PrivDKGMessageOut{
-		DKGMessage: messages.NewDKGMessage(b.myIndex, data, b.dkgInstanceID),
-		DestID:     b.committee[dest].NodeID,
-	}
-	b.tunnel.SendOut(dkgMessageOut)
-}
-
-// Broadcast signs and broadcasts a message to all participants.
-func (b *Broker) Broadcast(data []byte) {
-	b.unit.Launch(func() {
-
-		// NOTE: We're counting the number of times the underlying DKG
-		// requested a broadcast so we can detect an unhappy path. Thus incrementing
-		// broadcasts before we perform the broadcasts is okay.
-		b.unit.Lock()
-		if b.broadcasts > 0 {
-			// The Warn log is used by the integration tests to check if this method
-			// is called more than once within one epoch.
-			b.log.Warn().Msgf("DKG broadcast number %d with header %d", b.broadcasts+1, data[0])
-		} else {
-			b.log.Info().Msgf("DKG message broadcast with header %d", data[0])
-		}
-		b.broadcasts++
-		b.unit.Unlock()
-
-		bcastMsg, err := b.prepareBroadcastMessage(data)
-		if err != nil {
-			b.log.Fatal().Err(err).Msg("failed to create broadcast message")
+		var result []*sdkpb.ConfigSource_Value
+		for _, req := range reqs {
+			result = append(result, &sdkpb.ConfigSource_Value{
+				Name: req.Name,
+				Result: &sdkpb.ConfigSource_Value_Value{
+					Value: s.readValue[req.Config["key"]],
+				},
+			})
 		}
 
-		expRetry, err := retry.NewExponential(retryMilliseconds)
-		if err != nil {
-			b.log.Fatal().Err(err).Msg("create retry mechanism")
+		return result, nil
+	}
+}
+
+func (s *testConfigSourcer) StopFunc() interface{} {
+	return func() error {
+		s.Lock()
+		defer s.Unlock()
+		s.stopCount++
+		return nil
+	}
+}
+
+// ConfigSourcer that implements Configurable
+type testConfigSourcerWithConfig struct {
+	config struct {
+		Value string `hcl:"value,attr"`
+	}
+
+	stopCount uint32
+}
+
+func (s *testConfigSourcerWithConfig) Config() (interface{}, error) {
+	return &s.config, nil
+}
+
+func (s *testConfigSourcerWithConfig) ReadFunc() interface{} {
+	return func(reqs []*component.ConfigRequest) ([]*sdkpb.ConfigSource_Value, error) {
+		var result []*sdkpb.ConfigSource_Value
+		for _, req := range reqs {
+			result = append(result, &sdkpb.ConfigSource_Value{
+				Name: req.Name,
+				Result: &sdkpb.ConfigSource_Value_Value{
+					Value: s.config.Value,
+				},
+			})
 		}
-		maxedExpRetry := retry.WithMaxRetries(retryMax, expRetry)
 
-		attempts := 1
-		err = retry.Do(context.Background(), maxedExpRetry, func(ctx context.Context) error {
-			err := b.dkgContractClient().Broadcast(bcastMsg)
-			if err != nil {
-				b.log.Error().Err(err).Msgf("error broadcasting, retrying (%x)", attempts)
-
-				// retry with next fallback client every 2 attempts
-				if attempts%2 == 0 {
-					b.log.Info().Msgf("retrying on attempt (%x) with fallback access node", attempts)
-					b.updateActiveDKGContractClient()
-				}
-			}
-
-			attempts++
-			return retry.RetryableError(err)
-		})
-
-		// Various network can conditions can result in errors while broadcasting DKG messages,
-		// because failure to send an individual DKG message doesn't necessarily result in local or global DKG failure
-		// it is acceptable to log the error and move on.
-		if err != nil {
-			b.log.Error().Err(err).Msg("failed to broadcast message")
-		}
-	})
-}
-
-// Disqualify flags that a node is misbehaving and got disqualified
-func (b *Broker) Disqualify(node int, log string) {
-	// The Warn log is used by the integration tests to check if this method is
-	// called.
-	b.log.Warn().Msgf("participant %d is disqualifying participant %d because: %s", b.myIndex, node, log)
-}
-
-// FlagMisbehavior warns that a node is misbehaving.
-func (b *Broker) FlagMisbehavior(node int, log string) {
-	// The Warn log is used by the integration tests to check if this method is
-	// called.
-	b.log.Warn().Msgf("participant %d is flagging participant %d because: %s", b.myIndex, node, log)
-}
-
-// GetPrivateMsgCh returns the channel through which consumers can receive
-// incoming private DKG messages.
-func (b *Broker) GetPrivateMsgCh() <-chan messages.DKGMessage {
-	return b.privateMsgCh
-}
-
-// GetBroadcastMsgCh returns the channel through which consumers can receive
-// incoming broadcast DKG messages.
-func (b *Broker) GetBroadcastMsgCh() <-chan messages.DKGMessage {
-	return b.broadcastMsgCh
-}
-
-// Poll calls the DKG smart contract to get missing DKG messages for the current
-// epoch, and forwards them to the msgCh. It should be called with the ID of a
-// block whose seal is finalized. The function doesn't return until the received
-// messages are processed by the consumer because b.msgCh is not buffered.
-func (b *Broker) Poll(referenceBlock flow.Identifier) error {
-	b.Lock()
-	defer b.Unlock()
-	msgs, err := b.dkgContractClient().ReadBroadcast(b.messageOffset, referenceBlock)
-	if err != nil {
-		return fmt.Errorf("could not read broadcast messages(offset: %d, ref: %v): %w", b.messageOffset, referenceBlock, err)
-	}
-	for _, msg := range msgs {
-		ok, err := b.verifyBroadcastMessage(msg)
-		if err != nil {
-			b.log.Error().Err(err).Msg("bad broadcast message")
-			continue
-		}
-		if !ok {
-			b.log.Debug().Msg("invalid signature on broadcast dkg message")
-			continue
-		}
-		b.log.Debug().Msgf("forwarding broadcast message to controller")
-		b.broadcastMsgCh <- msg.DKGMessage
-	}
-	b.messageOffset += uint(len(msgs))
-	return nil
-}
-
-// SubmitResult publishes the result of the DKG protocol to the smart contract.
-func (b *Broker) SubmitResult(pubKey crypto.PublicKey, groupKeys []crypto.PublicKey) error {
-	expRetry, err := retry.NewExponential(retryMilliseconds)
-	if err != nil {
-		b.log.Fatal().Err(err).Msg("failed to create retry mechanism")
-	}
-	maxedExpRetry := retry.WithMaxRetries(retryMax, expRetry)
-
-	err = retry.Do(context.Background(), maxedExpRetry, func(ctx context.Context) error {
-		err := b.dkgContractClient().SubmitResult(pubKey, groupKeys)
-		if err != nil {
-			b.log.Error().Err(err).Msg("error submitting DKG result, retrying")
-		}
-		return retry.RetryableError(err)
-	})
-
-	if err != nil {
-		b.log.Fatal().Err(err).Msg("failed to submit dkg result")
-	}
-
-	b.log.Debug().Msg("dkg result submitted")
-	return nil
-}
-
-// Shutdown stop the goroutine that listens to incoming private messages.
-func (b *Broker) Shutdown() {
-	close(b.shutdownCh)
-}
-
-/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-// listen is a blocking call that processes incoming messages from the network
-// engine.
-func (b *Broker) listen() {
-	for {
-		select {
-		case msg := <-b.tunnel.MsgChIn:
-			b.onPrivateMessage(msg.OriginID, msg.DKGMessage)
-		case <-b.shutdownCh:
-			return
-		}
+		return result, nil
 	}
 }
 
-// onPrivateMessage verifies the integrity of an incoming message and forwards
-// it to consumers via the msgCh.
-func (b *Broker) onPrivateMessage(originID flow.Identifier, msg messages.DKGMessage) {
-	err := b.checkMessageInstanceAndOrigin(msg)
-	if err != nil {
-		b.log.Err(err).Msg("bad message")
-		return
+func (s *testConfigSourcerWithConfig) StopFunc() interface{} {
+	return func() error {
+		atomic.AddUint32(&s.stopCount, 1)
+		return nil
 	}
-	// check that the message's origin matches the sender's flow identifier
-	nodeID := b.committee[msg.Orig].NodeID
-	if !bytes.Equal(nodeID[:], originID[:]) {
-		b.log.Error().Msgf("bad message: OriginID (%v) does not match committee member %d (%v)", originID, msg.Orig, nodeID)
-		return
-	}
-	b.privateMsgCh <- msg
 }
 
-// checkMessageInstanceAndOrigin returns an error if the message's dkgInstanceID
-// does not correspond to the current instance, or if the message's origin index
-// is out of range with respect to the committee list.
-func (b *Broker) checkMessageInstanceAndOrigin(msg messages.DKGMessage) error {
-	// check that the message corresponds to the current epoch
-	if b.dkgInstanceID != msg.DKGInstanceID {
-		return fmt.Errorf("wrong DKG instance. Got %s, want %s", msg.DKGInstanceID, b.dkgInstanceID)
-	}
-	// check that the message's origin is not out of range
-	if msg.Orig >= uint64(len(b.committee)) {
-		return fmt.Errorf("origin id out of range: %d", msg.Orig)
-	}
-	return nil
-}
-
-// prepareBroadcastMessage creates BroadcastDKGMessage with a signature from the
-// node's staking key.
-func (b *Broker) prepareBroadcastMessage(data []byte) (messages.BroadcastDKGMessage, error) {
-	dkgMessage := messages.NewDKGMessage(
-		b.myIndex,
-		data,
-		b.dkgInstanceID,
-	)
-	sigData := fingerprint.Fingerprint(dkgMessage)
-	signature, err := b.me.Sign(sigData[:], NewDKGMessageHasher())
-	if err != nil {
-		return messages.BroadcastDKGMessage{}, err
-	}
-	bcastMsg := messages.BroadcastDKGMessage{
-		DKGMessage: dkgMessage,
-		Signature:  signature,
-	}
-	return bcastMsg, nil
-}
-
-// verifyBroadcastMessage checks the DKG instance and Origin of a broadcast
-// message, as well as the signature against the staking key of the sender.
-func (b *Broker) verifyBroadcastMessage(bcastMsg messages.BroadcastDKGMessage) (bool, error) {
-	err := b.checkMessageInstanceAndOrigin(bcastMsg.DKGMessage)
-	if err != nil {
-		return false, err
-	}
-	origin := b.committee[bcastMsg.Orig]
-	signData := fingerprint.Fingerprint(bcastMsg.DKGMessage)
-	return origin.StakingPubKey.Verify(
-		bcastMsg.Signature,
-		signData[:],
-		NewDKGMessageHasher(),
-	)
+func (s *testConfigSourcerWithConfig) StopCount() uint32 {
+	return atomic.LoadUint32(&s.stopCount)
 }

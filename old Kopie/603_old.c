@@ -1,5 +1,4 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
-      !compose_strv_contains_prefix (opt_metadata_strings, "version="))
  *
  * Copyright (C) 2013,2014 Colin Walters <walters@verbum.org>
  *
@@ -802,6 +801,7 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
   if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
+      !compose_strv_contains_prefix (opt_metadata_strings, "version="))
                        &rootfs_fd, error))
     goto out;
 

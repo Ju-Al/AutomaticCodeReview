@@ -1,5 +1,4 @@
 import { Node } from 'tiptap';
-          default: 'p'
 import {
   setBlockType
 } from 'tiptap-commands';
@@ -10,8 +9,8 @@ export default class Styles extends Node {
     return 'styles';
   }
 
+          default: 'p'
   get schema() {
-    const defaultStyle = (this.options.styles && this.options.styles[0]) || {
       tag: 'p'
     };
     return {

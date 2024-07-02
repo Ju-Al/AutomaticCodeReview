@@ -1,6 +1,4 @@
 // Package account stores and tracks accounts within a Bytom Core.
-// DeleteAccount deletes the account's ID or alias matching accountInfo.
-func (m *Manager) DeleteAccount(aliasOrID string) (err error) {
 package account
 
 import (
@@ -180,7 +178,8 @@ func (m *Manager) CreateAddress(accountID string, change bool) (cp *CtrlProgram,
 	return m.createAddress(account, change)
 }
 
-// DeleteAccount deletes the account's ID or alias matching account ID.
+// DeleteAccount deletes the account's ID or alias matching accountInfo.
+func (m *Manager) DeleteAccount(aliasOrID string) (err error) {
 func (m *Manager) DeleteAccount(accountID string) (err error) {
 	account := &Account{}
 	if account, err = m.FindByID(accountID); err != nil {

@@ -769,7 +769,6 @@ function harvestPlugins() {
     results = results.filter(function (filePath) {
       if (filePath.substring(0, 5) === 'tmp--') {
         return false;
-      } else if (filePath.substring(filePath.length - 2) != 'js') {
         //Skip unrelated/temp files
         return false;
       }

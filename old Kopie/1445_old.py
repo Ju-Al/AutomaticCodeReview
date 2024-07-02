@@ -1,5 +1,4 @@
 import numpy as np
-def get_adjacency_matrix(distance_df, sensor_ids, normalized_k=0.1):
     """
     :param distance_df: data frame with three columns: [from, to, distance].
     :param sensor_ids: list of sensor ids.

@@ -1,5 +1,4 @@
 /*
-      LOG.info("Received RoundChange Payload for a prior round.");
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -197,7 +196,7 @@ public class IbftBlockHeightManager {
 
     final MessageAge messageAge = determineAgeOfPayload(signedPayload.getPayload());
     if (messageAge == PRIOR_ROUND) {
-      LOG.info("Received RoundChange Payload for a prior round. targetRound={}", targetRound);
+      LOG.info("Received RoundChange Payload for a prior round.");
       return;
     }
 

@@ -1,5 +1,4 @@
 // Copyright 2019 Liquidata, Inc.
-		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -294,7 +293,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 			return 1
 		}
 
-		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.Operation != mvdata.UpdateOp && mvOpts.SchFile == "" {
+		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
 			cli.Println(color.RedString("Please specify schema file for .json tables."))
 			return 1
 		}

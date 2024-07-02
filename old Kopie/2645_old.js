@@ -1,5 +1,4 @@
 import {
-			let children = Children.map(props.children, child => (
 	setupScratch,
 	teardown,
 	serializeHtml
@@ -78,7 +77,7 @@ describe('Children', () => {
 
 	describe('.map', () => {
 		function Foo(props) {
-			let children = Children.map(props.children, child, context => (
+			let children = Children.map(props.children, child => (
 				<span>{child}</span>
 			));
 			return <div>{children}</div>;

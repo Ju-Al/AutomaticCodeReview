@@ -1,260 +1,118 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-	hndlr := func(m trojan.Message) {
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package pss_test
+package pss
 
 import (
 	"context"
-	"io/ioutil"
-	"reflect"
 	"sync"
-	"testing"
-	"time"
 
-	"github.com/ethersphere/bee/pkg/localstore"
 	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/pss"
-	"github.com/ethersphere/bee/pkg/pusher"
 	"github.com/ethersphere/bee/pkg/pushsync"
-	pushsyncmock "github.com/ethersphere/bee/pkg/pushsync/mock"
-	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"
 	"github.com/ethersphere/bee/pkg/tags"
-	mocktopology "github.com/ethersphere/bee/pkg/topology/mock"
 	"github.com/ethersphere/bee/pkg/trojan"
 )
 
-// Wrap the actual storer to intercept the modeSet that the pusher will call when a valid receipt is received
-type Store struct {
-	storage.Storer
-	modeSet   map[string]storage.ModeSet
-	modeSetMu *sync.Mutex
+// Pss is the top-level struct, which takes care of message sending
+type Pss struct {
+	pusher     pushsync.PushSyncer
+	tags       *tags.Tags
+	handlers   map[trojan.Topic]Handler
+	handlersMu sync.RWMutex
+	metrics    metrics
+	logger     logging.Logger
 }
 
-// TestTrojanChunkRetrieval creates a trojan chunk
-// mocks the localstore
-// calls pss.Send method and verifies it's properly stored
-func TestTrojanChunkRetrieval(t *testing.T) {
-	var err error
-	ctx := context.TODO()
-	testTags := tags.NewTags()
+type Options struct {
+	Logger     logging.Logger
+	PushSyncer pushsync.PushSyncer
+	Tags       *tags.Tags
+}
 
-	// create a mock pushsync service to push the chunk to its destination
-	var receipt *pushsync.Receipt
-	var storedChunk swarm.Chunk
-	pushSyncService := pushsyncmock.New(func(ctx context.Context, chunk swarm.Chunk) (*pushsync.Receipt, error) {
-		rcpt := &pushsync.Receipt{
-			Address: swarm.NewAddress(chunk.Address().Bytes()),
-		}
-		storedChunk = chunk
-		receipt = rcpt
-		return rcpt, nil
-	})
-
-	// create a option with WithBaseAddress
-	pss := pss.NewPss(pss.Options{logging.New(ioutil.Discard, 0), pushSyncService, testTags})
-
-	target := trojan.Target([]byte{1}) // arbitrary test target
-	targets := trojan.Targets([]trojan.Target{target})
-	payload := []byte("RECOVERY CHUNK")
-	topic := trojan.NewTopic("RECOVERY TOPIC")
-
-	// call Send to store trojan chunk in localstore
-	if _, err = pss.Send(ctx, targets, topic, payload); err != nil {
-		t.Fatal(err)
+// NewPss inits the Pss struct with the storer
+func NewPss(o Options) *Pss {
+	return &Pss{
+		pusher:   o.PushSyncer,
+		tags:     o.Tags,
+		handlers: make(map[trojan.Topic]Handler),
+		metrics:  newMetrics(),
+		logger:   o.Logger,
 	}
+}
 
-	// create a stored chunk artificially
+func (ps *Pss) WithPushSyncer(pushSyncer pushsync.PushSyncer) {
+	ps.pusher = pushSyncer
+}
+
+// Handler defines code to be executed upon reception of a trojan message
+type Handler func(context.Context, trojan.Message) error
+
+// Send constructs a padded message with topic and payload,
+// wraps it in a trojan chunk such that one of the targets is a prefix of the chunk address
+// uses push-sync to deliver message
+func (p *Pss) Send(ctx context.Context, targets trojan.Targets, topic trojan.Topic, payload []byte) (*tags.Tag, error) {
+	p.metrics.TotalMessagesSentCounter.Inc()
+
+	//construct Trojan Chunk
 	m, err := trojan.NewMessage(topic, payload)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	var tc swarm.Chunk
 	tc, err = m.Wrap(targets)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 
-	tag, err := tags.NewTags().Create("pss-chunks-tag", 1, false)
+	tag, err := p.tags.Create("pss-chunks-tag", 1, false)
 	if err != nil {
-		t.Fatal(err)
-	}
-	storedChunk = tc.WithTagID(tag.Uid)
-
-	// check if receipt is received
-	if receipt == nil {
-		t.Fatal("receipt not received")
+		return nil, err
 	}
 
-	if !reflect.DeepEqual(tc, storedChunk) {
-		t.Fatalf("trojan chunk created does not match sent chunk. got %s, want %s", storedChunk.Address().ByteString(), tc.Address().ByteString())
+	// push the chunk using push sync so that it reaches it destination in network
+	if _, err = p.pusher.PushChunkToClosest(ctx, tc.WithTagID(tag.Uid)); err != nil {
+		return nil, err
 	}
+
+	tag.Total = 1
+
+	return tag, nil
 }
 
-// TestPssMonitor creates a trojan chunk
-// mocks the localstore
-// calls pss.Send method
-// updates the tag state (Stored/Sent/Synced)
-// waits for the monitor to notify the changed state
-func TestPssMonitor(t *testing.T) {
-	var err error
-	ctx := context.TODO()
-	testTags := tags.NewTags()
+// Register allows the definition of a Handler func for a specific topic on the pss struct
+func (p *Pss) Register(topic trojan.Topic, hndlr Handler) {
+	p.handlersMu.Lock()
+	defer p.handlersMu.Unlock()
+	p.handlers[topic] = hndlr
+}
 
-	target := trojan.Target([]byte{1}) // arbitrary test target
-	targets := trojan.Targets([]trojan.Target{target})
-	payload := []byte("PSS CHUNK")
-	topic := trojan.NewTopic("PSS TOPIC")
-
-	// create a trigger  and a closestpeer
-	triggerPeer := swarm.MustParseHexAddress("6000000000000000000000000000000000000000000000000000000000000000")
-	closestPeer := swarm.MustParseHexAddress("f000000000000000000000000000000000000000000000000000000000000000")
-
-	pushSyncService := pushsyncmock.New(func(ctx context.Context, chunk swarm.Chunk) (*pushsync.Receipt, error) {
-		rcpt := &pushsync.Receipt{
-			Address: swarm.NewAddress(chunk.Address().Bytes()),
+// Deliver allows unwrapping a chunk as a trojan message and calling its handler func based on its topic
+func (p *Pss) Deliver(c swarm.Chunk) {
+	if trojan.IsPotential(c) {
+		ctx := context.Background()
+		m, _ := trojan.Unwrap(c) // if err occurs unwrapping, there will be no handler
+		h := p.GetHandler(m.Topic)
+		if h != nil {
+			p.logger.Debug("executing handler for trojan", "process", "global-pinning", "chunk", c.Address().ByteString())
+			return h(ctx, *m)
 		}
-		tt, err := testTags.Get(chunk.TagID())
-		if err != nil {
-			t.Fatal(err)
-		}
-		tt.Inc(tags.StateStored)
-		tt.Inc(tags.StateSent)
-		tt.Inc(tags.StateSynced)
-		return rcpt, nil
-	})
-
-	pss := pss.NewPss(pss.Options{logging.New(ioutil.Discard, 0), pushSyncService, testTags})
-
-	_, p, storer := createPusher(t, triggerPeer, pushSyncService, mocktopology.WithClosestPeer(closestPeer))
-	defer storer.Close()
-	defer p.Close()
-
-	var tag *tags.Tag
-	// call Send to store trojan chunk in localstore
-	if tag, err = pss.Send(ctx, targets, topic, payload); err != nil {
-		t.Fatal(err)
 	}
-
-	time.Sleep(1000 * time.Millisecond)
-
-	storeTags := testTags.All()
-	if len(storeTags) != 1 {
-		t.Fatalf("expected %d tags got %d", 1, len(storeTags))
-	}
-
-	if tag.Get(tags.StateStored) != 1 && tag.Get(tags.StateSent) != 1 && tag.Get(tags.StateSynced) != 1 {
-		t.Fatalf("Trojan Chunk expected to be Stored == %d, Sent == %d and Synced == %d", tag.Stored, tag.Sent, tag.Synced)
-	}
-
+	p.logger.Debug("chunk not trojan or no handler found", "process", "global-pinning", "chunk", c.Address().ByteString())
+	return nil
 }
 
-// TestRegister verifies that handler funcs are able to be registered correctly in pss
-func TestRegister(t *testing.T) {
-	testTags := tags.NewTags()
-	pss := pss.NewPss(pss.Options{logging.New(ioutil.Discard, 0), nil, testTags})
-
-	// pss handlers should be empty
-	if len(pss.GetAllHandlers()) != 0 {
-		t.Fatalf("expected pss handlers to contain 0 elements, but its length is %d", len(pss.GetAllHandlers()))
-	}
-
-	handlerVerifier := 0 // test variable to check handler funcs are correctly retrieved
-
-	// register first handler
-	testHandler := func(ctx context.Context, m trojan.Message) error {
-		handlerVerifier = 1
-		return nil
-	}
-	testTopic := trojan.NewTopic("FIRST_HANDLER")
-	pss.Register(testTopic, testHandler)
-
-	if len(pss.GetAllHandlers()) != 1 {
-		t.Fatalf("expected pss handlers to contain 1 element, but its length is %d", len(pss.GetAllHandlers()))
-	}
-
-	registeredHandler := pss.GetHandler(testTopic)
-	registeredHandler(context.Background(), trojan.Message{}) // call handler to verify the retrieved func is correct
-
-	if handlerVerifier != 1 {
-		t.Fatalf("unexpected handler retrieved, verifier variable should be 1 but is %d instead", handlerVerifier)
-	}
-
-	// register second handler
-	testHandler = func(ctx context.Context, m trojan.Message) error {
-		handlerVerifier = 2
-		return nil
-	}
-	testTopic = trojan.NewTopic("SECOND_HANDLER")
-	pss.Register(testTopic, testHandler)
-	if len(pss.GetAllHandlers()) != 2 {
-		t.Fatalf("expected pss handlers to contain 2 elements, but its length is %d", len(pss.GetAllHandlers()))
-	}
-
-	registeredHandler = pss.GetHandler(testTopic)
-	registeredHandler(context.Background(), trojan.Message{}) // call handler to verify the retrieved func is correct
-
-	if handlerVerifier != 2 {
-		t.Fatalf("unexpected handler retrieved, verifier variable should be 2 but is %d instead", handlerVerifier)
-	}
+// GetHandler returns the Handler func registered in pss for the given topic
+func (p *Pss) GetHandler(topic trojan.Topic) Handler {
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+	return p.handlers[topic]
 }
 
-// TestDeliver verifies that registering a handler on pss for a given topic and then submitting a trojan chunk with said topic to it
-// results in the execution of the expected handler func
-func TestDeliver(t *testing.T) {
-	testTags := tags.NewTags()
-	pss := pss.NewPss(pss.Options{logging.New(ioutil.Discard, 0), nil, testTags})
-
-	// test message
-	topic := trojan.NewTopic("footopic")
-	payload := []byte("foopayload")
-	msg, err := trojan.NewMessage(topic, payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// test chunk
-	target := trojan.Target([]byte{1}) // arbitrary test target
-	targets := trojan.Targets([]trojan.Target{target})
-	c, err := msg.Wrap(targets)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// trojan chunk has its type set through the validator called by the store, so this needs to be simulated
-	c.WithType(swarm.ContentAddressed)
-
-	// create and register handler
-	var tt trojan.Topic // test variable to check handler func was correctly called
-	hndlr := func(ctx context.Context, m trojan.Message) error {
-		tt = m.Topic // copy the message topic to the test variable
-		return nil
-	}
-	pss.Register(topic, hndlr)
-
-	// call pss Deliver on chunk and verify test topic variable value changes
-	pss.Deliver(c)
-	if tt != msg.Topic {
-		t.Fatalf("unexpected result for pss Deliver func, expected test variable to have a value of %v but is %v instead", msg.Topic, tt)
-	}
-}
-
-func createPusher(t *testing.T, addr swarm.Address, pushSyncService pushsync.PushSyncer, mockOpts ...mocktopology.Option) (*tags.Tags, *pusher.Service, *Store) {
-	t.Helper()
-	logger := logging.New(ioutil.Discard, 0)
-	storer, err := localstore.New("", addr.Bytes(), nil, logger)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	mtags := tags.NewTags()
-	pusherStorer := &Store{
-		Storer:    storer,
-		modeSet:   make(map[string]storage.ModeSet),
-		modeSetMu: &sync.Mutex{},
-	}
-	peerSuggester := mocktopology.NewTopologyDriver(mockOpts...)
-
-	pusherService := pusher.New(pusher.Options{Storer: pusherStorer, PushSyncer: pushSyncService, Tagger: mtags, PeerSuggester: peerSuggester, Logger: logger})
-	return mtags, pusherService, pusherStorer
+// GetAllHandlers returns all the Handler funcs registered in pss
+func (p *Pss) GetAllHandlers() map[trojan.Topic]Handler {
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+	return p.handlers
 }

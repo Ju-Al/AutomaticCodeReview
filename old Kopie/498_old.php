@@ -1,8 +1,4 @@
 <?php
-<script type="text/javascript">
-	var key_input = document.getElementById('key');
-	key_input && key_input.focus();
-</script>
 /**
  * Confirms that the activation key that is sent in an email after a user signs
  * up for a new site matches the key for that user and then displays confirmation.
@@ -216,6 +212,10 @@ $blog_details = get_blog_details();
 	?>
 	</div>
 </div>
+<script type="text/javascript">
+	var key_input = document.getElementById('key');
+	key_input && key_input.focus();
+</script>
 <?php
 
 wp_print_inline_script_tag( "var key_input = document.getElementById('key');\nkey_input && key_input.focus();" );

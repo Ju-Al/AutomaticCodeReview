@@ -89,7 +89,6 @@ public class OutboxImpl implements Outbox, SnapshotOutbox {
 
     @Override
     public final boolean offer(int[] ordinals, @Nonnull Object item) {
-        if (numRemainingInBatch <= 0) {
             return false;
         }
         numRemainingInBatch--;

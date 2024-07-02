@@ -1,9 +1,4 @@
 /*
-    final long walogMaxSize = aconf.getAsBytes(Property.TSERV_WALOG_MAX_SIZE);
-    final long walogMaxAge = aconf.getTimeInMillis(Property.TSERV_WALOG_MAX_AGE);
-    if (minBlockSize != 0 && minBlockSize > walogMaxSize) {
-          + walogMaxSize + " but hdfs minimum block size is " + minBlockSize
-          + ". Either increase the " + Property.TSERV_WALOG_MAX_SIZE
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -305,7 +300,11 @@ public class TabletServer extends AbstractServer {
           }
         }), 5000, 5000, TimeUnit.MILLISECONDS);
 
-    @SuppressWarnings("deprecation")
+    final long walogMaxSize = aconf.getAsBytes(Property.TSERV_WALOG_MAX_SIZE);
+    if (minBlockSize != 0 && minBlockSize > walogMaxSize) {
+          + walogMaxSize + " but hdfs minimum block size is " + minBlockSize
+          + ". Either increase the " + Property.TSERV_WALOG_MAX_SIZE
+    final long walogMaxAge = aconf.getTimeInMillis(Property.TSERV_WALOG_MAX_AGE);
     final long walMaxSize =
         aconf.getAsBytes(aconf.resolve(Property.TSERV_WAL_MAX_SIZE, Property.TSERV_WALOG_MAX_SIZE));
     @SuppressWarnings("deprecation")

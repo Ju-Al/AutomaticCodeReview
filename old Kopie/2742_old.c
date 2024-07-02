@@ -1,5 +1,4 @@
 /* Copyright (C) 2002-2012 by George Williams */
-        fread(buf, 0x72, 1, fntarray[i]);
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -1034,6 +1033,7 @@ return( false );
         fputc(0x00, fon);
 
     /* FONTDIR resource */
+        fread(buf, 0x72, 1, fntarray[i]);
     lputshort(fon,num_files);
 
     for(res = first_res, i = 0; i < num_files; i++, res++) {

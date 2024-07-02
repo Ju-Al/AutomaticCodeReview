@@ -1,89 +1,58 @@
-/*
-	UPDATE(600L, "Update", "Update an Entity");
- * Copyright 2018 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package org.springframework.cloud.dataflow.core;
+package fr.free.nrw.commons.data;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+    private static final int DATABASE_VERSION = 13;
+import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
+import android.database.sqlite.SQLiteOpenHelper;
 
-import org.springframework.util.Assert;
+import fr.free.nrw.commons.bookmarks.locations.BookmarkLocationsDao;
+import fr.free.nrw.commons.bookmarks.pictures.BookmarkPicturesDao;
+import fr.free.nrw.commons.category.CategoryDao;
+import fr.free.nrw.commons.explore.recentsearches.RecentSearchesDao;
 
-/**
- * Represent the various actions possible for Auditing events.
- *
- * @author Gunnar Hillert
- *
- */
-@JsonFormat(shape = JsonFormat.Shape.OBJECT)
-public enum AuditActionType {
+public class DBOpenHelper  extends SQLiteOpenHelper {
 
-	CREATE(100L, "Create", "Create an Entity"),
-	DELETE(200L, "Delete", "Delete an Entity"),
-	DEPLOY(300L, "Deploy", "Deploy an Entity"),
-	ROLLBACK(400L, "Rollback", "Rollback an Entity"),
-	UNDEPLOY(500L, "Undeploy", "Undeploy an Entity"),
-	UPDATE(600L, "Update", "Update an Entity"),
-	LOGIN_SUCCESS(700L, "Login", "Successful login");
+    private static final String DATABASE_NAME = "commons.db";
+    private static final int DATABASE_VERSION = 15;
+    public static final String CONTRIBUTIONS_TABLE = "contributions";
+    private final String DROP_TABLE_STATEMENT="DROP TABLE IF EXISTS %s";
 
-	private Long id;
+    /**
+     * Do not use directly - @Inject an instance where it's needed and let
+     * dependency injection take care of managing this as a singleton.
+     */
+    public DBOpenHelper(Context context) {
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+    }
 
-	private String name;
+    @Override
+    public void onCreate(SQLiteDatabase sqLiteDatabase) {
+        CategoryDao.Table.onCreate(sqLiteDatabase);
+        BookmarkPicturesDao.Table.onCreate(sqLiteDatabase);
+        BookmarkLocationsDao.Table.onCreate(sqLiteDatabase);
+        RecentSearchesDao.Table.onCreate(sqLiteDatabase);
+    }
 
-	private String description;
+    @Override
+    public void onUpgrade(SQLiteDatabase sqLiteDatabase, int from, int to) {
+        CategoryDao.Table.onUpdate(sqLiteDatabase, from, to);
+        BookmarkPicturesDao.Table.onUpdate(sqLiteDatabase, from, to);
+        BookmarkLocationsDao.Table.onUpdate(sqLiteDatabase, from, to);
+        RecentSearchesDao.Table.onUpdate(sqLiteDatabase, from, to);
+        deleteTable(sqLiteDatabase,CONTRIBUTIONS_TABLE);
+    }
 
-	/**
-	 * Constructor.
-	 *
-	 */
-	private AuditActionType(final Long id, final String name, final String description) {
-		this.id = id;
-		this.name = name;
-		this.description = description;
-	}
-
-	public Long getId() {
-		return id;
-	}
-
-	public String getName() {
-		return name;
-	}
-
-	public String getKey() {
-		return name();
-	}
-
-	public String getDescription() {
-		return description;
-	}
-
-	public String getNameWithDescription() {
-		return name + " (" + description + ")";
-	}
-
-	public static AuditActionType fromId(Long auditActionTypeId) {
-
-		Assert.notNull(auditActionTypeId, "Parameter auditActionTypeId, must not be null.");
-
-		for (AuditActionType auditActionType : AuditActionType.values()) {
-			if (auditActionType.getId().equals(auditActionTypeId)) {
-				return auditActionType;
-			}
-		}
-
-		return null;
-	}
-
+    /**
+     * Delete table in the given db
+     * @param db
+     * @param tableName
+     */
+    public void deleteTable(SQLiteDatabase db, String tableName) {
+        try {
+            db.execSQL(String.format(DROP_TABLE_STATEMENT, tableName));
+        } catch (SQLiteException e) {
+            e.printStackTrace();
+        }
+    }
 }

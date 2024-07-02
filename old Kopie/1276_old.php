@@ -1,10 +1,10 @@
 <?php
 /**
- * Generic Link Resolver Driver
+ * Resolver driver plugin manager
  *
  * PHP version 7
  *
- * Copyright (C) The National Library of Finland 2018
+ * Copyright (C) Villanova University 2010.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
@@ -21,59 +21,82 @@
  *
  * @category VuFind
  * @package  Resolver_Drivers
- * @author   Ere Maijala <ere.maijala@helsinki.fi>
+ * @author   Demian Katz <demian.katz@villanova.edu>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
  * @link     https://vufind.org/wiki/development:plugins:link_resolver_drivers Wiki
  */
 namespace VuFind\Resolver\Driver;
 
 /**
- * Generic Link Resolver Driver
+ * Resolver driver plugin manager
  *
  * @category VuFind
  * @package  Resolver_Drivers
- * @author   Ere Maijala <ere.maijala@helsinki.fi>
+ * @author   Demian Katz <demian.katz@villanova.edu>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
  * @link     https://vufind.org/wiki/development:plugins:link_resolver_drivers Wiki
  */
-class Generic extends AbstractBase
+class PluginManager extends \VuFind\ServiceManager\AbstractPluginManager
 {
+    /**
+     * Default plugin aliases.
+     *
+     * @var array
+     */
+    protected $aliases = [
+        '360link' => 'VuFind\Resolver\Driver\Threesixtylink',
+        'demo' => 'VuFind\Resolver\Driver\Demo',
+        'ezb' => 'VuFind\Resolver\Driver\Ezb',
+        'sfx' => 'VuFind\Resolver\Driver\Sfx',
+        'redi' => 'VuFind\Resolver\Driver\Redi',
+        'threesixtylink' => 'VuFind\Resolver\Driver\Threesixtylink',
+        'other' => 'VuFind\Resolver\Driver\Generic',
+    ];
+
+    /**
+     * Default plugin factories.
+     *
+     * @var array
+     */
+    protected $factories = [
+        'VuFind\Resolver\Driver\Threesixtylink' =>
+            'VuFind\Resolver\Driver\DriverWithHttpClientFactory',
+        'VuFind\Resolver\Driver\Demo' =>
+            'Zend\ServiceManager\Factory\InvokableFactory',            'VuFind\Resolver\Driver\AbstractBaseFactory',
+        'VuFind\Resolver\Driver\Ezb' =>
+            'VuFind\Resolver\Driver\DriverWithHttpClientFactory',
+        'VuFind\Resolver\Driver\Sfx' =>
+            'VuFind\Resolver\Driver\DriverWithHttpClientFactory',
+        'VuFind\Resolver\Driver\Redi' =>
+            'VuFind\Resolver\Driver\DriverWithHttpClientFactory',
+        'VuFind\Resolver\Driver\Generic' =>
+            'VuFind\Resolver\Driver\AbstractBaseFactory',
+    ];
+
     /**
      * Constructor
      *
-     * @param string $baseUrl Base URL for link resolver
+     * Make sure plugins are properly initialized.
+     *
+     * @param mixed $configOrContainerInstance Configuration or container instance
+     * @param array $v3config                  If $configOrContainerInstance is a
+     * container, this value will be passed to the parent constructor.
      */
-    public function __construct($baseUrl)
-    {
-        parent::__construct($baseUrl);
+    public function __construct($configOrContainerInstance = null,
+        array $v3config = []
+    ) {
+        $this->addAbstractFactory('VuFind\Resolver\Driver\PluginFactory');
+        parent::__construct($configOrContainerInstance, $v3config);
     }
 
     /**
-     * Fetch Links
+     * Return the name of the base class or interface that plug-ins must conform
+     * to.
      *
-     * Fetches a set of links corresponding to an OpenURL
-     *
-     * @param string $openURL openURL (url-encoded)
-     *
-     * @return string         raw data returned by resolver
+     * @return string
      */
-    public function fetchLinks($openURL)
+    protected function getExpectedInterface()
     {
-        return '';
-    }
-
-    /**
-     * Parse Links
-     *
-     * Parses an XML file returned by a link resolver
-     * and converts it to a standardised format for display
-     *
-     * @param string $url Data returned by fetchLinks
-     *
-     * @return array         Array of values
-     */
-    public function parseLinks($url)
-    {
-        return [];
+        return 'VuFind\Resolver\Driver\DriverInterface';
     }
 }

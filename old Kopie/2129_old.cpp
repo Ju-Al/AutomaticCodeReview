@@ -1,21 +1,4 @@
 /**
-bool FileSystemAccess::getValidPath(const string *originalPath, string &tempPath) const
-    if (!originalPath || originalPath->empty())
-    {
-        return false;
-    }
-    string separator = getPathSeparator();
-    for (size_t i = 0; i < separator.size(); i++)
-    {
-        size_t pos = originalPath->rfind(separator[i]);
-        if (pos != std::string::npos && pos != originalPath->size() - 1)
-        {
-            tempPath = originalPath->substr(0, pos + 1);
-            return true;
-        }
-    }
-    return false;
-}
  * @file filesystem.cpp
  * @brief Generic host filesystem access interfaces
  *
@@ -258,7 +241,23 @@ bool FileSystemAccess::islocalfscompatible(unsigned char c, bool isEscape, FileS
     }
 }
 
-FileSystemType FileSystemAccess::getFilesystemType(const LocalPath& dstPath) const
+    if (!originalPath || originalPath->empty())
+    {
+        return false;
+    }
+    string separator = getPathSeparator();
+    for (size_t i = 0; i < separator.size(); i++)
+    {
+        size_t pos = originalPath->rfind(separator[i]);
+        if (pos != std::string::npos && pos != originalPath->size() - 1)
+        {
+            tempPath = originalPath->substr(0, pos + 1);
+            return true;
+        }
+    }
+    return false;
+}
+bool FileSystemAccess::getValidPath(const string *originalPath, string &tempPath) const
 {
     // first get "valid" path (no last leaf name, in case it is not in the FS?)
     LocalPath validPath = dstPath;

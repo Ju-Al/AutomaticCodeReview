@@ -1,5 +1,4 @@
 package containerd
-	path = "%OPT%"
 
 import (
 	"context"
@@ -29,7 +28,7 @@ const (
 	maxMsgSize = 1024 * 1024 * 16
 	configToml = `
 [plugins.opt]
-  path = "%OPT%"
+	path = "%OPT%"
 [plugins.cri]
   stream_server_address = "%NODE%"
   stream_server_port = "10010"

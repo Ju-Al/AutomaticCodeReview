@@ -275,7 +275,6 @@ export class VirtualTransactionList extends Component<Props> {
     </div>
   );
 
-  onListScroll = (
     context: ScrollContextType,
     { scrollTop }: { scrollTop: number }
   ) => {

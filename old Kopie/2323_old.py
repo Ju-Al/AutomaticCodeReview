@@ -1,42 +1,4 @@
 # Microsoft Azure Linux Agent
-                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-    def update_extensions_goal_state(self, wait_for_new_goal_state=True):
-            # TODO: Remove this retry loop when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-            for _ in range(3):
-                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.info("Fetching extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, etag)
-                def get_vm_settings():
-                    url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
-                    if etag is not None:
-                        headers['if-none-match'] = etag
-                    return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
-                try:
-                    vm_settings, response_headers = get_vm_settings()
-                except ResourceGoneError:
-                    self.update_host_plugin_from_goal_state()
-                    vm_settings, response_headers = get_vm_settings()
-
-                # on error, fetch() logs the original exception and returns None as content
-                if vm_settings is None:
-                    raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
-
-                # The response includes an etag if and only if the VM settings change.
-                response_etag = None
-                for h in response_headers:
-                    if h[0].lower() == 'etag':
-                        response_etag = h[1]
-                        break
-
-                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.info("Fetched extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
-
-                # TODO: Remove the if clause when removing the retry loop (the else clause should remain)
-                if response_etag is None and wait_for_new_goal_state:
-                    logger.info("Expected a new goal state; will retry after a short delay...")
-                    time.sleep(5)
-                else:
-                    logger.info("Fetched new extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
-                    self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -826,8 +788,45 @@ class WireClient(object):
                 new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
 
             if new_goal_state is not None:
-                self._goal_state = new_goal_state
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
+    def update_extensions_goal_state(self, wait_for_new_goal_state=True):
+            # TODO: Remove this retry loop when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+            for _ in range(3):
+                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+                logger.info("Fetching extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, etag)
+                def get_vm_settings():
+                    url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
+                    if etag is not None:
+                        headers['if-none-match'] = etag
+                    return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+                try:
+                    vm_settings, response_headers = get_vm_settings()
+                except ResourceGoneError:
+                    self.update_host_plugin_from_goal_state()
+                    vm_settings, response_headers = get_vm_settings()
+
+                # on error, fetch() logs the original exception and returns None as content
+                if vm_settings is None:
+                    raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
+
+                # The response includes an etag if and only if the VM settings change.
+                response_etag = None
+                for h in response_headers:
+                    if h[0].lower() == 'etag':
+                        response_etag = h[1]
+                        break
+
+                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+                logger.info("Fetched extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
+
+                # TODO: Remove the if clause when removing the retry loop (the else clause should remain)
+                if response_etag is None and wait_for_new_goal_state:
+                    logger.info("Expected a new goal state; will retry after a short delay...")
+                    time.sleep(5)
+                else:
+                    logger.info("Fetched new extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
+                    self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+                self._goal_state = new_goal_state
                 if conf.get_fetch_vm_settings():
                     self.update_extensions_goal_state()
                 self._save_goal_state()

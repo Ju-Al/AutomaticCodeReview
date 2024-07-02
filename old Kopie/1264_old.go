@@ -1,5 +1,4 @@
 // Copyright The OpenTelemetry Authors
-			s.Shutdown()
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,7 +142,7 @@ func (p *TracerProvider) UnregisterSpanProcessor(s SpanProcessor) {
 	}
 	if stopOnce != nil {
 		stopOnce.state.Do(func() {
-			_ = s.Shutdown(context.Background())
+			s.Shutdown()
 		})
 	}
 	if len(new) > 1 {

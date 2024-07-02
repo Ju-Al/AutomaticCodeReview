@@ -1,144 +1,72 @@
-package process
+package schema
 
 import (
-	"bytes"
 	"fmt"
-	"os"
-	"path"
-	"strconv"
+	"net"
 	"strings"
-
-	linuxproc "github.com/c9s/goprocinfo/linux"
-
-	"github.com/weaveworks/scope/common/fs"
-	"github.com/weaveworks/scope/probe/host"
 )
 
-type walker struct {
-	procRoot string
+// ACLRule represent one ACL rule "weak" coerces a single value into string slice.
+type ACLRule struct {
+	Domains   []string `mapstructure:"domain,weak"`
+	Policy    string   `mapstructure:"policy"`
+	Subjects  []string `mapstructure:"subject,weak"`
+	Networks  []string `mapstructure:"networks"`
+	Resources []string `mapstructure:"resources"`
 }
 
-// NewWalker creates a new process Walker.
-func NewWalker(procRoot string) Walker {
-	return &walker{procRoot: procRoot}
+// IsPolicyValid check if policy is valid.
+func IsPolicyValid(policy string) bool {
+	return policy == "deny" || policy == "one_factor" || policy == "two_factor" || policy == "bypass"
 }
 
-func readStats(path string) (ppid, threads int, jiffies, rss uint64, err error) {
-	var (
-		buf                               []byte
-		userJiffies, sysJiffies, rssPages uint64
-	)
-	buf, err = fs.ReadFile(path)
-	if err != nil {
-		return
-	}
-	splits := strings.Fields(string(buf))
-	if len(splits) < 24 {
-		err = fmt.Errorf("Invalid /proc/PID/stat")
-		return
-	}
-	ppid, err = strconv.Atoi(splits[3])
-	if err != nil {
-		return
-	}
-	threads, err = strconv.Atoi(splits[19])
-	if err != nil {
-		return
-	}
-	userJiffies, err = strconv.ParseUint(splits[13], 10, 64)
-	if err != nil {
-		return
-	}
-	sysJiffies, err = strconv.ParseUint(splits[14], 10, 64)
-	if err != nil {
-		return
-	}
-	jiffies = userJiffies + sysJiffies
-	rssPages, err = strconv.ParseUint(splits[23], 10, 64)
-	if err != nil {
-		return
-	}
-	rss = rssPages * uint64(os.Getpagesize())
-	return
+// IsSubjectValid check if a subject is valid.
+func IsSubjectValid(subject string) bool {
+	return subject == "" || strings.HasPrefix(subject, "user:") || strings.HasPrefix(subject, "group:")
 }
 
-func readFileDescriptors(path string) (int, error) {
-	names, err := fs.ReadDirNames(path)
-	return len(names), err
+// IsNetworkValid check if a network is valid.
+func IsNetworkValid(network string) bool {
+	_, _, err := net.ParseCIDR(network)
+	return err == nil
 }
 
-// Walk walks the supplied directory (expecting it to look like /proc)
-// and marshalls the files into instances of Process, which it then
-// passes one-by-one to the supplied function. Walk is only made public
-// so that is can be tested.
-func (w *walker) Walk(f func(Process, Process)) error {
-	dirEntries, err := fs.ReadDirNames(w.procRoot)
-	if err != nil {
-		return err
+// Validate validate an ACL Rule.
+func (r *ACLRule) Validate(validator *StructValidator) {
+	if len(r.Domains) == 0 {
+		validator.Push(fmt.Errorf("Domain must be provided"))
 	}
 
-	for _, filename := range dirEntries {
-		pid, err := strconv.Atoi(filename)
-		if err != nil {
-			continue
+	if !IsPolicyValid(r.Policy) {
+		validator.Push(fmt.Errorf("A policy must either be 'deny', 'two_factor', 'one_factor' or 'bypass'"))
+	}
+
+	for i, subject := range r.Subjects {
+		if !IsSubjectValid(subject) {
+			validator.Push(fmt.Errorf("Subject %d must start with 'user:' or 'group:'", i))
 		}
-
-		ppid, threads, jiffies, rss, err := readStats(path.Join(w.procRoot, filename, "stat"))
-		if err != nil {
-			continue
-		}
-
-		fileDescriptors, err := readFileDescriptors(path.Join(w.procRoot, filename, "fd"))
-		if err != nil {
-			continue
-		}
-
-		cmdline, name := "", "(unknown)"
-		if cmdlineBuf, err := cachedReadFile(path.Join(w.procRoot, filename, "cmdline")); err == nil {
-			// like proc, treat name as the first element of command line
-			i := bytes.IndexByte(cmdlineBuf, '\000')
-			if i == -1 {
-				i = len(cmdlineBuf)
-			}
-			name = string(cmdlineBuf[:i])
-			cmdlineBuf = bytes.Replace(cmdlineBuf, []byte{'\000'}, []byte{' '}, -1)
-			cmdline = string(cmdlineBuf)
-		}
-
-		f(Process{
-			PID:             pid,
-			PPID:            ppid,
-			Name:            name,
-			Cmdline:         cmdline,
-			Threads:         threads,
-			Jiffies:         jiffies,
-			RSSBytes:        rss,
-			FileDescriptors: fileDescriptors,
-		}, Process{})
 	}
 
-	return nil
+	for i, network := range r.Networks {
+		if !IsNetworkValid(network) {
+			validator.Push(fmt.Errorf("Network %d must be a valid CIDR", i))
+		}
+	}
 }
 
-var previousStat = linuxproc.CPUStat{}
+// AccessControlConfiguration represents the configuration related to ACLs.
+type AccessControlConfiguration struct {
+	DefaultPolicy string    `mapstructure:"default_policy"`
+	Rules         []ACLRule `mapstructure:"rules"`
+}
 
-// GetDeltaTotalJiffies returns the number of jiffies that have passed since it
-// was last called.  In that respect, it is side-effect-ful.
-func GetDeltaTotalJiffies() (uint64, float64, error) {
-	stat, err := linuxproc.ReadStat(host.ProcStat)
-	if err != nil {
-		return 0, 0.0, err
+// Validate validate the access control configuration.
+func (acc *AccessControlConfiguration) Validate(validator *StructValidator) {
+	if acc.DefaultPolicy == "" {
+		acc.DefaultPolicy = defaultPolicy
 	}
 
-	var (
-		currentStat = stat.CPUStatAll
-		prevTotal   = (previousStat.Idle + previousStat.IOWait + previousStat.User +
-			previousStat.Nice + previousStat.System + previousStat.IRQ +
-			previousStat.SoftIRQ + previousStat.Steal)
-		currentTotal = (currentStat.Idle + currentStat.IOWait + currentStat.User +
-			currentStat.Nice + currentStat.System + currentStat.IRQ +
-			currentStat.SoftIRQ + currentStat.Steal)
-	)
-	previousStat = currentStat
-	return currentTotal - prevTotal, float64(len(stat.CPUStats)) * 100., nil
+	if !IsPolicyValid(acc.DefaultPolicy) {
+		validator.Push(fmt.Errorf("'default_policy' must either be 'deny', 'two_factor', 'one_factor' or 'bypass'"))
+	}
 }

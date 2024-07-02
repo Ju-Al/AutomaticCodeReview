@@ -1,5 +1,4 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-                errString = strprintf("too many unconfirmed ancestors [limit: %u]", limitAncestorCount);
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2015-2017 The Bitcoin Unlimited developers
 // Distributed under the MIT software license, see the accompanying
@@ -312,7 +311,7 @@ bool CTxMemPool::_CalculateMemPoolAncestors(const CTxMemPoolEntry &entry,
             // removed +1 from test below as per BU: Fix use after free bug
             if (parentHashes.size() + setAncestors.size() > limitAncestorCount)
             {
-                errString = strprintf("too many unconfirmed ancestors (%u+%u) [limit: %u]", parentHashes.size(),
+                errString = strprintf("too many unconfirmed ancestors [limit: %u]", limitAncestorCount);
                     setAncestors.size(), limitAncestorCount);
                 return false;
             }

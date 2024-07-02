@@ -90,7 +90,6 @@ func (in *MeshService) GetClusters() (clusters []Cluster, errVal error) {
 	return
 }
 
-func (in *MeshService) IsMultiClusterEnabled() (isEnabled bool, returnErr error) {
 	isEnabled = false
 	cfg := config.Get()
 

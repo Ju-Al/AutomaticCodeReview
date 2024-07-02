@@ -1,30 +1,15 @@
 <?php
-		$dir = $this->filesystem->dirlist( $dir_path );
-
-		if ( false === $dir ) {
-			Logger::error(
-				'Could not get the directory contents.',
-				[
-					self::LOGGER_CONTEXT,
-					'path' => $dir_path,
-				]
-			);
-			return false;
-		}
-
-		if ( ! $dir ) {
-			return [];
-		}
-namespace WP_Rocket\Addon\Busting;
+namespace WP_Rocket\Busting;
 
 use WP_Rocket\Logger\Logger;
 
-trait FileBustingTrait {
+trait File_Busting {
 	/**
 	 * Saves the content of the URL to bust to the busting file if it doesn't exist yet.
 	 *
 	 * @since  3.2.4
 	 * @access public
+	 * @author Grégory Viguier
 	 *
 	 * @param  string $url URL to get the content from.
 	 * @return bool
@@ -83,7 +68,7 @@ trait FileBustingTrait {
 			return true;
 		}
 
-		return $this->delete_files( array_keys( $files ) );
+		return $this->delete_files( \array_keys( $files ) );
 	}
 
 	/** ----------------------------------------------------------------------------------------- */
@@ -100,7 +85,7 @@ trait FileBustingTrait {
 	 * @return string|bool Version of the file. False if the file does not exist.
 	 */
 	protected function get_busting_version() {
-		if ( ! empty( $this->file_version ) ) {
+		if ( isset( $this->file_version ) ) {
 			return $this->file_version;
 		}
 
@@ -112,7 +97,7 @@ trait FileBustingTrait {
 		}
 
 		// Since we're not supposed to have several files, return the first one.
-		$this->file_version = reset( $files );
+		$this->file_version = \reset( $files );
 
 		return $this->file_version;
 	}
@@ -145,7 +130,7 @@ trait FileBustingTrait {
 		}
 
 		$pattern = '/' . sprintf(
-			$this->escape_file_name( $this->filename_pattern ),
+			$this->escape_file_name( $this->file_name_pattern ),
 			'([a-f0-9]{32}|local)'
 		) . '/';
 
@@ -153,12 +138,10 @@ trait FileBustingTrait {
 
 		$list = [];
 		foreach ( $entries as $entry ) {
-			$filename = $entry->getFilename();
+			$file_name = $entry->getFilename();
 
-			preg_match( $pattern, $filename, $file_details_match );
-			if ( ! empty( $file_details_match[1] ) ) {
-				$list[ $filename ] = $file_details_match[1];
-			}
+			preg_match( $pattern, $file_name, $file_details_match );
+			$list[ $file_name ] = $file_details_match[1];
 		}
 
 		return $list;
@@ -207,7 +190,7 @@ trait FileBustingTrait {
 		$filename = $this->get_busting_file_name( $version );
 
 		// This filter is documented in inc/functions/minify.php.
-		return apply_filters( 'rocket_js_url', $this->busting_url . $filename );
+		return \apply_filters( 'rocket_js_url', $this->busting_url . $filename );
 	}
 
 	/**
@@ -225,7 +208,7 @@ trait FileBustingTrait {
 			return false;
 		}
 
-		return sprintf( $this->filename_pattern, $version );
+		return sprintf( $this->file_name_pattern, $version );
 	}
 
 	/**
@@ -253,11 +236,11 @@ trait FileBustingTrait {
 	 * @since  3.2.4
 	 * @access private
 	 *
-	 * @param  string $filename_pattern The file name.
+	 * @param  string $file_name_pattern The file name.
 	 * @return string
 	 */
-	private function escape_file_name( $filename_pattern ) {
-		return preg_quote( $filename_pattern, '/' );
+	private function escape_file_name( $file_name_pattern ) {
+		return preg_quote( $file_name_pattern, '/' );
 	}
 
 	/**
@@ -321,7 +304,7 @@ trait FileBustingTrait {
 			return false;
 		}
 
-		if ( ! rocket_put_content( $file_path, $file_contents ) ) {
+		if ( ! \rocket_put_content( $file_path, $file_contents ) ) {
 			Logger::error(
 				'Contents could not be written into file.',
 				[
@@ -346,7 +329,7 @@ trait FileBustingTrait {
 	 */
 	private function is_busting_dir_writable() {
 		if ( ! $this->filesystem->exists( $this->busting_path ) ) {
-			rocket_mkdir_p( $this->busting_path );
+			\rocket_mkdir_p( $this->busting_path );
 		}
 
 		if ( ! $this->filesystem->is_writable( $this->busting_path ) ) {
@@ -451,7 +434,7 @@ trait FileBustingTrait {
 	private function get_remote_contents( $url ) {
 		try {
 			$response = wp_remote_get( $url );
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			Logger::error(
 				'Remote file could not be fetched.',
 				[
@@ -463,7 +446,7 @@ trait FileBustingTrait {
 			return false;
 		}
 
-		if ( is_wp_error( $response ) ) {
+		if ( \is_wp_error( $response ) ) {
 			Logger::error(
 				'Remote file could not be fetched.',
 				[
@@ -475,7 +458,7 @@ trait FileBustingTrait {
 			return false;
 		}
 
-		$contents = wp_remote_retrieve_body( $response );
+		$contents = \wp_remote_retrieve_body( $response );
 
 		if ( ! $contents ) {
 			Logger::error(

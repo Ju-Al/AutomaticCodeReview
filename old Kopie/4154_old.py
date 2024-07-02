@@ -1,5 +1,4 @@
 #
-            code.putln('%s = %s->%s;' % (cname, Naming.cur_scope_cname, save_cname))
 #   Parse tree nodes for expressions
 #
 
@@ -9935,7 +9934,7 @@ class YieldExprNode(ExprNode):
 
         code.put_label(label_name)
         for cname, save_cname, type in saved:
-            save_cname = "%s->%s" % (Naming.cur_scope_cname, save_cname)
+            code.putln('%s = %s->%s;' % (cname, Naming.cur_scope_cname, save_cname))
             if type.is_cpp_class:
                 code.globalstate.use_utility_code(
                     UtilityCode.load_cached("MoveIfSupported", "CppSupport.cpp"))

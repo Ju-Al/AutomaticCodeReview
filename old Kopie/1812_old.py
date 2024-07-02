@@ -274,7 +274,6 @@ def test_translation_not_in_terminology_saved(
 
     assert not reset_term_translation_mock.called
 
-
 @pytest.mark.django_db
 def test_machinery_sources_values(locale_a, entity_a):
     """

@@ -1,6 +1,4 @@
 import random
-        payload = {'message': 'Hello World from the BigchainDB'}
-        transaction = Transaction.create([self.me], [self.me], payload=payload)
 import math
 import collections
 from time import time
@@ -559,7 +557,8 @@ class Bigchain(object):
     def prepare_genesis_block(self):
         """Prepare a genesis block."""
 
-        metadata = {'message': 'Hello World from the BigchainDB'}
+        payload = {'message': 'Hello World from the BigchainDB'}
+        transaction = Transaction.create([self.me], [self.me], payload=payload)
         # TODO: When updating the BDBC lib, change `payload` to `metadata`
         transaction = Transaction.create([self.me], [self.me],
                                          metadata=metadata)

@@ -2735,7 +2735,6 @@ function wp_maybe_inline_styles() {
 	}
 }
 
-/**
  * Make URLs relative to the WordPress installation.
  *
  * @since 5.8.2

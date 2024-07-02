@@ -1,8 +1,4 @@
 /**
-    if(requestMap.find(client->restag) == requestMap.end()) return;
-    MegaRequestPrivate* request = requestMap.at(client->restag);
-    if(!request || ((request->getType() != MegaRequest::TYPE_GET_ATTR_USER) &&
-                    (request->getType() != MegaRequest::TYPE_SET_ATTR_USER))) return;
  * @file megaapi_impl.cpp
  * @brief Private implementation of the intermediate layer for the MEGA C++ SDK.
  *
@@ -14025,7 +14021,10 @@ void MegaApiImpl::putua_result(error e)
 void MegaApiImpl::getua_result(error e)
 {
     MegaError megaError(e);
-    MegaRequestPrivate* request = NULL;
+    if(requestMap.find(client->restag) == requestMap.end()) return;
+    MegaRequestPrivate* request = requestMap.at(client->restag);
+    if(!request || ((request->getType() != MegaRequest::TYPE_GET_ATTR_USER) &&
+                    (request->getType() != MegaRequest::TYPE_SET_ATTR_USER))) return;
     auto it = requestMap.find(client->restag);
     if (it == requestMap.end() || !(request = it->second)
            || (request->getType() != MegaRequest::TYPE_GET_ATTR_USER && request->getType() != MegaRequest::TYPE_SET_ATTR_USER)

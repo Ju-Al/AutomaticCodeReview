@@ -1,5 +1,4 @@
 package medco
-
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/dedis/cothority/log"

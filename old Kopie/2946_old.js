@@ -1,5 +1,4 @@
 /**
-        this.enableSyncCorrection = true; // User setting to disable sync during playback.
  * Module that manages the playback of SyncPlay.
  * @module components/syncPlay/core/PlaybackCore
  */
@@ -22,7 +21,7 @@ class PlaybackCore {
         this.playbackDiffMillis = 0; // Used for stats and remote time sync.
         this.syncAttempts = 0;
         this.lastSyncTime = new Date();
-        // User setting to disable sync during playback.
+        this.enableSyncCorrection = true; // User setting to disable sync during playback.
         this.enableSyncCorrection = !(browser.mobile || browser.iOS);
 
         this.playerIsBuffering = false;

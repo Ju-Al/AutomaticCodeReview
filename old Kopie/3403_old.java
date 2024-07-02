@@ -1,8 +1,5 @@
 package openfoodfacts.github.scrachx.openfood.views;
 
-        boolean show = prefs.getBoolean(identifier, true);
-        if (!show) {
-            return;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.TypedArray;
@@ -60,7 +57,9 @@ public class TipBox extends LinearLayout {
         });
 
         prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-        //Tooltip should be shown the first time the actual content is available
+        boolean show = prefs.getBoolean(identifier, true);
+        if (!show) {
+            return;
         boolean canDisplayImmediately = attributes.getBoolean(R.styleable.TipBox_shouldDisplayImmediately, false);
         tipMessage.setTextColor(attributes.getColor(R.styleable.TipBox_textColor, getResources().getColor(R.color.md_black_1000)));
         int toolTipColor = attributes.getColor(R.styleable.TipBox_backgroundColor,

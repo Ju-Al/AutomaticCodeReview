@@ -1,7 +1,4 @@
 package funcs
-		"file":            "return the data in the file located at the given path",
-		"filebase64":      "return the data in the file located at the given path after base64 decoding it",
-		"fileexists":      "indicate if a file exists at the given path",
 
 func Docs() map[string]string {
 	return map[string]string{
@@ -22,7 +19,9 @@ func Docs() map[string]string {
 		"dirname":         "return all except the last component of the string interpreted as a filesystem path",
 		"distinct":        "removes any duplicate elements from a list",
 		"element":         "return the value at given numeric index in the list",
-		"file":            "return the data in the file located at the given path. This can be paired with the `${path.app}` variable to get a path relative to your app folder, i.e. `filebase64(\"${path.app}/file.txt\") string`\"",
+		"file":            "return the data in the file located at the given path",
+		"filebase64":      "return the data in the file located at the given path after base64 decoding it",
+		"fileexists":      "indicate if a file exists at the given path",
 		"filebase64":      "return the data in the file located at the given path after base64 decoding it. This can be paired with the `${path.app}` variable to get a path relative to your app folder, i.e. `filebase64(\"${path.app}/file.txt\") string`",
 		"fileexists":      "indicate if a file exists at the given path. This can be paired with the `${path.app}` variable to get a path relative to your app folder, i.e. `filebase64(\"${path.app}/file.txt\") string`\"",
 		"fileset":         "gather a list of paths that match the given pattern under the given directory",

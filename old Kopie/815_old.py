@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.lib.utils import deprecate
 import logging
 from itertools import groupby
 

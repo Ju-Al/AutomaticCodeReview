@@ -1,5 +1,4 @@
 package smoketest
-			doQuery(t, addQuery(4))
 
 import (
 	"bytes"
@@ -112,7 +111,7 @@ func TestSystemLimits(t *testing.T) {
 				7. set limit to -1
 				8. update to 4 (should work)
 			*/
-			t.Parallel()
+			doQuery(t, addQuery(4))
 			h := harness.NewHarness(t, sql, "limit-configuration")
 			defer h.Close()
 

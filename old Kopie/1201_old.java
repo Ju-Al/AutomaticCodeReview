@@ -1,7 +1,5 @@
 package com.getcapacitor.plugin;
 
-    Map<String, Object> data = new HashMap<String, Object>();
-    JSObject remoteMessageData = new JSObject();
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
@@ -165,6 +163,7 @@ public class PushNotifications extends Plugin {
 
   public void fireNotification(RemoteMessage remoteMessage) {
     JSObject remoteMessageData = new JSObject();
+    Map<String, Object> data = new HashMap<String, Object>();
 
     JSObject data = new JSObject();
     for (String key : remoteMessage.getData().keySet()) {

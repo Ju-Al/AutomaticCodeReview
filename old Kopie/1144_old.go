@@ -1,5 +1,4 @@
 /*
-func (f *DefaultPortForwarder) ForwardPorts(method string, url *url.URL, opts Options) error {
 Copyright (c) 2019 the Octant contributors. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
@@ -56,7 +55,7 @@ type ForwardedPort struct {
 	Remote uint16
 }
 
-func (f *DefaultPortForwarder) ForwardPorts(alerter *action.Alerter, method string, url *url.URL, opts Options) error {
+func (f *DefaultPortForwarder) ForwardPorts(method string, url *url.URL, opts Options) error {
 	transport, upgrader, err := spdy.RoundTripperFor(opts.Config)
 	if err != nil {
 		return err

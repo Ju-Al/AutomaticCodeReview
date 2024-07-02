@@ -1,5 +1,4 @@
 define(['playbackManager', 'dom', 'inputManager', 'datetime', 'itemHelper', 'mediaInfo', 'focusManager', 'imageLoader', 'scrollHelper', 'events', 'connectionManager', 'browser', 'globalize', 'apphost', 'layoutManager', 'userSettings', 'keyboardnavigation', 'scrollStyles', 'emby-slider', 'paper-icon-button-light', 'css!assets/css/videoosd'], function (playbackManager, dom, inputManager, datetime, itemHelper, mediaInfo, focusManager, imageLoader, scrollHelper, events, connectionManager, browser, globalize, appHost, layoutManager, userSettings, keyboardnavigation) {
-                    appRouter.showDirect('/');
     'use strict';
 
     function seriesImageUrl(item, options) {
@@ -1342,7 +1341,7 @@ define(['playbackManager', 'dom', 'inputManager', 'datetime', 'itemHelper', 'med
                 });
             } catch (e) {
                 require(['appRouter'], function(appRouter) {
-                    window.location.href = 'index.html';
+                    appRouter.showDirect('/');
                 });
             }
         });

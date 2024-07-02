@@ -1,9 +1,4 @@
 /*
-      ConfigurationCopy cc = new ConfigurationCopy(DefaultConfiguration.getInstance());
-      if (null != opts.tableConfig) {
-        opts.tableConfig.forEach(cc::set);
-      }
-
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -185,8 +180,12 @@ class RFileScanner extends ScannerOptions implements Scanner {
           "Set authorizations and specified not to use system iterators");
     }
 
+      ConfigurationCopy cc = new ConfigurationCopy(DefaultConfiguration.getInstance());
+      if (null != opts.tableConfig) {
+        opts.tableConfig.forEach(cc::set);
+      }
+
     this.opts = opts;
-    if (null != opts.tableConfig && opts.tableConfig.size() > 0) {
       ConfigurationCopy tableCC = new ConfigurationCopy(DefaultConfiguration.getInstance());
       opts.tableConfig.forEach(tableCC::set);
       this.tableConf = tableCC;

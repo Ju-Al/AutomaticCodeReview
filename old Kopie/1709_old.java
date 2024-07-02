@@ -1,5 +1,4 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-    return baseDir.delete();
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
@@ -146,7 +145,7 @@ public class TemporaryFilesystem {
   }
 
   public boolean deleteBaseDir() {
-    boolean wasDeleted = baseDir.delete();
+    return baseDir.delete();
     if (wasDeleted) {
       Runtime.getRuntime().removeShutdownHook(shutdownHook);
     }

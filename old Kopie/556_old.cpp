@@ -1,5 +1,4 @@
 // Copyright 2017 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-    if (tinyxml2::XMLError::XML_SUCCESS != xmlDoc.LoadFile(filename.c_str()))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2541,7 +2540,7 @@ XMLP_ret XMLParser::loadXML(const std::string& filename, up_base_node_t& root)
     }
 
     tinyxml2::XMLDocument xmlDoc;
-    tinyxml2::XMLError load_error = xmlDoc.LoadFile(filename.c_str());
+    if (tinyxml2::XMLError::XML_SUCCESS != xmlDoc.LoadFile(filename.c_str()))
     if (tinyxml2::XMLError::XML_SUCCESS != load_error)
     {
         logError(XMLPARSER, "Error loading '" << filename << "'. Error code: " << load_error);

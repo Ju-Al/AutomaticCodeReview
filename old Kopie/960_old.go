@@ -114,7 +114,6 @@ func NewSyncPool(ctx context.Context, targets config.ReadonlyTargets, opts ...po
 		options:            options,
 		deliverClient:      deliverClient,
 		deliverRetryClient: retryClient,
-		// Set the deliver timeout slightly less than the total timeout for each event.
 		deliverTimeout: options.TimeoutPerEvent - (5 * time.Second),
 	}
 	return p, nil

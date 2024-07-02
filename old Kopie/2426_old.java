@@ -1,6 +1,5 @@
 package com.fsck.k9.notification;
 
-        newMailNotifications.addNewMailNotification(account, message, previousUnreadMessageCount);
 
 import android.content.Context;
 import android.net.Uri;
@@ -104,7 +103,7 @@ public class NotificationController {
     }
 
     public void addNewMailNotification(Account account, LocalMessage message, int previousUnreadMessageCount) {
-        boolean hasHighPriority = false;
+        newMailNotifications.addNewMailNotification(account, message, previousUnreadMessageCount);
 
         for (String iter : message.getHeader("X-Priority")) {
             if (iter.contains(context.getString(R.string.x_priority)))

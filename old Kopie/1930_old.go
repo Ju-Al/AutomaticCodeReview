@@ -1,5 +1,4 @@
 // Copyright 2019 Dolthub, Inc.
-		if err != nil {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,7 +150,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 	var autoVal types.Value
 	if schema.HasAutoIncrement(newSch) {
 		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		// In the case that the alter table is adding a new auto increment value, then it will return a
+		if err != nil {
 		// ErrorNoAutoIncrement value. We can ignore that.
 		if err != nil && !errors.Is(err, doltdb.ErrNoAutoIncrementValue) {
 			return nil, err

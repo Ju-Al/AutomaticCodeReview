@@ -1,45 +1,4 @@
 /******************************************************************************
-    const double gamma = f_gamma.getValue();
-    const double beta = f_beta.getValue();
-    const double rM = f_rayleighMass.getValue();
-    const double rK = f_rayleighStiffness.getValue();
-    const bool verbose  = f_verbose.getValue();
-
-    /* This integration scheme is based on the following equations:
-    *
-    *   $x_{t+h} = x_t + h v_t + h^2/2 ( (1-2\beta) a_t + 2\beta a_{t+h} )$
-    *   $v_{t+h} = v_t + h ( (1-\gamma) a_t + \gamma a_{t+h} )$
-    *
-    * Applied to a mechanical system where $ M a_t + (r_M M + r_K K) v_t + K x_t
-    = f_ext$, we need to solve the following system:
-    *
-    *   $ M a_{t+h} + (r_M M + r_K K) v_{t+h} + K x_{t+h} = f_ext $
-    *   $ M a_{t+h} + (r_M M + r_K K) ( v_t + h ( (1-\gamma) a_t + \gamma a_{t+h} ) ) + K ( x_t + h v_t + h^2/2 ( (1-2\beta) a_t + 2\beta a_{t+h} ) ) =
-    f_ext $
-    *   $ ( M + h \gamma (r_M M + r_K K) + h^2 \beta K ) a_{t+h} = f_ext - (r_M
-    M + r_K K) ( v_t + h (1-\gamma) a_t ) - K ( x_t + h v_t + h^2/2 (1-2\beta) a_t )
-    $
-    *   $ ( (1 + h \gamma r_M) M + (h^2 \beta + h \gamma r_K) K ) a_{t+h} =
-    f_ext - (r_M M + r_K K) v_t - K x_t - (r_M M + r_K K) ( h (1-\gamma) a_t ) - K (
-    h v_t + h^2/2 (1-2\beta) a_t) $
-    *   $ ( (1 + h \gamma r_M) M + (h^2 \beta + h \gamma r_K) K ) a_{t+h} = Ma_t
-    - (r_M M + r_K K) ( h (1-\gamma) a_t ) - K ( h v_t + h^2/2 (1-2\beta) a_t ) $
-    *
-    * The current implementation first computes $a_t$ directly (as in the
-    explicit solvers), then solves the previous system to compute $a_{t+dt}$, and
-    finally computes the new position and velocity.
-    */
-
-    //we need to initialize a_t and to store it as a vecId to be used in the resolution of this solver (using as well old xand v). Once we have a_{t+dt} we
-//can update the new x and v.
-
-    if(cpt ==0)
-    if( verbose )
-     {
-        msg_info() << "NewmarkImplicitSolver, aPrevious = " << a;
-        msg_info() << "NewmarkImplicitSolver, xPrevious = " << pos;
-        msg_info() << "NewmarkImplicitSolver, vPrevious = " << vel;
-    }
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -111,8 +70,47 @@ void NewmarkImplicitSolver::solve(const core::ExecParams* params, SReal dt, sofa
 
     // dx is no longer allocated by default (but it will be deleted automatically by the mechanical objects)
     MultiVecDeriv dx(&vop, core::VecDerivId::dx()); dx.realloc(&vop, !d_threadSafeVisitor.getValue(), true);
+    const double gamma = f_gamma.getValue();
+    const double beta = f_beta.getValue();
+    const double rM = f_rayleighMass.getValue();
+    const double rK = f_rayleighStiffness.getValue();
+    const bool verbose  = f_verbose.getValue();
 
+    /* This integration scheme is based on the following equations:
+    *
+    *   $x_{t+h} = x_t + h v_t + h^2/2 ( (1-2\beta) a_t + 2\beta a_{t+h} )$
+    *   $v_{t+h} = v_t + h ( (1-\gamma) a_t + \gamma a_{t+h} )$
+    *
+    * Applied to a mechanical system where $ M a_t + (r_M M + r_K K) v_t + K x_t
+    = f_ext$, we need to solve the following system:
+    *
+    *   $ M a_{t+h} + (r_M M + r_K K) v_{t+h} + K x_{t+h} = f_ext $
+    *   $ M a_{t+h} + (r_M M + r_K K) ( v_t + h ( (1-\gamma) a_t + \gamma a_{t+h} ) ) + K ( x_t + h v_t + h^2/2 ( (1-2\beta) a_t + 2\beta a_{t+h} ) ) =
+    f_ext $
+    *   $ ( M + h \gamma (r_M M + r_K K) + h^2 \beta K ) a_{t+h} = f_ext - (r_M
+    M + r_K K) ( v_t + h (1-\gamma) a_t ) - K ( x_t + h v_t + h^2/2 (1-2\beta) a_t )
+    $
+    *   $ ( (1 + h \gamma r_M) M + (h^2 \beta + h \gamma r_K) K ) a_{t+h} =
+    f_ext - (r_M M + r_K K) v_t - K x_t - (r_M M + r_K K) ( h (1-\gamma) a_t ) - K (
+    h v_t + h^2/2 (1-2\beta) a_t) $
+    *   $ ( (1 + h \gamma r_M) M + (h^2 \beta + h \gamma r_K) K ) a_{t+h} = Ma_t
+    - (r_M M + r_K K) ( h (1-\gamma) a_t ) - K ( h v_t + h^2/2 (1-2\beta) a_t ) $
+    *
+    * The current implementation first computes $a_t$ directly (as in the
+    explicit solvers), then solves the previous system to compute $a_{t+dt}$, and
+    finally computes the new position and velocity.
+    */
 
+    //we need to initialize a_t and to store it as a vecId to be used in the resolution of this solver (using as well old xand v). Once we have a_{t+dt} we
+
+    if(cpt ==0)
+    if( verbose )
+     {
+        msg_info() << "NewmarkImplicitSolver, aPrevious = " << a;
+        msg_info() << "NewmarkImplicitSolver, xPrevious = " << pos;
+        msg_info() << "NewmarkImplicitSolver, vPrevious = " << vel;
+    }
+//can update the new x and v.
     const SReal h = dt;
     const double gamma = d_gamma.getValue();
     const double beta = d_beta.getValue();

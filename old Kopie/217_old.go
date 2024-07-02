@@ -2,72 +2,163 @@ package password
 
 import (
 	"context"
-	"fmt"
+	"testing"
 
+	"github.com/hashicorp/watchtower/internal/auth/password/store"
 	"github.com/hashicorp/watchtower/internal/db"
-	"github.com/hashicorp/watchtower/internal/oplog"
+	"github.com/hashicorp/watchtower/internal/iam"
+	"github.com/jinzhu/gorm"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// CreateAuthMethod inserts m into the repository and returns a new
-// AuthMethod containing the auth method's PublicId. m is not changed. m must
-// contain a valid ScopeId. m must not contain a PublicId. The PublicId is
-// generated and assigned by this method.
-//
-//
-// Both m.Name and m.Description are optional. If m.Name is set, it must be
-// unique within m.ScopeId.
-func (r *Repository) CreateAuthMethod(ctx context.Context, m *AuthMethod, opt ...Option) (*AuthMethod, error) {
-	if m == nil {
-		return nil, fmt.Errorf("create: password auth method: %w", db.ErrNilParameter)
-	}
-	if m.AuthMethod == nil {
-		return nil, fmt.Errorf("create: password auth method: embedded AuthMethod: %w", db.ErrNilParameter)
-	}
-	if m.ScopeId == "" {
-		return nil, fmt.Errorf("create: password auth method: no scope id: %w", db.ErrInvalidParameter)
-	}
-	if m.PublicId != "" {
-		return nil, fmt.Errorf("create: password auth method: public id not empty: %w", db.ErrInvalidParameter)
-	}
-	m = m.clone()
+func testAuthMethods(t *testing.T, conn *gorm.DB, count int) []*AuthMethod {
+	t.Helper()
+	assert, require := assert.New(t), require.New(t)
+	w := db.New(conn)
+	org, _ := iam.TestScopes(t, conn)
+	var auts []*AuthMethod
+	for i := 0; i < count; i++ {
+		cat, err := NewAuthMethod(org.GetPublicId())
+		assert.NoError(err)
+		require.NotNil(cat)
+		id, err := newAuthMethodId()
+		assert.NoError(err)
+		require.NotEmpty(id)
+		cat.PublicId = id
 
-	id, err := newAuthMethodId()
-	if err != nil {
-		return nil, fmt.Errorf("create: password auth method: %w", err)
-	}
-	m.PublicId = id
+		conf := NewArgon2Configuration()
+		require.NotNil(conf)
+		conf.PublicId, err = newArgon2ConfigurationId()
+		require.NoError(err)
+		conf.PasswordMethodId = cat.PublicId
+		cat.PasswordConfId = conf.PublicId
 
-	opts := getOpts(opt...)
-	c, ok := opts.withConfig.(*Argon2Configuration)
-	if !ok {
-		return nil, fmt.Errorf("create: password auth method: unknown configuration: %w", db.ErrInvalidParameter)
+		ctx := context.Background()
+		_, err2 := w.DoTx(ctx, db.StdRetryCnt, db.ExpBackoff{},
+			func(_ db.Reader, iw db.Writer) error {
+				if err := iw.Create(ctx, conf); err != nil {
+					t.Log(err)
+					return err
+				}
+				return iw.Create(ctx, cat)
+			},
+		)
+
+		require.NoError(err2)
+		auts = append(auts, cat)
+	}
+	return auts
+}
+
+func TestAuthMethod_New(t *testing.T) {
+	conn, _ := db.TestSetup(t, "postgres")
+
+	w := db.New(conn)
+
+	type args struct {
+		scopeId string
+		opts    []Option
 	}
 
-	c.PublicId, err = newArgon2ConfigurationId()
-	if err != nil {
-		return nil, fmt.Errorf("create: password auth method: %w", err)
-	}
-	m.PasswordConfId, c.PasswordMethodId = c.PublicId, m.PublicId
-
-	var newAuthMethod *AuthMethod
-	var newArgon2Conf *Argon2Configuration
-	_, err = r.writer.DoTx(ctx, db.StdRetryCnt, db.ExpBackoff{},
-		func(_ db.Reader, w db.Writer) error {
-			newArgon2Conf = c.clone()
-			if err := w.Create(ctx, newArgon2Conf, db.WithOplog(r.wrapper, c.oplog(oplog.OpType_OP_TYPE_CREATE))); err != nil {
-				return err
-			}
-			newAuthMethod = m.clone()
-			return w.Create(ctx, newAuthMethod, db.WithOplog(r.wrapper, m.oplog(oplog.OpType_OP_TYPE_CREATE)))
+	var tests = []struct {
+		name    string
+		args    args
+		want    *AuthMethod
+		wantErr bool
+	}{
+		{
+			name: "valid-no-options",
+			args: args{},
+			want: &AuthMethod{
+				AuthMethod: &store.AuthMethod{
+					MinUserNameLength: 5,
+					MinPasswordLength: 8,
+				},
+			},
 		},
-	)
-
-	if err != nil {
-		if db.IsUniqueError(err) {
-			return nil, fmt.Errorf("create: password auth method: in scope: %s: name %s already exists: %w",
-				m.ScopeId, m.Name, db.ErrNotUnique)
-		}
-		return nil, fmt.Errorf("create: password auth method: in scope: %s: %w", m.ScopeId, err)
+		{
+			name: "valid-with-name",
+			args: args{
+				opts: []Option{
+					WithName("test-name"),
+				},
+			},
+			want: &AuthMethod{
+				AuthMethod: &store.AuthMethod{
+					Name:              "test-name",
+					MinUserNameLength: 5,
+					MinPasswordLength: 8,
+				},
+			},
+		},
+		{
+			name: "valid-with-description",
+			args: args{
+				opts: []Option{
+					WithDescription("test-description"),
+				},
+			},
+			want: &AuthMethod{
+				AuthMethod: &store.AuthMethod{
+					Description:       "test-description",
+					MinUserNameLength: 5,
+					MinPasswordLength: 8,
+				},
+			},
+		},
 	}
-	return newAuthMethod, nil
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			assert, require := assert.New(t), require.New(t)
+			org, _ := iam.TestScopes(t, conn)
+			got, err := NewAuthMethod(org.GetPublicId(), tt.args.opts...)
+			if tt.wantErr {
+				assert.Error(err)
+				require.Nil(got)
+				return
+			}
+			require.NoError(err)
+			require.NotNil(got)
+
+			tt.want.ScopeId = org.GetPublicId()
+
+			assert.Emptyf(got.PublicId, "PublicId set")
+			assert.Equal(tt.want, got)
+
+			id, err := newAuthMethodId()
+			assert.NoError(err)
+
+			tt.want.PublicId = id
+			got.PublicId = id
+
+			conn.LogMode(true)
+			require.NotNil(conf)
+			conf.PublicId, err = newArgon2ConfigurationId()
+			require.NoError(err)
+			conf.PasswordMethodId = got.PublicId
+			got.PasswordConfId = conf.PublicId
+
+			ctx := context.Background()
+			_, err2 := w.DoTx(ctx, db.StdRetryCnt, db.ExpBackoff{},
+				func(_ db.Reader, iw db.Writer) error {
+					if err := iw.Create(ctx, conf); err != nil {
+						t.Log(err)
+						return err
+					}
+					return iw.Create(ctx, got)
+				},
+			)
+			assert.NoError(err2)
+		})
+	}
+
+	t.Run("blank-scopeId", func(t *testing.T) {
+		assert, require := assert.New(t), require.New(t)
+		got, err := NewAuthMethod("")
+		assert.Error(err)
+		require.Nil(got)
+	})
 }

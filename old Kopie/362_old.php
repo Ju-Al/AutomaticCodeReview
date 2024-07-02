@@ -1,8 +1,5 @@
 <?php
 
-                $ref = $i === 1 ? 'admin' : ['admin', 'henkie', 'jane_admin', 'tom_admin'][random_int(0, 3)];
-                /** @var User $author */
-                $author = $this->getReference($ref);
 declare(strict_types=1);
 
 namespace Bolt\DataFixtures;
@@ -64,7 +61,9 @@ class ContentFixtures extends BaseFixture implements DependentFixtureInterface
             $amount = $contentType['singleton'] ? 1 : (int) ($contentType['listing_records'] * 3);
 
             foreach (range(1, $amount) as $i) {
-                if ($i === 1) {
+                $ref = $i === 1 ? 'admin' : ['admin', 'henkie', 'jane_admin', 'tom_admin'][random_int(0, 3)];
+                /** @var User $author */
+                $author = $this->getReference($ref);
                     $author = $this->getReference('user_admin');
                 } else {
                     $author = $this->getRandomReference('user');

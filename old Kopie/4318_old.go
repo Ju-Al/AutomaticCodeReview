@@ -1,5 +1,4 @@
 // Copyright 2014 beego Author. All Rights Reserved.
-	if p.cfg.WebConfig.Session.SessionOn {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -779,7 +778,7 @@ func (p *ControllerRegister) serveHttp(ctx *beecontext.Context) {
 	}
 
 	// session init
-	currentSessionOn = BConfig.WebConfig.Session.SessionOn
+	if p.cfg.WebConfig.Session.SessionOn {
 	originRouterInfo, originFindRouter = p.FindRouter(ctx)
 	if originFindRouter {
 		if !currentSessionOn && originRouterInfo.sessionOn {

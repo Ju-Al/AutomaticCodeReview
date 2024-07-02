@@ -218,10 +218,6 @@ public class HomeFragment extends NavigationBaseFragment implements CustomTabAct
             if (actionBar != null) {
                 actionBar.setTitle(R.string.home_drawer);
             }
-        }
-
-    }
-
     @Override
     public void onCustomTabsConnected() {
 

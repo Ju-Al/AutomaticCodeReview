@@ -1,6 +1,5 @@
 // Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
-	return t.root.lookupPath(buffer, cidr)
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -94,7 +93,7 @@ func (t *V4Trie) Get(cidr V4CIDR) interface{} {
 }
 
 func (t *V4Trie) LookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
-	return t.root.lookupPath(buffer[:0], cidr)
+	return t.root.lookupPath(buffer, cidr)
 }
 
 // LPM does a longest prefix match on the trie

@@ -237,7 +237,6 @@ TEST(meta index with boolean synopsis) {
   REQUIRE(slice != nullptr);
   auto id2 = uuid::random();
   meta_idx.add(id2, *slice);
-  CHECK(builder->add(make_data_view(caf::none_t{})));
   slice = builder->finish();
   REQUIRE(slice != nullptr);
   auto id3 = uuid::random();

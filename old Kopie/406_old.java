@@ -48,7 +48,6 @@ class HiveClientPool extends ClientPool<HiveMetaStoreClient, TException> {
       return new HiveMetaStoreClient(hiveConf);
     } catch (MetaException e) {
       throw new RuntimeMetaException(e, "Failed to connect to Hive Metastore");
-    } catch (Throwable t) {
       if (t.getMessage().contains("Another instance of Derby may have already booted")) {
         LOG.error("Another instance of Derby may have already booted. This is happened when using" +
             " embedded metastore, which only supports one client at time. Please change to use " +

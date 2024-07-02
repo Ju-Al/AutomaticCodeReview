@@ -1,6 +1,4 @@
 /*
-        MPI_Barrier(m_data.mpi_comm);
-        dspaces_finalize();
  * Distributed under the OSI-approved Apache License, Version 2.0.  See
  * accompanying file Copyright.txt for details.
  *
@@ -96,7 +94,8 @@ void DataSpacesWriter::DoClose(const int transportIndex)
         !globals_adios_is_dataspaces_connected_from_both())
     {
         // fprintf(stderr, "Disconnecting writer via finalize \n");
-        // MPI_Barrier(m_data.mpi_comm);
+        MPI_Barrier(m_data.mpi_comm);
+        dspaces_finalize();
         // dspaces_finalize();
     }
     globals_adios_set_dataspaces_disconnected_from_writer();

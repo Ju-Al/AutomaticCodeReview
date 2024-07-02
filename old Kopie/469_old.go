@@ -1,7 +1,4 @@
 // Copyright 2016 Keybase Inc. All rights reserved.
-    /path/to/mountpoint
-    [-log-to-file] [-log-file=path/to/file]
-    /path/to/mountpoint
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -38,7 +35,9 @@ To run against remote KBFS servers:
     [-bserver=%s] [-mdserver=%s]
     [-runtime-dir=path/to/dir] [-label=label] [-mount-type=force]
     [-log-to-file] [-log-file=path/to/file]
-    -mount-from-service | /path/to/mountpoint
+    [-log-to-file] [-log-file=path/to/file]
+    /path/to/mountpoint
+    /path/to/mountpoint
 
 To run in a local testing environment:
   kbfsdokan [-debug] [-cpuprofile=path/to/dir]

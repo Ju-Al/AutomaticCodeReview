@@ -1,6 +1,4 @@
 // @flow
-        withdrawals,
-        withdrawals,
 import { observable, action, runInAction, computed } from 'mobx';
 import { get, map, find, findLast, filter } from 'lodash';
 import semver from 'semver';
@@ -1368,7 +1366,8 @@ export default class HardwareWalletsStore extends Store {
           ? HW_SHELLEY_CONFIG.NETWORK.MAINNET.protocolMagic
           : HW_SHELLEY_CONFIG.NETWORK.TESTNET.protocolMagic,
         certificates: certificatesData,
-        withdrawals: withdrawalsData,
+        withdrawals,
+        withdrawals,
         metadataHashHex,
         devicePath,
       });

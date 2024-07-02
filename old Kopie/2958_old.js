@@ -1,9 +1,5 @@
 import { enqueueRender } from './component';
-						subs.some(enqueueRender);
 
-				this.sub = c => {
-					subs.push(c);
-						subs.splice(subs.indexOf(c), 1);
 export let i = 0;
 
 export function createContext(defaultValue, contextId) {
@@ -44,7 +40,10 @@ export function createContext(defaultValue, contextId) {
 						// 	c.context[contextId] = _props.value;
 						// 	enqueueRender(c);
 						// });
-						subs.some(c => {
+				this.sub = c => {
+					subs.push(c);
+						subs.splice(subs.indexOf(c), 1);
+						subs.some(enqueueRender);
 							if (!c[1] || c[1](_props.value) !== c[1](this.props.value))
 								enqueueRender(c[0])
 						});

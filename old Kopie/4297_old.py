@@ -1,5 +1,4 @@
 import time
-        else:
 import logging
 import random, base64, struct
 import hashlib
@@ -38,7 +37,7 @@ class ApiWrapper(Datastore, PGoApi):
             ApiWrapper.DEVICE_ID = hashlib.md5(key_string + salt).hexdigest()
             with open(did_path, "w") as text_file:
                 text_file.write("{0}".format(salt))
-        elif self.config is not None and os.path.exists(did_path) == True:
+        else:
                 saltfromfile = open(did_path, 'r').read()
                 key_string = self.config.username
                 ApiWrapper.DEVICE_ID = hashlib.md5(key_string + saltfromfile).hexdigest()

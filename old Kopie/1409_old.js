@@ -47,7 +47,6 @@ export type WalletProps = {
   hasPassword: boolean,
   passwordUpdateDate: ?Date,
   syncState?: WalletSyncState,
-  isLegacy?: boolean,
 };
 
 export default class Wallet {

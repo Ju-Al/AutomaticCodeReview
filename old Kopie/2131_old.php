@@ -566,7 +566,6 @@ class Configuration implements ConfigurationInterface
             ->end();
     }
 
-    private function addMessengerSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()

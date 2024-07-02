@@ -1124,7 +1124,6 @@ func (s *HandlerSuite) TestPushJWTKeyUpstreamWithUpstreamAuthority() {
 		Kid:       "kid",
 		PkixBytes: pkixBytes,
 	}
-
 	upstreamAuthority, _, upDone := fakeupstreamauthority.Load(s.T(), fakeupstreamauthority.Config{
 		TrustDomain: trustDomainID,
 		PublishJWTKeyResponse: &upstreamauthority.PublishJWTKeyResponse{

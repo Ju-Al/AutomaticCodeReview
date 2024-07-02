@@ -1,5 +1,4 @@
 class PathsController < ApplicationController
-    @paths = Path.all
   def show
     @path = Path.friendly.find(params[:id])
     @courses = decorated_courses
@@ -7,7 +6,7 @@ class PathsController < ApplicationController
   end
 
   def index
-    # The filter on here is temporary until the path is removed and the students
+    @paths = Path.all
     #  enrolled in it are migrated to another path.
     @paths = Path.all.filter { |path| path.title != 'Front End Only' }
   end

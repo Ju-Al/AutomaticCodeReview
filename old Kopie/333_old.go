@@ -1,10 +1,5 @@
 package catalog
 
-	// Directory in which plugin config files
-	// reside
-	ConfigDir string
-
-	Log logrus.FieldLogger
 import (
 	"fmt"
 	"sync"
@@ -43,7 +38,11 @@ var (
 )
 
 type Config struct {
-	PluginsConfigs map[string]map[string]common.HclPluginConfig
+	// Directory in which plugin config files
+	// reside
+	ConfigDir string
+
+	Log logrus.FieldLogger
 	Log            logrus.FieldLogger
 }
 

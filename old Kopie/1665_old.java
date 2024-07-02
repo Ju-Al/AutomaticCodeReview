@@ -1,5 +1,4 @@
 package net.pms.dlna;
-
 import org.apache.commons.io.FileUtils;
 import org.junit.BeforeClass;
 import org.junit.Test;

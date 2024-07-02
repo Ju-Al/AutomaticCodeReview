@@ -1,5 +1,4 @@
 import argparse
-        '--options', nargs='+', action=DictAction, help='arguments in dict')
 import os
 
 import mmcv
@@ -55,7 +54,7 @@ def parse_args():
         help='tmp directory used for collecting results from multiple '
         'workers, available when gpu-collect is not specified')
     parser.add_argument(
-        '--options',
+        '--options', nargs='+', action=DictAction, help='arguments in dict')
         nargs='+',
         action=DictAction,
         help='custom options to overwrite config')

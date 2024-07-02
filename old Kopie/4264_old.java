@@ -137,7 +137,6 @@ public class CapConfig {
         html5mode = JSONUtils.getBoolean(configJSON, "server.html5mode", html5mode);
         serverUrl = JSONUtils.getString(configJSON, "server.url", null);
         hostname = JSONUtils.getString(configJSON, "server.hostname", hostname);
-        path = JSONUtils.getString(configJSON, "server.path", path);
         androidScheme = JSONUtils.getString(configJSON, "server.androidScheme", androidScheme);
         allowNavigation = JSONUtils.getArray(configJSON, "server.allowNavigation", null);
 

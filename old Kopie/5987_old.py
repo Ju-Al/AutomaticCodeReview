@@ -344,7 +344,6 @@ def netrc_authentication(url, authenticator):
 
     return True
 
-
 def choose_file(multiple: bool) -> List[str]:
     """Select file(s) for uploading, using external command defined in config.
 

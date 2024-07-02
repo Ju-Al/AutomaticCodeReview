@@ -139,7 +139,6 @@ class LoginController extends AbstractAuthenticationController
         }
         $currentDomain = $this->domainRepository->findOneByActiveRequest();
         $currentSite = $currentDomain !== null ? $currentDomain->getSite() : $this->siteRepository->findDefault();
-
         $trustedPropertiesToken = $this->mvcPropertyMappingConfigurationService->generateTrustedPropertiesToken([
             'lastVisitedNode',
             '__authentication[Neos][Flow][Security][Authentication][Token][UsernamePassword][username]',

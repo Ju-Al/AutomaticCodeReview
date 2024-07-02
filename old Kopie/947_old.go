@@ -288,7 +288,6 @@ func Generate() ([]string, error) {
 	return nil, nil
 }
 `
-
 	validSourceTmplWithCustomFlags = `package foo
 import "fmt"
 import "os"

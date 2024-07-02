@@ -1,7 +1,4 @@
 /******************************************************************************
-sofa::gui::qt::viewer::SofaViewer* RealGUI::getQtViewer()
-    sofa::gui::qt::viewer::SofaViewer* qtViewer = dynamic_cast<sofa::gui::qt::viewer::SofaViewer*>(mViewer);
-    return qtViewer ? qtViewer : nullptr;
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -1474,7 +1471,9 @@ BaseViewer* RealGUI::getViewer()
 
 //------------------------------------
 
-sofa::gui::qt::viewer::SofaViewer* RealGUI::getSofaViewer()
+    sofa::gui::qt::viewer::SofaViewer* qtViewer = dynamic_cast<sofa::gui::qt::viewer::SofaViewer*>(mViewer);
+    return qtViewer ? qtViewer : nullptr;
+sofa::gui::qt::viewer::SofaViewer* RealGUI::getQtViewer()
 {
     sofa::gui::qt::viewer::SofaViewer* sofaViewer = dynamic_cast<sofa::gui::qt::viewer::SofaViewer*>(mViewer);
     return sofaViewer ? sofaViewer : nullptr;

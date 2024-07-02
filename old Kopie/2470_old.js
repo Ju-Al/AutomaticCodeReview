@@ -1,5 +1,4 @@
 // @flow
-      inputNewValue === ''
 import React, { Component } from 'react';
 import { map } from 'lodash';
 import { NumericInput } from 'react-polymorph/lib/components/NumericInput';
@@ -44,7 +43,7 @@ export default class PinCode extends Component<Props> {
     if (
       !Object.prototype.hasOwnProperty.call(value, key) ||
       value[key] === '' ||
-      inputNewValue === '' ||
+      inputNewValue === ''
       (inputNewValue !== '' && inputNewValue.length === 1)
     ) {
       const newValue = value;

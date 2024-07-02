@@ -1,5 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-				if err := k.discovery.BroadcastPeers(ctx, connectedPeer, peer); err != nil {
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -874,8 +873,8 @@ func (k *Kad) Announce(ctx context.Context, peer swarm.Address, fullnode bool) e
 				// we continue here so we dont gossip
 				// about lightnodes to others.
 				continue
+				if err := k.discovery.BroadcastPeers(ctx, connectedPeer, peer); err != nil {
 			}
-			k.bgBroadcastWg.Add(1)
 			go func(connectedPeer swarm.Address) {
 				defer k.bgBroadcastWg.Done()
 

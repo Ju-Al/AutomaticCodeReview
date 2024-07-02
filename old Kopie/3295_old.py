@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-        return
-        return
-        return new#
+#
 #      Restriction Analysis Libraries.
 #      Copyright (C) 2004. Frederic Sohm.
 #
@@ -204,16 +202,18 @@ class FormattedSeq:
     def circularise(self):
         """Circularise sequence in place."""
         self.linear = False
+        return
 
     def linearise(self):
         """Linearise sequence in place."""
         self.linear = True
+        return
 
     def to_linear(self):
         """Make a new instance of sequence as linear."""
         new = self.__class__(self)
         new.linear = True
-
+        return new
     def to_circular(self):
         """Make a new instance of sequence as circular."""
         new = self.__class__(self)

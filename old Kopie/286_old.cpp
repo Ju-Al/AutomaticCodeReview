@@ -298,7 +298,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           VAST_IGNORE_UNUSED(e);
           VAST_DEBUG(self, "failed to lookup query at index:",
                      self->system().render(e));
-          shutdown(self, e);
         }
       );
     },

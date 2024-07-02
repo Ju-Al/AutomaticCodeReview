@@ -1,6 +1,4 @@
 /*
-    Joiner slash = Joiner.on("/");
-    Path nsPath = new Path(slash.join(warehouseLocation, slash.join(namespace.levels())));
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -114,7 +112,8 @@ public class HadoopCatalog extends BaseMetastoreCatalog implements Closeable, Su
     Preconditions.checkArgument(namespace.levels().length >= 1,
         "Missing database in table identifier: %s", namespace);
 
-    Path nsPath = new Path(SLASH.join(warehouseLocation, SLASH.join(namespace.levels())));
+    Joiner slash = Joiner.on("/");
+    Path nsPath = new Path(slash.join(warehouseLocation, slash.join(namespace.levels())));
     FileSystem fs = Util.getFs(nsPath, conf);
     Set<TableIdentifier> tblIdents = Sets.newHashSet();
 

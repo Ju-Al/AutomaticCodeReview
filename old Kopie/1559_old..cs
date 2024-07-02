@@ -152,7 +152,6 @@ namespace Microsoft.Recognizers.Definitions.English
 		public static readonly Dictionary<string, long> OrdinalNumberMap = new Dictionary<string, long>
 		{
 			{ @"first", 1 },
-			{ @"first one", 1 },
 			{ @"first 1", 1 },
 			{ @"second", 2 },
 			{ @"secondary", 2 },

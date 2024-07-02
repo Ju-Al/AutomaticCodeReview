@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.media;
-                startActivity(viewIntent);
 
 import android.content.Intent;
 import android.database.DataSetObserver;
@@ -301,7 +300,7 @@ public class MediaDetailFragment extends CommonsDaggerSupportFragment {
                 Intent viewIntent = new Intent();
                 viewIntent.setAction(Intent.ACTION_VIEW);
                 viewIntent.setData(new PageTitle(selectedCategoryTitle).getCanonicalUri());
-                //check if web browser available
+                startActivity(viewIntent);
                 if(viewIntent.resolveActivity(getActivity().getPackageManager()) != null){
                     startActivity(viewIntent);
                 } else {

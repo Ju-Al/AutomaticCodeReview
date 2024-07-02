@@ -1,5 +1,4 @@
 /*
-        for (size_t i = 0; i < total_data_recv; i++) {
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -94,7 +93,7 @@ int early_data_recv(struct s2n_connection *conn)
 
     if (total_data_recv > 0) {
         fprintf(stdout, "Early Data received: ");
-        for (size_t i = 0; i < (size_t)total_data_recv; i++) {
+        for (size_t i = 0; i < total_data_recv; i++) {
             fprintf(stdout, "%c", early_data_received[i]);
         }
         fprintf(stdout, "\n");

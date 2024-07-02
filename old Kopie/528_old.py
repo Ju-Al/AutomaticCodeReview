@@ -1,5 +1,4 @@
 # coding=utf-8
-        self.assertEquals(obj["secret_story"], "story")
 import json
 import logging
 import tempfile

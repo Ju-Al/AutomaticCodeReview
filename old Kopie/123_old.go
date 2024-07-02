@@ -448,7 +448,6 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 // tuples and does not panic if tuples are different lengths.
 func (t Tuple) CountDifferencesBetweenTupleFields(other Tuple) (uint64, error) {
 	changed := 0
-	tMap, err := t.fieldsToMap()
 	otherMap, err := other.fieldsToMap()
 
 	if err != nil {

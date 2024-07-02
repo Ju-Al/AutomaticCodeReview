@@ -720,7 +720,6 @@ class HintManager(QObject):
                        if label.isVisible()}
 
         if len(visible) != 1:
-            self._apply_auto_follow_timeout()
             return
 
         auto_follow = config.get('hints', 'auto-follow')

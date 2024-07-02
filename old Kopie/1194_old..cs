@@ -510,7 +510,6 @@ namespace NLog.Targets
                     string stringValue = par.Layout.Render(logEvent);
 
                     p.Value = stringValue;
-                    SetParamType(p, par);
                     command.Parameters.Add(p);
 
                     InternalLogger.Trace("  Parameter: '{0}' = '{1}' ({2})", p.ParameterName, p.Value, p.DbType);

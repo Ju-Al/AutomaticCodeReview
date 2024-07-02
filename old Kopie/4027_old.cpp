@@ -1,5 +1,4 @@
 #include "server_logger.h"
-    QStringList listlogFilters = logFilters.split(",", QString::SkipEmptyParts);
 
 #include "settingscache.h"
 
@@ -58,7 +57,7 @@ void ServerLogger::logMessage(QString message, void *caller)
     // filter out all log entries based on values in configuration file
     bool shouldWeWriteLog = settingsCache->value("server/writelog", 1).toBool();
     QString logFilters = settingsCache->value("server/logfilters").toString();
-    QStringList listlogFilters = logFilters.split(",", Qt::SkipEmptyParts);
+    QStringList listlogFilters = logFilters.split(",", QString::SkipEmptyParts);
     bool shouldWeSkipLine = false;
 
     if (!shouldWeWriteLog)

@@ -1,7 +1,4 @@
 /*
-    int desiredLen = len;
-    if (len > 32)
-      desiredLen = 32;
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -2935,7 +2932,9 @@ public class ShellServerIT extends SharedMiniClusterBase {
   }
 
   private Text getRandomText(final int len) {
-    var desiredLen = Math.min(len, 32);
+    int desiredLen = len;
+    if (len > 32)
+      desiredLen = 32;
     return new Text(
         String.valueOf(UUID.randomUUID()).replaceAll("-", "").substring(0, desiredLen - 1));
   }

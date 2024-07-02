@@ -1,6 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-                var span = new ReadOnlySpan<byte>(text, length * 2);
-                var span = new ReadOnlySpan<byte>(text, length * 2);
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
@@ -15,7 +13,8 @@ namespace System.Text
             public unsafe static bool TryParseInt32(char* text, int length, out int value)
             {
                 int consumed;
-                var span = new ReadOnlySpan<byte>(text, length * sizeof(char));
+                var span = new ReadOnlySpan<byte>(text, length * 2);
+                var span = new ReadOnlySpan<byte>(text, length * 2);
                 return PrimitiveParser.TryParseInt32(span, out value, out consumed, EncodingData.InvariantUtf16);
             }
             public unsafe static bool TryParseInt32(char* text, int length, out int value, out int charactersConsumed)

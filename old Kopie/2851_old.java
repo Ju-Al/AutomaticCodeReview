@@ -1,5 +1,4 @@
 package fr.free.nrw.commons;
-
 class Urls {
     static final String NEW_ISSUE_URL = "https://github.com/commons-app/apps-android-commons/issues";
     static final String GITHUB_REPO_URL = "https://github.com/commons-app/apps-android-commons";

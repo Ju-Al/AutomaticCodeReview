@@ -1,6 +1,4 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-    chainActive.SetTip(it->second);
-    PruneBlockIndexCandidates();
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2015-2018 The Bitcoin Unlimited developers
 // Distributed under the MIT software license, see the accompanying
@@ -3963,8 +3961,8 @@ bool static LoadBlockIndexDB()
     {
         return true;
     }
+    chainActive.SetTip(it->second);
 
-    {
         LOCK(cs_main);
         chainActive.SetTip(it->second);
         PruneBlockIndexCandidates();

@@ -888,7 +888,6 @@ class MinijailLibFuzzerRunner(engine_common.MinijailEngineFuzzerRunner,
 class AndroidLibFuzzerRunner(new_process.ProcessRunner, LibFuzzerCommon):
   """Android libFuzzer runner."""
   DEVICE_FUZZING_DIR = '/data/fuzz'
-  LIBFUZZER_TEMP_DIR = '/data/local/tmp'
 
   def __init__(self, executable_path, build_directory, default_args=None):
     """Inits the AndroidLibFuzzerRunner.

@@ -1,5 +1,4 @@
 /**
-      std::vector<TransactionBatch> batches;
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,7 +22,7 @@ namespace shared_model {
                          std::vector<std::shared_ptr<Transaction>>,
                          interface::types::HashType::Hasher>
           extracted_batches;
-      types::BatchesCollectionType batches;
+      std::vector<TransactionBatch> batches;
 
       const auto &transaction_validator = validator.getTransactionValidator();
 

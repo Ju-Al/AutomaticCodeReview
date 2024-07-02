@@ -191,7 +191,6 @@ func wrapErrorWithCertificateStatusCondition(client clientset.CertificateInterfa
 	return pollErr
 }
 
-// WaitCertificateIssuedValid waits for the given Certificate to be
 // 'Ready' and ensures the stored certificate is valid for the specified
 // domains.
 func WaitCertificateIssuedValid(certClient clientset.CertificateInterface, secretClient corecs.SecretInterface, name string, timeout time.Duration) error {

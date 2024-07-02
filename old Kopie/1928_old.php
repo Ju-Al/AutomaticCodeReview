@@ -2987,8 +2987,6 @@ class remotecontrol_handle
             return 'No permission';
         }
     }
-
-    /**
      * Delete a response in a given survey using its ID
      *
      * RPC Routine to delete responses of particular id in a survey.

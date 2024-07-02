@@ -1,368 +1,595 @@
-from collections import defaultdict
-            translation_id=t.pk
+import codecs
+import json
 import logging
 import os
+import pytz
+import re
+import requests
+import StringIO
+import tempfile
+import time
+import zipfile
 
-from bulk_update.helper import bulk_update
-from django.contrib.auth.models import User
+from cgi import escape
+from datetime import datetime, timedelta
+from functools import partial
+
 from django.db.models import Prefetch
-from django.template.defaultfilters import pluralize
-from notifications.signals import notify
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.translation import trans_real
 
-from pontoon.base.models import (
-    Entity,
-    Locale,
-    Resource,
-    Translation,
-    TranslationMemoryEntry
-)
-from pontoon.base.utils import match_attr
-
-log = logging.getLogger(__name__)
+from translate.filters import checks
+from translate.storage import base as storage_base
+from translate.storage.placeables import base, general, parse
+from translate.storage.placeables.interfaces import BasePlaceable
+from translate.lang import data as lang_data
 
 
-class ChangeSet(object):
-    """
-    Stores a set of changes to be made to the database and the
-    translations stored in VCS. Once all the necessary changes have been
-    stored, execute all the changes at once efficiently.
-    """
-    def __init__(self, db_project, vcs_project, now, obsolete_vcs_entities=None, obsolete_vcs_resources=None, locale=None):
-        """
-        :param now:
-            Datetime to use for marking when approvals happened.
-        """
-        self.db_project = db_project
-        self.vcs_project = vcs_project
-        self.now = now
-        self.locale = locale
+log = logging.getLogger('pontoon')
 
-        # Store locales and resources for FK relationships.
-        self.locales = {l.code: l for l in Locale.objects.all()}
-        self.resources = {r.path: r for r in self.db_project.resources.all()}
 
-        self.executed = False
-        self.changes = {
-            'update_vcs': [],
-            'obsolete_vcs_entities': obsolete_vcs_entities or [],
-            'obsolete_vcs_resources': obsolete_vcs_resources or [],
-            'update_db': [],
-            'obsolete_db': [],
-            'create_db': []
-        }
+def split_ints(s):
+    """Splits string by comma and maps items to the integer."""
+    integers = filter(None, (s or '').split(','))
+    return map(int, integers)
 
-        self.entities_to_update = []
-        self.translations_to_update = []
-        self.translations_to_create = []
-        self.commit_authors_per_locale = defaultdict(list)
-        self.locales_to_commit = set()
 
-    def update_vcs_entity(self, locale, db_entity, vcs_entity):
-        """
-        Replace the translations in VCS with the translations from the
-        database.
-        Updates only entities that has been changed.
-        """
-        if db_entity.has_changed(locale):
-            self.changes['update_vcs'].append((locale.code, db_entity, vcs_entity))
-            self.locales_to_commit.add(locale)
+def get_project_locale_from_request(request, locales):
+    """Get Pontoon locale from Accept-language request header."""
 
-    def create_db_entity(self, vcs_entity):
-        """Create a new entity in the database."""
-        self.changes['create_db'].append(vcs_entity)
+    header = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
+    accept = trans_real.parse_accept_lang_header(header)
 
-    def update_db_entity(self, locale, db_entity, vcs_entity):
-        """Update the database with translations from VCS."""
-        self.changes['update_db'].append((locale.code, db_entity, vcs_entity))
+    for a in accept:
+        try:
+            return locales.get(code__iexact=a[0]).code
+        except:
+            continue
 
-    def update_db_source_entity(self, db_entity, vcs_entity):
-        """Update the entities with the latest data from vcs."""
-        self.changes['update_db'].append((None, db_entity, vcs_entity))
 
-    def obsolete_db_entity(self, db_entity):
-        """Mark the given entity as obsolete."""
-        self.changes['obsolete_db'].append(db_entity.pk)
+class NewlineEscapePlaceable(base.Ph):
+    """Placeable handling newline escapes."""
+    istranslatable = False
+    regex = re.compile(r'\\n')
+    parse = classmethod(general.regex_parse)
 
-    def execute(self):
-        """
-        Execute the changes stored in this changeset. Execute can only
-        be called once per changeset; subsequent calls raise a
-        RuntimeError, even if the changes failed.
-        """
-        if self.executed:
-            raise RuntimeError('execute() can only be called once per changeset.')
+
+class TabEscapePlaceable(base.Ph):
+    """Placeable handling tab escapes."""
+    istranslatable = False
+    regex = re.compile(r'\t')
+    parse = classmethod(general.regex_parse)
+
+
+class EscapePlaceable(base.Ph):
+    """Placeable handling escapes."""
+    istranslatable = False
+    regex = re.compile(r'\\')
+    parse = classmethod(general.regex_parse)
+
+
+class SpacesPlaceable(base.Ph):
+    """Placeable handling spaces."""
+    istranslatable = False
+    regex = re.compile('^ +| +$|[\r\n\t] +| {2,}')
+    parse = classmethod(general.regex_parse)
+
+
+class PythonFormatNamedPlaceable(base.Ph):
+    """Placeable handling named format string in python"""
+    istranslatable = False
+    regex = re.compile(r'%\([[\w\d\!\.,\[\]%:$<>\+\-= ]*\)[+|-|0\d+|#]?[\.\d+]?[s|d|e|f|g|o|x|c|%]', re.IGNORECASE)
+    parse = classmethod(general.regex_parse)
+
+
+class PythonFormatPlaceable(base.Ph):
+    """Placeable handling new format strings in python"""
+    istranslatable = False
+    regex = re.compile(r'\{{?[[\w\d\!\.,\[\]%:$<>\+\-= ]*\}?}', )
+    parse = classmethod(general.regex_parse)
+
+
+def mark_placeables(text):
+    """Wrap placeables to easily distinguish and manipulate them"""
+
+    PARSERS = [
+        NewlineEscapePlaceable.parse,
+        TabEscapePlaceable.parse,
+        EscapePlaceable.parse,
+
+        # The spaces placeable can match '\n  ' and mask the newline,
+        # so it has to come later.
+        SpacesPlaceable.parse,
+
+        # The XML placeables must be marked before variable placeables
+        # to avoid marking variables, but leaving out tags. See:
+        # https://bugzilla.mozilla.org/show_bug.cgi?id=1334926
+        general.XMLTagPlaceable.parse,
+        general.AltAttrPlaceable.parse,
+        general.XMLEntityPlaceable.parse,
+
+        PythonFormatNamedPlaceable.parse,
+        PythonFormatPlaceable.parse,
+        general.PythonFormattingPlaceable.parse,
+        general.JavaMessageFormatPlaceable.parse,
+        general.FormattingPlaceable.parse,
+
+        # The Qt variables can consume the %1 in %1$s which will mask a printf
+        # placeable, so it has to come later.
+        general.QtFormattingPlaceable.parse,
+
+        general.UrlPlaceable.parse,
+        general.FilePlaceable.parse,
+        general.EmailPlaceable.parse,
+        general.CapsPlaceable.parse,
+        general.CamelCasePlaceable.parse,
+        general.OptionPlaceable.parse,
+        general.PunctuationPlaceable.parse,
+        general.NumberPlaceable.parse,
+    ]
+
+    TITLES = {
+        'NewlineEscapePlaceable': "Escaped newline",
+        'TabEscapePlaceable': "Escaped tab",
+        'EscapePlaceable': "Escaped sequence",
+        'SpacesPlaceable': "Unusual space in string",
+        'AltAttrPlaceable': "'alt' attribute inside XML tag",
+        'NewlinePlaceable': "New-line",
+        'NumberPlaceable': "Number",
+        'QtFormattingPlaceable': "Qt string formatting variable",
+        'PythonFormattingPlaceable': "Python string formatting variable",
+        'JavaMessageFormatPlaceable': "Java Message formatting variable",
+        'FormattingPlaceable': "String formatting variable",
+        'UrlPlaceable': "URI",
+        'FilePlaceable': "File location",
+        'EmailPlaceable': "Email",
+        'PunctuationPlaceable': "Punctuation",
+        'XMLEntityPlaceable': "XML entity",
+        'CapsPlaceable': "Long all-caps string",
+        'CamelCasePlaceable': "Camel case string",
+        'XMLTagPlaceable': "XML tag",
+        'OptionPlaceable': "Command line option",
+        'PythonFormatNamedPlaceable': "Python format string",
+        'PythonFormatPlaceable': "Python format string"
+    }
+
+    output = u""
+
+    # Get a flat list of placeables and StringElem instances
+    flat_items = parse(text, PARSERS).flatten()
+
+    for item in flat_items:
+
+        # Placeable: mark
+        if isinstance(item, BasePlaceable):
+            class_name = item.__class__.__name__
+            placeable = unicode(item)
+
+            # CSS class used to mark the placeable
+            css = {
+                'TabEscapePlaceable': "escape ",
+                'EscapePlaceable': "escape ",
+                'SpacesPlaceable': "space ",
+                'NewlinePlaceable': "escape ",
+            }.get(class_name, "")
+
+            title = TITLES.get(class_name, "Unknown placeable")
+
+            # Correctly render placeables in translation editor
+            content = {
+                'TabEscapePlaceable': u'\\t',
+                'EscapePlaceable': u'\\',
+                'NewlinePlaceable': {
+                    u'\r\n': u'\\r\\n<br/>\n',
+                    u'\r': u'\\r<br/>\n',
+                    u'\n': u'\\n<br/>\n',
+                }.get(placeable),
+                'PythonFormatPlaceable':
+                    placeable.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'),
+                'PythonFormatNamedPlaceable':
+                    placeable.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'),
+                'XMLEntityPlaceable': placeable.replace('&', '&amp;'),
+                'XMLTagPlaceable':
+                    placeable.replace('<', '&lt;').replace('>', '&gt;'),
+            }.get(class_name, placeable)
+
+            output += ('<mark class="%splaceable" title="%s">%s</mark>') \
+                % (css, title, content)
+
+        # Not a placeable: skip
         else:
-            self.executed = True
+            output += unicode(item).replace('<', '&lt;').replace('>', '&gt;')
 
-        # Perform the changes and fill the lists for bulk creation and
-        # updating.
-        self.execute_update_vcs()
-        self.execute_create_db()
-        self.execute_update_db()
-        self.execute_obsolete_db()
-        self.execute_obsolete_vcs_resources()
+    return output
 
-        # Apply the built-up changes to the DB
-        self.bulk_update_entities()
-        self.bulk_create_translations()
-        self.bulk_update_translations()
 
-    def execute_update_vcs(self):
-        resources = self.vcs_project.resources
-        changed_resources = set()
+def quality_check(original, string, locale, ignore):
+    """Check for obvious errors like blanks and missing interpunction."""
 
-        for locale_code, db_entity, vcs_entity in self.changes['update_vcs']:
-            changed_resources.add(resources[db_entity.resource.path])
-            vcs_translation = vcs_entity.translations[locale_code]
-            db_translations = (db_entity.translation_set
-                .filter(approved=True, locale__code=locale_code)
+    if not ignore:
+        original = lang_data.normalized_unicode(original)
+        string = lang_data.normalized_unicode(string)
+
+        unit = storage_base.TranslationUnit(original)
+        unit.target = string
+        checker = checks.StandardChecker(
+            checkerconfig=checks.CheckerConfig(targetlanguage=locale.code))
+
+        warnings = checker.run_filters(unit)
+        if warnings:
+
+            # https://github.com/translate/pootle/
+            check_names = {
+                'accelerators': 'Accelerators',
+                'acronyms': 'Acronyms',
+                'blank': 'Blank',
+                'brackets': 'Brackets',
+                'compendiumconflicts': 'Compendium conflict',
+                'credits': 'Translator credits',
+                'doublequoting': 'Double quotes',
+                'doublespacing': 'Double spaces',
+                'doublewords': 'Repeated word',
+                'emails': 'E-mail',
+                'endpunc': 'Ending punctuation',
+                'endwhitespace': 'Ending whitespace',
+                'escapes': 'Escapes',
+                'filepaths': 'File paths',
+                'functions': 'Functions',
+                'gconf': 'GConf values',
+                'kdecomments': 'Old KDE comment',
+                'long': 'Long',
+                'musttranslatewords': 'Must translate words',
+                'newlines': 'Newlines',
+                'nplurals': 'Number of plurals',
+                'notranslatewords': 'Don\'t translate words',
+                'numbers': 'Numbers',
+                'options': 'Options',
+                'printf': 'printf()',
+                'puncspacing': 'Punctuation spacing',
+                'purepunc': 'Pure punctuation',
+                'sentencecount': 'Number of sentences',
+                'short': 'Short',
+                'simplecaps': 'Simple capitalization',
+                'simpleplurals': 'Simple plural(s)',
+                'singlequoting': 'Single quotes',
+                'startcaps': 'Starting capitalization',
+                'startpunc': 'Starting punctuation',
+                'startwhitespace': 'Starting whitespace',
+                'tabs': 'Tabs',
+                'unchanged': 'Unchanged',
+                'untranslated': 'Untranslated',
+                'urls': 'URLs',
+                'validchars': 'Valid characters',
+                'variables': 'Placeholders',
+                'xmltags': 'XML tags',
+            }
+
+            warnings_array = []
+            for key in warnings.keys():
+                warning = check_names.get(key, key)
+                warnings_array.append(warning)
+
+            return HttpResponse(json.dumps({
+                'warnings': warnings_array,
+            }), content_type='application/json')
+
+
+def first(collection, test, default=None):
+    """
+    Return the first item that, when passed to the given test function,
+    returns True. If no item passes the test, return the default value.
+    """
+    return next((c for c in collection if test(c)), default)
+
+
+def match_attr(collection, **attributes):
+    """
+    Return the first item that has matching values for the given
+    attributes, or None if no item is found to match.
+    """
+    return first(
+        collection,
+        lambda i: all(getattr(i, attrib) == value
+                      for attrib, value in attributes.items()),
+        default=None
+    )
+
+
+def aware_datetime(*args, **kwargs):
+    """Return an aware datetime using Django's configured timezone."""
+    return timezone.make_aware(datetime(*args, **kwargs))
+
+
+def extension_in(filename, extensions):
+    """
+    Check if the extension for the given filename is in the list of
+    allowed extensions. Uses os.path.splitext rules for getting the
+    extension.
+    """
+    filename, extension = os.path.splitext(filename)
+    if extension and extension[1:] in extensions:
+        return True
+    else:
+        return False
+
+
+def get_object_or_none(model, *args, **kwargs):
+    """
+    Get an instance of the given model, returning None instead of
+    raising an error if an instance cannot be found.
+    """
+    try:
+        return model.objects.get(*args, **kwargs)
+    except model.DoesNotExist:
+        return None
+
+
+def require_AJAX(f):
+    """
+    AJAX request required decorator
+    """
+    def wrap(request, *args, **kwargs):
+        if not request.is_ajax():
+            return HttpResponseBadRequest('Bad Request: Request must be AJAX')
+        return f(request, *args, **kwargs)
+    return wrap
+
+
+def _download_file(prefixes, dirnames, relative_path):
+    for prefix in prefixes:
+        for dirname in dirnames:
+            url = os.path.join(prefix.format(locale_code=dirname), relative_path)
+            r = requests.get(url, stream=True)
+            if not r.ok:
+                continue
+
+            extension = os.path.splitext(relative_path)[1]
+            with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as temp:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        temp.write(chunk)
+                temp.flush()
+            return temp.name
+
+
+def _get_relative_path_from_part(slug, part):
+    """Check if part is a Resource path or Subpage name."""
+    # Avoid circular import; someday we should refactor to avoid.
+    from pontoon.base.models import Subpage
+    try:
+        subpage = Subpage.objects.get(project__slug=slug, name=part)
+        return subpage.resources.first().path
+    except Subpage.DoesNotExist:
+        return part
+
+
+def get_download_content(slug, code, part):
+    """
+    Get content of the file to be downloaded.
+
+    :param str slug: Project slug.
+    :param str code: Locale code.
+    :param str part: Resource path or Subpage name.
+    """
+    # Avoid circular import; someday we should refactor to avoid.
+    from pontoon.sync import formats
+    from pontoon.sync.vcs.models import VCSProject
+    from pontoon.base.models import Entity, Locale, Project, Resource
+
+    project = get_object_or_404(Project, slug=slug)
+    locale = get_object_or_404(Locale, code=code)
+
+    # Download a ZIP of all files if project has > 1 and < 10 resources
+    resources = Resource.objects.filter(project=project, translatedresources__locale=locale)
+    isZipable = 1 < len(resources) < 10
+    if isZipable:
+        s = StringIO.StringIO()
+        zf = zipfile.ZipFile(s, "w")
+
+    # Download a single file if project has 1 or >= 10 resources
+    else:
+        relative_path = _get_relative_path_from_part(slug, part)
+        resources = [get_object_or_404(Resource, project__slug=slug, path=relative_path)]
+
+    for resource in resources:
+        # Get locale file
+        locale_prefixes = (
+            project.repositories.filter(permalink_prefix__contains='{locale_code}')
+            .values_list('permalink_prefix', flat=True)
+            .distinct()
+        )
+        dirnames = set([locale.code, locale.code.replace('-', '_')])
+        locale_path = _download_file(locale_prefixes, dirnames, resource.path)
+        if not locale_path and not resource.is_asymmetric:
+            return None, None
+
+        # Get source file if needed
+        source_path = None
+        if resource.is_asymmetric:
+            source_prefixes = (
+                project.repositories
+                .values_list('permalink_prefix', flat=True)
+                .distinct()
             )
-            vcs_translation.update_from_db(db_translations)
+            dirnames = VCSProject.SOURCE_DIR_NAMES
+            source_path = _download_file(source_prefixes, dirnames, resource.path)
+            if not source_path:
+                return None, None
 
-            # Track which translators were involved.
-            self.commit_authors_per_locale[locale_code].extend([t.user for t in db_translations if t.user])
+            # If locale file doesn't exist, create it
+            if not locale_path:
+                extension = os.path.splitext(resource.path)[1]
+                with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as temp:
+                    temp.flush()
+                locale_path = temp.name
 
-        # Remove obsolete entities from asymmetric files
-        obsolete_entities_paths = Resource.objects.obsolete_entities_paths(
-            self.changes['obsolete_vcs_entities']
+        # Update file from database
+        resource_file = formats.parse(locale_path, source_path)
+        entities_dict = {}
+        entities_qs = Entity.objects.filter(
+            changedentitylocale__locale=locale,
+            resource__project=project,
+            resource__path=resource.path,
+            obsolete=False
         )
 
-        for path in obsolete_entities_paths:
-            changed_resources.add(resources[path])
+        for e in entities_qs:
+            entities_dict[e.key] = e.translation_set.filter(approved=True, locale=locale)
 
-        if len(obsolete_entities_paths) > 0:
-            self.locales_to_commit = set(self.locales.values())
+        for vcs_translation in resource_file.translations:
+            key = vcs_translation.key
+            if key in entities_dict:
+                entity = entities_dict[key]
+                vcs_translation.update_from_db(entity)
 
-        for resource in changed_resources:
-            resource.save(self.locale)
+        resource_file.save(locale)
 
-    def get_entity_updates(self, vcs_entity, db_entity=None):
-        """
-        Return a dict of the properties and values necessary to create
-        or update a database entity from a VCS entity.
-        """
-        return {
-            'resource': self.resources[vcs_entity.resource.path],
-            'string': vcs_entity.string,
-            'string_plural': vcs_entity.string_plural,
-            'key': vcs_entity.key,
-            'comment': '\n'.join(vcs_entity.comments),
-            # one timestamp per import, unlike timezone.now()
-            'date_created': db_entity.date_created if db_entity else self.now,
-            'order': vcs_entity.order,
-            'source': vcs_entity.source,
-        }
+        if not locale_path:
+            return None, None
 
-    def send_notifications(self, new_entities):
-        """
-        Notify project contributors if new entities have been added.
-        """
-        count = len(new_entities)
+        if isZipable:
+            zf.write(locale_path, resource.path)
+        else:
+            with codecs.open(locale_path, 'r', 'utf-8') as f:
+                content = f.read()
+            filename = os.path.basename(resource.path)
 
-        if count > 0:
-            log.info('Sending new string notifications for project {}.'.format(self.db_project))
+        # Remove temporary files
+        os.remove(locale_path)
+        if source_path:
+            os.remove(source_path)
 
-            verb = 'updated with {} new string{}'.format(count, pluralize(count))
-            contributors = User.objects.filter(
-                translation__entity__resource__project=self.db_project
-            ).distinct()
+    if isZipable:
+        zf.close()
+        content = s.getvalue()
+        filename = project.slug + '.zip'
 
-            for contributor in contributors:
-                notify.send(
-                    self.db_project,
-                    recipient=contributor,
-                    verb=verb
-                )
+    return content, filename
 
-            log.info('New string notifications for project {} sent.'.format(self.db_project))
 
-    def execute_create_db(self):
-        new_entities = []
+def handle_upload_content(slug, code, part, f, user):
+    """
+    Update translations in the database from uploaded file.
 
-        for vcs_entity in self.changes['create_db']:
-            # We can't use bulk_create since we need a PK
-            entity, created = Entity.objects.get_or_create(**self.get_entity_updates(vcs_entity))
+    :param str slug: Project slug.
+    :param str code: Locale code.
+    :param str part: Resource path or Subpage name.
+    :param UploadedFile f: UploadedFile instance.
+    :param User user: User uploading the file.
+    """
+    # Avoid circular import; someday we should refactor to avoid.
+    from pontoon.sync import formats
+    from pontoon.sync.changeset import ChangeSet
+    from pontoon.sync.vcs.models import VCSProject
+    from pontoon.base.models import (
+        ChangedEntityLocale,
+        Entity,
+        Locale,
+        Project,
+        Resource,
+        TranslatedResource,
+        Translation,
+    )
 
-            if created:
-                new_entities.append(entity)
+    relative_path = _get_relative_path_from_part(slug, part)
+    project = get_object_or_404(Project, slug=slug)
+    locale = get_object_or_404(Locale, code=code)
+    resource = get_object_or_404(Resource, project__slug=slug, path=relative_path)
 
-            for locale_code, vcs_translation in vcs_entity.translations.items():
-                for plural_form, string in vcs_translation.strings.items():
-                    self.translations_to_create.append(Translation(
-                        entity=entity,
-                        locale=self.locales[locale_code],
-                        string=string,
-                        plural_form=plural_form,
-                        approved=not vcs_translation.fuzzy,
-                        approved_date=self.now if not vcs_translation.fuzzy else None,
-                        fuzzy=vcs_translation.fuzzy
-                    ))
+    # Store uploaded file to a temporary file and parse it
+    extension = os.path.splitext(f.name)[1]
+    with tempfile.NamedTemporaryFile(suffix=extension) as temp:
+        for chunk in f.chunks():
+            temp.write(chunk)
+        temp.flush()
+        resource_file = formats.parse(temp.name)
 
-        self.send_notifications(new_entities)
+    # Update database objects from file
+    changeset = ChangeSet(
+        project,
+        VCSProject(project, locales=[locale]),
+        timezone.now()
+    )
+    entities_qs = Entity.objects.filter(
+        resource__project=project,
+        resource__path=relative_path,
+        obsolete=False
+    ).prefetch_related(
+        Prefetch(
+            'translation_set',
+            queryset=Translation.objects.filter(locale=locale),
+            to_attr='db_translations'
+        )
+    ).prefetch_related(
+        Prefetch(
+            'translation_set',
+            queryset=Translation.objects.filter(locale=locale, approved_date__lte=timezone.now()),
+            to_attr='old_translations'
+        )
+    )
+    entities_dict = {entity.key: entity for entity in entities_qs}
 
-    def update_entity_translations_from_vcs(
-            self, db_entity, locale_code, vcs_translation,
-            user=None, db_translations=None, old_translations=None
-    ):
-        if db_translations is None:
-            db_translations = db_entity.translation_set.filter(
-                locale__code=locale_code,
+    for vcs_translation in resource_file.translations:
+        key = vcs_translation.key
+        if key in entities_dict:
+            entity = entities_dict[key]
+            changeset.update_entity_translations_from_vcs(
+                entity, locale.code, vcs_translation, user,
+                entity.db_translations, entity.old_translations
             )
-        approved_translations = []
-        fuzzy_translations = []
 
-        for plural_form, string in vcs_translation.strings.items():
-            # Check if we need to modify an existing translation or
-            # create a new one.
-            db_translation = match_attr(db_translations,
-                                        plural_form=plural_form,
-                                        string=string)
-            if db_translation:
-                if not db_translation.approved and not vcs_translation.fuzzy:
-                    db_translation.approved = True
-                    db_translation.approved_date = self.now
-                    db_translation.approved_user = user
-                db_translation.fuzzy = vcs_translation.fuzzy
-                db_translation.extra = vcs_translation.extra
+    changeset.bulk_create_translations()
+    changeset.bulk_update_translations()
+    TranslatedResource.objects.get(resource=resource, locale=locale).calculate_stats()
 
-                if db_translation.is_dirty():
-                    self.translations_to_update.append(db_translation)
-                if not db_translation.fuzzy:
-                    approved_translations.append(db_translation)
-                else:
-                    fuzzy_translations.append(db_translation)
-            else:
-                self.translations_to_create.append(Translation(
-                    entity=db_entity,
-                    locale=self.locales[locale_code],
-                    string=string,
-                    plural_form=plural_form,
-                    approved=not vcs_translation.fuzzy,
-                    approved_date=self.now if not vcs_translation.fuzzy else None,
-                    approved_user=user,
-                    user=user,
-                    fuzzy=vcs_translation.fuzzy,
-                    extra=vcs_translation.extra
-                ))
+    # Mark translations as changed
+    changed_entities = {}
+    existing = ChangedEntityLocale.objects.values_list('entity', 'locale').distinct()
+    for t in changeset.translations_to_create + changeset.translations_to_update:
+        key = (t.entity.pk, t.locale.pk)
+        # Remove duplicate changes to prevent unique constraint violation
+        if not key in existing:
+            changed_entities[key] = ChangedEntityLocale(entity=t.entity, locale=t.locale)
 
-        # Any existing translations that were not approved get unapproved.
-        if old_translations is None:
-            old_translations = db_translations.filter(approved_date__lte=self.now)
+    ChangedEntityLocale.objects.bulk_create(changed_entities.values())
 
-        for translation in old_translations:
-            if translation not in approved_translations:
-                translation.approved = False
-                translation.approved_user = None
-                translation.approved_date = None
+    # Update latest translation
+    if changeset.translations_to_create:
+        changeset.translations_to_create[-1].update_latest_translation()
 
-                if translation.is_dirty():
-                    self.translations_to_update.append(translation)
 
-        # Any existing translations that are no longer fuzzy get unfuzzied.
-        for translation in db_translations:
-            if translation not in fuzzy_translations:
-                translation.fuzzy = False
+def latest_datetime(datetimes):
+    """
+    Return the latest datetime in the given list of datetimes,
+    gracefully handling `None` values in the list. Returns `None` if all
+    values in the list are `None`.
+    """
+    if all(map(lambda d: d is None, datetimes)):
+        return None
 
-                if translation.is_dirty():
-                    self.translations_to_update.append(translation)
+    min_datetime = timezone.make_aware(datetime.min)
+    datetimes = map(lambda d: d or min_datetime, datetimes)
+    return max(datetimes)
 
-    def prefetch_entity_translations(self):
-        prefetched_entities = {}
 
-        locale_entities = {}
-        for locale_code, db_entity, vcs_entity in self.changes['update_db']:
-            locale_entities.setdefault(locale_code, []).append(db_entity.pk)
+def parse_time_interval(interval):
+    """
+    Return start and end time objects from time interval string n the format
+    %d%m%Y%H%M-%d%m%Y%H%M. Also, increase interval by one minute due to
+    truncation to a minute in Translation.counts_per_minute QuerySet.
+    """
+    def parse_timestamp(timestamp):
+        return timezone.make_aware(datetime.strptime(timestamp, '%Y%m%d%H%M'), timezone=pytz.UTC)
 
-        for locale in locale_entities.keys():
-            entities_qs = Entity.objects.filter(
-                pk__in=locale_entities[locale],
-            ).prefetch_related(
-                Prefetch(
-                    'translation_set',
-                    queryset=Translation.objects.filter(locale__code=locale),
-                    to_attr='db_translations'
-                )
-            ).prefetch_related(
-                Prefetch(
-                    'translation_set',
-                    queryset=Translation.objects.filter(locale__code=locale, approved_date__lte=self.now),
-                    to_attr='old_translations'
-                )
-            )
-            prefetched_entities[locale] = {entity.id: entity for entity in entities_qs}
+    start, end = interval.split('-')
 
-        return prefetched_entities
+    return parse_timestamp(start), parse_timestamp(end) + timedelta(minutes=1)
 
-    def execute_update_db(self):
-        if self.changes['update_db']:
-            entities_with_translations = self.prefetch_entity_translations()
 
-        for locale_code, db_entity, vcs_entity in self.changes['update_db']:
-            for field, value in self.get_entity_updates(vcs_entity, db_entity).items():
-                setattr(db_entity, field, value)
-
-            if db_entity.is_dirty(check_relationship=True):
-                self.entities_to_update.append(db_entity)
-
-            if locale_code is not None:
-                # Update translations for the entity.
-                vcs_translation = vcs_entity.translations[locale_code]
-                prefetched_entity = entities_with_translations[locale_code][db_entity.id]
-                self.update_entity_translations_from_vcs(
-                    db_entity, locale_code, vcs_translation, None,
-                    prefetched_entity.db_translations, prefetched_entity.old_translations
-                )
-
-    def execute_obsolete_db(self):
-        (Entity.objects
-            .filter(pk__in=self.changes['obsolete_db'])
-            .update(obsolete=True))
-
-    def execute_obsolete_vcs_resources(self):
-        for path in self.changes['obsolete_vcs_resources']:
-            locales = [self.locale] if self.locale else self.db_project.locales.all()
-            for locale in locales:
-                locale_directory = self.vcs_project.locale_directory_paths[locale.code]
-                file_path = os.path.join(locale_directory, path)
-                if os.path.exists(file_path):
-                    log.info('Removing obsolete file {} for {}.'.format(path, locale.code))
-                    os.remove(file_path)
-                    self.locales_to_commit.add(locale)
-
-    def bulk_update_entities(self):
-        if len(self.entities_to_update) > 0:
-            bulk_update(self.entities_to_update, update_fields=[
-                'resource',
-                'string',
-                'string_plural',
-                'key',
-                'comment',
-                'order',
-                'source',
-            ])
-
-    def bulk_create_translations(self):
-        Translation.objects.bulk_create(self.translations_to_create)
-        memory_entries = [TranslationMemoryEntry(
-            source=t.entity.string,
-            target=t.string,
-            locale_id=t.locale_id,
-            entity_id=t.entity.pk,
-            translation_id=t.pk,
-            project=t.entity.resource.project_id,
-        ) for t in self.translations_to_create if t.plural_form in (None, 0)]
-        TranslationMemoryEntry.objects.bulk_create(memory_entries)
-
-    def bulk_update_translations(self):
-        if len(self.translations_to_update) > 0:
-            bulk_update(self.translations_to_update, update_fields=[
-                'entity',
-                'locale',
-                'string',
-                'plural_form',
-                'approved',
-                'approved_user_id',
-                'approved_date',
-                'fuzzy',
-                'extra'
-            ])
+def convert_to_unix_time(my_datetime):
+    """
+    Convert datetime object to UNIX time
+    """
+    return int(time.mktime(my_datetime.timetuple()) * 1000)

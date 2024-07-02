@@ -1,7 +1,5 @@
 package slack
 
-		listCache: newTTLCache(250, time.Minute),
-		chanCache: newTTLCache(1000, 15*time.Minute),
 import (
 	"context"
 	"encoding/json"
@@ -47,7 +45,8 @@ func NewChannelSender(ctx context.Context, cfg Config) (*ChannelSender, error) {
 		chanTht: newThrottle(time.Minute / 50),
 		listTht: newThrottle(time.Minute / 50),
 
-		listCache:   newTTLCache(250, time.Minute),
+		listCache: newTTLCache(250, time.Minute),
+		chanCache: newTTLCache(1000, 15*time.Minute),
 		chanCache:   newTTLCache(1000, 15*time.Minute),
 		teamIDCache: newTTLCache(1, 5*time.Minute),
 	}, nil

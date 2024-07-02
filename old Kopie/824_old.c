@@ -1,357 +1,1046 @@
 /*
-     * then the serialized length, plus an 0x80 byte, will have fit in that block. 
-     * If there were fewer than 9 then adding the length will have caused an extra 
-    if (state->currently_in_hash_block > (state->hash_block_size - 9)) {
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
- *
- *  http://aws.amazon.com/apache2.0
- *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
- */
+*
+*   This source code is released for free distribution under the terms of the
+*   GNU General Public License version 2 or (at your option) any later version.
+*
+*   This module contains functions for parsing and scanning C++ source files
+*/
+#include "cxx_parser.h"
+#include "cxx_parser_internal.h"
 
-#include <openssl/md5.h>
-#include <openssl/sha.h>
+#include "cxx_debug.h"
+#include "cxx_keyword.h"
+#include "cxx_token.h"
+#include "cxx_token_chain.h"
+#include "cxx_scope.h"
 
-#include "error/s2n_errno.h"
+#include "parse.h"
+#include "vstring.h"
+#include "get.h"
+#include "debug.h"
+#include "keyword.h"
+#include "read.h"
 
-#include "crypto/s2n_hmac.h"
-#include "crypto/s2n_hash.h"
-#include "crypto/s2n_fips.h"
+#include <string.h>
 
-#include "utils/s2n_safety.h"
-#include "utils/s2n_blob.h"
-#include "utils/s2n_mem.h"
+//
+// The global parser state
+//
+CXXParserState g_cxx;
 
-#include <stdint.h>
+//
+// This is set to false once the parser is run at least one time. Used by cleanup routines.
+//
+boolean g_bFirstRun = TRUE;
 
-
-int s2n_hmac_hash_alg(s2n_hmac_algorithm hmac_alg, s2n_hash_algorithm *out)
+//
+// Reset parser state:
+// - Clear the token chain
+// - Reset "seen" keywords
+//
+void cxxParserNewStatement()
 {
-    switch(hmac_alg) {
-    case S2N_HMAC_NONE:       *out = S2N_HASH_NONE;   break;
-    case S2N_HMAC_MD5:        *out = S2N_HASH_MD5;    break;
-    case S2N_HMAC_SHA1:       *out = S2N_HASH_SHA1;   break;
-    case S2N_HMAC_SHA224:     *out = S2N_HASH_SHA224; break;
-    case S2N_HMAC_SHA256:     *out = S2N_HASH_SHA256; break;
-    case S2N_HMAC_SHA384:     *out = S2N_HASH_SHA384; break;
-    case S2N_HMAC_SHA512:     *out = S2N_HASH_SHA512; break;
-    case S2N_HMAC_SSLv3_MD5:  *out = S2N_HASH_MD5;    break;
-    case S2N_HMAC_SSLv3_SHA1: *out = S2N_HASH_SHA1;   break;
-    default:
-        S2N_ERROR(S2N_ERR_HMAC_INVALID_ALGORITHM);
-    }
-    return 0;
+	cxxTokenChainClear(g_cxx.pTokenChain);
+	if(g_cxx.pTemplateTokenChain)
+	{
+		cxxTokenChainDestroy(g_cxx.pTemplateTokenChain);
+		g_cxx.pTemplateTokenChain = NULL;
+	}
+	g_cxx.uKeywordState = 0;
+
+	cppEndStatement(); // FIXME: this cpp handling is broken: it works only because the moon is in the correct phase.
+
+	//g_cxx.bParsingTemplateAngleBrackets = FALSE; <-- no need for this, it's always reset to false after usage
+	//g_cxx.bParsingClassStructOrUnionDeclaration = FALSE; <-- ditto
 }
 
-int s2n_hmac_digest_size(s2n_hmac_algorithm hmac_alg, uint8_t *out)
+//
+// Parse a subchain of input delimited by matching pairs: [],(),{},<> [WARNING: no other subchain types are recognized!]
+// This function expects g_cxx.pToken to point to the initial token of the pair ([{<.
+// It will parse input until the matching terminator token is found.
+// Inner parsing is done by cxxParserParseAndCondenseSubchainsUpToOneOf()
+// so this is actually a recursive subchain nesting algorithm.
+//
+boolean cxxParserParseAndCondenseCurrentSubchain(
+		unsigned int uInitialSubchainMarkerTypes,
+		boolean bAcceptEOF
+	)
 {
-    s2n_hash_algorithm hash_alg;
-    GUARD(s2n_hmac_hash_alg(hmac_alg, &hash_alg));
-    GUARD(s2n_hash_digest_size(hash_alg, out));
-    return 0;
+	CXXTokenChain * pCurrentChain = g_cxx.pTokenChain;
+	g_cxx.pTokenChain = cxxTokenChainCreate();
+	CXXToken * pInitial = cxxTokenChainTakeLast(pCurrentChain);
+	cxxTokenChainAppend(g_cxx.pTokenChain,pInitial);
+	CXXToken * pChainToken = cxxTokenCreate();
+	pChainToken->eType = (enum CXXTokenType)(g_cxx.pToken->eType << 8); // see the declaration of CXXTokenType enum. Shifting by 8 gives the corresponding chain marker
+	pChainToken->pChain = g_cxx.pTokenChain;
+	cxxTokenChainAppend(pCurrentChain,pChainToken);
+	unsigned int uTokenTypes = g_cxx.pToken->eType << 4; // see the declaration of CXXTokenType enum. Shifting by 4 gives the corresponding closing token type
+	if(bAcceptEOF)
+		uTokenTypes |= CXXTokenTypeEOF;
+	boolean bRet = cxxParserParseAndCondenseSubchainsUpToOneOf(
+			uTokenTypes,
+			uInitialSubchainMarkerTypes
+		);
+	g_cxx.pTokenChain = pCurrentChain;
+	g_cxx.pToken = pCurrentChain->pTail;
+	return bRet;
 }
 
-/* Return 1 if hmac algorithm is available, 0 otherwise. */
-int s2n_hmac_is_available(s2n_hmac_algorithm hmac_alg)
+//
+// This function parses input until one of the specified tokens appears.
+// The algorithm will also build subchains of matching pairs ([...],(...),<...>,{...}): within the subchain
+// analysis of uTokenTypes is completly disabled. Subchains do nest.
+// 
+// Returns true if it stops before EOF or it stops at EOF and CXXTokenTypeEOF is present in uTokenTypes.
+// Returns false in all the other stop conditions and when an unmatched subchain character pair is found (syntax error).
+//
+boolean cxxParserParseAndCondenseSubchainsUpToOneOf(
+		unsigned int uTokenTypes,
+		unsigned int uInitialSubchainMarkerTypes
+	)
 {
-    int is_available = 0;
-    switch(hmac_alg) {
-    case S2N_HMAC_MD5:
-    case S2N_HMAC_SSLv3_MD5:
-    case S2N_HMAC_SSLv3_SHA1:
-        /* Set is_available to 0 if in FIPS mode, as MD5/SSLv3 algs are not available in FIPS mode. */
-        is_available = !s2n_is_in_fips_mode();
-        break;
-    case S2N_HMAC_NONE:    
-    case S2N_HMAC_SHA1:
-    case S2N_HMAC_SHA224:
-    case S2N_HMAC_SHA256:
-    case S2N_HMAC_SHA384:
-    case S2N_HMAC_SHA512:
-        is_available = 1;
-        break;
-    default:
-        S2N_ERROR(S2N_ERR_HMAC_INVALID_ALGORITHM);
-    }
+	CXX_DEBUG_ENTER_TEXT("Token types = 0x%x",uTokenTypes);
+	if(!cxxParserParseNextToken())
+	{
+		CXX_DEBUG_LEAVE_TEXT("Found EOF");
+		return (uTokenTypes & CXXTokenTypeEOF); // was already at EOF
+	}
 
-    return is_available;
+	unsigned int uFinalSubchainMarkerTypes = uInitialSubchainMarkerTypes << 4;  // see the declaration of CXXTokenType enum. Shifting by 4 gives the corresponding closing token type
+
+	for(;;)
+	{
+		//CXX_DEBUG_PRINT("Current token is '%s' 0x%x",vStringValue(g_cxx.pToken->pszWord),g_cxx.pToken->eType);
+
+		if(cxxTokenTypeIsOneOf(g_cxx.pToken,uTokenTypes))
+		{
+			CXX_DEBUG_LEAVE_TEXT("Got terminator token '%s' 0x%x",vStringValue(g_cxx.pToken->pszWord),g_cxx.pToken->eType);
+			return TRUE;
+		}
+		
+		if(cxxTokenTypeIsOneOf(g_cxx.pToken,uInitialSubchainMarkerTypes))
+		{
+			// subchain
+			CXX_DEBUG_PRINT("Got subchain start token '%s' 0x%x",vStringValue(g_cxx.pToken->pszWord),g_cxx.pToken->eType);
+			CXXToken * pParenthesis;
+
+			if(
+				cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeOpeningBracket) &&
+				cxxParserCurrentLanguageIsCPP() &&
+				(pParenthesis = cxxParserOpeningBracketIsLambda())
+			)
+			{
+				if(!cxxParserHandleLambda(pParenthesis))
+				{
+					CXX_DEBUG_LEAVE_TEXT("Failed to handle lambda");
+					return FALSE;
+				}
+			} else {
+				if(!cxxParserParseAndCondenseCurrentSubchain(uInitialSubchainMarkerTypes,(uTokenTypes & CXXTokenTypeEOF)))
+				{
+					CXX_DEBUG_LEAVE_TEXT("Failed to parse subchain of type 0x%x",g_cxx.pToken->eType);
+					return false;
+				}
+			}
+
+			if(cxxTokenTypeIsOneOf(g_cxx.pToken,uTokenTypes))
+			{
+				// was looking for a subchain
+				CXX_DEBUG_LEAVE_TEXT("Got terminator subchain token 0x%x",g_cxx.pToken->eType);
+				return TRUE;
+			}
+
+			if(!cxxParserParseNextToken())
+			{
+				CXX_DEBUG_LEAVE_TEXT("Found EOF(2)");
+				return (uTokenTypes & CXXTokenTypeEOF); // was already at EOF
+			}
+
+			continue; // jump up to avoid checking for mismatched pairs below
+		}
+
+		// Check for mismatched brackets/parenthis
+		// Note that if we were looking for one of [({ then we would have matched it at the top of the for
+		if(cxxTokenTypeIsOneOf(g_cxx.pToken,uFinalSubchainMarkerTypes))
+		{
+			CXX_DEBUG_LEAVE_TEXT("Got mismatched subchain terminator 0x%x",g_cxx.pToken->eType);
+			return FALSE; // unmatched: syntax error
+		}
+
+		if(!cxxParserParseNextToken())
+		{
+			CXX_DEBUG_LEAVE_TEXT("Found EOF(3)");
+			return (uTokenTypes & CXXTokenTypeEOF); // was already at EOF
+		}
+	}
+
+	// not reached
+	CXX_DEBUG_LEAVE_TEXT("Internal error");
+	return FALSE;
 }
 
-static int s2n_sslv3_mac_init(struct s2n_hmac_state *state, s2n_hmac_algorithm alg, const void *key, uint32_t klen)
+//
+// This function parses input until one of the specified tokens appears.
+// The algorithm will also build subchains of matching pairs ([...],(...),{...}): within the subchain
+// analysis of uTokenTypes is completly disabled. Subchains do nest.
+//
+// Please note that this function will skip entire scopes (matching {} pairs) unless
+// you pass CXXTokenTypeOpeningBracket to stop at their beginning.
+// This is usually what you want, unless you're really expecting a scope to begin in
+// the current statement.
+//
+boolean cxxParserParseUpToOneOf(unsigned int uTokenTypes)
 {
-    for (int i = 0; i < state->xor_pad_size; i++) {
-        state->xor_pad[i] = 0x36;
-    }
-
-    GUARD(s2n_hash_update(&state->inner_just_key, key, klen));
-    GUARD(s2n_hash_update(&state->inner_just_key, state->xor_pad, state->xor_pad_size));
-
-    for (int i = 0; i < state->xor_pad_size; i++) {
-        state->xor_pad[i] = 0x5c;
-    }
-
-    GUARD(s2n_hash_update(&state->outer_just_key, key, klen));
-    GUARD(s2n_hash_update(&state->outer_just_key, state->xor_pad, state->xor_pad_size));
-
-    return 0;
+	return cxxParserParseAndCondenseSubchainsUpToOneOf(
+			uTokenTypes,
+			CXXTokenTypeOpeningBracket | CXXTokenTypeOpeningParenthesis | CXXTokenTypeOpeningSquareParenthesis
+		);
 }
 
-static int s2n_tls_hmac_init(struct s2n_hmac_state *state, s2n_hmac_algorithm alg, const void *key, uint32_t klen)
+//
+// This is called after a full enum/struct/class/union declaration that ends with a closing bracket.
+//
+static boolean cxxParserParseEnumStructClassOrUnionFullDeclarationTrailer(boolean bParsingTypedef,enum CXXKeyword eTagKeyword,enum CXXTagKind eTagKind,const char * szTypeName)
 {
-    memset(&state->xor_pad, 0, sizeof(state->xor_pad));
-    
-    if (klen > state->xor_pad_size) {
-        GUARD(s2n_hash_update(&state->outer, key, klen));
-        GUARD(s2n_hash_digest(&state->outer, state->digest_pad, state->digest_size));
-        memcpy_check(state->xor_pad, state->digest_pad, state->digest_size);
-    } else {
-        memcpy_check(state->xor_pad, key, klen);
-    }
+	CXX_DEBUG_ENTER();
 
-    for (int i = 0; i < state->xor_pad_size; i++) {
-        state->xor_pad[i] ^= 0x36;
-    }
+	cxxTokenChainClear(g_cxx.pTokenChain);
+	
+	CXX_DEBUG_PRINT("Parse enum/struct/class/union trailer, typename is '%s'",szTypeName);
 
-    GUARD(s2n_hash_update(&state->inner_just_key, state->xor_pad, state->xor_pad_size));
+	if(!cxxParserParseUpToOneOf(CXXTokenTypeEOF | CXXTokenTypeSemicolon))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Failed to parse up to EOF/semicolon");
+		return FALSE;
+	}
 
-    /* 0x36 xor 0x5c == 0x6a */
-    for (int i = 0; i < state->xor_pad_size; i++) {
-        state->xor_pad[i] ^= 0x6a;
-    }
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeEOF))
+	{
+		// It's a syntax error, but we can be tolerant here.
+		CXX_DEBUG_LEAVE_TEXT("Got EOF after enum/class/struct/union block");
+		return TRUE;
+	}
 
-    GUARD(s2n_hash_update(&state->outer_just_key, state->xor_pad, state->xor_pad_size));
-    return 0;
+	if(g_cxx.pTokenChain->iCount < 2)
+	{
+		CXX_DEBUG_LEAVE_TEXT("Nothing interesting after enum/class/struct/union block");
+		return TRUE;
+	}
+
+	// fake the initial two tokens
+	CXXToken * pIdentifier = cxxTokenCreate();
+	pIdentifier->eType = CXXTokenTypeIdentifier;
+	pIdentifier->bFollowedBySpace = TRUE;
+	vStringCatS(pIdentifier->pszWord,szTypeName);
+	cxxTokenChainPrepend(g_cxx.pTokenChain,pIdentifier);
+	
+	CXXToken * pKeyword = cxxTokenCreate();
+	pKeyword->eType = CXXTokenTypeKeyword;
+	pKeyword->eKeyword = eTagKeyword;
+	pKeyword->bFollowedBySpace = TRUE;
+	vStringCatS(pKeyword->pszWord,cxxTagGetKindOptions()[eTagKind].name);
+	cxxTokenChainPrepend(g_cxx.pTokenChain,pKeyword);
+
+	if(bParsingTypedef)
+		cxxParserHandleGenericTypedef();
+	else
+		cxxParserExtractVariableDeclarations(g_cxx.pTokenChain);
+
+	CXX_DEBUG_LEAVE();
+	return TRUE;
 }
 
-int s2n_hmac_xor_pad_size(s2n_hmac_algorithm hmac_alg, uint16_t *xor_pad_size)
+boolean cxxParserParseEnum()
 {
-    switch(hmac_alg) {
-    case S2N_HMAC_NONE:       *xor_pad_size = 64;   break;
-    case S2N_HMAC_MD5:        *xor_pad_size = 64;   break;
-    case S2N_HMAC_SHA1:       *xor_pad_size = 64;   break;
-    case S2N_HMAC_SHA224:     *xor_pad_size = 64;   break;
-    case S2N_HMAC_SHA256:     *xor_pad_size = 64;   break;
-    case S2N_HMAC_SHA384:     *xor_pad_size = 128;  break;
-    case S2N_HMAC_SHA512:     *xor_pad_size = 128;  break;
-    case S2N_HMAC_SSLv3_MD5:  *xor_pad_size = 48;   break;
-    case S2N_HMAC_SSLv3_SHA1: *xor_pad_size = 40;   break;
-    default:
-        S2N_ERROR(S2N_ERR_HMAC_INVALID_ALGORITHM);
-    }
-    return 0;
+	CXX_DEBUG_ENTER();
+
+	//cxxTokenChainClear(g_cxx.pTokenChain);
+
+	boolean bParsingTypedef = (g_cxx.uKeywordState & CXXParserKeywordStateSeenTypedef); // may be cleared below
+
+	/*
+		Spec is:
+			enum-key attr(optional) identifier(optional) enum-base(optional) { enumerator-list(optional) }	(1)	
+			enum-key attr(optional) identifier enum-base(optional) ;	(2)	(since C++11)
+	*/
+
+	// Skip attr and class-head-name
+	if(!cxxParserParseUpToOneOf(CXXTokenTypeEOF | CXXTokenTypeSemicolon | CXXTokenTypeParenthesisChain | CXXTokenTypeOpeningBracket))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Could not parse enum name");
+		return FALSE;
+	}
+
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeParenthesisChain))
+	{
+		// probably a function declaration/prototype
+		// something like enum x func()....
+		// do not clear statement
+		CXX_DEBUG_LEAVE_TEXT("Probably a function declaration!");
+		return TRUE;
+	}
+
+	// FIXME: This block is duplicated in struct/union/class
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeSemicolon))
+	{
+		if(g_cxx.pTokenChain->iCount > 3) // [typedef] struct X Y; <-- typedef has been removed!
+		{
+			if(g_cxx.uKeywordState & CXXParserKeywordStateSeenTypedef)
+			{
+				cxxParserHandleGenericTypedef();
+			} else {
+				cxxParserExtractVariableDeclarations(g_cxx.pTokenChain);
+			}
+		}
+
+		cxxParserNewStatement();
+		CXX_DEBUG_LEAVE();
+		return TRUE;
+	}
+	
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeEOF))
+	{
+		// tolerate EOF, treat as forward declaration
+		cxxParserNewStatement();
+		CXX_DEBUG_LEAVE_TEXT("EOF before enum block: treating as forward declaration");
+		return TRUE;
+	}
+
+	// semicolon or opening bracket
+
+	// check if we can extract a class name identifier
+	CXXToken * pEnumName = cxxTokenChainLastTokenOfType(g_cxx.pTokenChain,CXXTokenTypeIdentifier);
+	
+	int iPushedScopes = 0;
+	
+	if(pEnumName)
+	{
+		// good.
+		// It may be qualified though.
+		CXXToken * pNamespaceBegin = pEnumName;
+		CXXToken * pPrev = pEnumName->pPrev;
+		while(pPrev)
+		{
+			if(!cxxTokenTypeIs(pPrev,CXXTokenTypeMultipleColons))
+				break;
+			pPrev = pPrev->pPrev;
+			if(!pPrev)
+				break;
+			if(!cxxTokenTypeIs(pPrev,CXXTokenTypeIdentifier))
+				break;
+			pNamespaceBegin = pPrev;
+			pPrev = pPrev->pPrev;
+		}
+		
+		while(pNamespaceBegin != pEnumName)
+		{
+			CXXToken * pNext = pNamespaceBegin->pNext;
+			cxxTokenChainTake(g_cxx.pTokenChain,pNamespaceBegin);
+			cxxScopePush(pNamespaceBegin,CXXTagKindCLASS,CXXScopeAccessUnknown); // FIXME: We don't really know if it's a class!
+			iPushedScopes++;
+			pNamespaceBegin = pNext->pNext;
+		}
+		
+		CXX_DEBUG_PRINT("Enum name is %s",vStringValue(pEnumName->pszWord));
+		cxxTokenChainTake(g_cxx.pTokenChain,pEnumName);
+	} else {
+		pEnumName = cxxTokenCreateAnonymousIdentifier();
+		CXX_DEBUG_PRINT("Enum name is %s (anonymous)",vStringValue(pEnumName->pszWord));
+	}
+
+	tagEntryInfo * tag = cxxTagBegin(pEnumName->pszWord->buffer,CXXTagKindENUM,pEnumName);
+	
+	if(tag)
+	{
+		// FIXME: this is debatable
+		tag->isFileScope = !isInputHeaderFile();
+	
+		cxxTagCommit();
+	}
+
+	cxxScopePush(pEnumName,CXXTagKindENUM,CXXScopeAccessPublic);
+	iPushedScopes++;
+
+	vString * pScopeName = cxxScopeGetFullNameAsString();
+
+	// Special kind of block
+	for(;;)
+	{
+		cxxTokenChainClear(g_cxx.pTokenChain);
+	
+		if(!cxxParserParseUpToOneOf(CXXTokenTypeComma | CXXTokenTypeClosingBracket | CXXTokenTypeEOF))
+		{
+			CXX_DEBUG_LEAVE_TEXT("Failed to parse enum contents");
+			if(pScopeName)
+				vStringDelete(pScopeName);
+			return FALSE;
+		}
+
+		CXXToken * pFirst = cxxTokenChainFirst(g_cxx.pTokenChain);
+
+		// enumerator.
+		if((g_cxx.pTokenChain->iCount > 1) && cxxTokenTypeIs(pFirst,CXXTokenTypeIdentifier))
+		{
+			tag = cxxTagBegin(vStringValue(pFirst->pszWord),CXXTagKindENUMERATOR,pFirst);
+			if(tag)
+			{
+				tag->isFileScope = !isInputHeaderFile();
+				cxxTagCommit();
+			}
+		}
+
+		if(cxxTokenTypeIsOneOf(g_cxx.pToken,CXXTokenTypeEOF | CXXTokenTypeClosingBracket))
+			break;
+	}
+
+	while(iPushedScopes > 0)
+	{
+		cxxScopePop();
+		iPushedScopes--;
+	}
+
+	boolean bRet = cxxParserParseEnumStructClassOrUnionFullDeclarationTrailer(bParsingTypedef,CXXKeywordENUM,CXXTagKindENUM,vStringValue(pScopeName));
+
+	if(pScopeName)
+		vStringDelete(pScopeName);
+
+	cxxParserNewStatement();
+	CXX_DEBUG_LEAVE();
+	return bRet;
+};
+
+
+boolean cxxParserParseClassStructOrUnion(enum CXXKeyword eKeyword,enum CXXTagKind eTagKind)
+{
+	CXX_DEBUG_ENTER();
+
+	//cxxTokenChainClear(g_cxx.pTokenChain);
+	
+	boolean bParsingTypedef = (g_cxx.uKeywordState & CXXParserKeywordStateSeenTypedef); // may be cleared below
+
+	/*
+		Spec is:
+			class-key attr class-head-name base-clause { member-specification }		
+
+			class-key	-	one of class or struct. The keywords are identical except for the default member access and the default base class access.
+			attr(C++11)	-	optional sequence of any number of attributes, may include alignas specifier
+			class-head-name	-	the name of the class that's being defined. Optionally qualified, optionally followed by keyword final. The name may be omitted, in which case the class is unnamed (note that unnamed class cannot be final)
+			base-clause	-	optional list of one or more parent classes and the model of inheritance used for each (see derived class)
+			member-specification	-	list of access specifiers, member object and member function declarations and definitions (see below)
+	*/
+
+	// Skip attr and class-head-name
+
+	g_cxx.bParsingClassStructOrUnionDeclaration = TRUE; // enable "final" keyword handling
+
+	unsigned int uTerminatorTypes = CXXTokenTypeEOF | CXXTokenTypeSingleColon | CXXTokenTypeSemicolon | CXXTokenTypeOpeningBracket | CXXTokenTypeSmallerThanSign;
+	if(eTagKind != CXXTagKindCLASS)
+		uTerminatorTypes |= CXXTokenTypeParenthesisChain;
+
+	boolean bRet;
+
+	for(;;)
+	{
+		bRet = cxxParserParseUpToOneOf(uTerminatorTypes);
+
+		if(!bRet)
+		{
+			g_cxx.bParsingClassStructOrUnionDeclaration = FALSE;
+			CXX_DEBUG_LEAVE_TEXT("Could not parse class/struct/union name");
+			return FALSE;
+		}
+
+		if(!cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeSmallerThanSign))
+			break;
+
+		// Probably a template specialisation
+		
+		// template<typename T> struct X<int>
+		// {
+		// }
+		
+		// FIXME: Should we add the specialisation arguments somewhere? Maye as a separate field?
+
+		bRet = cxxParserParseAndCondenseCurrentSubchain(
+					CXXTokenTypeOpeningParenthesis | CXXTokenTypeOpeningBracket | CXXTokenTypeOpeningSquareParenthesis | CXXTokenTypeSmallerThanSign,
+					FALSE
+				);
+
+		if(!bRet)
+		{
+			g_cxx.bParsingClassStructOrUnionDeclaration = FALSE;
+			CXX_DEBUG_LEAVE_TEXT("Could not parse class/struct/union name");
+			return FALSE;
+		}
+	}
+
+	g_cxx.bParsingClassStructOrUnionDeclaration = FALSE;
+
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeParenthesisChain))
+	{
+		// probably a function declaration/prototype
+		// something like struct x * func()....
+		// do not clear statement
+		CXX_DEBUG_LEAVE_TEXT("Probably a function declaration!");
+		return TRUE;
+	}
+
+	// FIXME: This block is duplicated in enum
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeSemicolon))
+	{
+		if(g_cxx.pTokenChain->iCount > 3) // [typedef] struct X Y; <-- typedef has been removed!
+		{
+			if(bParsingTypedef)
+				cxxParserHandleGenericTypedef();
+			else
+				cxxParserExtractVariableDeclarations(g_cxx.pTokenChain);
+		}
+
+		cxxParserNewStatement();
+		CXX_DEBUG_LEAVE();
+		return TRUE;
+	}
+	
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeEOF))
+	{
+		// tolerate EOF, just ignore this
+		cxxParserNewStatement();
+		CXX_DEBUG_LEAVE_TEXT("EOF: ignoring");
+		return TRUE;
+	}
+
+	// semicolon or opening bracket
+
+	// check if we can extract a class name identifier
+	CXXToken * pClassName = cxxTokenChainLastTokenOfType(g_cxx.pTokenChain,CXXTokenTypeIdentifier);
+	
+	int iPushedScopes = 0;
+	
+	if(pClassName)
+	{
+		// good.
+		// It may be qualified though.
+		CXXToken * pNamespaceBegin = pClassName;
+		CXXToken * pPrev = pClassName->pPrev;
+		while(pPrev)
+		{
+			if(!cxxTokenTypeIs(pPrev,CXXTokenTypeMultipleColons))
+				break;
+			pPrev = pPrev->pPrev;
+			if(!pPrev)
+				break;
+			if(!cxxTokenTypeIs(pPrev,CXXTokenTypeIdentifier))
+				break;
+			pNamespaceBegin = pPrev;
+			pPrev = pPrev->pPrev;
+		}
+		
+		while(pNamespaceBegin != pClassName)
+		{
+			CXXToken * pNext = pNamespaceBegin->pNext;
+			cxxTokenChainTake(g_cxx.pTokenChain,pNamespaceBegin);
+			cxxScopePush(pNamespaceBegin,CXXTagKindCLASS,CXXScopeAccessUnknown); // FIXME: We don't really know if it's a class!
+			iPushedScopes++;
+			pNamespaceBegin = pNext->pNext;
+		}
+		
+		CXX_DEBUG_PRINT("Class/struct/union name is %s",vStringValue(pClassName->pszWord));
+		cxxTokenChainTake(g_cxx.pTokenChain,pClassName);
+	} else {
+		pClassName = cxxTokenCreateAnonymousIdentifier();
+		CXX_DEBUG_PRINT("Class/struct/union name is %s (anonymous)",vStringValue(pClassName->pszWord));
+	}
+
+	cxxTokenChainClear(g_cxx.pTokenChain);
+
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeSingleColon))
+	{
+		// check for base classes
+	
+		if(!cxxParserParseUpToOneOf(CXXTokenTypeEOF | CXXTokenTypeSemicolon | CXXTokenTypeOpeningBracket))
+		{
+			cxxTokenDestroy(pClassName);
+			CXX_DEBUG_LEAVE_TEXT("Failed to parse base class part");
+			return FALSE;
+		}
+	
+		if(cxxTokenTypeIsOneOf(g_cxx.pToken,CXXTokenTypeSemicolon | CXXTokenTypeEOF))
+		{
+			cxxTokenDestroy(pClassName);
+			cxxParserNewStatement();
+			CXX_DEBUG_LEAVE_TEXT("Syntax error: ignoring");
+			return TRUE;
+		}
+		
+		cxxTokenChainDestroyLast(g_cxx.pTokenChain); // remove the {
+	}
+
+	tagEntryInfo * tag = cxxTagBegin(pClassName->pszWord->buffer,eTagKind,pClassName);
+
+	if(tag)
+	{
+		if(g_cxx.pTokenChain->iCount > 0)
+		{
+			cxxTokenChainCondense(g_cxx.pTokenChain,0);
+			tag->extensionFields.inheritance = vStringValue(g_cxx.pTokenChain->pHead->pszWord);
+		}
+		
+		tag->isFileScope = !isInputHeaderFile();
+		
+		cxxTagCommit();
+	}
+
+	cxxScopePush(pClassName,eTagKind,(eTagKind == CXXTagKindCLASS) ? CXXScopeAccessPrivate : CXXScopeAccessPublic);
+
+	vString * pScopeName = cxxScopeGetFullNameAsString();
+
+	if(!cxxParserParseBlock(TRUE))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Failed to parse scope");
+		if(pScopeName)
+			vStringDelete(pScopeName);
+		return FALSE;
+	}
+
+	iPushedScopes++;
+	while(iPushedScopes > 0)
+	{
+		cxxScopePop();
+		iPushedScopes--;
+	}
+
+	bRet = cxxParserParseEnumStructClassOrUnionFullDeclarationTrailer(bParsingTypedef,eKeyword,eTagKind,vStringValue(pScopeName));
+
+	if(pScopeName)
+		vStringDelete(pScopeName);
+
+	cxxParserNewStatement();
+	CXX_DEBUG_LEAVE();
+	return bRet;
+};
+
+//
+// This is called at block level, upon encountering a semicolon, an unbalanced closing bracket or EOF.
+// The current token is something like:
+//   static const char * variable;
+//   int i = ....
+//   const QString & function(whatever) const;
+//   QString szText("ascii");
+//   QString(...)
+//
+// Notable facts:
+//   - several special statements never end up here: this includes class, struct, union, enum, namespace, typedef,
+//     case, try, catch and other similar stuff.
+//   - the terminator is always at the end. It's either a semicolon, a closing bracket or an EOF
+//   - the parentheses and brackets are always condensed in subchains (unless unbalanced).
+//
+//                int __attribute__() function();
+//                                  |          |
+//                             ("whatever")  (int var1,type var2) 
+//
+//                const char * strings[] = {}
+//                                    |     |
+//                                   [10]  { "string","string",.... }
+//
+// This function tries to extract variable declarations and function prototypes.
+//
+// Yes, it's complex: it's because C/C++ is complex.
+//
+void cxxParserAnalyzeOtherStatement()
+{
+	CXX_DEBUG_ENTER();
+
+#ifdef CXX_DO_DEBUGGING
+	vString * pChain = cxxTokenChainJoin(g_cxx.pTokenChain,NULL,0);
+	CXX_DEBUG_PRINT("Analyzing statement '%s'",vStringValue(pChain));
+	vStringDelete(pChain);
+#endif
+
+	CXX_DEBUG_ASSERT(g_cxx.pTokenChain->iCount > 0,"There should be at least the terminator here!");
+
+	if(g_cxx.pTokenChain->iCount < 2)
+	{
+		CXX_DEBUG_LEAVE_TEXT("Empty statement");
+		return;
+	}
+	
+	if(g_cxx.uKeywordState & CXXParserKeywordStateSeenReturn)
+	{
+		CXX_DEBUG_LEAVE_TEXT("Statement after a return is not interesting");
+		return;
+	}
+
+	// Everything we can make sense of starts with an identifier or keyword. This is usually a type name
+	// (eventually decorated by some attributes and modifiers) with the notable exception of constructor/destructor declarations
+	// (which are still identifiers tho).
+	
+	CXXToken * t = cxxTokenChainFirst(g_cxx.pTokenChain);
+	
+	if(!cxxTokenTypeIsOneOf(t,CXXTokenTypeIdentifier | CXXTokenTypeKeyword))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Statement does not start with an identifier or keyword");
+		return;
+	}
+
+	enum CXXTagKind eScopeKind = cxxScopeGetKind();
+
+	CXXFunctionSignatureInfo oInfo;
+
+	// kinda looks like a function or variable instantiation... maybe
+	if(eScopeKind == CXXTagKindFUNCTION)
+	{
+		// prefer variable declarations.
+		// if none found then try function prototype
+		if(cxxParserExtractVariableDeclarations(g_cxx.pTokenChain))
+		{
+			CXX_DEBUG_LEAVE_TEXT("Found variable declarations");
+			return;
+		}
+
+		// FIXME: This *COULD* work but we should first rule out the possibility of simple function calls
+		// like func(a). The function signature search should be far stricter here.
+		//if(cxxParserLookForFunctionSignature(g_cxx.pTokenChain,&oInfo,NULL))
+		//	cxxParserEmitFunctionTags(&oInfo,CXXTagKindPROTOTYPE,0);
+
+		CXX_DEBUG_LEAVE();
+		return;
+	}
+
+	// prefer function.
+	if(cxxParserLookForFunctionSignature(g_cxx.pTokenChain,&oInfo,NULL))
+	{
+		cxxParserEmitFunctionTags(&oInfo,CXXTagKindPROTOTYPE,0);
+		CXX_DEBUG_LEAVE_TEXT("Found function prototypes");
+		return;
+	}
+
+	if(
+		g_cxx.uKeywordState &
+		(
+			CXXParserKeywordStateSeenInline | CXXParserKeywordStateSeenExplicit |
+			CXXParserKeywordStateSeenOperator | CXXParserKeywordStateSeenVirtual
+		)
+	)
+	{
+		// must be function!
+		CXX_DEBUG_LEAVE_TEXT("WARNING: Was expecting to find a function prototype but did not find one");
+		return;
+	}
+
+	cxxParserExtractVariableDeclarations(g_cxx.pTokenChain);
+	CXX_DEBUG_LEAVE_TEXT("Nothing else");
 }
 
-int s2n_hmac_hash_block_size(s2n_hmac_algorithm hmac_alg, uint16_t *block_size)
+
+// This is called when we encounter a "public", "protected" or "private" keyword
+// that is NOT in the class declaration header line.
+boolean cxxParserParseAccessSpecifier()
 {
-    switch(hmac_alg) {
-    case S2N_HMAC_NONE:       *block_size = 64;   break;
-    case S2N_HMAC_MD5:        *block_size = 64;   break;
-    case S2N_HMAC_SHA1:       *block_size = 64;   break;
-    case S2N_HMAC_SHA224:     *block_size = 64;   break;
-    case S2N_HMAC_SHA256:     *block_size = 64;   break;
-    case S2N_HMAC_SHA384:     *block_size = 128;  break;
-    case S2N_HMAC_SHA512:     *block_size = 128;  break;
-    case S2N_HMAC_SSLv3_MD5:  *block_size = 64;   break;
-    case S2N_HMAC_SSLv3_SHA1: *block_size = 64;   break;
-    default:
-        S2N_ERROR(S2N_ERR_HMAC_INVALID_ALGORITHM);
-    }
-    return 0;
-}
+	CXX_DEBUG_ENTER();
 
-int s2n_hmac_new(struct s2n_hmac_state *state)
-{
-    GUARD(s2n_hash_new(&state->inner));
-    GUARD(s2n_hash_new(&state->inner_just_key));
-    GUARD(s2n_hash_new(&state->outer));
-    GUARD(s2n_hash_new(&state->outer_just_key));
+	enum CXXTagKind eScopeKind = cxxScopeGetKind();
 
-    return 0;
-}
+	if((eScopeKind != CXXTagKindCLASS) && (eScopeKind != CXXTagKindSTRUCT) && (eScopeKind != CXXTagKindUNION))
+	{
+		// this is a syntax error: we're in the wrong scope.
+		CXX_DEBUG_LEAVE_TEXT("Access specified in wrong context (%d): bailing out to avoid reporting broken structure",eScopeKind);
+		return FALSE;
+	}
+	
+	switch(g_cxx.pToken->eKeyword)
+	{
+		case CXXKeywordPUBLIC:
+			cxxScopeSetAccess(CXXScopeAccessPublic);
+		break;
+		case CXXKeywordPRIVATE:
+			cxxScopeSetAccess(CXXScopeAccessPrivate);
+		break;
+		case CXXKeywordPROTECTED:
+			cxxScopeSetAccess(CXXScopeAccessProtected);
+		break;
+		default:
+			CXX_DEBUG_ASSERT(false,"Bad keyword in cxxParserParseAccessSpecifier!");
+		break;
+	}
+	
+	// skip to the next :, without leaving scope.
+	if(!cxxParserParseUpToOneOf(CXXTokenTypeSingleColon | CXXTokenTypeSemicolon | CXXTokenTypeClosingBracket | CXXTokenTypeEOF))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Failed to parse up to the next ;");
+		return false;
+	}
 
-int s2n_hmac_init(struct s2n_hmac_state *state, s2n_hmac_algorithm alg, const void *key, uint32_t klen)
-{
-    if (!s2n_hmac_is_available(alg)) {
-        /* Prevent hmacs from being used if they are not available. */
-        S2N_ERROR(S2N_ERR_HMAC_INVALID_ALGORITHM);
-    }
-
-    state->alg = alg;
-    GUARD(s2n_hmac_hash_block_size(alg, &state->hash_block_size));
-    state->currently_in_hash_block = 0;
-    GUARD(s2n_hmac_xor_pad_size(alg, &state->xor_pad_size));
-    GUARD(s2n_hmac_digest_size(alg, &state->digest_size));
-
-    gte_check(sizeof(state->xor_pad), state->xor_pad_size);
-    gte_check(sizeof(state->digest_pad), state->digest_size);
-    /* key needs to be as large as the biggest block size */
-    gte_check(sizeof(state->xor_pad), state->hash_block_size);
-
-    s2n_hash_algorithm hash_alg;
-    GUARD(s2n_hmac_hash_alg(alg, &hash_alg));
-
-    GUARD(s2n_hash_init(&state->inner, hash_alg));
-    GUARD(s2n_hash_init(&state->inner_just_key, hash_alg));
-    GUARD(s2n_hash_init(&state->outer, hash_alg));
-    GUARD(s2n_hash_init(&state->outer_just_key, hash_alg));
-
-    if (alg == S2N_HMAC_SSLv3_SHA1 || alg == S2N_HMAC_SSLv3_MD5) {
-        GUARD(s2n_sslv3_mac_init(state, alg, key, klen));
-    } else {
-        GUARD(s2n_tls_hmac_init(state, alg, key, klen));
-    }
-
-    /* Once we have produced inner_just_key and outer_just_key, don't need the key material in xor_pad, so wipe it.
-     * Since xor_pad is used as a source of bytes in s2n_hmac_digest_two_compression_rounds,
-     * this also prevents uninitilized bytes being used.
-     */
-    memset(&state->xor_pad, 0, sizeof(state->xor_pad));
-    GUARD(s2n_hmac_reset(state));
-
-    return 0;
-}
-
-int s2n_hmac_update(struct s2n_hmac_state *state, const void *in, uint32_t size)
-{
-    /* Keep track of how much of the current hash block is full
-     *
-     * Why the 4294949760 constant in this code? 4294949760 is the highest 32-bit
-     * value that is congruent to 0 modulo all of our HMAC block sizes, that is also
-     * at least 16k smaller than 2^32. It therefore has no effect on the mathematical
-     * result, and no valid record size can cause it to overflow.
-     * 
-     * The value was found with the following python code;
-     * 
-     * x = (2 ** 32) - (2 ** 14)
-     * while True:
-     *   if x % 40 | x % 48 | x % 64 | x % 128 == 0:
-     *     break
-     *   x -= 1
-     * print x
-     *
-     * What it does do however is ensure that the mod operation takes a
-     * constant number of instruction cycles, regardless of the size of the
-     * input. On some platforms, including Intel, the operation can take a
-     * smaller number of cycles if the input is "small".
-     */
-    state->currently_in_hash_block += (4294949760 + size) % state->hash_block_size;
-    state->currently_in_hash_block %= state->hash_block_size;
-
-    return s2n_hash_update(&state->inner, in, size);
-}
-
-int s2n_hmac_digest(struct s2n_hmac_state *state, void *out, uint32_t size)
-{
-    GUARD(s2n_hash_digest(&state->inner, state->digest_pad, state->digest_size));
-    GUARD(s2n_hash_copy(&state->outer, &state->outer_just_key));
-    GUARD(s2n_hash_update(&state->outer, state->digest_pad, state->digest_size));
-
-    return s2n_hash_digest(&state->outer, out, size);
-}
-
-int s2n_hmac_digest_two_compression_rounds(struct s2n_hmac_state *state, void *out, uint32_t size)
-{
-    /* Do the "real" work of this function. */
-    GUARD(s2n_hmac_digest(state, out, size));
-
-    /* If there were 9 or more bytes of space left in the current hash block
-     * then the serialized length, plus an 0x80 byte, will have fit in that block.
-     * If there were fewer than 9 then adding the length will have caused an extra
-     * compression block round. This digest function always does two compression rounds,
-     * even if there is no need for the second.
-     *
-     * 17 bytes if the block size is 128.
-     */
-    uint8_t space_left = 9;
-    if (state->block_size == 128) {
-        space_left = 17;
-    }
-
-    if (state->currently_in_hash_block > (state->hash_block_size - space_left)) {
-        return 0;
-    }
-
-    /* Can't reuse a hash after it has been finalized, so reset and push another block in */
-    GUARD(s2n_hash_reset(&state->inner));
-
-    /* No-op s2n_hash_update to normalize timing and guard against Lucky13. This does not affect the value of *out. */
-    return s2n_hash_update(&state->inner, state->xor_pad, state->hash_block_size);
-}
-
-int s2n_hmac_free(struct s2n_hmac_state *state)
-{
-    GUARD(s2n_hash_free(&state->inner));
-    GUARD(s2n_hash_free(&state->inner_just_key));
-    GUARD(s2n_hash_free(&state->outer));
-    GUARD(s2n_hash_free(&state->outer_just_key));
-
-    return 0;
-}
-
-int s2n_hmac_reset(struct s2n_hmac_state *state)
-{
-    GUARD(s2n_hash_copy(&state->inner, &state->inner_just_key));
-    
-    uint64_t bytes_in_hash;
-    GUARD(s2n_hash_get_currently_in_hash_total(&state->inner, &bytes_in_hash));
-    /* The length of the key is not private, so don't need to do tricky math here */
-    state->currently_in_hash_block = bytes_in_hash % state->hash_block_size;
-    return 0;
-}
-
-int s2n_hmac_digest_verify(const void *a, const void *b, uint32_t len)
-{
-    return 0 - !s2n_constant_time_equals(a, b, len);
-}
-
-int s2n_hmac_copy(struct s2n_hmac_state *to, struct s2n_hmac_state *from)
-{
-    /* memcpy cannot be used on s2n_hmac_state as the underlying s2n_hash implementation's
-     * copy must be used. This is enforced when the s2n_hash implementation is s2n_evp_hash.
-     */
-    to->alg = from->alg;
-    to->hash_block_size = from->hash_block_size;
-    to->currently_in_hash_block = from->currently_in_hash_block;
-    to->xor_pad_size = from->xor_pad_size;
-    to->digest_size = from->digest_size;
-
-    GUARD(s2n_hash_copy(&to->inner, &from->inner));
-    GUARD(s2n_hash_copy(&to->inner_just_key, &from->inner_just_key));
-    GUARD(s2n_hash_copy(&to->outer, &from->outer));
-    GUARD(s2n_hash_copy(&to->outer_just_key, &from->outer_just_key));
-
-
-    memcpy_check(to->xor_pad, from->xor_pad, sizeof(to->xor_pad));
-    memcpy_check(to->digest_pad, from->digest_pad, sizeof(to->digest_pad));
-
-    return 0;
+	cxxTokenChainClear(g_cxx.pTokenChain);
+	CXX_DEBUG_LEAVE();
+	return TRUE;
 }
 
 
-/* Preserve the handlers for hmac state pointers to avoid re-allocation 
- * Only valid if the HMAC is in EVP mode
- */
-int s2n_hmac_save_evp_hash_state(struct s2n_hmac_evp_backup* backup, struct s2n_hmac_state* hmac)
+//
+// This is used to handle non struct/class/union/enum typedefs.
+//
+boolean cxxParserParseGenericTypedef()
 {
-    backup->inner = hmac->inner.digest.high_level;
-    backup->inner_just_key = hmac->inner_just_key.digest.high_level;
-    backup->outer = hmac->outer.digest.high_level;
-    backup->outer_just_key = hmac->outer_just_key.digest.high_level;
-    return 0;
+	CXX_DEBUG_ENTER();
+	
+	for(;;)
+	{
+		if(!cxxParserParseUpToOneOf(CXXTokenTypeSemicolon | CXXTokenTypeEOF | CXXTokenTypeClosingBracket | CXXTokenTypeKeyword))
+		{
+			CXX_DEBUG_LEAVE_TEXT("Failed to parse fast statement");
+			return FALSE;
+		}
+		
+		// This fixes bug reported by Emil Rojas in 2002.
+		// Though it's quite debatable if we really *should* do this.
+		if(!cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeKeyword))
+		{
+			// not a keyword
+			if(!cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeSemicolon))
+			{
+				// not semicolon
+				CXX_DEBUG_LEAVE_TEXT("Found EOF/closing bracket at typedef");
+				return TRUE; // EOF
+			}
+			// semicolon: exit
+			break;
+		}
+
+		// keyword
+		if(
+			(g_cxx.pToken->eKeyword == CXXKeywordEXTERN) ||
+			(g_cxx.pToken->eKeyword == CXXKeywordTYPEDEF) ||
+			(g_cxx.pToken->eKeyword == CXXKeywordSTATIC)
+		)
+		{
+			CXX_DEBUG_LEAVE_TEXT("Found a terminating keyword inside typedef");
+			return TRUE; // treat as semicolon but don't dare to emit a tag
+		}
+	}
+
+	cxxParserHandleGenericTypedef();
+	CXX_DEBUG_LEAVE();
+	return TRUE;
 }
 
-int s2n_hmac_restore_evp_hash_state(struct s2n_hmac_evp_backup* backup, struct s2n_hmac_state* hmac)
+void cxxParserHandleGenericTypedef()
 {
-    hmac->inner.digest.high_level = backup->inner;
-    hmac->inner_just_key.digest.high_level = backup->inner_just_key;
-    hmac->outer.digest.high_level = backup->outer;
-    hmac->outer_just_key.digest.high_level = backup->outer_just_key;
-    return 0;
+	// FIXME: Make this function take a generic token chain
+	CXX_DEBUG_ENTER();
+
+	// find the last identifier
+	CXXToken * t;
+
+	// check for special case of function pointer definition
+	if(
+		g_cxx.pToken->pPrev &&
+		cxxTokenTypeIs(g_cxx.pToken->pPrev,CXXTokenTypeParenthesisChain) &&
+		g_cxx.pToken->pPrev->pPrev &&
+		cxxTokenTypeIs(g_cxx.pToken->pPrev->pPrev,CXXTokenTypeParenthesisChain) &&
+		g_cxx.pToken->pPrev->pPrev->pPrev &&
+		(t = cxxTokenChainLastTokenOfType(g_cxx.pToken->pPrev->pPrev->pChain,CXXTokenTypeIdentifier))
+	)
+	{
+		CXX_DEBUG_PRINT("Found function pointer typedef");
+	} else {
+		t = cxxTokenChainLastTokenOfType(g_cxx.pTokenChain,CXXTokenTypeIdentifier);
+	}
+	
+	if(!t)
+	{
+		CXX_DEBUG_LEAVE_TEXT("Didn't find an identifier");
+		return; // EOF
+	}
+	
+	if(!t->pPrev)
+	{
+		CXX_DEBUG_LEAVE_TEXT("No type before the typedef'd identifier");
+		return; // EOF
+	}
+
+	// FIXME: typeref here?
+	tagEntryInfo * tag = cxxTagBegin(
+			vStringValue(t->pszWord),
+			CXXTagKindTYPEDEF,
+			t
+		);
+
+	if(tag)
+	{
+		// check for simple typerefs (this is to emulate what old ctags did!)
+		if(
+			cxxTokenTypeIs(t->pPrev,CXXTokenTypeIdentifier) &&
+			t->pPrev->pPrev &&
+			(!t->pPrev->pPrev->pPrev) &&
+			cxxTokenTypeIs(t->pPrev->pPrev,CXXTokenTypeKeyword) &&
+			(
+				(t->pPrev->pPrev->eKeyword == CXXKeywordSTRUCT) ||
+				(t->pPrev->pPrev->eKeyword == CXXKeywordUNION) ||
+				(t->pPrev->pPrev->eKeyword == CXXKeywordCLASS) ||
+				(t->pPrev->pPrev->eKeyword == CXXKeywordENUM)
+			)
+		)
+		{
+			tag->extensionFields.typeRef[0] = vStringValue(t->pPrev->pPrev->pszWord);
+			tag->extensionFields.typeRef[1] = vStringValue(t->pPrev->pszWord);
+			CXX_DEBUG_PRINT("Typeref is %s:%s",tag->extensionFields.typeRef[0],tag->extensionFields.typeRef[1]);
+		} else {
+			CXX_DEBUG_PRINT("No typeref found");
+		}
+
+		tag->isFileScope = !isInputHeaderFile();
+	
+		cxxTagCommit();
+	}
+
+	CXX_DEBUG_LEAVE();
+	return;
+}
+
+boolean cxxParserParseIfForWhileSwitch()
+{
+	CXX_DEBUG_ENTER();
+
+	if(!cxxParserParseUpToOneOf(CXXTokenTypeParenthesisChain | CXXTokenTypeSemicolon | CXXTokenTypeOpeningBracket | CXXTokenTypeEOF))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Failed to parse if/for/while/switch up to parenthesis");
+		return FALSE;
+	}
+	
+	if(cxxTokenTypeIsOneOf(g_cxx.pToken,CXXTokenTypeEOF | CXXTokenTypeSemicolon))
+	{
+		CXX_DEBUG_LEAVE_TEXT("Found EOF/semicolon while parsing if/for/while/switch");
+		return TRUE;
+	}
+	
+	if(cxxTokenTypeIs(g_cxx.pToken,CXXTokenTypeParenthesisChain))
+	{
+		// Extract variables from the parenthesis chain
+		// We handle only simple cases.
+		CXXTokenChain * pChain = g_cxx.pToken->pChain;
+
+		CXX_DEBUG_ASSERT(pChain->iCount >= 2,"The parenthesis chain must have initial and final parenthesis");
+
+		// Kill the initial parenthesis
+		cxxTokenChainDestroyFirst(pChain);
+		// Fake the final semicolon
+		CXXToken * t = cxxTokenChainLast(pChain);
+		t->eType = CXXTokenTypeSemicolon;
+		vStringClear(t->pszWord);
+		vStringPut(t->pszWord,';');
+
+		// and extract variable declarations if possible
+		cxxParserExtractVariableDeclarations(pChain);
+
+		CXX_DEBUG_LEAVE_TEXT("Found if/for/while/switch parenthesis chain");
+		return TRUE;
+	}
+
+	// must be opening bracket: parse it here.
+
+	boolean bRet = cxxParserParseBlock(TRUE);
+
+	CXX_DEBUG_LEAVE();
+
+	return bRet;
+}
+
+rescanReason cxxParserMain(const unsigned int passCount)
+{
+	if(g_bFirstRun)
+	{
+		cxxTokenAPIInit();
+
+		g_cxx.pTokenChain = cxxTokenChainCreate();
+
+		cxxScopeInit();
+		
+		g_bFirstRun = FALSE;
+	} else {
+		// Only clean state
+		cxxScopeClear();
+		cxxTokenAPINewFile();
+		cxxParserNewStatement();
+	}
+
+	kindOption * kind_for_define = cxxTagGetKindOptions() + CXXTagKindMACRO;
+	kindOption * kind_for_header = cxxTagGetKindOptions() + CXXTagKindINCLUDE;
+	int role_for_macro_undef = CR_MACRO_UNDEF;
+	int role_for_header_system = CR_HEADER_SYSTEM;
+	int role_for_header_local = CR_HEADER_LOCAL;
+
+	Assert(passCount < 3);
+
+	cppInit(
+			(boolean) (passCount > 1),
+			FALSE,
+			TRUE, // raw literals
+			FALSE,
+			kind_for_define,
+			role_for_macro_undef,
+			kind_for_header,
+			role_for_header_system,
+			role_for_header_local
+		);
+
+	g_cxx.iChar = ' ';
+
+	boolean bRet = cxxParserParseBlock(FALSE);
+
+	cppTerminate ();
+
+	cxxTokenChainClear(g_cxx.pTokenChain);
+	if(g_cxx.pTemplateTokenChain)
+		cxxTokenChainClear(g_cxx.pTemplateTokenChain);
+	
+	if(!bRet && (passCount == 1))
+	{
+		CXX_DEBUG_PRINT("Processing failed: trying to rescan");
+		return RESCAN_FAILED;
+	}
+	
+	return RESCAN_NONE;
+}
+
+void cxxCppParserInitialize(const langType language)
+{
+	CXX_DEBUG_INIT();
+
+	CXX_DEBUG_PRINT("Parser initialize for language C++");
+	if(g_bFirstRun)
+		memset(&g_cxx,0,sizeof(CXXParserState));
+
+	g_cxx.eLanguage = language;
+	g_cxx.eCPPLanguage = language;
+	g_cxx.eCLanguage = -1;
+	cxxBuildKeywordHash(language,TRUE);
+}
+
+void cxxCParserInitialize(const langType language)
+{
+	CXX_DEBUG_INIT();
+
+	CXX_DEBUG_PRINT("Parser initialize for language C");
+	if(g_bFirstRun)
+		memset(&g_cxx,0,sizeof(CXXParserState));
+
+	g_cxx.eLanguage = language;
+	g_cxx.eCLanguage = language;
+	g_cxx.eCPPLanguage = -1;
+	cxxBuildKeywordHash(language,FALSE);
+}
+
+void cxxParserCleanup()
+{
+	if(g_bFirstRun)
+		return; // didn't run at all
+
+	if(g_cxx.pTokenChain)
+		cxxTokenChainDestroy(g_cxx.pTokenChain);
+	if(g_cxx.pTemplateTokenChain)
+		cxxTokenChainDestroy(g_cxx.pTemplateTokenChain);
+
+	cxxScopeDone();
+
+	cxxTokenAPIDone();
 }

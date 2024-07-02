@@ -1,17 +1,10 @@
 import torch
-            assign_results, sampling_results = multi_apply(
-                assign_and_sample,
-                proposal_list,
-                gt_bboxes,
-                gt_bboxes_ignore,
-                gt_labels,
-                cfg=self.train_cfg.rcnn)
 import torch.nn as nn
 
 from .base import BaseDetector
 from .test_mixins import RPNTestMixin, BBoxTestMixin, MaskTestMixin
 from .. import builder
-from mmdet.core import bbox2roi, bbox2result, build_assigner, build_sampler
+from mmdet.core import (bbox2roi, bbox2result, build_assigner, build_sampler)
 
 
 class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
@@ -109,9 +102,17 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         # assign gts and sample proposals
         if self.with_bbox or self.with_mask:
-            bbox_assigner = build_assigner(self.train_cfg.rcnn.assigner)
+            assign_results, sampling_results = multi_apply(
+                assign_and_sample,
+                proposal_list,
+                gt_bboxes,
+                gt_bboxes_ignore,
+                gt_labels,
+                cfg=self.train_cfg.rcnn)
             bbox_sampler = build_sampler(
-                self.train_cfg.rcnn.sampler, context=self)
+                self.train_cfg.rcnn.sampler,
+                dict(bbox_roi_extractor=self.bbox_roi_extractor,
+                     bbox_head=self.bbox_head))
             num_imgs = img.size(0)
             assign_results = []
             sampling_results = []

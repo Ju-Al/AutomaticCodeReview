@@ -1,9 +1,4 @@
 import React from 'react';
-        <WindowSizeContextProvider>
-            <ToastContextProvider>
-                <App />
-            </ToastContextProvider>
-        </WindowSizeContextProvider>
 import ReactDOM from 'react-dom';
 import { setContext } from 'apollo-link-context';
 import { Peregrine, Util } from '@magento/peregrine';
@@ -41,7 +36,11 @@ ReactDOM.render(
         apollo={{ link: authLink.concat(Adapter.apolloLink(apiBase)) }}
         store={store}
     >
-        <Peregrine>
+        <WindowSizeContextProvider>
+            <ToastContextProvider>
+                <App />
+            </ToastContextProvider>
+        </WindowSizeContextProvider>
             <App />
         </Peregrine>
     </Adapter>,

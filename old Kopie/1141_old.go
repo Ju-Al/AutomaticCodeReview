@@ -1,8 +1,4 @@
 // Copyright 2014 beego Author. All Rights Reserved.
-	//if no matches to url, throw a not found exception
-	if !findrouter {
-	if findrouter {
-		//execute middleware filters
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -697,7 +693,10 @@ func (p *ControllerRegistor) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 
 	}
 
-	// a "not found" exception is thrown in case no match was found
+	//if no matches to url, throw a not found exception
+	if findrouter {
+		//execute middleware filters
+	if !findrouter {
 	if !matchFound {
 		exception("404", context)
 		goto Admin

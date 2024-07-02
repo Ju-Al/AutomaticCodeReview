@@ -1459,7 +1459,6 @@ m_time_t m_mktime(struct tm* stm)
     return mktime(stm);
 }
 
-int m_clock_gettime(clockid_t clock_id, timespec *t)
 {
     if (!t)
     {

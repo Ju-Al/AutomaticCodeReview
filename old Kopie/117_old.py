@@ -1,8 +1,4 @@
 ## This file is part of Scapy
-                return (772, '\x00'*6)
-                l = l["link_addr"]
-                raise Scapy_Exception("Error in attempting to get hw address for interface [%s]" % iff)
-            return l.type,l.data
 ## See http://www.secdev.org/projects/scapy for more informations
 ## Copyright (C) Philippe Biondi <phil@secdev.org>
 ## This program is published under a GPLv2 license
@@ -489,8 +485,11 @@ if conf.use_dnet:
         else:
             raise
     else:
+                return (772, '\x00'*6)
+                l = l["link_addr"]
+                raise Scapy_Exception("Error in attempting to get hw address for interface [%s]" % iff)
+            return l.type,l.data
         def get_if_raw_hwaddr(iff):
-            """Return a tuple containing the link type and the raw hardware
                address corresponding to the interface 'iff'"""
 
             if iff == scapy.arch.LOOPBACK_NAME:

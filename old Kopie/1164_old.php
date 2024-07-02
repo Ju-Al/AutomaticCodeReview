@@ -10,44 +10,71 @@ declare(strict_types=1);
  * @license LGPL-3.0-or-later
  */
 
-namespace Contao\CoreBundle\Controller;
+namespace Contao\ManagerBundle\EventListener;
 
+use Contao\CoreBundle\Routing\ScopeMatcher;
+use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
 use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\UriSigner;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
- * @internal Do not use this controller in your code
+ * @internal
  */
-class Base64EncodedRedirectController
+class PreviewAuthenticationListener
 {
+    /**
+     * @var ScopeMatcher
+     */
+    private $scopeMatcher;
+
+    /**
+     * @var TokenChecker
+     */
+    private $tokenChecker;
+
+    /**
+     * @var UrlGeneratorInterface
+     */
+    private $router;
+
     /**
      * @var UriSigner
      */
     private $uriSigner;
 
-    public function __construct(UriSigner $uriSigner)
+    /**
+     * @var string
+     */
+    private $previewScript;
+
+    public function __construct(ScopeMatcher $scopeMatcher, TokenChecker $tokenChecker, UrlGeneratorInterface $router, UriSigner $uriSigner, string $previewScript)
     {
+        $this->scopeMatcher = $scopeMatcher;
+        $this->tokenChecker = $tokenChecker;
+        $this->router = $router;
         $this->uriSigner = $uriSigner;
+        $this->previewScript = $previewScript;
     }
 
-    /**
-     * @Route("/_contao/base64_redirect", name="contao_base64_redirect")
-     */
-    public function renderAction(Request $request): Response
+    public function __invoke(RequestEvent $event): void
     {
-        if (!$request->query->has('redirect')) {
-            throw new BadRequestHttpException();
+        $request = $event->getRequest();
+
+        if (
+            '' === $this->previewScript
+            || $request->getScriptName() !== $this->previewScript
+            || !$this->scopeMatcher->isFrontendRequest($request)
+            || $this->tokenChecker->hasBackendUser()
+        ) {
+            return;
         }
 
-        // we cannot use $request->getUri() here as we want to work with the original URI (no query string reordering)
-        if (!$this->uriSigner->check($request->getSchemeAndHttpHost().$request->getBaseUrl().$request->getPathInfo().(null !== ($qs = $request->server->get('QUERY_STRING')) ? '?'.$qs : ''))) {
-            throw new BadRequestHttpException();
-        }
-
-        return new RedirectResponse(base64_decode($request->query->get('redirect'), true));
+        $event->setResponse(new RedirectResponse($this->router->generate('contao_backend_login')));
+            new RedirectResponse($this->uriSigner->sign($this->router->generate('contao_backend_login', [
+                'redirect' => $request->getUri(),
+            ], UrlGeneratorInterface::ABSOLUTE_URL)))
+        );
     }
 }

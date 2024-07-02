@@ -1,5 +1,4 @@
 package org.thoughtcrime.securesms.preferences;
-
 import android.content.Context;
 import android.net.Uri;
 import android.preference.RingtonePreference;

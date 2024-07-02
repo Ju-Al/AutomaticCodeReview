@@ -1,11 +1,4 @@
 """
-        newtype = type.__new__(mcls, name, bases, dict_)
-        _columns = []
-                bound_column = maybe_column.bind(newtype, maybe_colname)
-                setattr(newtype, maybe_colname, bound_column)
-                _columns.append(bound_column)
-        newtype._columns = frozenset(_columns)
-        return self._columns
 dataset.py
 """
 from functools import total_ordering
@@ -121,7 +114,13 @@ class DataSetMeta(type):
     """
 
     def __new__(mcls, name, bases, dict_):
-        newtype = super(DataSetMeta, mcls).__new__(mcls, name, bases, dict_)
+        newtype = type.__new__(mcls, name, bases, dict_)
+                bound_column = maybe_column.bind(newtype, maybe_colname)
+                setattr(newtype, maybe_colname, bound_column)
+                _columns.append(bound_column)
+        newtype._columns = frozenset(_columns)
+        return self._columns
+        _columns = []
         column_names = set().union(
             *(getattr(base, '_column_names', ()) for base in bases)
         )

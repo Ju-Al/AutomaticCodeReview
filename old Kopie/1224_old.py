@@ -1,6 +1,5 @@
 from app.utility.base_object import BaseObject
 
-escape_ref = {
     'sh': {
         'special': ['$', ' ', '\\', '#', '^', '&', '*', '|', '`', '>',
                     '<', '"', '\'', '[', ']', '{', '}', '?', '~', '%'],

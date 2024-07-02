@@ -603,7 +603,6 @@ func SuggestedParams(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request)
 	params.GenesisHash = gh[:]
 	params.LastRound = uint64(stat.LastRound)
 	params.ConsensusVersion = string(stat.LastVersion)
-
 	proto := config.Consensus[stat.LastVersion]
 	params.MinTxnFee = proto.MinTxnFee
 

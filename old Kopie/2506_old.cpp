@@ -51,7 +51,6 @@ using namespace MathSpecial;
 
 enum{REVERSE_RHO};
 enum{FORWARD_IK,FORWARD_AD,FORWARD_IK_PERATOM,FORWARD_AD_PERATOM};
-enum{FORWARD=-1,BACKWARD=1};
 
 #ifdef FFT_SINGLE
 #define ZEROF 0.0f

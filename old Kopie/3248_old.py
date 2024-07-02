@@ -1,13 +1,4 @@
 # Copyright 2002 by Andrew Dalke.  All rights reserved.
-        #
-        # Convert to a string on returning for databases that give back
-        # unicode. Shouldn't need unicode for sequences so this seems safe.
-        return str(
-            self.execute_one(
-                """select SUBSTR(seq, %s, %s)
-                (start + 1, length, seqid),
-            )[0]
-        )
 # Revisions 2007-2016 copyright by Peter Cock.  All rights reserved.
 # Revisions 2009 copyright by Cymon J. Cox.  All rights reserved.
 # Revisions 2013-2014 copyright by Tiago Antao.  All rights reserved.
@@ -604,7 +595,14 @@ class Adaptor:
         #    """select SUBSTRING(seq FROM %s FOR %s)
         #             from biosequence where bioentry_id = %s""",
         #    (start+1, length, seqid))[0]
-        return self.execute_one(
+        #
+        # Convert to a string on returning for databases that give back
+        # unicode. Shouldn't need unicode for sequences so this seems safe.
+        return str(
+                (start + 1, length, seqid),
+            )[0]
+        )
+            self.execute_one(
             """select SUBSTR(seq, %s, %s)
                      from biosequence where bioentry_id = %s""",
             (start + 1, length, seqid),

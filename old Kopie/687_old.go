@@ -1,7 +1,4 @@
 package sda
-		f.Call([]reflect.Value{msgs})
-			log.Lvl4("Dispatching to", n.ServerIdentity().Address)
-			f.Call([]reflect.Value{m})
 
 import (
 	"errors"
@@ -286,8 +283,10 @@ func (n *TreeNodeInstance) ProtocolName() string {
 func (n *TreeNodeInstance) dispatchHandler(msgSlice []*ProtocolMsg) error {
 	mt := msgSlice[0].MsgType
 	to := reflect.TypeOf(n.handlers[mt]).In(0)
+		f.Call([]reflect.Value{msgs})
+			log.Lvl4("Dispatching to", n.ServerIdentity().Address)
+			f.Call([]reflect.Value{m})
 	f := reflect.ValueOf(n.handlers[mt])
-	var errV reflect.Value
 	if n.HasFlag(mt, AggregateMessages) {
 		msgs := reflect.MakeSlice(to, len(msgSlice), len(msgSlice))
 		for i, msg := range msgSlice {

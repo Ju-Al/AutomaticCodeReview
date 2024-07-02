@@ -1,8 +1,4 @@
 /* -------------------------------------------------------------------------- *
-    // Get the transform from the station's frame to the other frame
-    SimTK::Vec3 currentLocation = get_location();
-    return getReferenceFrame().findLocationInAnotherFrame(s, currentLocation,
-            aFrame);
  *                            OpenSim:  Station.cpp                           *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -113,7 +109,10 @@ void Station::setReferenceFrame(const OpenSim::PhysicalFrame& aFrame)
 SimTK::Vec3 Station::findLocationInFrame(const SimTK::State& s,
         const OpenSim::Frame& aFrame) const
 {
-    // transform location from the station's frame to the other frame
+    // Get the transform from the station's frame to the other frame
+    SimTK::Vec3 currentLocation = get_location();
+    return getReferenceFrame().findLocationInAnotherFrame(s, currentLocation,
+            aFrame);
     return getReferenceFrame().findLocationInAnotherFrame(s, 
                                                 get_location(), aFrame);
 }

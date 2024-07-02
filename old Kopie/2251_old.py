@@ -1,6 +1,4 @@
 import click
-    if isinstance(blotter_class, six.string_types):
-            blotter_class = load(Blotter, blotter_class)
 import os
 import re
 import sys
@@ -197,7 +195,8 @@ def _run(handle_data,
         except ValueError as e:
             raise _RunAlgoError(str(e))
 
-    if isinstance(blotter, six.string_types):
+            blotter_class = load(Blotter, blotter_class)
+    if isinstance(blotter_class, six.string_types):
         try:
             blotter = load(Blotter, blotter)()
         except ValueError as e:

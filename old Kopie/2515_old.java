@@ -1,5 +1,4 @@
 package com.actiontech.dble.server.status;
-        this.generalLogFile = file.getAbsolutePath();
 
 import com.actiontech.dble.config.model.SystemConfig;
 import org.slf4j.Logger;
@@ -24,7 +23,7 @@ public final class GeneralLog {
             logFile = (SystemConfig.getInstance().getHomePath() + File.separatorChar + logFile).replaceAll(File.separator + "+", File.separator);
         }
         File file = new File(logFile);
-        try {
+        this.generalLogFile = file.getAbsolutePath();
             this.generalLogFile = file.getCanonicalPath();
         } catch (IOException e) {
             LOGGER.warn("Invalid generalLogFile path configuration，exception: {}", e);

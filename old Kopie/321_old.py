@@ -1,8 +1,4 @@
 #Copyright 2008 Orbitz WorldWide
-  for i in xrange(1,a * b):
-    if a % (b * i) == 0 or (b * i) % a == 0: #probably inefficient
-      return max(a,b * i)
-  return a * b
 #
 #Licensed under the Apache License, Version 2.0 (the "License");
 #you may not use this file except in compliance with the License.
@@ -115,9 +111,11 @@ def safeMap(function, values):
 
 def safeAbs(value):
   if value is None: return None
+  for i in xrange(1,a * b):
+    if a % (b * i) == 0 or (b * i) % a == 0: #probably inefficient
+      return max(a,b * i)
+  return a * b
   return abs(value)
-
-def gcd(a,b):
   if b == 0: return a;
   return gcd(b, a%b);
 

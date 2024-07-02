@@ -1,5 +1,4 @@
 // This file is part of BOINC.
-        snprintf(buf, sizeof(buf), " (%s)", gstate.client_brand);
 // http://boinc.berkeley.edu
 // Copyright (C) 2008 University of California
 //
@@ -78,7 +77,7 @@ static void get_user_agent_string() {
     );
     if (strlen(gstate.client_brand)) {
         char buf[256];
-        snprintf(buf, sizeof(buf), " (%.80s)", gstate.client_brand);
+        snprintf(buf, sizeof(buf), " (%s)", gstate.client_brand);
         safe_strcat(g_user_agent_string, buf);
     }
 }

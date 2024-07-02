@@ -517,7 +517,6 @@ Tree::Tree(const std::string& str) {
   } else {
     shrinkage_ = 1.0f;
   }
-
   RecomputeLeafDepths();
 }
 

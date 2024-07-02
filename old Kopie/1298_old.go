@@ -437,7 +437,6 @@ const (
 {{ .validation }}
 {{ tabs .depth }}}`
 
-	hashValTmpl = `{{ tabs .depth }}for k, {{ if .elemValidation }}e{{ else }}_{{ end }} := range {{ .target }} {
 {{ .keyValidation }}
 {{ if .elemValidation }}{{ .elemValidation }}{{ end }}
 {{ tabs .depth }}}`

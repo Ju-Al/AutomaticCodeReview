@@ -1,6 +1,4 @@
 # This file is part of Hypothesis, which may be found at
-    # In different python versions they might have the same type (3.6)
-    # or it can be regular type vs `_GenericAlias` (3.7+)
 # https://github.com/HypothesisWorks/hypothesis/
 #
 # Most of this work is copyright (C) 2013-2021 David R. MacIver
@@ -186,7 +184,8 @@ def has_type_arguments(type_):
 def is_generic_type(type_):
     """Decides whether a given type is generic or not."""
     # The ugly truth is that `MyClass`, `MyClass[T]`, and `MyClass[int]` are very different.
-    # In different python versions it can be regular type vs `_GenericAlias` (3.7+)
+    # In different python versions they might have the same type (3.6)
+    # or it can be regular type vs `_GenericAlias` (3.7+)
     # We check for `MyClass[T]` and `MyClass[int]` with the first condition,
     # while the second condition is for `MyClass` in `python3.7+`.
     return isinstance(type_, typing_root_type) or (

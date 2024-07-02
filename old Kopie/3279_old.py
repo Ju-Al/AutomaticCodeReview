@@ -1,6 +1,4 @@
 #  Copyright (c) 2015-2018 Cisco Systems, Inc.
-        "The value '%s' is not a valid boolean.  Valid booleans include: %s"
-        % (str(value), ", ".join(repr(i) for i in BOOLEANS))
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to
@@ -387,7 +385,8 @@ def boolean(value: Any, strict=True) -> bool:
         return False
 
     raise TypeError(
-        f"The value '{str(value)}' is not a valid boolean.  Valid booleans include: {', '.join(repr(i) for i in BOOLEANS)}"
+        "The value '%s' is not a valid boolean.  Valid booleans include: %s"
+        % (str(value), ", ".join(repr(i) for i in BOOLEANS))
     )
 
 

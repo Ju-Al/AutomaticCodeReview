@@ -1,14 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////////
-          const El::Int row_center = input_width/2;
-          const El::Int col_center = input_height/2;
-          const auto& rotated_row =  (output_row - row_center) * cos(angle_rad) - (output_col - col_center) * sin(angle_rad) + row_center;
-          auto input_col = static_cast<El::Int>(std::floor(rotated_col - half));
-          auto input_row = static_cast<El::Int>(std::floor(rotated_row - half));
-	  if((input_row >= 0 && input_row < input_height) && (input_col >= 0 && input_col < input_width)){
-          	auto& pixel_input = local_input(channel * input_height * input_width
-                                       	     	  + input_row * input_width
-                                           	  + input_col,
-                                                  sample);
 // Copyright (c) 2014-2019, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory.
 // Written by the LBANN Research Team (B. Van Essen, et al.) listed in
@@ -76,7 +66,16 @@ void rotation_layer<TensorDataType, Layout, Device>::fp_compute() {
           const auto& angle_rad = angle * Pi / degree;
 
           // Get center pixel for rotation
-          const El::Int col_center = input_width/2;
+          const El::Int row_center = input_width/2;
+          const auto& rotated_row =  (output_row - row_center) * cos(angle_rad) - (output_col - col_center) * sin(angle_rad) + row_center;
+          auto input_col = static_cast<El::Int>(std::floor(rotated_col - half));
+          auto input_row = static_cast<El::Int>(std::floor(rotated_row - half));
+	  if((input_row >= 0 && input_row < input_height) && (input_col >= 0 && input_col < input_width)){
+          	auto& pixel_input = local_input(channel * input_height * input_width
+                                       	     	  + input_row * input_width
+                                           	  + input_col,
+                                                  sample);
+          const El::Int col_center = input_height/2;
           const El::Int row_center = input_height/2;
 
           // Rotate point relative to input pixel centers

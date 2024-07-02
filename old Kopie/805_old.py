@@ -388,7 +388,6 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         if self.distributed_servers and not self.settings.get("gui", False):
             cmdline += ['-R%s' % ','.join(self.distributed_servers)]
 
-        # fix for JMeter 4.0 bug where jmeter.bat requires JMETER_HOME to be set
         jmeter_ver = str(self.settings.get("version", self.JMETER_VER))
         if is_windows() and jmeter_ver == "4.0":
             tool_path = self.tool.tool_path

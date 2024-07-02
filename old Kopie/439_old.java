@@ -1,5 +1,4 @@
 /*
-                    && !state.getType().equals(DefaultState.Type.SWITCH)) {
  * Copyright 2020 Red Hat, Inc. and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,7 +92,7 @@ public class ServerlessWorkflowUtils {
                     && !state.getType().equals(DefaultState.Type.DELAY)
                     && !state.getType().equals(DefaultState.Type.SUBFLOW)
                     && !state.getType().equals(DefaultState.Type.RELAY)
-                    && !state.getType().equals(DefaultState.Type.SWITCH)
+                    && !state.getType().equals(DefaultState.Type.SWITCH)) {
                     && !state.getType().equals(DefaultState.Type.PARALLEL)) {
                 return false;
             }

@@ -39,8 +39,6 @@ define(['dialogHelper', 'dom', 'layoutManager', 'connectionManager', 'globalize'
 
             if (enableFocusTransform) {
                 cssClass += ' show-animation';
-            }
-import dom from 'dom';
 import layoutManager from 'layoutManager';
 import connectionManager from 'connectionManager';
 import globalize from 'globalize';

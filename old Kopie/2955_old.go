@@ -1,7 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-func (t *TaskConfig) TaskPlatform() (*string, error) {
-	if t.Platform.PlatformString == nil {
-		return nil, nil
 // SPDX-License-Identifier: Apache-2.0
 
 // Package manifest provides functionality to create Manifest files.
@@ -506,7 +503,9 @@ type TaskConfig struct {
 }
 
 // TaskPlatform returns the platform for the service.
-func (t *TaskConfig) TaskPlatform() *string {
+func (t *TaskConfig) TaskPlatform() (*string, error) {
+	if t.Platform.PlatformString == nil {
+		return nil, nil
 	if t.Platform.IsEmpty() {
 		return nil
 	}

@@ -1,12 +1,4 @@
 /*
-        private final Map<Long, Map<String, Long>> metrics = new HashMap<>();
-
-        InternalJobMetricsPublisher(@Nonnull JobExecutionService jobExecutionService) {
-                metrics.computeIfAbsent(executionId, x -> new HashMap<>())
-                        .put(name, value);
-            publishLong(name, JobMetricsUtil.toLongMetricValue(value));
-            jobExecutionService.updateMetrics(System.currentTimeMillis(), metrics);
-            metrics.clear();
  * Copyright (c) 2008-2019, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -217,7 +209,14 @@ public class JetMetricsService implements LiveOperationsTracker {
     public static class InternalJobMetricsPublisher implements MetricsPublisher {
 
         private final JobExecutionService jobExecutionService;
-        private final String namePrefix;
+        private final Map<Long, Map<String, Long>> metrics = new HashMap<>();
+
+                metrics.computeIfAbsent(executionId, x -> new HashMap<>())
+                        .put(name, value);
+            publishLong(name, JobMetricsUtil.toLongMetricValue(value));
+            jobExecutionService.updateMetrics(System.currentTimeMillis(), metrics);
+            metrics.clear();
+        InternalJobMetricsPublisher(@Nonnull JobExecutionService jobExecutionService) {
         private final ILogger logger;
         private final PublisherProvider publisherProvider = new PublisherProvider();
         private final Map<Long, RawJobMetrics> jobMetrics = new HashMap<>();

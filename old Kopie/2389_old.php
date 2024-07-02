@@ -1,5 +1,4 @@
 <?php
-		$courses = array();
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -1156,7 +1155,7 @@ class Sensei_Course {
 	 */
 	public function get_product_courses( $product_id = 0 ) {
 
-		_deprecated_function( __CLASS__ .':'. __METHOD__, '2.0.0', 'Sensei_WC_Paid_Courses\Courses::get_product_courses' );
+		$courses = array();
 
 		if ( method_exists( 'Sensei_WC_Paid_Courses\Courses', 'get_product_courses' ) ) {
 			return \Sensei_WC_Paid_Courses\Courses::get_product_courses( $product_id );

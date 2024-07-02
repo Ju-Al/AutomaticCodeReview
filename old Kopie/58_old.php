@@ -1002,7 +1002,6 @@ function ModifySpamSettings($return_config = false)
 }
 
 /**
- * Change the way bad behavior ... well behaves
  *
  * @param $return_config
  */

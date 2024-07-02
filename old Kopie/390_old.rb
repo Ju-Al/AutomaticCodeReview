@@ -34,8 +34,6 @@ module API
       # TODO: Return the discussion post here
       head 200
     end
-
-    def update
       post = Solution::MentorDiscussionPost.find_by(uuid: params[:id])
 
       return render_404(:mentor_discussion_post_not_found) if post.blank?

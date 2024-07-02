@@ -253,8 +253,6 @@ func (h *Hash) UnmarshalText(data []byte) error {
 	return nil
 }
 
-const ptrSize = 4 << (^uintptr(0) >> 63) // stolen from runtime/internal/sys
-
 // Size implements the cache.Measurable interface.
 func (h *Hash) Size() int {
 	return len(h.h) + ptrSize

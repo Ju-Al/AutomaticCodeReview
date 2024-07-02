@@ -2478,7 +2478,6 @@ function wp_common_block_scripts_and_styles() {
 	do_action( 'enqueue_block_assets' );
 }
 
-/**
  * Checks if the editor scripts and styles for all registered block types
  * should be enqueued on the current screen.
  *

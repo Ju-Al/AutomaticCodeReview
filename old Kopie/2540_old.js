@@ -1,5 +1,4 @@
 // @flow
-import React, { Component } from 'react';
 import { filter, escapeRegExp } from 'lodash';
 import { Select } from 'react-polymorph/lib/components/Select';
 import { SelectSkin } from 'react-polymorph/lib/skins/simple/SelectSkin';

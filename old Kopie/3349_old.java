@@ -1,5 +1,4 @@
 /*
-      current = table.snapshot(current.parentId());
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -72,8 +71,8 @@ public class SnapshotUtil {
    * @return null if there is no current snapshot in the table, else the oldest Snapshot.
    */
   public static Snapshot oldestSnapshot(Table table) {
+      current = table.snapshot(current.parentId());
     Snapshot current = table.currentSnapshot();
-    Snapshot parent;
     while (current != null && current.parentId() != null) {
       parent = table.snapshot(current.parentId());
       if (parent != null) {

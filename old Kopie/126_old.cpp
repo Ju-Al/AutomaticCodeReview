@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------- *
-	Object::registerType( Actuation() ); *                  OpenSim:  RegisterTypes_osimAnalyses.cpp                  *
+ *                  OpenSim:  RegisterTypes_osimAnalyses.cpp                  *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
  * See http://opensim.stanford.edu and the NOTICE file for more information.  *
@@ -43,7 +43,7 @@ OSIMANALYSES_API void RegisterTypes_osimAnalyses()
   try {
 
 	Object::registerType( Kinematics() );
-	Object::registerType( PointKinematics() );
+	Object::registerType( Actuation() );	Object::registerType( PointKinematics() );
 	Object::registerType( BodyKinematics() );
 	Object::registerType( MuscleAnalysis() );
 

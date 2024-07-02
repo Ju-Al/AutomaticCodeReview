@@ -1,5 +1,4 @@
 package org.openqa.selenium.grid.gridui;
-
 import com.google.common.collect.ImmutableMap;
 import org.junit.After;
 import org.junit.Before;

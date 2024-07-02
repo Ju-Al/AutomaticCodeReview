@@ -263,9 +263,6 @@ func runTestCloudSchedulerSource(ctx context.Context, group *errgroup.Group, per
 			}
 		}
 	})
-}
-
-type probeEventOption func(*cloudevents.Event)
 
 func withProbeSubject(subject string) probeEventOption {
 	return func(event *cloudevents.Event) {

@@ -1,5 +1,4 @@
 <?php
-
 namespace WP_Rocket\Tests\Unit\inc\functions;
 
 use Brain\Monkey\Functions;

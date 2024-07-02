@@ -115,7 +115,6 @@ func decodeDoc(m map[string]interface{}, ddoc driver.Document, fps [][]string, r
 				return err
 			}
 		}
-		if ddoc.RevisionOn(revField) {
 			m2[revField] = m[revField]
 		}
 	}

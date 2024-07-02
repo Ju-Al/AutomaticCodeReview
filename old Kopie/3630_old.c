@@ -1,5 +1,4 @@
 /* Copyright (C) 2000-2012 by George Williams */
-    free(host); free(username); free(password);
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -689,6 +688,7 @@ void *GIO_dispatch(GIOControl *gc) {
 	    free(topath); free(tohost); free(tousername); free(topassword);
 	  } break;
 	}
+    free(host); free(username); free(password);
     }
     if ( ret<=0 )
   goto leave;

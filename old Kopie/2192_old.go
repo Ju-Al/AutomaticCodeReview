@@ -1,6 +1,5 @@
 // +build !windows,functional
 
-	agent.RequireVersion(">=1.30.0")
 // Copyright 2014-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -1903,7 +1902,7 @@ func testFirelens(t *testing.T, firelensConfigType, secretLogOptionKey, secretLo
 	agent := RunAgent(t, agentOptions)
 	defer agent.Cleanup()
 
-	// TODO: change to 1.31.0 before merging feature branch
+	agent.RequireVersion(">=1.30.0")
 	agent.RequireVersion(">=1.29.1")
 
 	tdOverrides := make(map[string]string)

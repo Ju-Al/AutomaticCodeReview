@@ -35,7 +35,6 @@ type ConfigRunner struct {
 
 	// Must not be nil if using default subnets.
 	VPCGetter VPCGetter
-
 	// Platform configuration
 	OS   string
 	Arch string

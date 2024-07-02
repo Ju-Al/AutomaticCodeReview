@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <pthread.h>
 #include <algorithm>
 #include <cstdio>
 #include <unistd.h>

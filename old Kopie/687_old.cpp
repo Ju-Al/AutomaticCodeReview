@@ -1,5 +1,4 @@
 #include<stdlib.h>
-#include <math.h>
 #include <iostream>
 float eq(float i) {
     return (pow(i, 3) - (4 * i) - 9);  // origial equation

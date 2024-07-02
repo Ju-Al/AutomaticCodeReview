@@ -1,6 +1,5 @@
 <?php
 /**
-     * @var \VuFind\Validator\Csrf $csrf CSRF validator
  * Class for managing email-based authentication.
  *
  * PHP version 7
@@ -60,7 +59,7 @@ class EmailAuthenticator implements \VuFind\I18n\Translator\TranslatorAwareInter
     /**
      * CSRF Validator
      *
-     * @var \VuFind\Validator\TokenCountingCsrfInterface $csrf CSRF validator
+     * @var \VuFind\Validator\Csrf $csrf CSRF validator
      */
     protected $csrf = null;
 

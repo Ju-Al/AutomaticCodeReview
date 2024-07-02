@@ -1,6 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////////
-  OptimizerType::load_from_checkpoint_distributed(p, name_prefix);
-  char l_name[512];
 // Copyright (c) 2014-2019, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory.
 // Written by the LBANN Research Team (B. Van Essen, et al.) listed in
@@ -26,46 +24,39 @@
 // permissions and limitations under the license.
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "lbann/optimizers/rmsprop.hpp"
+#include "lbann/optimizers/adagrad.hpp"
 #include "lbann/utils/exception.hpp"
 #include "lbann/utils/memory.hpp"
 
 namespace lbann {
 
 template <typename TensorDataType>
-rmsprop<TensorDataType>::rmsprop(TensorDataType learning_rate,
-                 TensorDataType decay_rate,
-                 TensorDataType eps)
-  : OptimizerType(learning_rate),
-    m_decay_rate(decay_rate),
-    m_eps(eps) {}
+adagrad<TensorDataType>::adagrad(TensorDataType learning_rate, TensorDataType eps)
+  : OptimizerType(learning_rate), m_eps(eps) {}
 
 template <typename TensorDataType>
-rmsprop<TensorDataType>::rmsprop(const rmsprop& other) :
-  OptimizerType(other),
-  m_decay_rate(other.m_decay_rate),
-  m_eps(other.m_eps),
-  m_cache(other.m_cache ? other.m_cache->Copy() : nullptr) {}
+adagrad<TensorDataType>::adagrad(const adagrad<TensorDataType>& other)
+  : OptimizerType(other),
+    m_eps(other.m_eps),
+    m_cache(other.m_cache ? other.m_cache->Copy() : nullptr) {}
 
 template <typename TensorDataType>
-rmsprop<TensorDataType>& rmsprop<TensorDataType>::operator=(const rmsprop& other) {
+adagrad<TensorDataType>& adagrad<TensorDataType>::operator=(const adagrad<TensorDataType>& other) {
   OptimizerType::operator=(other);
-  m_decay_rate = other.m_decay_rate;
   m_eps = other.m_eps;
   m_cache.reset(other.m_cache ? other.m_cache->Copy() : nullptr);
   return *this;
 }
 
 template <typename TensorDataType>
-description rmsprop<TensorDataType>::get_description() const {
+description adagrad<TensorDataType>::get_description() const {
   auto desc = OptimizerType::get_description();
-  desc.add("Decay rate", m_decay_rate);
   desc.add("eps", m_eps);
   return desc;
 }
 
 template <typename TensorDataType>
-void rmsprop<TensorDataType>::setup(WeightsType* w) {
+void adagrad<TensorDataType>::setup(WeightsType* w) {
   OptimizerType::setup(w);
   const auto& gradient = this->get_gradient();
   m_cache.reset(AbsDistMatrixType::Instantiate(gradient.DistData()));
@@ -73,7 +64,7 @@ void rmsprop<TensorDataType>::setup(WeightsType* w) {
 }
 
 template <typename TensorDataType>
-void rmsprop<TensorDataType>::step_compute(AbsDistMatrixType& values,
+void adagrad<TensorDataType>::step_compute(AbsDistMatrixType& values,
                                            const AbsDistMatrixType& gradient) {
   switch (values.GetLocalDevice()) {
   case El::Device::CPU: step_compute_cpu(values, gradient); break;
@@ -89,7 +80,7 @@ void rmsprop<TensorDataType>::step_compute(AbsDistMatrixType& values,
 }
 
 template <typename TensorDataType>
-void rmsprop<TensorDataType>::step_compute_cpu(AbsDistMatrixType& values,
+void adagrad<TensorDataType>::step_compute_cpu(AbsDistMatrixType& values,
                                                const AbsDistMatrixType& gradient) {
 
   // Get local matrix data
@@ -102,7 +93,7 @@ void rmsprop<TensorDataType>::step_compute_cpu(AbsDistMatrixType& values,
   auto* __restrict__ cache_buffer = m_cache->Buffer();
   const size_t cache_ldim = m_cache->LDim();
 
-  // Apply RMSprop step
+  // Apply AdaGrad step
   const auto& learning_rate = this->get_learning_rate();
   LBANN_OMP_PARALLEL_FOR_COLLAPSE2
   for (size_t col = 0; col < local_width; ++col) {
@@ -110,7 +101,7 @@ void rmsprop<TensorDataType>::step_compute_cpu(AbsDistMatrixType& values,
       auto& x = values_buffer[row+col*values_ldim];
       const auto& g = gradient_buffer[row+col*gradient_ldim];
       auto& c = cache_buffer[row+col*cache_ldim];
-      c = m_decay_rate * c + (TensorDataType(1.) - m_decay_rate) * g * g;
+      c += g * g;
       x -= learning_rate * g / (El::Sqrt(c) + m_eps);
     }
   }
@@ -122,9 +113,9 @@ void rmsprop<TensorDataType>::step_compute_cpu(AbsDistMatrixType& values,
 // =============================================
 
 template <typename TensorDataType>
-bool rmsprop<TensorDataType>::save_to_checkpoint_shared(persist& p, std::string name_prefix) {
+bool adagrad<TensorDataType>::save_to_checkpoint_shared(persist& p, std::string name_prefix) {
   if (this->get_comm().am_trainer_master()) {
-    write_cereal_archive<rmsprop<TensorDataType>>(*this, p, "rmsprop.xml");
+    write_cereal_archive<adagrad<TensorDataType>>(*this, p, "adagrad.xml");
   }
 
   char l_name[512];
@@ -135,8 +126,9 @@ bool rmsprop<TensorDataType>::save_to_checkpoint_shared(persist& p, std::string 
 }
 
 template <typename TensorDataType>
-bool rmsprop<TensorDataType>::load_from_checkpoint_shared(persist& p, std::string name_prefix) {
-  load_from_shared_cereal_archive<rmsprop<TensorDataType>>(*this, p, this->get_comm(), "rmsprop.xml");
+bool adagrad<TensorDataType>::load_from_checkpoint_shared(persist& p, std::string name_prefix) {
+  OptimizerType::load_from_checkpoint_shared(p, name_prefix);
+  char l_name[512];
 
   char l_name[512];
   sprintf(l_name, "%s_optimizer_cache_%lldx%lld.bin", name_prefix.c_str(), m_cache->Height(), m_cache->Width());
@@ -146,8 +138,8 @@ bool rmsprop<TensorDataType>::load_from_checkpoint_shared(persist& p, std::strin
 }
 
 template <typename TensorDataType>
-bool rmsprop<TensorDataType>::save_to_checkpoint_distributed(persist& p, std::string name_prefix) {
-  write_cereal_archive<rmsprop<TensorDataType>>(*this, p, "rmsprop.xml");
+bool adagrad<TensorDataType>::save_to_checkpoint_distributed(persist& p, std::string name_prefix) {
+  write_cereal_archive<adagrad<TensorDataType>>(*this, p, "adagrad.xml");
 
   char l_name[512];
   sprintf(l_name, "%s_optimizer_cache_%lldx%lld", name_prefix.c_str(), m_cache->Height(), m_cache->Width());
@@ -157,8 +149,8 @@ bool rmsprop<TensorDataType>::save_to_checkpoint_distributed(persist& p, std::st
 }
 
 template <typename TensorDataType>
-bool rmsprop<TensorDataType>::load_from_checkpoint_distributed(persist& p, std::string name_prefix) {
-  read_cereal_archive<rmsprop<TensorDataType>>(*this, p, "rmsprop.xml");
+bool adagrad<TensorDataType>::load_from_checkpoint_distributed(persist& p, std::string name_prefix) {
+  read_cereal_archive<adagrad<TensorDataType>>(*this, p, "adagrad.xml");
 
   char l_name[512];
   sprintf(l_name, "%s_optimizer_cache_%lldx%lld", name_prefix.c_str(), m_cache->Height(), m_cache->Width());
@@ -169,20 +161,18 @@ bool rmsprop<TensorDataType>::load_from_checkpoint_distributed(persist& p, std::
 
 template <typename TensorDataType>
 std::unique_ptr<optimizer>
-build_rmsprop_optimizer_from_pbuf(
+build_adagrad_optimizer_from_pbuf(
   google::protobuf::Message const& msg) {
   const auto& params =
-    dynamic_cast<lbann_data::Optimizer::RMSprop const&>(msg);
-  return make_unique<rmsprop<TensorDataType>>(
-    TensorDataType(params.learn_rate()),
-    TensorDataType(params.decay_rate()),
-    TensorDataType(params.eps()));
+    dynamic_cast<lbann_data::Optimizer::AdaGrad const&>(msg);
+  return make_unique<adagrad<TensorDataType>>(TensorDataType(params.learn_rate()),
+                                              TensorDataType(params.eps()));
 }
 
 #define PROTO(T)                                    \
-  template class rmsprop<T>;                        \
+  template class adagrad<T>;                        \
   template std::unique_ptr<optimizer>               \
-  build_rmsprop_optimizer_from_pbuf<T>(             \
+  build_adagrad_optimizer_from_pbuf<T>(             \
     google::protobuf::Message const&)
 
 #define LBANN_INSTANTIATE_CPU_HALF

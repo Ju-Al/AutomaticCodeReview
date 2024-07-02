@@ -1,5 +1,4 @@
 package com.github.javaparser.utils;
-                        if (!dir.equals(ParallelParse.this.path)) {
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseProblemException;
@@ -588,7 +587,7 @@ public class SourceRoot {
                         if (!SourceRoot.isSensibleDirectoryToEnter(dir)) {
                             return SKIP_SUBTREE;
                         }
-                        if (Files.isSameFile(dir, ParallelParse.this.path)) {
+                        if (!dir.equals(ParallelParse.this.path)) {
                             ParallelParse w = new ParallelParse(dir, callback);
                             w.fork();
                             walks.add(w);

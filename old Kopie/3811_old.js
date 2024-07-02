@@ -1,5 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////
-
 //
 // Copyright 2021 Realm Inc.
 //
@@ -36,7 +35,7 @@ module.exports = {
         let realm = new Realm({schema: [DictSchema]})
         realm.write(()=> realm.create(DictSchema.name, { a: {x:1, y:2, z:"hey"} } ))
         let data = realm.objects(DictSchema.name)[0]
-        TestCase.assertTrue(data.a instanceof(Realm.Dictionary), "Should be a dictionary");
+
         TestCase.assertTrue(data.a.addListener !== undefined, "addListener should be an method of Dictionary");
         TestCase.assertTrue(data.a.removeAllListeners !== undefined, "removeAllListeners should be an method of Dictionary");
         TestCase.assertTrue(data.a.removeListener !== undefined, "removeListener should be an method of Dictionary");

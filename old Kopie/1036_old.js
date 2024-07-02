@@ -1,7 +1,4 @@
 // @flow
-    application,
-    version: environment.version,
-    build: environment.build,
 import moment from 'moment';
 import url from 'url';
 import { request } from '../lib/reportRequest';
@@ -44,7 +41,9 @@ export const sendEtcBugReport = (
     path: '/report',
     port: reportUrl.port,
   }, {
-    product: 'Cardano Wallet',
+    application,
+    version: environment.version,
+    build: environment.build,
     frontendVersion: version,
     backendVersion: API_VERSION,
     network: NETWORK,

@@ -1,33 +1,4 @@
 /**
-  std::future<std::shared_ptr<FakePeer>>
-  IntegrationTestFramework::addInitialPeer(
-    fake_peers_promises_.emplace_back(std::promise<std::shared_ptr<FakePeer>>(),
-                                      key);
-    return fake_peers_promises_.back().first.get_future();
-  }
-
-  void IntegrationTestFramework::makeFakePeers() {
-    if (fake_peers_promises_.size() == 0) {
-      return;
-    }
-    log_->info("creating fake iroha peers");
-    assert(this_peer_ && "this_peer_ is needed for fake peers initialization, "
-        "but not set");
-    for (auto &promise_and_key : fake_peers_promises_) {
-      auto fake_peer =
-          std::make_shared<FakePeer>(kLocalHost,
-                                     port_guard_->getPort(kDefaultInternalPort),
-                                     promise_and_key.second,
-                                     this_peer_,
-                                     common_objects_factory_,
-                                     transaction_factory_,
-                                     batch_parser_,
-                                     transaction_batch_factory_,
-                                     tx_presence_cache_);
-      fake_peer->initialize();
-      fake_peers_.emplace_back(fake_peer);
-      promise_and_key.first.set_value(fake_peer);
-    }
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -161,7 +132,35 @@ namespace integration_framework {
     }
   }
 
-  std::shared_ptr<FakePeer> IntegrationTestFramework::addInitialPeer(
+  std::future<std::shared_ptr<FakePeer>>
+    fake_peers_promises_.emplace_back(std::promise<std::shared_ptr<FakePeer>>(),
+                                      key);
+    return fake_peers_promises_.back().first.get_future();
+  }
+
+  void IntegrationTestFramework::makeFakePeers() {
+    if (fake_peers_promises_.size() == 0) {
+      return;
+    }
+    log_->info("creating fake iroha peers");
+    assert(this_peer_ && "this_peer_ is needed for fake peers initialization, "
+        "but not set");
+    for (auto &promise_and_key : fake_peers_promises_) {
+      auto fake_peer =
+          std::make_shared<FakePeer>(kLocalHost,
+                                     port_guard_->getPort(kDefaultInternalPort),
+                                     promise_and_key.second,
+                                     this_peer_,
+                                     common_objects_factory_,
+                                     transaction_factory_,
+                                     batch_parser_,
+                                     transaction_batch_factory_,
+                                     tx_presence_cache_);
+      fake_peer->initialize();
+      fake_peers_.emplace_back(fake_peer);
+      promise_and_key.first.set_value(fake_peer);
+    }
+  IntegrationTestFramework::addInitialPeer(
       const boost::optional<Keypair> &key) {
     BOOST_ASSERT_MSG(this_peer_, "Need to set the ITF peer key first!");
     auto fake_peer =

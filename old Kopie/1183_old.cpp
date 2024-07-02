@@ -1,9 +1,4 @@
 /*
-    caffe_copy(data_count, &data_blob_.cpu_data()[current_row_ * data_count],
-               &(*top)[0]->mutable_cpu_data()[i * data_count]);
-    caffe_copy(label_data_count,
-               &label_blob_.cpu_data()[current_row_ * label_data_count],
-               &(*top)[1]->mutable_cpu_data()[i * label_data_count]);
 TODO:
 - load file in a separate thread ("prefetch")
 - can be smarter about the memcpy call instead of doing it row-by-row
@@ -37,8 +32,6 @@ void HDF5DataLayer<Dtype>::LoadHDF5FileData(const char* filename) {
     LOG(ERROR) << "Failed opening HDF5 file" << filename;
     return;
   }
-
-  int top_size = this->layer_param_.top_size();
   hdf_blobs_.resize(top_size);
 
   const int MIN_DATA_DIM = 2;

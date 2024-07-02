@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { useQuery } from '@apollo/react-hooks';
 
 import { useAppContext } from '../../../context/app';
 import { useCartContext } from '../../../context/cart';

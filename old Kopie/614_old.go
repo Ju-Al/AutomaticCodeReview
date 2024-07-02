@@ -1,8 +1,5 @@
 package network
 
-		// whether the router is closed
-			// signal we are done with this go routine.
-			// something went wrong on this connection
 import (
 	"errors"
 	"fmt"
@@ -189,15 +186,17 @@ func (r *Router) handleConn(remote *ServerIdentity, c Conn) {
 		packet.From = address
 		packet.ServerIdentity = remote
 
+		// whether the router is closed
 		if r.Closed() {
+			// signal we are done with this go routine.
 			return
 		}
 
 		if err != nil {
+			// something went wrong on this connection
 			log.Lvlf4("%+v got error (%+s) while receiving message", r.id.String(), err)
 
 			if err == ErrClosed || err == ErrEOF {
-				// Connection got closed.
 				// remote connection closed
 				log.Lvl3(r.address, "handleConn with closed connection: stop (dst=", remote.Address, ")")
 				return

@@ -1,10 +1,25 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package pushsync_test
+
+import (
+	"bytes"
+	"context"
+	"io/ioutil"
 	"sync"
+	"testing"
+
 	"github.com/ethersphere/bee/pkg/pushsync"
 	"github.com/ethersphere/bee/pkg/pushsync/pb"
 	"github.com/ethersphere/bee/pkg/topology"
 	"github.com/ethersphere/bee/pkg/topology/mock"
 
+	"github.com/ethersphere/bee/pkg/localstore"
+	"github.com/ethersphere/bee/pkg/logging"
+	"github.com/ethersphere/bee/pkg/p2p"
+	"github.com/ethersphere/bee/pkg/p2p/protobuf"
 // TestSendToClosest tests that a chunk that is uploaded to localstore is sent to the appropriate peer.
 func TestSendToClosest(t *testing.T) {
 	logger := logging.New(ioutil.Discard, 0)
@@ -123,23 +138,7 @@ func TestNoForwardChunk(t *testing.T) {
 	pivotNode := swarm.MustParseHexAddress("6000000000000000000000000000000000000000000000000000000000000000") // pivot is 0110
 	// Create a mock connectivity
 	mockTopology := mock.NewTopologyDriver(mock.WithClosestPeerErr(topology.ErrWantSelf))
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package pushsync_test
-
-import (
-	"bytes"
-	"context"
-	"io/ioutil"
-	"testing"
-
-	"github.com/ethersphere/bee/pkg/localstore"
-	"github.com/ethersphere/bee/pkg/logging"
-	"github.com/ethersphere/bee/pkg/p2p"
-	"github.com/ethersphere/bee/pkg/p2p/protobuf"
 	"github.com/ethersphere/bee/pkg/p2p/streamtest"
-	"github.com/ethersphere/bee/pkg/pushsync"
 	"github.com/ethersphere/bee/pkg/pushsync/pb"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/swarm"

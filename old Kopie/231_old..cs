@@ -264,7 +264,6 @@ static class ProjectPropertiesHelpers
         // CSC OPTIONS
         properties.CscOptions.Add("/nostdlib");
         properties.CscOptions.Add("/noconfig");
-        if (Array.Exists(args, element => element == "/unsafe")) 
         {
             properties.CscOptions.Add("/unsafe");
         }

@@ -1,6 +1,4 @@
 import torch
-        self.bbox_roi_extractor = context.bbox_roi_extractor
-        self.bbox_head = context.bbox_head
 
 from .base_sampler import BaseSampler
 from ..transforms import bbox2roi
@@ -13,8 +11,9 @@ class OHEMSampler(BaseSampler):
                  pos_fraction,
                  context,
                  neg_pos_ub=-1,
+        self.bbox_roi_extractor = context.bbox_roi_extractor
+        self.bbox_head = context.bbox_head
                  add_gt_as_proposals=True,
-                 stages=0,
                  **kwargs):
         super(OHEMSampler, self).__init__(num, pos_fraction, neg_pos_ub,
                                           add_gt_as_proposals)

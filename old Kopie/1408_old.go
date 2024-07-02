@@ -126,8 +126,6 @@ func (o *deployJobOpts) validateEnvName() error {
 	}
 	return nil
 }
-
-func (o *deployJobOpts) askJobName() error {
 	if o.Name != "" {
 		return nil
 	}

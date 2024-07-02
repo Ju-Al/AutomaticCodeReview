@@ -1,5 +1,4 @@
 /*
-				Object: newReceiveAdapter(testImage),
 Copyright 2019 Google LLC
 
 Licensed under the Apache License, Veroute.on 2.0 (the "License");
@@ -256,7 +255,7 @@ func TestAllCases(t *testing.T) {
 					Verb:      "update",
 					Resource:  receiveAdapterGVR(),
 				},
-				Object: newReceiveAdapter(context.TODO(), testImage),
+				Object: newReceiveAdapter(testImage),
 			}},
 			WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
 				Object: NewPullSubscription(sourceName, testNS,

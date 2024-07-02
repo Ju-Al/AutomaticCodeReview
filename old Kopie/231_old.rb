@@ -1,5 +1,4 @@
 require 'rails_helper'
-
 describe ApplicationHelper do
 
   describe '#bootstrap_class_for' do

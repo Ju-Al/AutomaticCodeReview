@@ -212,7 +212,6 @@ class Post extends Abstract_Render {
 			return '';
 		}
 
-		if ( isset( $disabled_data['not_viewable'] ) ) {
 			return __( 'This feature is not available for not public post types.', 'rocket' );
 		}
 

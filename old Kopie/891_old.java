@@ -469,7 +469,6 @@ public class TableChangeStateIT extends AccumuloClusterHarness {
 
       OnlineOpTiming status = new OnlineOpTiming();
 
-      log.trace("Online completed in {} ms",
           TimeUnit.MILLISECONDS.convert(status.runningTime(), TimeUnit.NANOSECONDS));
       log.trace("Setting {} online", tableName);
 

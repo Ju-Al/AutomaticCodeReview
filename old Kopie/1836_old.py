@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-  elif archive_type == ArchiveType.TAR or archive_type == ArchiveType.TAR_LZMA:
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -291,7 +290,7 @@ def unpack(archive_path,
       logs.log_error(
           'Failed to extract everything from archive %s.' % archive_filename)
 
-  elif archive_type in [ArchiveType.TAR, ArchiveType.TAR_LZMA]:
+  elif archive_type == ArchiveType.TAR or archive_type == ArchiveType.TAR_LZMA:
     if archive_type == ArchiveType.TAR_LZMA:
       lzma_file = lzma.LZMAFile(archive_path)
       tar_archive = tarfile.open(fileobj=lzma_file)

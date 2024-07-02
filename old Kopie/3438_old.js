@@ -30,7 +30,6 @@ describe('number-picker', () => {
             assert(wrapper1.find('button').at(0).prop("tabIndex") === -1);
             assert(wrapper1.find('button').at(1).prop("tabIndex") === -1);
         });
-        it('should compare max or min the changes', () => {
             let wrapper = mount(<NumberPicker max={15} min={3} value={10} />)
             wrapper.find('input').simulate('click');
             wrapper.find('input').simulate('blur');

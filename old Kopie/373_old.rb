@@ -98,7 +98,6 @@ module Bolt
     end
 
     def run_command(targets, command, options = {}, &callback)
-      @logger.notice(options['_description']) if options.key?('_description')
       @logger.info("Starting command run '#{command}' on #{targets.map(&:uri)}")
       notify = proc { |event| @notifier.notify(callback, event) if callback }
       options = { '_run_as' => run_as }.merge(options) if run_as

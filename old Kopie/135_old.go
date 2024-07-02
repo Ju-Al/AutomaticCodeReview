@@ -728,9 +728,6 @@ func InstallGrubCfg(installRoot, rootDevice, bootUUID string, encryptedRoot disk
 	if err != nil {
 		logger.Log.Warnf("Failed to set lvm.lv in grub.cfg: %v", err)
 		return
-	}
-
-	// Configure IMA policy
 	err = setGrubCfgIMA(installGrubCfgFile, kernelCommandLine)
 	if err != nil {
 		logger.Log.Warnf("Failed to set ima_policy in grub.cfg: %v", err)

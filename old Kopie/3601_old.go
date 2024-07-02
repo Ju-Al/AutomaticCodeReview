@@ -1283,8 +1283,6 @@ func (d *Datastore) GetMDM(ctx context.Context, hostID uint) (bool, string, bool
 		return false, "", false, ctxerr.Wrapf(ctx, err, "getting data from host_mdm for host_id %d", hostID)
 	}
 	return dest.Enrolled, dest.ServerURL, dest.InstalledFromDep, nil
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 func (d *Datastore) HostLite(ctx context.Context, id uint, opts ...fleet.HostLoadOpt) (*fleet.Host, error) {

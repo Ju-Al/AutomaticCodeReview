@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING, Sequence
-            res.append({'address': o.get_ui_address_str(), 'value': value})
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -214,7 +213,7 @@ class OutputList(RecycleView):
         res = []
         for o in outputs:
             value = self.app.format_amount_and_units(o.value)
-            res.append({
+            res.append({'address': o.get_ui_address_str(), 'value': value})
                     'address': o.get_ui_address_str(),
                     'value': value,
                     'background_color': (0.3, 0.3, 0.3, 1),

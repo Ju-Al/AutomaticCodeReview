@@ -1,7 +1,7 @@
 <?php
 	<?php
 
-/**
+		/**
 		 * This action before course archive loop. This hook fires within the archive-course.php
 		 * It fires even if the current archive has no posts.
 		 *
@@ -14,6 +14,7 @@
 		do_action( 'sensei_archive_before_course_loop' );
 
 	?>
+/**
  * The Template for displaying course archives, including the course page template.
  *
  * Override this template by copying it to your_theme/sensei/archive-course.php

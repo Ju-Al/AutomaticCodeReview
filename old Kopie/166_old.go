@@ -1,50 +1,5 @@
 package sftp
 
-	// read version file
-	f, err := sftp.c.Open(filepath.Join(dir, backend.Paths.Version))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read version file: %v\n", err)
-	}
-
-	var version uint
-	n, err := fmt.Fscanf(f, "%d", &version)
-	if err != nil {
-		return nil, err
-	}
-
-	if n != 1 {
-		return nil, errors.New("could not read version from file")
-	}
-
-	err = f.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	// check version
-	if version != backend.Version {
-		return nil, fmt.Errorf("wrong version %d", version)
-	}
-
-	// read ID
-	f, err = sftp.c.Open(filepath.Join(dir, backend.Paths.ID))
-	if err != nil {
-		return nil, err
-	}
-
-	buf, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	err = f.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	sftp.id = strings.TrimSpace(string(buf))
-
-// backend at dir.
 import (
 	"crypto/rand"
 	"encoding/hex"
@@ -129,12 +84,56 @@ func Open(dir string, program string, args ...string) (*SFTP, error) {
 		}
 	}
 
+	// read version file
+	f, err := sftp.c.Open(filepath.Join(dir, backend.Paths.Version))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read version file: %v\n", err)
+	}
+
+	var version uint
+	n, err := fmt.Fscanf(f, "%d", &version)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != 1 {
+		return nil, errors.New("could not read version from file")
+	}
+
+	err = f.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	// check version
+	if version != backend.Version {
+		return nil, fmt.Errorf("wrong version %d", version)
+	}
+
+	// read ID
+	f, err = sftp.c.Open(filepath.Join(dir, backend.Paths.ID))
+	if err != nil {
+		return nil, err
+	}
+
+	buf, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	sftp.id = strings.TrimSpace(string(buf))
 	sftp.p = dir
+
 	return sftp, nil
 }
 
 // Create creates all the necessary files and directories for a new sftp
-// backend at dir. Afterwards a new config blob should must created.
+// backend at dir.
 func Create(dir string, program string, args ...string) (*SFTP, error) {
 	sftp, err := startClient(program, args...)
 	if err != nil {

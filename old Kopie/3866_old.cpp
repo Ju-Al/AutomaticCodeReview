@@ -1,5 +1,4 @@
 /***************************************************************************
-                    Castle * castle = GetCastle( Maps::GetPoint( findobject ) );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -431,7 +430,7 @@ bool World::LoadMapMP2( const std::string & filename )
                                    << "incorrect size block: " << pblock.size() );
                 }
                 else {
-                    Castle * castle = GetCastle( Maps::GetPoint( findobject ), false );
+                    Castle * castle = GetCastle( Maps::GetPoint( findobject ) );
                     if ( castle ) {
                         castle->LoadFromMP2( StreamBuf( pblock ) );
                         Maps::UpdateCastleSprite( castle->GetCenter(), castle->GetRace(), castle->isCastle(), true );

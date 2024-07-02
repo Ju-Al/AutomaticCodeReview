@@ -1,6 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-	if _, err := keeper.Decrypt(ctx, []byte("malformed cipher message")); err == nil {
-		t.Error("Got nil, want decrypt error")
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,7 +238,8 @@ func testDecryptMalformedError(t *testing.T, newHarness HarnessMaker) {
 	}
 	keeper := secrets.NewKeeper(drv)
 
-	msg := []byte("I'm a secret message!")
+	if _, err := keeper.Decrypt(ctx, []byte("malformed cipher message")); err == nil {
+		t.Error("Got nil, want decrypt error")
 	encryptedMsg, err := keeper.Encrypt(ctx, msg)
 	if err != nil {
 		t.Fatal(err)

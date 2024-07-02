@@ -866,7 +866,6 @@ class ResourceManagerFolder(resource_class_factory('folder', None)):
             self.add_warning(err_msg)
             return None
 
-    @cached('org_policy')
     def get_org_policy(self, client=None):
         """Gets Organization policy for this organization.
 

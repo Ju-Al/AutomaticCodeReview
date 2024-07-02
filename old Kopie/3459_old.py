@@ -1,5 +1,4 @@
 # Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-batch_size_alias_test=64
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -129,7 +128,7 @@ def test_file_reader_relpath_file_list():
             assert contents == ref_contents(fnames[index])
 
 
-def _test_file_reader_filter(filters, batch_size, num_threads):
+batch_size_alias_test=64
     pipe = Pipeline(batch_size, num_threads, 0)
     root = os.path.join(os.environ['DALI_EXTRA_PATH'], 'db/single/mixed')
     files, labels = fn.readers.file(file_root=root, file_filters=filters)

@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,7 +64,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
 		phonebooks[nodeIdx] = network.MakePhonebook(cfg.ConnectionsRateLimitingCount,
 			time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
-		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, nodesAddresses, "go-test-agreement-network-genesis", config.Devtestnet)
+		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, phonebooks[nodeIdx], "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {
 			t.Fatalf("fail making ws node: %v", err)
 		}

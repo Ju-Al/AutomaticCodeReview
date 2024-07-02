@@ -1,33 +1,4 @@
 """
-    """Draw the graph G with a circular layout.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
-    """Draw the graph G with a Kamada-Kawai force-directed layout.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
-    """Draw the graph G with a random layout.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
-    """Draw the graph G with a spectral 2D layout.
-    Using the unnormalized Laplacian, the layout shows possible clusters of
-    nodes which are an approximation of the ratio cut. The positions are the
-    entries of the second and third eigenvectors corresponding to the
-    ascending eigenvalues starting from the second one.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
-    """Draw the graph G with a spring layout.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
-def draw_shell(G, **kwargs):
-    """Draw networkx graph with shell layout.
-        See networkx.draw_networkx() for a description of optional keywords,
-        with the exception of the pos parameter which is not used by this
-        function.
 **********
 Matplotlib
 **********
@@ -1220,7 +1191,35 @@ def draw_networkx_edge_labels(
 
 
 def draw_circular(G, **kwargs):
-    """Draw the graph `G` with a circular layout.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+    """Draw the graph G with a Kamada-Kawai force-directed layout.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+    """Draw the graph G with a random layout.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+    """Draw the graph G with a spectral 2D layout.
+    Using the unnormalized Laplacian, the layout shows possible clusters of
+    nodes which are an approximation of the ratio cut. The positions are the
+    entries of the second and third eigenvectors corresponding to the
+    ascending eigenvalues starting from the second one.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+    """Draw the graph G with a spring layout.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+def draw_shell(G, **kwargs):
+    """Draw networkx graph with shell layout.
+        See networkx.draw_networkx() for a description of optional keywords,
+        with the exception of the pos parameter which is not used by this
+        function.
+    """Draw the graph G with a circular layout.
 
     This is a convenience function equivalent to::
 

@@ -1,7 +1,5 @@
 # coding=utf-8
 
-
-    def fetch_listens(self, user_name, from_ts=None, to_ts=None, limit=DEFAULT_LISTENS_PER_FETCH):
 import calendar
 import logging
 import time
@@ -60,7 +58,8 @@ class ListenStore(object):
         """
         raise NotImplementedError()
 
-    def fetch_listens(self, user_name, from_ts=None, to_ts=None, limit=DEFAULT_LISTENS_PER_FETCH, time_range=None):
+
+    def fetch_listens(self, user_name, from_ts=None, to_ts=None, limit=DEFAULT_LISTENS_PER_FETCH):
         """ Check from_ts, to_ts, and limit for fetching listens
             and set them to default values if not given.
         """

@@ -1,6 +1,5 @@
 package e2e
 
-			err = VeleroUninstall(ctx, client, extensionsClient, veleroNamespace)
 import (
 	"context"
 	"encoding/json"
@@ -345,7 +344,7 @@ func RunEnableAPIGroupVersionsTests(ctx context.Context, resource, group string,
 
 		// Uninstall Velero
 		if installVelero {
-			err = uninstall.Uninstall(ctx, client, extensionsClient, veleroNamespace)
+			err = VeleroUninstall(ctx, client, extensionsClient, veleroNamespace)
 			if err != nil {
 				return err
 			}

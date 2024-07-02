@@ -6,7 +6,6 @@
    data-target="#project-submission-modal">
   Add your solution
 </a>
-  <div class="col text-center mt-3">
     <a class="button button--primary add-submission-button"
      href="#"
      id="add-submission-button"

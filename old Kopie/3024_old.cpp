@@ -181,8 +181,6 @@ static inline void is_invalid(DB_HOST_APP_VERSION& hav) {
         hav.max_jobs_per_day--;
     }
 }
-
-// check for results with long-term failure; punish those hosts
 //
 void scan_punitive(vector<VALIDATOR_ITEM>& items) {
     void* data=NULL;

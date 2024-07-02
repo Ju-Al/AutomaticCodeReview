@@ -1,5 +1,4 @@
 // @flow
-  } else if (amount.isZero()) {
 import BigNumber from 'bignumber.js';
 import {
   DECIMAL_PLACES_IN_ADA,
@@ -14,7 +13,7 @@ export const formattedWalletAmount = (
   let formattedAmount = '';
   if (long) {
     formattedAmount = amount.toFormat(DECIMAL_PLACES_IN_ADA);
-  } else {
+  } else if (amount.isZero()) {
     formattedAmount = shortNumber(amount);
   }
   const { decimalSeparator } = BigNumber.config().FORMAT;

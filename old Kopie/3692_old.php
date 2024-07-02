@@ -1,35 +1,4 @@
 <?php
-	 * Find link styles on the page HTML.
-	private function find_styles( $html ) {
-		$links = $this->find( '<link\s+(?:[^>]+[\s"\'])?href\s*=\s*[\'"]\s*(?<url>[^\'"\s]+)\s*?[\'"](?:[^>]+)?\/?>', $html );
-		if ( empty( $links ) ) {
-		foreach ( $links as $link ) {
-			if ( ! (bool) preg_match( '/rel=[\'"]stylesheet[\'"]/is', $link[0] ) ) {
-			$contents = $this->get_url_contents( $link['url'] );
-				'url'     => rocket_add_url_protocol( $link['url'] ),
-				'type'    => 'css',
-	 * Find scripts with src on the page HTML.
-	 * @param string $html Page HTML.
-	private function find_scripts( $html ) {
-		$scripts = $this->find( '<script\s+(?:[^>]+[\s\'"])?src\s*=\s*[\'"]\s*?(?<url>[^\'"\s]+)\s*?[\'"](?:[^>]+)?\/?>', $html );
-
-		if ( empty( $scripts ) ) {
-			return;
-		}
-
-		foreach ( $scripts as $script ) {
-			$contents = $this->get_url_contents( $script['url'] );
-
-			if ( empty( $contents ) ) {
-				continue;
-			}
-
-			$this->resources[] = [
-				'url'     => rocket_add_url_protocol( $script['url'] ),
-				'content' => $contents,
-				'type'    => 'js',
-			];
-		}
 declare(strict_types=1);
 
 namespace WP_Rocket\Engine\Optimization\RUCSS\Warmup;
@@ -124,7 +93,37 @@ class ResourceFetcher extends WP_Rocket_WP_Async_Request {
 	}
 
 	/**
-	 * Find resources of type (css/js) on the page HTML.
+	private function find_styles( $html ) {
+		$links = $this->find( '<link\s+(?:[^>]+[\s"\'])?href\s*=\s*[\'"]\s*(?<url>[^\'"\s]+)\s*?[\'"](?:[^>]+)?\/?>', $html );
+		if ( empty( $links ) ) {
+		foreach ( $links as $link ) {
+			if ( ! (bool) preg_match( '/rel=[\'"]stylesheet[\'"]/is', $link[0] ) ) {
+			$contents = $this->get_url_contents( $link['url'] );
+				'url'     => rocket_add_url_protocol( $link['url'] ),
+				'type'    => 'css',
+	 * Find scripts with src on the page HTML.
+	 * @param string $html Page HTML.
+	private function find_scripts( $html ) {
+		$scripts = $this->find( '<script\s+(?:[^>]+[\s\'"])?src\s*=\s*[\'"]\s*?(?<url>[^\'"\s]+)\s*?[\'"](?:[^>]+)?\/?>', $html );
+
+		if ( empty( $scripts ) ) {
+			return;
+		}
+
+		foreach ( $scripts as $script ) {
+			$contents = $this->get_url_contents( $script['url'] );
+
+			if ( empty( $contents ) ) {
+				continue;
+			}
+
+			$this->resources[] = [
+				'url'     => rocket_add_url_protocol( $script['url'] ),
+				'content' => $contents,
+				'type'    => 'js',
+			];
+		}
+	 * Find link styles on the page HTML.
 	 *
 	 * @since 3.9
 	 *

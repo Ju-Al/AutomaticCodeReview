@@ -173,7 +173,6 @@ class Sensei_Onboarding {
 		add_action( 'admin_print_scripts', [ $this, 'enqueue_scripts' ] );
 		add_action( 'admin_print_styles', [ $this, 'enqueue_styles' ] );
 		add_action( 'admin_body_class', [ $this, 'filter_body_class' ] );
-		add_action( 'init', [ $this, 'setup_wizard_set_script_translations' ] );
 
 		add_filter( 'show_admin_bar', '__return_false' );
 	}

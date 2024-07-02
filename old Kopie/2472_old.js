@@ -1,26 +1,4 @@
 /**
-         * A description of a route in the Venia app structure.
-         * @typedef {Object} VeniaRoute
-         * @property {string} name - Friendly name for the React component.
-         * @property {string} pattern - Route pattern. Will be used as the
-         *   `<Route/>` component's `path` prop.
-         * @property {boolean} [exact] - Exactly match the route?
-         * @property {string} path - Resolvable path to the component which the
-         *   Route will render.
-         */
-
-        /**
-         * @callback routesIntercept
-         * @param {VeniaRoute[]} routes - Array of registered routes.
-         * @returns {VeniaRoute[]} - You must return the array, or a new
-         *   array you have constructed.
-         */
-
-        /**
-         * Registers custom client-side routes for third-party extensions.
-         * Venia uses the Peregrine MagentoRoute for most of the site;
-         * catalog and CMS page URLs are controlled by admins, and dispatched
-         * via the UrlResolver query.
  * These targets are available for interception to modules which depend on `@magento/venia-ui`.
  *
  * Their implementations are found in `./venia-ui-intercept.js`.
@@ -60,7 +38,28 @@ module.exports = targets => {
         richContentRenderers: new targets.types.Sync(['renderers']),
 
         /**
-         * Provides access to Venia's routing logic.
+         * @typedef {Object} VeniaRoute
+         * @property {string} name - Friendly name for the React component.
+         * @property {string} pattern - Route pattern. Will be used as the
+         *   `<Route/>` component's `path` prop.
+         * @property {boolean} [exact] - Exactly match the route?
+         * @property {string} path - Resolvable path to the component which the
+         *   Route will render.
+         */
+
+        /**
+         * @callback routesIntercept
+         * @param {VeniaRoute[]} routes - Array of registered routes.
+         * @returns {VeniaRoute[]} - You must return the array, or a new
+         *   array you have constructed.
+         */
+
+        /**
+         * Registers custom client-side routes for third-party extensions.
+         * Venia uses the Peregrine MagentoRoute for most of the site;
+         * catalog and CMS page URLs are controlled by admins, and dispatched
+         * via the UrlResolver query.
+         * A description of a route in the Venia app structure.
          *
          * This target lets you add new routes to your storefronts.
          * You can also modify the existing routes that come with Venia,

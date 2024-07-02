@@ -69,8 +69,6 @@ public class SavingsAccountSummaryData {
         this.depositType = depositType;
         this.subStatus = subStatus;
         this.lastActiveTransactionDate = lastActiveTransactionDate;
-    }
-
 	public String getAccountNo() {
 		return accountNo;
 	}

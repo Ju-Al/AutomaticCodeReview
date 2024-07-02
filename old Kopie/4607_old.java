@@ -1,8 +1,5 @@
 package de.danoeh.antennapod.core.feed;
 
-        FeedItem item = new FeedItem(0, file.getName(), uuid, file.getName(), new Date(),
-                FeedItem.UNPLAYED, feed);
-        item.setAutoDownload(false);
 import android.content.ContentResolver;
 import android.content.Context;
 import android.media.MediaMetadataRetriever;
@@ -137,10 +134,12 @@ public class LocalFeedUpdater {
 
     private static FeedItem createFeedItem(Feed feed, DocumentFile file, Context context) {
         String uuid = UUID.randomUUID().toString();
+        FeedItem item = new FeedItem(0, file.getName(), uuid, file.getName(), new Date(),
+                FeedItem.UNPLAYED, feed);
+        item.setAutoDownload(false);
 
         MediaMetadataRetriever mediaMetadataRetriever = new MediaMetadataRetriever();
         mediaMetadataRetriever.setDataSource(context, file.getUri());
-        String dateStr = mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE);
 
         Date date = null;
         if (!TextUtils.isEmpty(dateStr)) {

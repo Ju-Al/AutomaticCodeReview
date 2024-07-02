@@ -1,6 +1,4 @@
 <?php
-    public function __call(string $name, array $arguments = []): Field
-            return $this->getField($name);
 
 declare(strict_types=1);
 
@@ -452,7 +450,8 @@ class Content implements \JsonSerializable
      * - {{ record.image }} => field named image
      * - {{ record|image }} => value of guessed image field
      */
-    public function __call(string $name, array $arguments = [])
+            return $this->getField($name);
+    public function __call(string $name, array $arguments = []): Field
     {
         try {
             $field = $this->getField($name);

@@ -152,9 +152,6 @@ class Plugin_Installer_Skin extends WP_Upgrader_Skin {
 
 		if ( ! empty( $install_actions ) ) {
 			$this->feedback( implode( ' ', (array) $install_actions ) );
-		}
-	}
-
 	/**
 	 * Create the compare table to show user information about overwrite plugin on upload.
 	 *

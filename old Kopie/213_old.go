@@ -1,5 +1,4 @@
 // Copyright (C) 2019 Algorand, Inc.
-// This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as

@@ -6,7 +6,6 @@ var RootCerts = require('./common/RootCerts');
 
 var PayPro = require('./common/PayPro');
 
-var KJUR = require('jsrsasign');
 
 PayPro.prototype.x509Sign = function(key) {
   var self = this;

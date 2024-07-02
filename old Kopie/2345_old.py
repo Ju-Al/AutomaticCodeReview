@@ -240,7 +240,6 @@ class DataService(DataServiceInterface, BaseService):
         for src in self.strip_yml(filename):
             obj = object_class.load(src)
             obj.access = access
-            obj.plugin = filename.split('/')[1]
             await self.store(obj)
 
     """ PRIVATE """

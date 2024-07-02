@@ -1,4 +1,4 @@
-// Copyright 2016 The prometheus-operator Authors
+// Copyright 2018 The prometheus-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,1622 +12,1612 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prometheus
+package v1
 
 import (
 	"fmt"
-	"path"
-	"regexp"
-	"sort"
-	"strings"
 
-	"github.com/blang/semver/v4"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus-operator/prometheus-operator/pkg/assets"
-	"github.com/prometheus-operator/prometheus-operator/pkg/operator"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
-	kubernetesSDRoleEndpoint = "endpoints"
-	kubernetesSDRolePod      = "pod"
-	kubernetesSDRoleIngress  = "ingress"
+	Version = "v1"
+
+	PrometheusesKind  = "Prometheus"
+	PrometheusName    = "prometheuses"
+	PrometheusKindKey = "prometheus"
+
+	AlertmanagersKind   = "Alertmanager"
+	AlertmanagerName    = "alertmanagers"
+	AlertManagerKindKey = "alertmanager"
+
+	ServiceMonitorsKind   = "ServiceMonitor"
+	ServiceMonitorName    = "servicemonitors"
+	ServiceMonitorKindKey = "servicemonitor"
+
+	PodMonitorsKind   = "PodMonitor"
+	PodMonitorName    = "podmonitors"
+	PodMonitorKindKey = "podmonitor"
+
+	PrometheusRuleKind    = "PrometheusRule"
+	PrometheusRuleName    = "prometheusrules"
+	PrometheusRuleKindKey = "prometheusrule"
+
+	ProbesKind   = "Probe"
+	ProbeName    = "probes"
+	ProbeKindKey = "probe"
 )
 
-var (
-	invalidLabelCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
-)
-
-// ConfigGenerator is used to create Prometheus configurations from operator resources.
-type ConfigGenerator struct {
-	logger log.Logger
+// Prometheus defines a Prometheus deployment.
+// +genclient
+// +k8s:openapi-gen=true
+// +kubebuilder:resource:categories="prometheus-operator"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.version",description="The version of Prometheus"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="The desired replicas number of Prometheuses"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+type Prometheus struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of the desired behavior of the Prometheus cluster. More info:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	Spec PrometheusSpec `json:"spec"`
+	// Most recent observed status of the Prometheus cluster. Read-only. Not
+	// included when requesting from the apiserver, only from the Prometheus
+	// Operator API itself. More info:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	Status *PrometheusStatus `json:"status,omitempty"`
 }
 
-// NewConfigGenerator creates a ConfigGenerator instance using the provided Logger.
-func NewConfigGenerator(logger log.Logger) *ConfigGenerator {
-	cg := &ConfigGenerator{
-		logger: logger,
-	}
-	return cg
+// PrometheusList is a list of Prometheuses.
+// +k8s:openapi-gen=true
+type PrometheusList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of Prometheuses
+	Items []*Prometheus `json:"items"`
 }
 
-func sanitizeLabelName(name string) string {
-	return invalidLabelCharRE.ReplaceAllString(name, "_")
+// PrometheusSpec is a specification of the desired behavior of the Prometheus cluster. More info:
+// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+// +k8s:openapi-gen=true
+type PrometheusSpec struct {
+	// PodMetadata configures Labels and Annotations which are propagated to the prometheus pods.
+	PodMetadata *EmbeddedObjectMetadata `json:"podMetadata,omitempty"`
+	// ServiceMonitors to be selected for target discovery. *Deprecated:* if
+	// neither this nor podMonitorSelector are specified, configuration is
+	// unmanaged.
+	ServiceMonitorSelector *metav1.LabelSelector `json:"serviceMonitorSelector,omitempty"`
+	// Namespace's labels to match for ServiceMonitor discovery. If nil, only
+	// check own namespace.
+	ServiceMonitorNamespaceSelector *metav1.LabelSelector `json:"serviceMonitorNamespaceSelector,omitempty"`
+	// *Experimental* PodMonitors to be selected for target discovery.
+	// *Deprecated:* if neither this nor serviceMonitorSelector are specified,
+	// configuration is unmanaged.
+	PodMonitorSelector *metav1.LabelSelector `json:"podMonitorSelector,omitempty"`
+	// Namespace's labels to match for PodMonitor discovery. If nil, only
+	// check own namespace.
+	PodMonitorNamespaceSelector *metav1.LabelSelector `json:"podMonitorNamespaceSelector,omitempty"`
+	// *Experimental* Probes to be selected for target discovery.
+	ProbeSelector *metav1.LabelSelector `json:"probeSelector,omitempty"`
+	// *Experimental* Namespaces to be selected for Probe discovery. If nil, only check own namespace.
+	ProbeNamespaceSelector *metav1.LabelSelector `json:"probeNamespaceSelector,omitempty"`
+	// Version of Prometheus to be deployed.
+	Version string `json:"version,omitempty"`
+	// Tag of Prometheus container image to be deployed. Defaults to the value of `version`.
+	// Version is ignored if Tag is set.
+	// Deprecated: use 'image' instead.  The image tag can be specified
+	// as part of the image URL.
+	Tag string `json:"tag,omitempty"`
+	// SHA of Prometheus container image to be deployed. Defaults to the value of `version`.
+	// Similar to a tag, but the SHA explicitly deploys an immutable container image.
+	// Version and Tag are ignored if SHA is set.
+	// Deprecated: use 'image' instead.  The image digest can be specified
+	// as part of the image URL.
+	SHA string `json:"sha,omitempty"`
+	// When a Prometheus deployment is paused, no actions except for deletion
+	// will be performed on the underlying objects.
+	Paused bool `json:"paused,omitempty"`
+	// Image if specified has precedence over baseImage, tag and sha
+	// combinations. Specifying the version is still necessary to ensure the
+	// Prometheus Operator knows what version of Prometheus is being
+	// configured.
+	Image *string `json:"image,omitempty"`
+	// Base image to use for a Prometheus deployment.
+	// Deprecated: use 'image' instead
+	BaseImage string `json:"baseImage,omitempty"`
+	// An optional list of references to secrets in the same namespace
+	// to use for pulling prometheus and alertmanager images from registries
+	// see http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod
+	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// Number of replicas of each shard to deploy for a Prometheus deployment.
+	// Number of replicas multiplied by shards is the total number of Pods
+	// created.
+	Replicas *int32 `json:"replicas,omitempty"`
+	// EXPERIMENTAL: Number of shards to distribute targets onto. Number of
+	// replicas multiplied by shards is the total number of Pods created. Note
+	// that scaling down shards will not reshard data onto remaining instances,
+	// it must be manually moved. Increasing shards will not reshard data
+	// either but it will continue to be available from the same instances. To
+	// query globally use Thanos sidecar and Thanos querier or remote write
+	// data to a central location. Sharding is done on the content of the
+	// `__address__` target meta-label.
+	Shards *int32 `json:"shards,omitempty"`
+	// Name of Prometheus external label used to denote replica name.
+	// Defaults to the value of `prometheus_replica`. External label will
+	// _not_ be added when value is set to empty string (`""`).
+	ReplicaExternalLabelName *string `json:"replicaExternalLabelName,omitempty"`
+	// Name of Prometheus external label used to denote Prometheus instance
+	// name. Defaults to the value of `prometheus`. External label will
+	// _not_ be added when value is set to empty string (`""`).
+	PrometheusExternalLabelName *string `json:"prometheusExternalLabelName,omitempty"`
+	// Time duration Prometheus shall retain data for. Default is '24h',
+	// and must match the regular expression `[0-9]+(ms|s|m|h|d|w|y)` (milliseconds seconds minutes hours days weeks years).
+	Retention string `json:"retention,omitempty"`
+	// Maximum amount of disk space used by blocks. Supported units: B, KB, MB, GB, TB, PB, EB. Ex: `512MB`.
+	RetentionSize string `json:"retentionSize,omitempty"`
+	// Disable prometheus compaction.
+	DisableCompaction bool `json:"disableCompaction,omitempty"`
+	// Enable compression of the write-ahead log using Snappy. This flag is
+	// only available in versions of Prometheus >= 2.11.0.
+	WALCompression *bool `json:"walCompression,omitempty"`
+	// Log level for Prometheus to be configured with.
+	LogLevel string `json:"logLevel,omitempty"`
+	// Log format for Prometheus to be configured with.
+	LogFormat string `json:"logFormat,omitempty"`
+	// Interval between consecutive scrapes. Default: `1m`
+	ScrapeInterval string `json:"scrapeInterval,omitempty"`
+	// Number of seconds to wait for target to respond before erroring.
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+	// Interval between consecutive evaluations. Default: `1m`
+	EvaluationInterval string `json:"evaluationInterval,omitempty"`
+	// /--rules.*/ command-line arguments.
+	Rules Rules `json:"rules,omitempty"`
+	// The labels to add to any time series or alerts when communicating with
+	// external systems (federation, remote storage, Alertmanager).
+	ExternalLabels map[string]string `json:"externalLabels,omitempty"`
+	// Enable access to prometheus web admin API. Defaults to the value of `false`.
+	// WARNING: Enabling the admin APIs enables mutating endpoints, to delete data,
+	// shutdown Prometheus, and more. Enabling this should be done with care and the
+	// user is advised to add additional authentication authorization via a proxy to
+	// ensure only clients authorized to perform these actions can do so.
+	// For more information see https://prometheus.io/docs/prometheus/latest/querying/api/#tsdb-admin-apis
+	EnableAdminAPI bool `json:"enableAdminAPI,omitempty"`
+	// Enable access to Prometheus disabled features. By default, no features are enabled.
+	// Enabling disabled features is entirely outside the scope of what the maintainers will
+	// support and by doing so, you accept that this behaviour may break at any
+	// time without notice.
+	// For more information see https://prometheus.io/docs/prometheus/latest/disabled_features/
+	EnableFeatures []string `json:"enableFeatures,omitempty"`
+	// The external URL the Prometheus instances will be available under. This is
+	// necessary to generate correct URLs. This is necessary if Prometheus is not
+	// served from root of a DNS name.
+	ExternalURL string `json:"externalUrl,omitempty"`
+	// The route prefix Prometheus registers HTTP handlers for. This is useful,
+	// if using ExternalURL and a proxy is rewriting HTTP routes of a request,
+	// and the actual ExternalURL is still true, but the server serves requests
+	// under a different route prefix. For example for use with `kubectl proxy`.
+	RoutePrefix string `json:"routePrefix,omitempty"`
+	// QuerySpec defines the query command line flags when starting Prometheus.
+	Query *QuerySpec `json:"query,omitempty"`
+	// Storage spec to specify how storage shall be used.
+	Storage *StorageSpec `json:"storage,omitempty"`
+	// Volumes allows configuration of additional volumes on the output StatefulSet definition. Volumes specified will
+	// be appended to other volumes that are generated as a result of StorageSpec objects.
+	Volumes []v1.Volume `json:"volumes,omitempty"`
+	// VolumeMounts allows configuration of additional VolumeMounts on the output StatefulSet definition.
+	// VolumeMounts specified will be appended to other VolumeMounts in the prometheus container,
+	// that are generated as a result of StorageSpec objects.
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
+	// WebSpec defines the web command line flags when starting Prometheus.
+	Web *WebSpec `json:"web,omitempty"`
+	// A selector to select which PrometheusRules to mount for loading alerting/recording
+	// rules from. Until (excluding) Prometheus Operator v0.24.0 Prometheus
+	// Operator will migrate any legacy rule ConfigMaps to PrometheusRule custom
+	// resources selected by RuleSelector. Make sure it does not match any config
+	// maps that you do not want to be migrated.
+	RuleSelector *metav1.LabelSelector `json:"ruleSelector,omitempty"`
+	// Namespaces to be selected for PrometheusRules discovery. If unspecified, only
+	// the same namespace as the Prometheus object is in is used.
+	RuleNamespaceSelector *metav1.LabelSelector `json:"ruleNamespaceSelector,omitempty"`
+	// Define details regarding alerting.
+	Alerting *AlertingSpec `json:"alerting,omitempty"`
+	// Define resources requests and limits for single Pods.
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+	// Define which Nodes the Pods are scheduled on.
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// ServiceAccountName is the name of the ServiceAccount to use to run the
+	// Prometheus Pods.
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+	// Secrets is a list of Secrets in the same namespace as the Prometheus
+	// object, which shall be mounted into the Prometheus Pods.
+	// The Secrets are mounted into /etc/prometheus/secrets/<secret-name>.
+	Secrets []string `json:"secrets,omitempty"`
+	// ConfigMaps is a list of ConfigMaps in the same namespace as the Prometheus
+	// object, which shall be mounted into the Prometheus Pods.
+	// The ConfigMaps are mounted into /etc/prometheus/configmaps/<configmap-name>.
+	ConfigMaps []string `json:"configMaps,omitempty"`
+	// If specified, the pod's scheduling constraints.
+	Affinity *v1.Affinity `json:"affinity,omitempty"`
+	// If specified, the pod's tolerations.
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
+	// If specified, the pod's topology spread constraints.
+	TopologySpreadConstraints []v1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+	// If specified, the remote_write spec. This is an experimental feature, it may change in any upcoming release in a breaking way.
+	RemoteWrite []RemoteWriteSpec `json:"remoteWrite,omitempty"`
+	// If specified, the remote_read spec. This is an experimental feature, it may change in any upcoming release in a breaking way.
+	RemoteRead []RemoteReadSpec `json:"remoteRead,omitempty"`
+	// SecurityContext holds pod-level security attributes and common container settings.
+	// This defaults to the default PodSecurityContext.
+	SecurityContext *v1.PodSecurityContext `json:"securityContext,omitempty"`
+	// ListenLocal makes the Prometheus server listen on loopback, so that it
+	// does not bind against the Pod IP.
+	ListenLocal bool `json:"listenLocal,omitempty"`
+	// Containers allows injecting additional containers or modifying operator
+	// generated containers. This can be used to allow adding an authentication
+	// proxy to a Prometheus pod or to change the behavior of an operator
+	// generated container. Containers described here modify an operator
+	// generated container if they share the same name and modifications are
+	// done via a strategic merge patch. The current container names are:
+	// `prometheus`, `config-reloader`, and `thanos-sidecar`. Overriding
+	// containers is entirely outside the scope of what the maintainers will
+	// support and by doing so, you accept that this behaviour may break at any
+	// time without notice.
+	Containers []v1.Container `json:"containers,omitempty"`
+	// InitContainers allows adding initContainers to the pod definition. Those can be used to e.g.
+	// fetch secrets for injection into the Prometheus configuration from external sources. Any errors
+	// during the execution of an initContainer will lead to a restart of the Pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+	// InitContainers described here modify an operator
+	// generated init containers if they share the same name and modifications are
+	// done via a strategic merge patch. The current init container name is:
+	// `init-config-reloader`. Overriding init containers is entirely outside the
+	// scope of what the maintainers will support and by doing so, you accept that
+	// this behaviour may break at any time without notice.
+	InitContainers []v1.Container `json:"initContainers,omitempty"`
+	// AdditionalScrapeConfigs allows specifying a key of a Secret containing
+	// additional Prometheus scrape configurations. Scrape configurations
+	// specified are appended to the configurations generated by the Prometheus
+	// Operator. Job configurations specified must have the form as specified
+	// in the official Prometheus documentation:
+	// https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config.
+	// As scrape configs are appended, the user is responsible to make sure it
+	// is valid. Note that using this feature may expose the possibility to
+	// break upgrades of Prometheus. It is advised to review Prometheus release
+	// notes to ensure that no incompatible scrape configs are going to break
+	// Prometheus after the upgrade.
+	AdditionalScrapeConfigs *v1.SecretKeySelector `json:"additionalScrapeConfigs,omitempty"`
+	// AdditionalAlertRelabelConfigs allows specifying a key of a Secret containing
+	// additional Prometheus alert relabel configurations. Alert relabel configurations
+	// specified are appended to the configurations generated by the Prometheus
+	// Operator. Alert relabel configurations specified must have the form as specified
+	// in the official Prometheus documentation:
+	// https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alert_relabel_configs.
+	// As alert relabel configs are appended, the user is responsible to make sure it
+	// is valid. Note that using this feature may expose the possibility to
+	// break upgrades of Prometheus. It is advised to review Prometheus release
+	// notes to ensure that no incompatible alert relabel configs are going to break
+	// Prometheus after the upgrade.
+	AdditionalAlertRelabelConfigs *v1.SecretKeySelector `json:"additionalAlertRelabelConfigs,omitempty"`
+	// AdditionalAlertManagerConfigs allows specifying a key of a Secret containing
+	// additional Prometheus AlertManager configurations. AlertManager configurations
+	// specified are appended to the configurations generated by the Prometheus
+	// Operator. Job configurations specified must have the form as specified
+	// in the official Prometheus documentation:
+	// https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alertmanager_config.
+	// As AlertManager configs are appended, the user is responsible to make sure it
+	// is valid. Note that using this feature may expose the possibility to
+	// break upgrades of Prometheus. It is advised to review Prometheus release
+	// notes to ensure that no incompatible AlertManager configs are going to break
+	// Prometheus after the upgrade.
+	AdditionalAlertManagerConfigs *v1.SecretKeySelector `json:"additionalAlertManagerConfigs,omitempty"`
+	// APIServerConfig allows specifying a host and auth methods to access apiserver.
+	// If left empty, Prometheus is assumed to run inside of the cluster
+	// and will discover API servers automatically and use the pod's CA certificate
+	// and bearer token file at /var/run/secrets/kubernetes.io/serviceaccount/.
+	APIServerConfig *APIServerConfig `json:"apiserverConfig,omitempty"`
+	// Thanos configuration allows configuring various aspects of a Prometheus
+	// server in a Thanos environment.
+	//
+	// This section is experimental, it may change significantly without
+	// deprecation notice in any release.
+	//
+	// This is experimental and may change significantly without backward
+	// compatibility in any release.
+	Thanos *ThanosSpec `json:"thanos,omitempty"`
+	// Priority class assigned to the Pods
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+	// Port name used for the pods and governing service.
+	// This defaults to web
+	PortName string `json:"portName,omitempty"`
+	// ArbitraryFSAccessThroughSMs configures whether configuration
+	// based on a service monitor can access arbitrary files on the file system
+	// of the Prometheus container e.g. bearer token files.
+	ArbitraryFSAccessThroughSMs ArbitraryFSAccessThroughSMsConfig `json:"arbitraryFSAccessThroughSMs,omitempty"`
+	// OverrideHonorLabels if set to true overrides all user configured honor_labels.
+	// If HonorLabels is set in ServiceMonitor or PodMonitor to true, this overrides honor_labels to false.
+	OverrideHonorLabels bool `json:"overrideHonorLabels,omitempty"`
+	// OverrideHonorTimestamps allows to globally enforce honoring timestamps in all scrape configs.
+	OverrideHonorTimestamps bool `json:"overrideHonorTimestamps,omitempty"`
+	// IgnoreNamespaceSelectors if set to true will ignore NamespaceSelector settings from
+	// the podmonitor and servicemonitor configs, and they will only discover endpoints
+	// within their current namespace.  Defaults to false.
+	IgnoreNamespaceSelectors bool `json:"ignoreNamespaceSelectors,omitempty"`
+	// EnforcedNamespaceLabel If set, a label will be added to
+	//
+	// 1. all user-metrics (created by `ServiceMonitor`, `PodMonitor` and `ProbeConfig` object) and
+	// 2. in all `PrometheusRule` objects (except the ones excluded in `prometheusRulesExcludedFromEnforce`) to
+	//    * alerting & recording rules and
+	//    * the metrics used in their expressions (`expr`).
+	//
+	// Label name is this field's value.
+	// Label value is the namespace of the created object (mentioned above).
+	EnforcedNamespaceLabel string `json:"enforcedNamespaceLabel,omitempty"`
+	// PrometheusRulesExcludedFromEnforce - list of prometheus rules to be excluded from enforcing
+	// of adding namespace labels. Works only if enforcedNamespaceLabel set to true.
+	// Make sure both ruleNamespace and ruleName are set for each pair
+	PrometheusRulesExcludedFromEnforce []PrometheusRuleExcludeConfig `json:"prometheusRulesExcludedFromEnforce,omitempty"`
+	// QueryLogFile specifies the file to which PromQL queries are logged.
+	// Note that this location must be writable, and can be persisted using an attached volume.
+	// Alternatively, the location can be set to a stdout location such as `/dev/stdout` to log
+	// querie information to the default Prometheus log stream.
+	// This is only available in versions of Prometheus >= 2.16.0.
+	// For more details, see the Prometheus docs (https://prometheus.io/docs/guides/query-log/)
+	QueryLogFile string `json:"queryLogFile,omitempty"`
+	// EnforcedSampleLimit defines global limit on number of scraped samples
+	// that will be accepted. This overrides any SampleLimit set per
+	// ServiceMonitor or/and PodMonitor. It is meant to be used by admins to
+	// enforce the SampleLimit to keep overall number of samples/series under
+	// the desired limit.
+	// Note that if SampleLimit is lower that value will be taken instead.
+	EnforcedSampleLimit *uint64 `json:"enforcedSampleLimit,omitempty"`
+	// AllowOverlappingBlocks enables vertical compaction and vertical query merge in Prometheus.
+	// This is still experimental in Prometheus so it may change in any upcoming release.
+	AllowOverlappingBlocks bool `json:"allowOverlappingBlocks,omitempty"`
+	// EnforcedTargetLimit defines a global limit on the number of scraped
+	// targets.  This overrides any TargetLimit set per ServiceMonitor or/and
+	// PodMonitor.  It is meant to be used by admins to enforce the TargetLimit
+	// to keep the overall number of targets under the desired limit.
+	// Note that if TargetLimit is lower, that value will be taken instead,
+	// except if either value is zero, in which case the non-zero value will be
+	// used.  If both values are zero, no limit is enforced.
+	EnforcedTargetLimit *uint64 `json:"enforcedTargetLimit,omitempty"`
 }
 
-func stringMapToMapSlice(m map[string]string) yaml.MapSlice {
-	res := yaml.MapSlice{}
-	ks := make([]string, 0)
-
-	for k := range m {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-
-	for _, k := range ks {
-		res = append(res, yaml.MapItem{Key: k, Value: m[k]})
-	}
-
-	return res
+// PrometheusRuleExcludeConfig enables users to configure excluded PrometheusRule names and their namespaces
+// to be ignored while enforcing namespace label for alerts and metrics.
+type PrometheusRuleExcludeConfig struct {
+	// RuleNamespace - namespace of excluded rule
+	RuleNamespace string `json:"ruleNamespace"`
+	// RuleNamespace - name of excluded rule
+	RuleName string `json:"ruleName"`
 }
 
-func addSafeTLStoYaml(cfg yaml.MapSlice, namespace string, tls v1.SafeTLSConfig) yaml.MapSlice {
-	pathForSelector := func(sel v1.SecretOrConfigMap) string {
-		return path.Join(tlsAssetsDir, assets.TLSAssetKeyFromSelector(namespace, sel).String())
-	}
-	tlsConfig := yaml.MapSlice{
-		{Key: "insecure_skip_verify", Value: tls.InsecureSkipVerify},
-	}
-	if tls.CA.Secret != nil || tls.CA.ConfigMap != nil {
-		tlsConfig = append(tlsConfig, yaml.MapItem{Key: "ca_file", Value: pathForSelector(tls.CA)})
-	}
-	if tls.Cert.Secret != nil || tls.Cert.ConfigMap != nil {
-		tlsConfig = append(tlsConfig, yaml.MapItem{Key: "cert_file", Value: pathForSelector(tls.Cert)})
-	}
-	if tls.KeySecret != nil {
-		tlsConfig = append(tlsConfig, yaml.MapItem{Key: "key_file", Value: pathForSelector(v1.SecretOrConfigMap{Secret: tls.KeySecret})})
-	}
-	if tls.ServerName != "" {
-		tlsConfig = append(tlsConfig, yaml.MapItem{Key: "server_name", Value: tls.ServerName})
-	}
-	cfg = append(cfg, yaml.MapItem{Key: "tls_config", Value: tlsConfig})
-	return cfg
+// ArbitraryFSAccessThroughSMsConfig enables users to configure, whether
+// a service monitor selected by the Prometheus instance is allowed to use
+// arbitrary files on the file system of the Prometheus container. This is the case
+// when e.g. a service monitor specifies a BearerTokenFile in an endpoint. A
+// malicious user could create a service monitor selecting arbitrary secret files
+// in the Prometheus container. Those secrets would then be sent with a scrape
+// request by Prometheus to a malicious target. Denying the above would prevent the
+// attack, users can instead use the BearerTokenSecret field.
+type ArbitraryFSAccessThroughSMsConfig struct {
+	Deny bool `json:"deny,omitempty"`
 }
 
-func addTLStoYaml(cfg yaml.MapSlice, namespace string, tls *v1.TLSConfig) yaml.MapSlice {
-	if tls != nil {
-		tlsConfig := addSafeTLStoYaml(yaml.MapSlice{}, namespace, tls.SafeTLSConfig)[0].Value.(yaml.MapSlice)
-		if tls.CAFile != "" {
-			tlsConfig = append(tlsConfig, yaml.MapItem{Key: "ca_file", Value: tls.CAFile})
-		}
-		if tls.CertFile != "" {
-			tlsConfig = append(tlsConfig, yaml.MapItem{Key: "cert_file", Value: tls.CertFile})
-		}
-		if tls.KeyFile != "" {
-			tlsConfig = append(tlsConfig, yaml.MapItem{Key: "key_file", Value: tls.KeyFile})
-		}
-		cfg = append(cfg, yaml.MapItem{Key: "tls_config", Value: tlsConfig})
-	}
-	return cfg
+// PrometheusStatus is the most recent observed status of the Prometheus cluster. Read-only. Not
+// included when requesting from the apiserver, only from the Prometheus
+// Operator API itself. More info:
+// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+// +k8s:openapi-gen=true
+type PrometheusStatus struct {
+	// Represents whether any actions on the underlying managed objects are
+	// being performed. Only delete actions will be performed.
+	Paused bool `json:"paused"`
+	// Total number of non-terminated pods targeted by this Prometheus deployment
+	// (their labels match the selector).
+	Replicas int32 `json:"replicas"`
+	// Total number of non-terminated pods targeted by this Prometheus deployment
+	// that have the desired version spec.
+	UpdatedReplicas int32 `json:"updatedReplicas"`
+	// Total number of available pods (ready for at least minReadySeconds)
+	// targeted by this Prometheus deployment.
+	AvailableReplicas int32 `json:"availableReplicas"`
+	// Total number of unavailable pods targeted by this Prometheus deployment.
+	UnavailableReplicas int32 `json:"unavailableReplicas"`
 }
 
-func buildExternalLabels(p *v1.Prometheus) yaml.MapSlice {
-	m := map[string]string{}
-
-	// Use "prometheus" external label name by default if field is missing.
-	// Do not add external label if field is set to empty string.
-	prometheusExternalLabelName := "prometheus"
-	if p.Spec.PrometheusExternalLabelName != nil {
-		if *p.Spec.PrometheusExternalLabelName != "" {
-			prometheusExternalLabelName = *p.Spec.PrometheusExternalLabelName
-		} else {
-			prometheusExternalLabelName = ""
-		}
-	}
-
-	// Use defaultReplicaExternalLabelName constant by default if field is missing.
-	// Do not add external label if field is set to empty string.
-	replicaExternalLabelName := defaultReplicaExternalLabelName
-	if p.Spec.ReplicaExternalLabelName != nil {
-		if *p.Spec.ReplicaExternalLabelName != "" {
-			replicaExternalLabelName = *p.Spec.ReplicaExternalLabelName
-		} else {
-			replicaExternalLabelName = ""
-		}
-	}
-
-	if prometheusExternalLabelName != "" {
-		m[prometheusExternalLabelName] = fmt.Sprintf("%s/%s", p.Namespace, p.Name)
-	}
-
-	if replicaExternalLabelName != "" {
-		m[replicaExternalLabelName] = "$(POD_NAME)"
-	}
-
-	for n, v := range p.Spec.ExternalLabels {
-		m[n] = v
-	}
-	return stringMapToMapSlice(m)
+// AlertingSpec defines parameters for alerting configuration of Prometheus servers.
+// +k8s:openapi-gen=true
+type AlertingSpec struct {
+	// AlertmanagerEndpoints Prometheus should fire alerts against.
+	Alertmanagers []AlertmanagerEndpoints `json:"alertmanagers"`
 }
 
-// GenerateConfig creates a serialized YAML representation of a Prometheus configuration using the provided resources.
-func (cg *ConfigGenerator) GenerateConfig(
-	p *v1.Prometheus,
-	sMons map[string]*v1.ServiceMonitor,
-	pMons map[string]*v1.PodMonitor,
-	probes map[string]*v1.Probe,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	oauth2Secrets map[string]assets.OAuth2Credentials,
-	bearerTokens map[string]assets.BearerToken,
-	additionalScrapeConfigs []byte,
-	additionalAlertRelabelConfigs []byte,
-	additionalAlertManagerConfigs []byte,
-	ruleConfigMapNames []string,
-) ([]byte, error) {
-	versionStr := p.Spec.Version
-	if versionStr == "" {
-		versionStr = operator.DefaultPrometheusVersion
-	}
-
-	version, err := semver.ParseTolerant(versionStr)
-	if err != nil {
-		return nil, errors.Wrap(err, "parse version")
-	}
-
-	cfg := yaml.MapSlice{}
-
-	scrapeInterval := "30s"
-	if p.Spec.ScrapeInterval != "" {
-		scrapeInterval = p.Spec.ScrapeInterval
-	}
-
-	evaluationInterval := "30s"
-	if p.Spec.EvaluationInterval != "" {
-		evaluationInterval = p.Spec.EvaluationInterval
-	}
-
-	globalItems := yaml.MapSlice{
-		{Key: "evaluation_interval", Value: evaluationInterval},
-		{Key: "scrape_interval", Value: scrapeInterval},
-		{Key: "external_labels", Value: buildExternalLabels(p)},
-	}
-
-	if p.Spec.ScrapeTimeout != "" {
-		globalItems = append(globalItems, yaml.MapItem{
-			Key: "scrape_timeout", Value: p.Spec.ScrapeTimeout,
-		})
-	}
-
-	if version.GTE(semver.MustParse("2.16.0")) && p.Spec.QueryLogFile != "" {
-		globalItems = append(globalItems, yaml.MapItem{
-			Key: "query_log_file", Value: p.Spec.QueryLogFile,
-		})
-	}
-
-	cfg = append(cfg, yaml.MapItem{Key: "global", Value: globalItems})
-
-	ruleFilePaths := []string{}
-	for _, name := range ruleConfigMapNames {
-		ruleFilePaths = append(ruleFilePaths, rulesDir+"/"+name+"/*.yaml")
-	}
-	cfg = append(cfg, yaml.MapItem{
-		Key:   "rule_files",
-		Value: ruleFilePaths,
-	})
-
-	sMonIdentifiers := make([]string, len(sMons))
-	i := 0
-	for k := range sMons {
-		sMonIdentifiers[i] = k
-		i++
-	}
-
-	// Sorting ensures, that we always generate the config in the same order.
-	sort.Strings(sMonIdentifiers)
-
-	pMonIdentifiers := make([]string, len(pMons))
-	i = 0
-	for k := range pMons {
-		pMonIdentifiers[i] = k
-		i++
-	}
-
-	// Sorting ensures, that we always generate the config in the same order.
-	sort.Strings(pMonIdentifiers)
-
-	probeIdentifiers := make([]string, len(probes))
-	i = 0
-	for k := range probes {
-		probeIdentifiers[i] = k
-		i++
-	}
-
-	// Sorting ensures, that we always generate the config in the same order.
-	sort.Strings(probeIdentifiers)
-
-	apiserverConfig := p.Spec.APIServerConfig
-	shards := int32(1)
-	if p.Spec.Shards != nil && *p.Spec.Shards > 1 {
-		shards = *p.Spec.Shards
-	}
-
-	var scrapeConfigs []yaml.MapSlice
-	for _, identifier := range sMonIdentifiers {
-		for i, ep := range sMons[identifier].Spec.Endpoints {
-			scrapeConfigs = append(scrapeConfigs,
-				cg.generateServiceMonitorConfig(
-					version,
-					sMons[identifier],
-					ep, i,
-					apiserverConfig,
-					basicAuthSecrets,
-					bearerTokens,
-					p.Spec.OverrideHonorLabels,
-					p.Spec.OverrideHonorTimestamps,
-					p.Spec.IgnoreNamespaceSelectors,
-					p.Spec.EnforcedNamespaceLabel,
-					p.Spec.EnforcedSampleLimit,
-					p.Spec.EnforcedTargetLimit,
-					shards,
-				),
-			)
-		}
-	}
-	for _, identifier := range pMonIdentifiers {
-		for i, ep := range pMons[identifier].Spec.PodMetricsEndpoints {
-			scrapeConfigs = append(scrapeConfigs,
-				cg.generatePodMonitorConfig(
-					version,
-					pMons[identifier], ep, i,
-					apiserverConfig,
-					basicAuthSecrets,
-					bearerTokens,
-					p.Spec.OverrideHonorLabels,
-					p.Spec.OverrideHonorTimestamps,
-					p.Spec.IgnoreNamespaceSelectors,
-					p.Spec.EnforcedNamespaceLabel,
-					p.Spec.EnforcedSampleLimit,
-					p.Spec.EnforcedTargetLimit,
-					shards,
-				),
-			)
-		}
-	}
-
-	for _, identifier := range probeIdentifiers {
-		scrapeConfigs = append(scrapeConfigs,
-			cg.generateProbeConfig(
-				version,
-				probes[identifier],
-				apiserverConfig,
-				basicAuthSecrets,
-				bearerTokens,
-				p.Spec.OverrideHonorLabels,
-				p.Spec.OverrideHonorTimestamps,
-				p.Spec.IgnoreNamespaceSelectors,
-				p.Spec.EnforcedNamespaceLabel,
-			),
-		)
-	}
-
-	var alertmanagerConfigs []yaml.MapSlice
-	if p.Spec.Alerting != nil {
-		for _, am := range p.Spec.Alerting.Alertmanagers {
-			alertmanagerConfigs = append(alertmanagerConfigs, cg.generateAlertmanagerConfig(version, am, apiserverConfig, basicAuthSecrets))
-		}
-	}
-
-	var additionalScrapeConfigsYaml []yaml.MapSlice
-	err = yaml.Unmarshal([]byte(additionalScrapeConfigs), &additionalScrapeConfigsYaml)
-	if err != nil {
-		return nil, errors.Wrap(err, "unmarshalling additional scrape configs failed")
-	}
-
-	cfg = append(cfg, yaml.MapItem{
-		Key:   "scrape_configs",
-		Value: append(scrapeConfigs, additionalScrapeConfigsYaml...),
-	})
-
-	var additionalAlertManagerConfigsYaml []yaml.MapSlice
-	err = yaml.Unmarshal([]byte(additionalAlertManagerConfigs), &additionalAlertManagerConfigsYaml)
-	if err != nil {
-		return nil, errors.Wrap(err, "unmarshalling additional alert manager configs failed")
-	}
-
-	alertmanagerConfigs = append(alertmanagerConfigs, additionalAlertManagerConfigsYaml...)
-
-	var alertRelabelConfigs []yaml.MapSlice
-
-	// Use defaultReplicaExternalLabelName constant by default if field is missing.
-	// Do not add external label if field is set to empty string.
-	replicaExternalLabelName := defaultReplicaExternalLabelName
-	if p.Spec.ReplicaExternalLabelName != nil {
-		if *p.Spec.ReplicaExternalLabelName != "" {
-			replicaExternalLabelName = *p.Spec.ReplicaExternalLabelName
-		} else {
-			replicaExternalLabelName = ""
-		}
-	}
-
-	// action 'labeldrop' is not supported <= v1.4.1
-	if replicaExternalLabelName != "" && version.GT(semver.MustParse("1.4.1")) {
-		// Drop replica label, to make alerts from multiple Prometheus replicas alike
-		alertRelabelConfigs = append(alertRelabelConfigs, yaml.MapSlice{
-			{Key: "action", Value: "labeldrop"},
-			{Key: "regex", Value: regexp.QuoteMeta(replicaExternalLabelName)},
-		})
-	}
-
-	var additionalAlertRelabelConfigsYaml []yaml.MapSlice
-	err = yaml.Unmarshal([]byte(additionalAlertRelabelConfigs), &additionalAlertRelabelConfigsYaml)
-	if err != nil {
-		return nil, errors.Wrap(err, "unmarshalling additional alerting relabel configs failed")
-	}
-
-	cfg = append(cfg, yaml.MapItem{
-		Key: "alerting",
-		Value: yaml.MapSlice{
-			{
-				Key:   "alert_relabel_configs",
-				Value: append(alertRelabelConfigs, additionalAlertRelabelConfigsYaml...),
-			},
-			{
-				Key:   "alertmanagers",
-				Value: alertmanagerConfigs,
-			},
-		},
-	})
-
-	if len(p.Spec.RemoteWrite) > 0 {
-		cfg = append(cfg, cg.generateRemoteWriteConfig(version, p, basicAuthSecrets, oauth2Secrets))
-	}
-
-	if len(p.Spec.RemoteRead) > 0 {
-		cfg = append(cfg, cg.generateRemoteReadConfig(version, p, basicAuthSecrets, oauth2Secrets))
-	}
-
-	return yaml.Marshal(cfg)
+// StorageSpec defines the configured storage for a group Prometheus servers.
+// If neither `emptyDir` nor `volumeClaimTemplate` is specified, then by default an [EmptyDir](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) will be used.
+// +k8s:openapi-gen=true
+type StorageSpec struct {
+	// Deprecated: subPath usage will be disabled by default in a future release, this option will become unnecessary.
+	// DisableMountSubPath allows to remove any subPath usage in volume mounts.
+	DisableMountSubPath bool `json:"disableMountSubPath,omitempty"`
+	// EmptyDirVolumeSource to be used by the Prometheus StatefulSets. If specified, used in place of any volumeClaimTemplate. More
+	// info: https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
+	EmptyDir *v1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+	// A PVC spec to be used by the Prometheus StatefulSets.
+	VolumeClaimTemplate EmbeddedPersistentVolumeClaim `json:"volumeClaimTemplate,omitempty"`
 }
 
-// honorLabels determines the value of honor_labels.
-// if overrideHonorLabels is true and user tries to set the
-// value to true, we want to set honor_labels to false.
-func honorLabels(userHonorLabels, overrideHonorLabels bool) bool {
-	if userHonorLabels && overrideHonorLabels {
-		return false
-	}
-	return userHonorLabels
+// EmbeddedPersistentVolumeClaim is an embedded version of k8s.io/api/core/v1.PersistentVolumeClaim.
+// It contains TypeMeta and a reduced ObjectMeta.
+type EmbeddedPersistentVolumeClaim struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// EmbeddedMetadata contains metadata relevant to an EmbeddedResource.
+	EmbeddedObjectMetadata `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// Spec defines the desired characteristics of a volume requested by a pod author.
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+	// +optional
+	Spec v1.PersistentVolumeClaimSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+
+	// Status represents the current information/status of a persistent volume claim.
+	// Read-only.
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+	// +optional
+	Status v1.PersistentVolumeClaimStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
-// honorTimestamps adds option to enforce honor_timestamps option in scrape_config.
-// We want to disable honoring timestamps when user specified it or when global
-// override is set. For backwards compatibility with prometheus <2.9.0 we don't
-// set honor_timestamps when that option wasn't specified anywhere
-func honorTimestamps(cfg yaml.MapSlice, userHonorTimestamps *bool, overrideHonorTimestamps bool) yaml.MapSlice {
-	// Ensuring backwards compatibility by checking if user set any option
-	if userHonorTimestamps == nil && !overrideHonorTimestamps {
-		return cfg
-	}
+// EmbeddedObjectMetadata contains a subset of the fields included in k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta
+// Only fields which are relevant to embedded resources are included.
+type EmbeddedObjectMetadata struct {
+	// Name must be unique within a namespace. Is required when creating resources, although
+	// some resources may allow a client to request the generation of an appropriate name
+	// automatically. Name is primarily intended for creation idempotence and configuration
+	// definition.
+	// Cannot be updated.
+	// More info: http://kubernetes.io/docs/user-guide/identifiers#names
+	// +optional
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 
-	honor := false
-	if userHonorTimestamps != nil {
-		honor = *userHonorTimestamps
-	}
+	// Map of string keys and values that can be used to organize and categorize
+	// (scope and select) objects. May match selectors of replication controllers
+	// and services.
+	// More info: http://kubernetes.io/docs/user-guide/labels
+	// +optional
+	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
 
-	return append(cfg, yaml.MapItem{Key: "honor_timestamps", Value: honor && !overrideHonorTimestamps})
+	// Annotations is an unstructured key value map stored with a resource that may be
+	// set by external tools to store and retrieve arbitrary metadata. They are not
+	// queryable and should be preserved when modifying objects.
+	// More info: http://kubernetes.io/docs/user-guide/annotations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" protobuf:"bytes,12,rep,name=annotations"`
 }
 
-func initRelabelings() []yaml.MapSlice {
-	// Relabel prometheus job name into a meta label
-	return []yaml.MapSlice{
-		{
-			{Key: "source_labels", Value: []string{"job"}},
-			{Key: "target_label", Value: "__tmp_prometheus_job_name"},
-		},
-	}
+// QuerySpec defines the query command line flags when starting Prometheus.
+// +k8s:openapi-gen=true
+type QuerySpec struct {
+	// The delta difference allowed for retrieving metrics during expression evaluations.
+	LookbackDelta *string `json:"lookbackDelta,omitempty"`
+	// Number of concurrent queries that can be run at once.
+	MaxConcurrency *int32 `json:"maxConcurrency,omitempty"`
+	// Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return.
+	MaxSamples *int32 `json:"maxSamples,omitempty"`
+	// Maximum time a query may take before being aborted.
+	Timeout *string `json:"timeout,omitempty"`
 }
 
-func (cg *ConfigGenerator) generatePodMonitorConfig(
-	version semver.Version,
-	m *v1.PodMonitor,
-	ep v1.PodMetricsEndpoint,
-	i int, apiserverConfig *v1.APIServerConfig,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	bearerTokens map[string]assets.BearerToken,
-	ignoreHonorLabels bool,
-	overrideHonorTimestamps bool,
-	ignoreNamespaceSelectors bool,
-	enforcedNamespaceLabel string,
-	enforcedSampleLimit *uint64,
-	enforcedTargetLimit *uint64,
-	shards int32,
-) yaml.MapSlice {
-	hl := honorLabels(ep.HonorLabels, ignoreHonorLabels)
-	cfg := yaml.MapSlice{
-		{
-			Key:   "job_name",
-			Value: fmt.Sprintf("podMonitor/%s/%s/%d", m.Namespace, m.Name, i),
-		},
-		{
-			Key:   "honor_labels",
-			Value: hl,
-		},
-	}
-	if version.Major == 2 && version.Minor >= 9 {
-		cfg = honorTimestamps(cfg, ep.HonorTimestamps, overrideHonorTimestamps)
-	}
-
-	selectedNamespaces := getNamespacesFromNamespaceSelector(&m.Spec.NamespaceSelector, m.Namespace, ignoreNamespaceSelectors)
-	cfg = append(cfg, cg.generateK8SSDConfig(selectedNamespaces, apiserverConfig, basicAuthSecrets, kubernetesSDRolePod))
-
-	if ep.Interval != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_interval", Value: ep.Interval})
-	}
-	if ep.ScrapeTimeout != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_timeout", Value: ep.ScrapeTimeout})
-	}
-	if ep.Path != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "metrics_path", Value: ep.Path})
-	}
-	if ep.ProxyURL != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "proxy_url", Value: ep.ProxyURL})
-	}
-	if ep.Params != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "params", Value: ep.Params})
-	}
-	if ep.Scheme != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scheme", Value: ep.Scheme})
-	}
-
-	if ep.TLSConfig != nil {
-		cfg = addSafeTLStoYaml(cfg, m.Namespace, ep.TLSConfig.SafeTLSConfig)
-	}
-
-	if ep.BearerTokenSecret.Name != "" {
-		if s, ok := bearerTokens[fmt.Sprintf("podMonitor/%s/%s/%d", m.Namespace, m.Name, i)]; ok {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token", Value: s})
-		}
-	}
-
-	if ep.BasicAuth != nil {
-		if s, ok := basicAuthSecrets[fmt.Sprintf("podMonitor/%s/%s/%d", m.Namespace, m.Name, i)]; ok {
-			cfg = append(cfg, yaml.MapItem{
-				Key: "basic_auth", Value: yaml.MapSlice{
-					{Key: "username", Value: s.Username},
-					{Key: "password", Value: s.Password},
-				},
-			})
-		}
-	}
-
-	relabelings := initRelabelings()
-
-	var labelKeys []string
-	// Filter targets by pods selected by the monitor.
-	// Exact label matches.
-	for k := range m.Spec.Selector.MatchLabels {
-		labelKeys = append(labelKeys, k)
-	}
-	sort.Strings(labelKeys)
-
-	for _, k := range labelKeys {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(k)}},
-			{Key: "regex", Value: m.Spec.Selector.MatchLabels[k]},
-		})
-	}
-	// Set based label matching. We have to map the valid relations
-	// `In`, `NotIn`, `Exists`, and `DoesNotExist`, into relabeling rules.
-	for _, exp := range m.Spec.Selector.MatchExpressions {
-		switch exp.Operator {
-		case metav1.LabelSelectorOpIn:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: strings.Join(exp.Values, "|")},
-			})
-		case metav1.LabelSelectorOpNotIn:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "drop"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: strings.Join(exp.Values, "|")},
-			})
-		case metav1.LabelSelectorOpExists:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_labelpresent_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: "true"},
-			})
-		case metav1.LabelSelectorOpDoesNotExist:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "drop"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_labelpresent_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: "true"},
-			})
-		}
-	}
-
-	// Filter targets based on correct port for the endpoint.
-	if ep.Port != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_name"}},
-			{Key: "regex", Value: ep.Port},
-		})
-	} else if ep.TargetPort != nil { //nolint:staticcheck // Ignore SA1019 this field is marked as deprecated.
-		level.Warn(cg.logger).Log("msg", "PodMonitor 'targetPort' is deprecated, use 'port' instead.",
-			"podMonitor", m.Name)
-		//nolint:staticcheck // Ignore SA1019 this field is marked as deprecated.
-		if ep.TargetPort.StrVal != "" {
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_name"}},
-				{Key: "regex", Value: ep.TargetPort.String()},
-			})
-		} else if ep.TargetPort.IntVal != 0 { //nolint:staticcheck // Ignore SA1019 this field is marked as deprecated.
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_number"}},
-				{Key: "regex", Value: ep.TargetPort.String()},
-			})
-		}
-	}
-
-	// Relabel namespace and pod and service labels into proper labels.
-	relabelings = append(relabelings, []yaml.MapSlice{
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_namespace"}},
-			{Key: "target_label", Value: "namespace"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_name"}},
-			{Key: "target_label", Value: "container"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_name"}},
-			{Key: "target_label", Value: "pod"},
-		},
-	}...)
-
-	// Relabel targetLabels from Pod onto target.
-	for _, l := range m.Spec.PodTargetLabels {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(l)}},
-			{Key: "target_label", Value: sanitizeLabelName(l)},
-			{Key: "regex", Value: "(.+)"},
-			{Key: "replacement", Value: "${1}"},
-		})
-	}
-
-	// By default, generate a safe job name from the PodMonitor. We also keep
-	// this around if a jobLabel is set in case the targets don't actually have a
-	// value for it. A single pod may potentially have multiple metrics
-	// endpoints, therefore the endpoints labels is filled with the ports name or
-	// as a fallback the port number.
-
-	relabelings = append(relabelings, yaml.MapSlice{
-		{Key: "target_label", Value: "job"},
-		{Key: "replacement", Value: fmt.Sprintf("%s/%s", m.GetNamespace(), m.GetName())},
-	})
-	if m.Spec.JobLabel != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(m.Spec.JobLabel)}},
-			{Key: "target_label", Value: "job"},
-			{Key: "regex", Value: "(.+)"},
-			{Key: "replacement", Value: "${1}"},
-		})
-	}
-
-	if ep.Port != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "target_label", Value: "endpoint"},
-			{Key: "replacement", Value: ep.Port},
-		})
-	} else if ep.TargetPort != nil && ep.TargetPort.String() != "" { //nolint:staticcheck // Ignore SA1019 this field is marked as deprecated.
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "target_label", Value: "endpoint"},
-			{Key: "replacement", Value: ep.TargetPort.String()}, //nolint:staticcheck // Ignore SA1019 this field is marked as deprecated.
-		})
-	}
-
-	if ep.RelabelConfigs != nil {
-		for _, c := range ep.RelabelConfigs {
-			relabelings = append(relabelings, generateRelabelConfig(c))
-		}
-	}
-	// Because of security risks, whenever enforcedNamespaceLabel is set, we want to append it to the
-	// relabel_configs as the last relabeling, to ensure it overrides any other relabelings.
-	relabelings = enforceNamespaceLabel(relabelings, m.Namespace, enforcedNamespaceLabel)
-
-	relabelings = generateAddressShardingRelabelingRules(relabelings, shards)
-	cfg = append(cfg, yaml.MapItem{Key: "relabel_configs", Value: relabelings})
-
-	if m.Spec.SampleLimit > 0 || enforcedSampleLimit != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "sample_limit", Value: getLimit(m.Spec.SampleLimit, enforcedSampleLimit)})
-	}
-
-	if version.Major == 2 && version.Minor >= 21 &&
-		(m.Spec.TargetLimit > 0 || enforcedTargetLimit != nil) {
-		cfg = append(cfg, yaml.MapItem{Key: "target_limit", Value: getLimit(m.Spec.TargetLimit, enforcedTargetLimit)})
-	}
-
-	if ep.MetricRelabelConfigs != nil {
-		var metricRelabelings []yaml.MapSlice
-		for _, c := range ep.MetricRelabelConfigs {
-			if c.TargetLabel != "" && enforcedNamespaceLabel != "" && c.TargetLabel == enforcedNamespaceLabel {
-				continue
-			}
-			relabeling := generateRelabelConfig(c)
-
-			metricRelabelings = append(metricRelabelings, relabeling)
-		}
-		cfg = append(cfg, yaml.MapItem{Key: "metric_relabel_configs", Value: metricRelabelings})
-	}
-
-	return cfg
+// WebSpec defines the query command line flags when starting Prometheus.
+// +k8s:openapi-gen=true
+type WebSpec struct {
+	// The prometheus web page title
+	PageTitle *string       `json:"pageTitle,omitempty"`
+	TLSConfig *WebTLSConfig `json:"tlsConfig,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateProbeConfig(
-	version semver.Version,
-	m *v1.Probe,
-	apiserverConfig *v1.APIServerConfig,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	bearerTokens map[string]assets.BearerToken,
-	ignoreHonorLabels bool,
-	overrideHonorTimestamps bool,
-	ignoreNamespaceSelectors bool,
-	enforcedNamespaceLabel string) yaml.MapSlice {
-
-	jobName := fmt.Sprintf("probe/%s/%s", m.Namespace, m.Name)
-	cfg := yaml.MapSlice{
-		{
-			Key:   "job_name",
-			Value: jobName,
-		},
-	}
-
-	hTs := true
-	cfg = honorTimestamps(cfg, &hTs, overrideHonorTimestamps)
-
-	path := "/probe"
-	if m.Spec.ProberSpec.Path != "" {
-		path = m.Spec.ProberSpec.Path
-	}
-	cfg = append(cfg, yaml.MapItem{Key: "metrics_path", Value: path})
-
-	if m.Spec.Interval != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_interval", Value: m.Spec.Interval})
-	}
-	if m.Spec.ScrapeTimeout != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_timeout", Value: m.Spec.ScrapeTimeout})
-	}
-	if m.Spec.ProberSpec.Scheme != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scheme", Value: m.Spec.ProberSpec.Scheme})
-	}
-	if m.Spec.ProberSpec.ProxyURL != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "proxy_url", Value: m.Spec.ProberSpec.ProxyURL})
-	}
-
-	if m.Spec.Module != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "params", Value: yaml.MapSlice{
-			{Key: "module", Value: []string{m.Spec.Module}},
-		}})
-	}
-
-	relabelings := initRelabelings()
-
-	if m.Spec.JobName != "" {
-		relabelings = append(relabelings, []yaml.MapSlice{
-			{
-				{Key: "target_label", Value: "job"},
-				{Key: "replacement", Value: m.Spec.JobName},
-			},
-		}...)
-	}
-	// Generate static_config section.
-	if m.Spec.Targets.StaticConfig != nil {
-		staticConfig := yaml.MapSlice{
-			{Key: "targets", Value: m.Spec.Targets.StaticConfig.Targets},
-		}
-
-		if m.Spec.Targets.StaticConfig.Labels != nil {
-			if _, ok := m.Spec.Targets.StaticConfig.Labels["namespace"]; !ok {
-				m.Spec.Targets.StaticConfig.Labels["namespace"] = m.Namespace
-			}
-		} else {
-			m.Spec.Targets.StaticConfig.Labels = map[string]string{"namespace": m.Namespace}
-		}
-
-		staticConfig = append(staticConfig, yaml.MapSlice{
-			{Key: "labels", Value: m.Spec.Targets.StaticConfig.Labels},
-		}...)
-
-		cfg = append(cfg, yaml.MapItem{
-			Key:   "static_configs",
-			Value: []yaml.MapSlice{staticConfig},
-		})
-
-		// Relabelings for prober.
-		relabelings = append(relabelings, []yaml.MapSlice{
-			{
-				{Key: "source_labels", Value: []string{"__address__"}},
-				{Key: "target_label", Value: "__param_target"},
-			},
-			{
-				{Key: "source_labels", Value: []string{"__param_target"}},
-				{Key: "target_label", Value: "instance"},
-			},
-			{
-				{Key: "target_label", Value: "__address__"},
-				{Key: "replacement", Value: m.Spec.ProberSpec.URL},
-			},
-		}...)
-
-		// Add configured relabelings.
-		if m.Spec.Targets.StaticConfig.RelabelConfigs != nil {
-			for _, r := range m.Spec.Targets.StaticConfig.RelabelConfigs {
-				relabelings = append(relabelings, generateRelabelConfig(r))
-			}
-		}
-
-		cfg = append(cfg, yaml.MapItem{Key: "relabel_configs", Value: enforceNamespaceLabel(relabelings, m.Namespace, enforcedNamespaceLabel)})
-	}
-
-	// Generate kubernetes_sd_config section for ingress resources.
-	if m.Spec.Targets.StaticConfig == nil {
-		labelKeys := make([]string, 0, len(m.Spec.Targets.Ingress.Selector.MatchLabels))
-
-		// Filter targets by ingresses selected by the monitor.
-		// Exact label matches.
-		for k := range m.Spec.Targets.Ingress.Selector.MatchLabels {
-			labelKeys = append(labelKeys, k)
-		}
-		sort.Strings(labelKeys)
-
-		for _, k := range labelKeys {
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_label_" + sanitizeLabelName(k)}},
-				{Key: "regex", Value: m.Spec.Targets.Ingress.Selector.MatchLabels[k]},
-			})
-		}
-
-		// Set based label matching. We have to map the valid relations
-		// `In`, `NotIn`, `Exists`, and `DoesNotExist`, into relabeling rules.
-		for _, exp := range m.Spec.Targets.Ingress.Selector.MatchExpressions {
-			switch exp.Operator {
-			case metav1.LabelSelectorOpIn:
-				relabelings = append(relabelings, yaml.MapSlice{
-					{Key: "action", Value: "keep"},
-					{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_label_" + sanitizeLabelName(exp.Key)}},
-					{Key: "regex", Value: strings.Join(exp.Values, "|")},
-				})
-			case metav1.LabelSelectorOpNotIn:
-				relabelings = append(relabelings, yaml.MapSlice{
-					{Key: "action", Value: "drop"},
-					{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_label_" + sanitizeLabelName(exp.Key)}},
-					{Key: "regex", Value: strings.Join(exp.Values, "|")},
-				})
-			case metav1.LabelSelectorOpExists:
-				relabelings = append(relabelings, yaml.MapSlice{
-					{Key: "action", Value: "keep"},
-					{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_labelpresent_" + sanitizeLabelName(exp.Key)}},
-					{Key: "regex", Value: "true"},
-				})
-			case metav1.LabelSelectorOpDoesNotExist:
-				relabelings = append(relabelings, yaml.MapSlice{
-					{Key: "action", Value: "drop"},
-					{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_labelpresent_" + sanitizeLabelName(exp.Key)}},
-					{Key: "regex", Value: "true"},
-				})
-			}
-		}
-
-		selectedNamespaces := getNamespacesFromNamespaceSelector(&m.Spec.Targets.Ingress.NamespaceSelector, m.Namespace, ignoreNamespaceSelectors)
-		cfg = append(cfg, cg.generateK8SSDConfig(selectedNamespaces, apiserverConfig, basicAuthSecrets, kubernetesSDRoleIngress))
-
-		// Relabelings for ingress SD.
-		relabelings = append(relabelings, []yaml.MapSlice{
-			{
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_scheme", "__address__", "__meta_kubernetes_ingress_path"}},
-				{Key: "separator", Value: ";"},
-				{Key: "regex", Value: "(.+);(.+);(.+)"},
-				{Key: "target_label", Value: "__param_target"},
-				{Key: "replacement", Value: "${1}://${2}${3}"},
-				{Key: "action", Value: "replace"},
-			},
-			{
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_namespace"}},
-				{Key: "target_label", Value: "namespace"},
-			},
-			{
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_ingress_name"}},
-				{Key: "target_label", Value: "ingress"},
-			},
-		}...)
-
-		// Relabelings for prober.
-		relabelings = append(relabelings, []yaml.MapSlice{
-			{
-				{Key: "source_labels", Value: []string{"__param_target"}},
-				{Key: "target_label", Value: "instance"},
-			},
-			{
-				{Key: "target_label", Value: "__address__"},
-				{Key: "replacement", Value: m.Spec.ProberSpec.URL},
-			},
-		}...)
-
-		// Add configured relabelings.
-		if m.Spec.Targets.Ingress.RelabelConfigs != nil {
-			for _, r := range m.Spec.Targets.Ingress.RelabelConfigs {
-				relabelings = append(relabelings, generateRelabelConfig(r))
-			}
-		}
-
-		relabelings = enforceNamespaceLabel(relabelings, m.Namespace, enforcedNamespaceLabel)
-		cfg = append(cfg, yaml.MapItem{Key: "relabel_configs", Value: relabelings})
-
-	}
-
-	if m.Spec.TLSConfig != nil {
-		cfg = addSafeTLStoYaml(cfg, m.Namespace, m.Spec.TLSConfig.SafeTLSConfig)
-	}
-
-	if m.Spec.BearerTokenSecret.Name != "" {
-		pnKey := fmt.Sprintf("probe/%s/%s", m.GetNamespace(), m.GetName())
-		if s, ok := bearerTokens[pnKey]; ok {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token", Value: s})
-		}
-	}
-
-	if m.Spec.BasicAuth != nil {
-		if s, ok := basicAuthSecrets[fmt.Sprintf("probe/%s/%s", m.Namespace, m.Name)]; ok {
-			cfg = append(cfg, yaml.MapItem{
-				Key: "basic_auth", Value: yaml.MapSlice{
-					{Key: "username", Value: s.Username},
-					{Key: "password", Value: s.Password},
-				},
-			})
-		}
-	}
-
-	return cfg
+// WebTLSConfig defines the TLS parameters for HTTPS.
+// +k8s:openapi-gen=true
+type WebTLSConfig struct {
+	// Secret containing the TLS key for the server.
+	KeySecret v1.SecretKeySelector `json:"keySecret"`
+	// Contains the TLS certificate for the server.
+	Cert SecretOrConfigMap `json:"cert"`
+	// Server policy for client authentication. Maps to ClientAuth Policies.
+	// For more detail on clientAuth options:
+	// https://golang.org/pkg/crypto/tls/#ClientAuthType
+	ClientAuthType string `json:"clientAuthType,omitempty"`
+	// Contains the CA certificate for client certificate authentication to the server.
+	ClientCA SecretOrConfigMap `json:"client_ca,omitempty"`
+	// Minimum TLS version that is acceptable. Defaults to TLS12.
+	MinVersion string `json:"minVersion,omitempty"`
+	// Maximum TLS version that is acceptable. Defaults to TLS13.
+	MaxVersion string `json:"maxVersion,omitempty"`
+	// List of supported cipher suites for TLS versions up to TLS 1.2. If empty,
+	// Go default cipher suites are used. Available cipher suites are documented
+	// in the go documentation: https://golang.org/pkg/crypto/tls/#pkg-constants
+	CipherSuites []string `json:"cipherSuites,omitempty"`
+	// Controls whether the server selects the
+	// client's most preferred cipher suite, or the server's most preferred
+	// cipher suite. If true then the server's preference, as expressed in
+	// the order of elements in cipherSuites, is used.
+	PreferServerCipherSuites *bool `json:"preferServerCipherSuites,omitempty"`
+	// Elliptic curves that will be used in an ECDHE handshake, in preference
+	// order. Available curves are documented in the go documentation:
+	// https://golang.org/pkg/crypto/tls/#CurveID
+	CurvePreferences []string `json:"curvePreferences,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateServiceMonitorConfig(
-	version semver.Version,
-	m *v1.ServiceMonitor,
-	ep v1.Endpoint,
-	i int,
-	apiserverConfig *v1.APIServerConfig,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	bearerTokens map[string]assets.BearerToken,
-	overrideHonorLabels bool,
-	overrideHonorTimestamps bool,
-	ignoreNamespaceSelectors bool,
-	enforcedNamespaceLabel string,
-	enforcedSampleLimit *uint64,
-	enforcedTargetLimit *uint64,
-	shards int32,
-) yaml.MapSlice {
-	hl := honorLabels(ep.HonorLabels, overrideHonorLabels)
-	cfg := yaml.MapSlice{
-		{
-			Key:   "job_name",
-			Value: fmt.Sprintf("serviceMonitor/%s/%s/%d", m.Namespace, m.Name, i),
-		},
-		{
-			Key:   "honor_labels",
-			Value: hl,
-		},
-	}
-	if version.Major == 2 && version.Minor >= 9 {
-		cfg = honorTimestamps(cfg, ep.HonorTimestamps, overrideHonorTimestamps)
-	}
-
-	selectedNamespaces := getNamespacesFromNamespaceSelector(&m.Spec.NamespaceSelector, m.Namespace, ignoreNamespaceSelectors)
-	cfg = append(cfg, cg.generateK8SSDConfig(selectedNamespaces, apiserverConfig, basicAuthSecrets, kubernetesSDRoleEndpoint))
-
-	if ep.Interval != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_interval", Value: ep.Interval})
-	}
-	if ep.ScrapeTimeout != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scrape_timeout", Value: ep.ScrapeTimeout})
-	}
-	if ep.Path != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "metrics_path", Value: ep.Path})
-	}
-	if ep.ProxyURL != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "proxy_url", Value: ep.ProxyURL})
-	}
-	if ep.Params != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "params", Value: ep.Params})
-	}
-	if ep.Scheme != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "scheme", Value: ep.Scheme})
-	}
-
-	cfg = addTLStoYaml(cfg, m.Namespace, ep.TLSConfig)
-
-	if ep.BearerTokenFile != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "bearer_token_file", Value: ep.BearerTokenFile})
-	}
-
-	if ep.BearerTokenSecret.Name != "" {
-		if s, ok := bearerTokens[fmt.Sprintf("serviceMonitor/%s/%s/%d", m.Namespace, m.Name, i)]; ok {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token", Value: s})
-		}
-	}
-
-	if ep.BasicAuth != nil {
-		if s, ok := basicAuthSecrets[fmt.Sprintf("serviceMonitor/%s/%s/%d", m.Namespace, m.Name, i)]; ok {
-			cfg = append(cfg, yaml.MapItem{
-				Key: "basic_auth", Value: yaml.MapSlice{
-					{Key: "username", Value: s.Username},
-					{Key: "password", Value: s.Password},
-				},
-			})
-		}
-	}
-
-	relabelings := initRelabelings()
-
-	// Filter targets by services selected by the monitor.
-
-	// Exact label matches.
-	var labelKeys []string
-	for k := range m.Spec.Selector.MatchLabels {
-		labelKeys = append(labelKeys, k)
-	}
-	sort.Strings(labelKeys)
-
-	for _, k := range labelKeys {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_service_label_" + sanitizeLabelName(k)}},
-			{Key: "regex", Value: m.Spec.Selector.MatchLabels[k]},
-		})
-	}
-	// Set based label matching. We have to map the valid relations
-	// `In`, `NotIn`, `Exists`, and `DoesNotExist`, into relabeling rules.
-	for _, exp := range m.Spec.Selector.MatchExpressions {
-		switch exp.Operator {
-		case metav1.LabelSelectorOpIn:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_service_label_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: strings.Join(exp.Values, "|")},
-			})
-		case metav1.LabelSelectorOpNotIn:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "drop"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_service_label_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: strings.Join(exp.Values, "|")},
-			})
-		case metav1.LabelSelectorOpExists:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_service_labelpresent_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: "true"},
-			})
-		case metav1.LabelSelectorOpDoesNotExist:
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "drop"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_service_labelpresent_" + sanitizeLabelName(exp.Key)}},
-				{Key: "regex", Value: "true"},
-			})
-		}
-	}
-
-	// Filter targets based on correct port for the endpoint.
-	if ep.Port != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_endpoint_port_name"}},
-			{Key: "regex", Value: ep.Port},
-		})
-	} else if ep.TargetPort != nil {
-		if ep.TargetPort.StrVal != "" {
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_name"}},
-				{Key: "regex", Value: ep.TargetPort.String()},
-			})
-		} else if ep.TargetPort.IntVal != 0 {
-			relabelings = append(relabelings, yaml.MapSlice{
-				{Key: "action", Value: "keep"},
-				{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_number"}},
-				{Key: "regex", Value: ep.TargetPort.String()},
-			})
-		}
-	}
-
-	// Relabel namespace and pod and service labels into proper labels.
-	relabelings = append(relabelings, []yaml.MapSlice{
-		{ // Relabel node labels for pre v2.3 meta labels
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_endpoint_address_target_kind", "__meta_kubernetes_endpoint_address_target_name"}},
-			{Key: "separator", Value: ";"},
-			{Key: "regex", Value: "Node;(.*)"},
-			{Key: "replacement", Value: "${1}"},
-			{Key: "target_label", Value: "node"},
-		},
-		{ // Relabel pod labels for >=v2.3 meta labels
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_endpoint_address_target_kind", "__meta_kubernetes_endpoint_address_target_name"}},
-			{Key: "separator", Value: ";"},
-			{Key: "regex", Value: "Pod;(.*)"},
-			{Key: "replacement", Value: "${1}"},
-			{Key: "target_label", Value: "pod"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_namespace"}},
-			{Key: "target_label", Value: "namespace"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_service_name"}},
-			{Key: "target_label", Value: "service"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_name"}},
-			{Key: "target_label", Value: "pod"},
-		},
-		{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_name"}},
-			{Key: "target_label", Value: "container"},
-		},
-	}...)
-
-	// Relabel targetLabels from Service onto target.
-	for _, l := range m.Spec.TargetLabels {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_service_label_" + sanitizeLabelName(l)}},
-			{Key: "target_label", Value: sanitizeLabelName(l)},
-			{Key: "regex", Value: "(.+)"},
-			{Key: "replacement", Value: "${1}"},
-		})
-	}
-
-	for _, l := range m.Spec.PodTargetLabels {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_label_" + sanitizeLabelName(l)}},
-			{Key: "target_label", Value: sanitizeLabelName(l)},
-			{Key: "regex", Value: "(.+)"},
-			{Key: "replacement", Value: "${1}"},
-		})
-	}
-
-	// By default, generate a safe job name from the service name.  We also keep
-	// this around if a jobLabel is set in case the targets don't actually have a
-	// value for it.
-	relabelings = append(relabelings, yaml.MapSlice{
-		{Key: "source_labels", Value: []string{"__meta_kubernetes_service_name"}},
-		{Key: "target_label", Value: "job"},
-		{Key: "replacement", Value: "${1}"},
-	})
-	if m.Spec.JobLabel != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_service_label_" + sanitizeLabelName(m.Spec.JobLabel)}},
-			{Key: "target_label", Value: "job"},
-			{Key: "regex", Value: "(.+)"},
-			{Key: "replacement", Value: "${1}"},
-		})
-	}
-
-	// A single service may potentially have multiple metrics
-	//	endpoints, therefore the endpoints labels is filled with the ports name or
-	//	as a fallback the port number.
-	if ep.Port != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "target_label", Value: "endpoint"},
-			{Key: "replacement", Value: ep.Port},
-		})
-	} else if ep.TargetPort != nil && ep.TargetPort.String() != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "target_label", Value: "endpoint"},
-			{Key: "replacement", Value: ep.TargetPort.String()},
-		})
-	}
-
-	if ep.RelabelConfigs != nil {
-		for _, c := range ep.RelabelConfigs {
-			relabelings = append(relabelings, generateRelabelConfig(c))
-		}
-	}
-	// Because of security risks, whenever enforcedNamespaceLabel is set, we want to append it to the
-	// relabel_configs as the last relabeling, to ensure it overrides any other relabelings.
-	relabelings = enforceNamespaceLabel(relabelings, m.Namespace, enforcedNamespaceLabel)
-
-	relabelings = generateAddressShardingRelabelingRules(relabelings, shards)
-	cfg = append(cfg, yaml.MapItem{Key: "relabel_configs", Value: relabelings})
-
-	if m.Spec.SampleLimit > 0 || enforcedSampleLimit != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "sample_limit", Value: getLimit(m.Spec.SampleLimit, enforcedSampleLimit)})
-	}
-
-	if version.Major == 2 && version.Minor >= 21 &&
-		(m.Spec.TargetLimit > 0 || enforcedTargetLimit != nil) {
-		cfg = append(cfg, yaml.MapItem{Key: "target_limit", Value: getLimit(m.Spec.TargetLimit, enforcedTargetLimit)})
-	}
-
-	if ep.MetricRelabelConfigs != nil {
-		var metricRelabelings []yaml.MapSlice
-		for _, c := range ep.MetricRelabelConfigs {
-			if c.TargetLabel != "" && enforcedNamespaceLabel != "" && c.TargetLabel == enforcedNamespaceLabel {
-				continue
-			}
-			relabeling := generateRelabelConfig(c)
-
-			metricRelabelings = append(metricRelabelings, relabeling)
-		}
-		cfg = append(cfg, yaml.MapItem{Key: "metric_relabel_configs", Value: metricRelabelings})
-	}
-
-	return cfg
+// WebTLSConfigError is returned by WebTLSConfig.Validate() on
+// semantically invalid configurations.
+// +k8s:openapi-gen=false
+type WebTLSConfigError struct {
+	err string
 }
 
-func getLimit(user uint64, enforced *uint64) uint64 {
-	if enforced != nil {
-		if user < *enforced && user != 0 || *enforced == 0 {
-			return user
-		}
-		return *enforced
-	}
-	return user
+func (e *WebTLSConfigError) Error() string {
+	return e.err
 }
 
-func generateAddressShardingRelabelingRules(relabelings []yaml.MapSlice, shards int32) []yaml.MapSlice {
-	return append(relabelings, yaml.MapSlice{
-		{Key: "source_labels", Value: []string{"__address__"}},
-		{Key: "target_label", Value: "__tmp_hash"},
-		{Key: "modulus", Value: shards},
-		{Key: "action", Value: "hashmod"},
-	}, yaml.MapSlice{
-		{Key: "source_labels", Value: []string{"__tmp_hash"}},
-		{Key: "regex", Value: "$(SHARD)"},
-		{Key: "action", Value: "keep"},
-	})
+func (c *WebTLSConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+
+	if c.ClientCA != (SecretOrConfigMap{}) {
+		if err := c.ClientCA.Validate(); err != nil {
+			msg := fmt.Sprintf("invalid web tls config: %s", err.Error())
+			return &WebTLSConfigError{msg}
+		}
+	}
+
+	if c.Cert == (SecretOrConfigMap{}) {
+		return &WebTLSConfigError{"invalid web tls config: cert must be defined"}
+	} else if err := c.Cert.Validate(); err != nil {
+		msg := fmt.Sprintf("invalid web tls config: %s", err.Error())
+		return &WebTLSConfigError{msg}
+	}
+
+	if c.KeySecret == (v1.SecretKeySelector{}) {
+		return &WebTLSConfigError{"invalid web tls config: key must be defined"}
+	}
+
+	return nil
 }
 
-func enforceNamespaceLabel(relabelings []yaml.MapSlice, namespace, enforcedNamespaceLabel string) []yaml.MapSlice {
-	if enforcedNamespaceLabel == "" {
-		return relabelings
-	}
-	return append(relabelings, yaml.MapSlice{
-		{Key: "target_label", Value: enforcedNamespaceLabel},
-		{Key: "replacement", Value: namespace}})
+// ThanosSpec defines parameters for a Prometheus server within a Thanos deployment.
+// +k8s:openapi-gen=true
+type ThanosSpec struct {
+	// Image if specified has precedence over baseImage, tag and sha
+	// combinations. Specifying the version is still necessary to ensure the
+	// Prometheus Operator knows what version of Thanos is being
+	// configured.
+	Image *string `json:"image,omitempty"`
+	// Version describes the version of Thanos to use.
+	Version *string `json:"version,omitempty"`
+	// Tag of Thanos sidecar container image to be deployed. Defaults to the value of `version`.
+	// Version is ignored if Tag is set.
+	// Deprecated: use 'image' instead.  The image tag can be specified
+	// as part of the image URL.
+	Tag *string `json:"tag,omitempty"`
+	// SHA of Thanos container image to be deployed. Defaults to the value of `version`.
+	// Similar to a tag, but the SHA explicitly deploys an immutable container image.
+	// Version and Tag are ignored if SHA is set.
+	// Deprecated: use 'image' instead.  The image digest can be specified
+	// as part of the image URL.
+	SHA *string `json:"sha,omitempty"`
+	// Thanos base image if other than default.
+	// Deprecated: use 'image' instead
+	BaseImage *string `json:"baseImage,omitempty"`
+	// Resources defines the resource requirements for the Thanos sidecar.
+	// If not provided, no requests/limits will be set
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+	// ObjectStorageConfig configures object storage in Thanos.
+	// Alternative to ObjectStorageConfigFile, and lower order priority.
+	ObjectStorageConfig *v1.SecretKeySelector `json:"objectStorageConfig,omitempty"`
+	// ObjectStorageConfigFile specifies the path of the object storage configuration file.
+	// When used alongside with ObjectStorageConfig, ObjectStorageConfigFile takes precedence.
+	ObjectStorageConfigFile *string `json:"objectStorageConfigFile,omitempty"`
+	// ListenLocal makes the Thanos sidecar listen on loopback, so that it
+	// does not bind against the Pod IP.
+	ListenLocal bool `json:"listenLocal,omitempty"`
+	// TracingConfig configures tracing in Thanos. This is an experimental feature, it may change in any upcoming release in a breaking way.
+	TracingConfig *v1.SecretKeySelector `json:"tracingConfig,omitempty"`
+	// TracingConfig specifies the path of the tracing configuration file.
+	// When used alongside with TracingConfig, TracingConfigFile takes precedence.
+	TracingConfigFile string `json:"tracingConfigFile,omitempty"`
+	// GRPCServerTLSConfig configures the gRPC server from which Thanos Querier reads
+	// recorded rule data.
+	// Note: Currently only the CAFile, CertFile, and KeyFile fields are supported.
+	// Maps to the '--grpc-server-tls-*' CLI args.
+	GRPCServerTLSConfig *TLSConfig `json:"grpcServerTlsConfig,omitempty"`
+	// LogLevel for Thanos sidecar to be configured with.
+	LogLevel string `json:"logLevel,omitempty"`
+	// LogFormat for Thanos sidecar to be configured with.
+	LogFormat string `json:"logFormat,omitempty"`
+	// MinTime for Thanos sidecar to be configured with. Option can be a constant time in RFC3339 format or time duration relative to current time, such as -1d or 2h45m. Valid duration units are ms, s, m, h, d, w, y.
+	MinTime string `json:"minTime,omitempty"`
+	// ReadyTimeout is the maximum time Thanos sidecar will wait for Prometheus to start. Eg 10m
+	ReadyTimeout string `json:"readyTimeout,omitempty"`
 }
 
-func generateRelabelConfig(c *v1.RelabelConfig) yaml.MapSlice {
-	relabeling := yaml.MapSlice{}
-
-	if len(c.SourceLabels) > 0 {
-		relabeling = append(relabeling, yaml.MapItem{Key: "source_labels", Value: c.SourceLabels})
-	}
-
-	if c.Separator != "" {
-		relabeling = append(relabeling, yaml.MapItem{Key: "separator", Value: c.Separator})
-	}
-
-	if c.TargetLabel != "" {
-		relabeling = append(relabeling, yaml.MapItem{Key: "target_label", Value: c.TargetLabel})
-	}
-
-	if c.Regex != "" {
-		relabeling = append(relabeling, yaml.MapItem{Key: "regex", Value: c.Regex})
-	}
-
-	if c.Modulus != uint64(0) {
-		relabeling = append(relabeling, yaml.MapItem{Key: "modulus", Value: c.Modulus})
-	}
-
-	if c.Replacement != "" {
-		relabeling = append(relabeling, yaml.MapItem{Key: "replacement", Value: c.Replacement})
-	}
-
-	if c.Action != "" {
-		relabeling = append(relabeling, yaml.MapItem{Key: "action", Value: c.Action})
-	}
-
-	return relabeling
+// RemoteWriteSpec defines the remote_write configuration for prometheus.
+// +k8s:openapi-gen=true
+type RemoteWriteSpec struct {
+	// The URL of the endpoint to send samples to.
+	URL string `json:"url"`
+	// The name of the remote write queue, must be unique if specified. The
+	// name is used in metrics and logging in order to differentiate queues.
+	// Only valid in Prometheus versions 2.15.0 and newer.
+	Name string `json:"name,omitempty"`
+	SendExemplars bool `json:"sendExemplars,omitempty"`
+	// Timeout for requests to the remote write endpoint.
+	RemoteTimeout string `json:"remoteTimeout,omitempty"`
+	// Custom HTTP headers to be sent along with each remote write request.
+	// Be aware that headers that are set by Prometheus itself can't be overwritten.
+	// Only valid in Prometheus versions 2.25.0 and newer.
+	Headers map[string]string `json:"headers,omitempty"`
+	// The list of remote write relabel configurations.
+	WriteRelabelConfigs []RelabelConfig `json:"writeRelabelConfigs,omitempty"`
+	// OAuth2 for the URL. Only valid in Prometheus versions 2.27.0 and newer.
+	OAuth2 *OAuth2 `json:"oauth2,omitempty"`
+	// BasicAuth for the URL.
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+	// Bearer token for remote write.
+	BearerToken string `json:"bearerToken,omitempty"`
+	// File to read bearer token for remote write.
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
+	// TLS Config to use for remote write.
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+	// Optional ProxyURL
+	ProxyURL string `json:"proxyUrl,omitempty"`
+	// QueueConfig allows tuning of the remote write queue parameters.
+	QueueConfig *QueueConfig `json:"queueConfig,omitempty"`
+	// MetadataConfig configures the sending of series metadata to remote storage.
+	MetadataConfig *MetadataConfig `json:"metadataConfig,omitempty"`
 }
 
-// getNamespacesFromNamespaceSelector gets a list of namespaces to select based on
-// the given namespace selector, the given default namespace, and whether to ignore namespace selectors
-func getNamespacesFromNamespaceSelector(nsel *v1.NamespaceSelector, namespace string, ignoreNamespaceSelectors bool) []string {
-	if ignoreNamespaceSelectors {
-		return []string{namespace}
-	} else if nsel.Any {
-		return []string{}
-	} else if len(nsel.MatchNames) == 0 {
-		return []string{namespace}
-	}
-	return nsel.MatchNames
+// QueueConfig allows the tuning of remote_write queue_config parameters. This object
+// is referenced in the RemoteWriteSpec object.
+// +k8s:openapi-gen=true
+type QueueConfig struct {
+	// Capacity is the number of samples to buffer per shard before we start dropping them.
+	Capacity int `json:"capacity,omitempty"`
+	// MinShards is the minimum number of shards, i.e. amount of concurrency.
+	MinShards int `json:"minShards,omitempty"`
+	// MaxShards is the maximum number of shards, i.e. amount of concurrency.
+	MaxShards int `json:"maxShards,omitempty"`
+	// MaxSamplesPerSend is the maximum number of samples per send.
+	MaxSamplesPerSend int `json:"maxSamplesPerSend,omitempty"`
+	// BatchSendDeadline is the maximum time a sample will wait in buffer.
+	BatchSendDeadline string `json:"batchSendDeadline,omitempty"`
+	// MaxRetries is the maximum number of times to retry a batch on recoverable errors.
+	MaxRetries int `json:"maxRetries,omitempty"`
+	// MinBackoff is the initial retry delay. Gets doubled for every retry.
+	MinBackoff string `json:"minBackoff,omitempty"`
+	// MaxBackoff is the maximum retry delay.
+	MaxBackoff string `json:"maxBackoff,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateK8SSDConfig(namespaces []string, apiserverConfig *v1.APIServerConfig, basicAuthSecrets map[string]assets.BasicAuthCredentials, role string) yaml.MapItem {
-	k8sSDConfig := yaml.MapSlice{
-		{
-			Key:   "role",
-			Value: role,
-		},
-	}
-
-	if len(namespaces) != 0 {
-		k8sSDConfig = append(k8sSDConfig, yaml.MapItem{
-			Key: "namespaces",
-			Value: yaml.MapSlice{
-				{
-					Key:   "names",
-					Value: namespaces,
-				},
-			},
-		})
-	}
-
-	if apiserverConfig != nil {
-		k8sSDConfig = append(k8sSDConfig, yaml.MapItem{
-			Key: "api_server", Value: apiserverConfig.Host,
-		})
-
-		if apiserverConfig.BasicAuth != nil && basicAuthSecrets != nil {
-			if s, ok := basicAuthSecrets["apiserver"]; ok {
-				k8sSDConfig = append(k8sSDConfig, yaml.MapItem{
-					Key: "basic_auth", Value: yaml.MapSlice{
-						{Key: "username", Value: s.Username},
-						{Key: "password", Value: s.Password},
-					},
-				})
-			}
-		}
-
-		if apiserverConfig.BearerToken != "" {
-			k8sSDConfig = append(k8sSDConfig, yaml.MapItem{Key: "bearer_token", Value: apiserverConfig.BearerToken})
-		}
-
-		if apiserverConfig.BearerTokenFile != "" {
-			k8sSDConfig = append(k8sSDConfig, yaml.MapItem{Key: "bearer_token_file", Value: apiserverConfig.BearerTokenFile})
-		}
-
-		// TODO: If we want to support secret refs for k8s service discovery tls
-		// config as well, make sure to path the right namespace here.
-		k8sSDConfig = addTLStoYaml(k8sSDConfig, "", apiserverConfig.TLSConfig)
-	}
-
-	return yaml.MapItem{
-		Key: "kubernetes_sd_configs",
-		Value: []yaml.MapSlice{
-			k8sSDConfig,
-		},
-	}
+// RemoteReadSpec defines the remote_read configuration for prometheus.
+// +k8s:openapi-gen=true
+type RemoteReadSpec struct {
+	// The URL of the endpoint to send samples to.
+	URL string `json:"url"`
+	// The name of the remote read queue, must be unique if specified. The name
+	// is used in metrics and logging in order to differentiate read
+	// configurations.  Only valid in Prometheus versions 2.15.0 and newer.
+	Name string `json:"name,omitempty"`
+	// An optional list of equality matchers which have to be present
+	// in a selector to query the remote read endpoint.
+	RequiredMatchers map[string]string `json:"requiredMatchers,omitempty"`
+	// Timeout for requests to the remote read endpoint.
+	RemoteTimeout string `json:"remoteTimeout,omitempty"`
+	// Whether reads should be made for queries for time ranges that
+	// the local storage should have complete data for.
+	ReadRecent bool `json:"readRecent,omitempty"`
+	// BasicAuth for the URL.
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+	// OAuth2 for the URL. Only valid in Prometheus versions 2.27.0 and newer.
+	OAuth2 *OAuth2 `json:"oauth2,omitempty"`
+	// Bearer token for remote read.
+	BearerToken string `json:"bearerToken,omitempty"`
+	// File to read bearer token for remote read.
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
+	// TLS Config to use for remote read.
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+	// Optional ProxyURL
+	ProxyURL string `json:"proxyUrl,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateAlertmanagerConfig(version semver.Version, am v1.AlertmanagerEndpoints, apiserverConfig *v1.APIServerConfig, basicAuthSecrets map[string]assets.BasicAuthCredentials) yaml.MapSlice {
-	if am.Scheme == "" {
-		am.Scheme = "http"
-	}
-
-	if am.PathPrefix == "" {
-		am.PathPrefix = "/"
-	}
-
-	cfg := yaml.MapSlice{
-		{Key: "path_prefix", Value: am.PathPrefix},
-		{Key: "scheme", Value: am.Scheme},
-	}
-
-	if am.Timeout != nil {
-		cfg = append(cfg, yaml.MapItem{Key: "timeout", Value: am.Timeout})
-	}
-
-	// TODO: If we want to support secret refs for alertmanager config tls
-	// config as well, make sure to path the right namespace here.
-	cfg = addTLStoYaml(cfg, "", am.TLSConfig)
-
-	cfg = append(cfg, cg.generateK8SSDConfig([]string{am.Namespace}, apiserverConfig, basicAuthSecrets, kubernetesSDRoleEndpoint))
-
-	if am.BearerTokenFile != "" {
-		cfg = append(cfg, yaml.MapItem{Key: "bearer_token_file", Value: am.BearerTokenFile})
-	}
-
-	if version.Major > 2 || (version.Major == 2 && version.Minor >= 11) {
-		if am.APIVersion == "v1" || am.APIVersion == "v2" {
-			cfg = append(cfg, yaml.MapItem{Key: "api_version", Value: am.APIVersion})
-		}
-	}
-
-	var relabelings []yaml.MapSlice
-
-	relabelings = append(relabelings, yaml.MapSlice{
-		{Key: "action", Value: "keep"},
-		{Key: "source_labels", Value: []string{"__meta_kubernetes_service_name"}},
-		{Key: "regex", Value: am.Name},
-	})
-
-	if am.Port.StrVal != "" {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_endpoint_port_name"}},
-			{Key: "regex", Value: am.Port.String()},
-		})
-	} else if am.Port.IntVal != 0 {
-		relabelings = append(relabelings, yaml.MapSlice{
-			{Key: "action", Value: "keep"},
-			{Key: "source_labels", Value: []string{"__meta_kubernetes_pod_container_port_number"}},
-			{Key: "regex", Value: am.Port.String()},
-		})
-	}
-
-	cfg = append(cfg, yaml.MapItem{Key: "relabel_configs", Value: relabelings})
-
-	return cfg
+// RelabelConfig allows dynamic rewriting of the label set, being applied to samples before ingestion.
+// It defines `<metric_relabel_configs>`-section of Prometheus configuration.
+// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs
+// +k8s:openapi-gen=true
+type RelabelConfig struct {
+	//The source labels select values from existing labels. Their content is concatenated
+	//using the configured separator and matched against the configured regular expression
+	//for the replace, keep, and drop actions.
+	SourceLabels []string `json:"sourceLabels,omitempty"`
+	//Separator placed between concatenated source label values. default is ';'.
+	Separator string `json:"separator,omitempty"`
+	//Label to which the resulting value is written in a replace action.
+	//It is mandatory for replace actions. Regex capture groups are available.
+	TargetLabel string `json:"targetLabel,omitempty"`
+	//Regular expression against which the extracted value is matched. Default is '(.*)'
+	Regex string `json:"regex,omitempty"`
+	// Modulus to take of the hash of the source label values.
+	Modulus uint64 `json:"modulus,omitempty"`
+	//Replacement value against which a regex replace is performed if the
+	//regular expression matches. Regex capture groups are available. Default is '$1'
+	Replacement string `json:"replacement,omitempty"`
+	// Action to perform based on regex matching. Default is 'replace'
+	Action string `json:"action,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateRemoteReadConfig(
-	version semver.Version,
-	p *v1.Prometheus,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	oauth2Secrets map[string]assets.OAuth2Credentials,
-) yaml.MapItem {
-	cfgs := []yaml.MapSlice{}
-
-	for i, spec := range p.Spec.RemoteRead {
-		//defaults
-		if spec.RemoteTimeout == "" {
-			spec.RemoteTimeout = "30s"
-		}
-
-		cfg := yaml.MapSlice{
-			{Key: "url", Value: spec.URL},
-			{Key: "remote_timeout", Value: spec.RemoteTimeout},
-		}
-
-		if spec.Name != "" && version.GTE(semver.MustParse("2.15.0")) {
-			cfg = append(cfg, yaml.MapItem{Key: "name", Value: spec.Name})
-		}
-
-		if len(spec.RequiredMatchers) > 0 {
-			cfg = append(cfg, yaml.MapItem{Key: "required_matchers", Value: stringMapToMapSlice(spec.RequiredMatchers)})
-		}
-
-		if spec.ReadRecent {
-			cfg = append(cfg, yaml.MapItem{Key: "read_recent", Value: spec.ReadRecent})
-		}
-
-		if spec.BasicAuth != nil {
-			if s, ok := basicAuthSecrets[fmt.Sprintf("remoteRead/%d", i)]; ok {
-				cfg = append(cfg, yaml.MapItem{
-					Key: "basic_auth", Value: yaml.MapSlice{
-						{Key: "username", Value: s.Username},
-						{Key: "password", Value: s.Password},
-					},
-				})
-			}
-		}
-
-		if spec.BearerToken != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token", Value: spec.BearerToken})
-		}
-
-		if spec.BearerTokenFile != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token_file", Value: spec.BearerTokenFile})
-		}
-
-		if spec.OAuth2 != nil && version.GTE(semver.MustParse("2.27.0")) {
-			oauth2Cfg := yaml.MapSlice{}
-			if s, ok := oauth2Secrets[fmt.Sprintf("remoteRead/%d", i)]; ok {
-				oauth2Cfg = append(oauth2Cfg,
-					yaml.MapItem{Key: "client_id", Value: s.ClientID},
-					yaml.MapItem{Key: "client_secret", Value: s.ClientSecret},
-					yaml.MapItem{Key: "token_url", Value: spec.OAuth2.TokenURL},
-				)
-
-				if len(spec.OAuth2.Scopes) > 0 {
-					oauth2Cfg = append(oauth2Cfg, yaml.MapItem{Key: "scopes", Value: spec.OAuth2.Scopes})
-				}
-
-				if len(spec.OAuth2.EndpointParams) > 0 {
-					oauth2Cfg = append(oauth2Cfg, yaml.MapItem{Key: "endpoint_params", Value: spec.OAuth2.EndpointParams})
-				}
-
-				cfg = append(cfg, yaml.MapItem{Key: "oauth2", Value: oauth2Cfg})
-			}
-		}
-
-		cfg = addTLStoYaml(cfg, p.ObjectMeta.Namespace, spec.TLSConfig)
-
-		if spec.ProxyURL != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "proxy_url", Value: spec.ProxyURL})
-		}
-
-		cfgs = append(cfgs, cfg)
-
-	}
-
-	return yaml.MapItem{
-		Key:   "remote_read",
-		Value: cfgs,
-	}
+// APIServerConfig defines a host and auth methods to access apiserver.
+// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config
+// +k8s:openapi-gen=true
+type APIServerConfig struct {
+	// Host of apiserver.
+	// A valid string consisting of a hostname or IP followed by an optional port number
+	Host string `json:"host"`
+	// BasicAuth allow an endpoint to authenticate over basic authentication
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+	// Bearer token for accessing apiserver.
+	BearerToken string `json:"bearerToken,omitempty"`
+	// File to read bearer token for accessing apiserver.
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
+	// TLS Config to use for accessing apiserver.
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
 }
 
-func (cg *ConfigGenerator) generateRemoteWriteConfig(
-	version semver.Version,
-	p *v1.Prometheus,
-	basicAuthSecrets map[string]assets.BasicAuthCredentials,
-	oauth2Secrets map[string]assets.OAuth2Credentials,
-) yaml.MapItem {
+// AlertmanagerEndpoints defines a selection of a single Endpoints object
+// containing alertmanager IPs to fire alerts against.
+// +k8s:openapi-gen=true
+type AlertmanagerEndpoints struct {
+	// Namespace of Endpoints object.
+	Namespace string `json:"namespace"`
+	// Name of Endpoints object in Namespace.
+	Name string `json:"name"`
+	// Port the Alertmanager API is exposed on.
+	Port intstr.IntOrString `json:"port"`
+	// Scheme to use when firing alerts.
+	Scheme string `json:"scheme,omitempty"`
+	// Prefix for the HTTP path alerts are pushed to.
+	PathPrefix string `json:"pathPrefix,omitempty"`
+	// TLS Config to use for alertmanager connection.
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+	// BearerTokenFile to read from filesystem to use when authenticating to
+	// Alertmanager.
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
+	// Version of the Alertmanager API that Prometheus uses to send alerts. It
+	// can be "v1" or "v2".
+	APIVersion string `json:"apiVersion,omitempty"`
+	// Timeout is a per-target Alertmanager timeout when pushing alerts.
+	Timeout *string `json:"timeout,omitempty"`
+}
 
-	cfgs := []yaml.MapSlice{}
+// ServiceMonitor defines monitoring for a set of services.
+// +genclient
+// +k8s:openapi-gen=true
+// +kubebuilder:resource:categories="prometheus-operator"
+type ServiceMonitor struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of desired Service selection for target discovery by
+	// Prometheus.
+	Spec ServiceMonitorSpec `json:"spec"`
+}
 
-	for i, spec := range p.Spec.RemoteWrite {
-		//defaults
-		if spec.RemoteTimeout == "" {
-			spec.RemoteTimeout = "30s"
-		}
+// ServiceMonitorSpec contains specification parameters for a ServiceMonitor.
+// +k8s:openapi-gen=true
+type ServiceMonitorSpec struct {
+	// Chooses the label of the Kubernetes `Endpoints`.
+	// Its value will be used for the `job`-label's value of the created metrics.
+	//
+	// Default & fallback value: the name of the respective Kubernetes `Endpoint`.
+	JobLabel string `json:"jobLabel,omitempty"`
+	// TargetLabels transfers labels from the Kubernetes `Service` onto the created metrics.
+	// All labels set in `selector.matchLabels` are automatically transferred.
+	TargetLabels []string `json:"targetLabels,omitempty"`
+	// PodTargetLabels transfers labels on the Kubernetes `Pod` onto the created metrics.
+	PodTargetLabels []string `json:"podTargetLabels,omitempty"`
+	// A list of endpoints allowed as part of this ServiceMonitor.
+	Endpoints []Endpoint `json:"endpoints"`
+	// Selector to select Endpoints objects.
+	Selector metav1.LabelSelector `json:"selector"`
+	// Selector to select which namespaces the Kubernetes Endpoints objects are discovered from.
+	NamespaceSelector NamespaceSelector `json:"namespaceSelector,omitempty"`
+	// SampleLimit defines per-scrape limit on number of scraped samples that will be accepted.
+	SampleLimit uint64 `json:"sampleLimit,omitempty"`
+	// TargetLimit defines a limit on the number of scraped targets that will be accepted.
+	TargetLimit uint64 `json:"targetLimit,omitempty"`
+}
 
-		cfg := yaml.MapSlice{
-			{Key: "url", Value: spec.URL},
-			{Key: "remote_timeout", Value: spec.RemoteTimeout},
-		}
+// Endpoint defines a scrapeable endpoint serving Prometheus metrics.
+// +k8s:openapi-gen=true
+type Endpoint struct {
+	// Name of the service port this endpoint refers to. Mutually exclusive with targetPort.
+	Port string `json:"port,omitempty"`
+	// Name or number of the target port of the Pod behind the Service, the port must be specified with container port property. Mutually exclusive with port.
+	TargetPort *intstr.IntOrString `json:"targetPort,omitempty"`
+	// HTTP path to scrape for metrics.
+	Path string `json:"path,omitempty"`
+	// HTTP scheme to use for scraping.
+	Scheme string `json:"scheme,omitempty"`
+	// Optional HTTP URL parameters
+	Params map[string][]string `json:"params,omitempty"`
+	// Interval at which metrics should be scraped
+	Interval string `json:"interval,omitempty"`
+	// Timeout after which the scrape is ended
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+	// TLS configuration to use when scraping the endpoint
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+	// File to read bearer token for scraping targets.
+	BearerTokenFile string `json:"bearerTokenFile,omitempty"`
+	// Secret to mount to read bearer token for scraping targets. The secret
+	// needs to be in the same namespace as the service monitor and accessible by
+	// the Prometheus Operator.
+	BearerTokenSecret v1.SecretKeySelector `json:"bearerTokenSecret,omitempty"`
+	// HonorLabels chooses the metric's labels on collisions with target labels.
+	HonorLabels bool `json:"honorLabels,omitempty"`
+	// HonorTimestamps controls whether Prometheus respects the timestamps present in scraped data.
+	HonorTimestamps *bool `json:"honorTimestamps,omitempty"`
+	// BasicAuth allow an endpoint to authenticate over basic authentication
+	// More info: https://prometheus.io/docs/operating/configuration/#endpoints
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+	// MetricRelabelConfigs to apply to samples before ingestion.
+	MetricRelabelConfigs []*RelabelConfig `json:"metricRelabelings,omitempty"`
+	// RelabelConfigs to apply to samples before scraping.
+	// Prometheus Operator automatically adds relabelings for a few standard Kubernetes fields
+	// and replaces original scrape job name with __tmp_prometheus_job_name.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+	RelabelConfigs []*RelabelConfig `json:"relabelings,omitempty"`
+	// ProxyURL eg http://proxyserver:2195 Directs scrapes to proxy through this endpoint.
+	ProxyURL *string `json:"proxyUrl,omitempty"`
+}
 
-		if len(spec.Headers) > 0 && version.GTE(semver.MustParse("2.25.0")) {
-			cfg = append(cfg, yaml.MapItem{Key: "headers", Value: stringMapToMapSlice(spec.Headers)})
-		}
+// PodMonitor defines monitoring for a set of pods.
+// +genclient
+// +k8s:openapi-gen=true
+// +kubebuilder:resource:categories="prometheus-operator"
+type PodMonitor struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of desired Pod selection for target discovery by Prometheus.
+	Spec PodMonitorSpec `json:"spec"`
+}
 
-		if spec.Name != "" && version.GTE(semver.MustParse("2.15.0")) {
-			cfg = append(cfg, yaml.MapItem{Key: "name", Value: spec.Name})
-		}
+// PodMonitorSpec contains specification parameters for a PodMonitor.
+// +k8s:openapi-gen=true
+type PodMonitorSpec struct {
+	// The label to use to retrieve the job name from.
+	JobLabel string `json:"jobLabel,omitempty"`
+	// PodTargetLabels transfers labels on the Kubernetes Pod onto the target.
+	PodTargetLabels []string `json:"podTargetLabels,omitempty"`
+	// A list of endpoints allowed as part of this PodMonitor.
+	PodMetricsEndpoints []PodMetricsEndpoint `json:"podMetricsEndpoints"`
+	// Selector to select Pod objects.
+	Selector metav1.LabelSelector `json:"selector"`
+	// Selector to select which namespaces the Endpoints objects are discovered from.
+	NamespaceSelector NamespaceSelector `json:"namespaceSelector,omitempty"`
+	// SampleLimit defines per-scrape limit on number of scraped samples that will be accepted.
+	SampleLimit uint64 `json:"sampleLimit,omitempty"`
+	// TargetLimit defines a limit on the number of scraped targets that will be accepted.
+	TargetLimit uint64 `json:"targetLimit,omitempty"`
+}
 
-		if spec.SendExemplars && version.GTE(semver.MustParse("2.27.0")) {
-			cfg = append(cfg, yaml.MapItem{Key: "send_exemplars", Value: spec.SendExemplars})
-		}
+// PodMetricsEndpoint defines a scrapeable endpoint of a Kubernetes Pod serving Prometheus metrics.
+// +k8s:openapi-gen=true
+type PodMetricsEndpoint struct {
+	// Name of the pod port this endpoint refers to. Mutually exclusive with targetPort.
+	Port string `json:"port,omitempty"`
+	// Deprecated: Use 'port' instead.
+	TargetPort *intstr.IntOrString `json:"targetPort,omitempty"`
+	// HTTP path to scrape for metrics.
+	Path string `json:"path,omitempty"`
+	// HTTP scheme to use for scraping.
+	Scheme string `json:"scheme,omitempty"`
+	// Optional HTTP URL parameters
+	Params map[string][]string `json:"params,omitempty"`
+	// Interval at which metrics should be scraped
+	Interval string `json:"interval,omitempty"`
+	// Timeout after which the scrape is ended
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+	// TLS configuration to use when scraping the endpoint.
+	TLSConfig *PodMetricsEndpointTLSConfig `json:"tlsConfig,omitempty"`
+	// Secret to mount to read bearer token for scraping targets. The secret
+	// needs to be in the same namespace as the pod monitor and accessible by
+	// the Prometheus Operator.
+	BearerTokenSecret v1.SecretKeySelector `json:"bearerTokenSecret,omitempty"`
+	// HonorLabels chooses the metric's labels on collisions with target labels.
+	HonorLabels bool `json:"honorLabels,omitempty"`
+	// HonorTimestamps controls whether Prometheus respects the timestamps present in scraped data.
+	HonorTimestamps *bool `json:"honorTimestamps,omitempty"`
+	// BasicAuth allow an endpoint to authenticate over basic authentication.
+	// More info: https://prometheus.io/docs/operating/configuration/#endpoint
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+	// MetricRelabelConfigs to apply to samples before ingestion.
+	MetricRelabelConfigs []*RelabelConfig `json:"metricRelabelings,omitempty"`
+	// RelabelConfigs to apply to samples before scraping.
+	// Prometheus Operator automatically adds relabelings for a few standard Kubernetes fields
+	// and replaces original scrape job name with __tmp_prometheus_job_name.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+	RelabelConfigs []*RelabelConfig `json:"relabelings,omitempty"`
+	// ProxyURL eg http://proxyserver:2195 Directs scrapes to proxy through this endpoint.
+	ProxyURL *string `json:"proxyUrl,omitempty"`
+}
 
-		if spec.WriteRelabelConfigs != nil {
-			relabelings := []yaml.MapSlice{}
-			for _, c := range spec.WriteRelabelConfigs {
-				relabeling := yaml.MapSlice{}
+// PodMetricsEndpointTLSConfig specifies TLS configuration parameters.
+// +k8s:openapi-gen=true
+type PodMetricsEndpointTLSConfig struct {
+	SafeTLSConfig `json:",inline"`
+}
 
-				if len(c.SourceLabels) > 0 {
-					relabeling = append(relabeling, yaml.MapItem{Key: "source_labels", Value: c.SourceLabels})
-				}
+// Probe defines monitoring for a set of static targets or ingresses.
+// +genclient
+// +k8s:openapi-gen=true
+// +kubebuilder:resource:categories="prometheus-operator"
+type Probe struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of desired Ingress selection for target discovery by Prometheus.
+	Spec ProbeSpec `json:"spec"`
+}
 
-				if c.Separator != "" {
-					relabeling = append(relabeling, yaml.MapItem{Key: "separator", Value: c.Separator})
-				}
+// ProbeSpec contains specification parameters for a Probe.
+// +k8s:openapi-gen=true
+type ProbeSpec struct {
+	// The job name assigned to scraped metrics by default.
+	JobName string `json:"jobName,omitempty"`
+	// Specification for the prober to use for probing targets.
+	// The prober.URL parameter is required. Targets cannot be probed if left empty.
+	ProberSpec ProberSpec `json:"prober,omitempty"`
+	// The module to use for probing specifying how to probe the target.
+	// Example module configuring in the blackbox exporter:
+	// https://github.com/prometheus/blackbox_exporter/blob/master/example.yml
+	Module string `json:"module,omitempty"`
+	// Targets defines a set of static and/or dynamically discovered targets to be probed using the prober.
+	Targets ProbeTargets `json:"targets,omitempty"`
+	// Interval at which targets are probed using the configured prober.
+	// If not specified Prometheus' global scrape interval is used.
+	Interval string `json:"interval,omitempty"`
+	// Timeout for scraping metrics from the Prometheus exporter.
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+	// TLS configuration to use when scraping the endpoint.
+	TLSConfig *ProbeTLSConfig `json:"tlsConfig,omitempty"`
+	// Secret to mount to read bearer token for scraping targets. The secret
+	// needs to be in the same namespace as the probe and accessible by
+	// the Prometheus Operator.
+	BearerTokenSecret v1.SecretKeySelector `json:"bearerTokenSecret,omitempty"`
+	// BasicAuth allow an endpoint to authenticate over basic authentication.
+	// More info: https://prometheus.io/docs/operating/configuration/#endpoint
+	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+}
 
-				if c.TargetLabel != "" {
-					relabeling = append(relabeling, yaml.MapItem{Key: "target_label", Value: c.TargetLabel})
-				}
+// ProbeTargets defines a set of static and dynamically discovered targets for the prober.
+// +k8s:openapi-gen=true
+type ProbeTargets struct {
+	// StaticConfig defines static targets which are considers for probing.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#static_config.
+	StaticConfig *ProbeTargetStaticConfig `json:"staticConfig,omitempty"`
+	// Ingress defines the set of dynamically discovered ingress objects which hosts are considered for probing.
+	Ingress *ProbeTargetIngress `json:"ingress,omitempty"`
+}
 
-				if c.Regex != "" {
-					relabeling = append(relabeling, yaml.MapItem{Key: "regex", Value: c.Regex})
-				}
+// ProbeTargetStaticConfig defines the set of static targets considered for probing.
+// +k8s:openapi-gen=true
+type ProbeTargetStaticConfig struct {
+	// Targets is a list of URLs to probe using the configured prober.
+	Targets []string `json:"static,omitempty"`
+	// Labels assigned to all metrics scraped from the targets.
+	Labels map[string]string `json:"labels,omitempty"`
+	// RelabelConfigs to apply to samples before ingestion.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+	RelabelConfigs []*RelabelConfig `json:"relabelingConfigs,omitempty"`
+}
 
-				if c.Modulus != uint64(0) {
-					relabeling = append(relabeling, yaml.MapItem{Key: "modulus", Value: c.Modulus})
-				}
+// ProbeTargetIngress defines the set of Ingress objects considered for probing.
+// +k8s:openapi-gen=true
+type ProbeTargetIngress struct {
+	// Select Ingress objects by labels.
+	Selector metav1.LabelSelector `json:"selector,omitempty"`
+	// Select Ingress objects by namespace.
+	NamespaceSelector NamespaceSelector `json:"namespaceSelector,omitempty"`
+	// RelabelConfigs to apply to samples before ingestion.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+	RelabelConfigs []*RelabelConfig `json:"relabelingConfigs,omitempty"`
+}
 
-				if c.Replacement != "" {
-					relabeling = append(relabeling, yaml.MapItem{Key: "replacement", Value: c.Replacement})
-				}
+// ProberSpec contains specification parameters for the Prober used for probing.
+// +k8s:openapi-gen=true
+type ProberSpec struct {
+	// Mandatory URL of the prober.
+	URL string `json:"url"`
+	// HTTP scheme to use for scraping.
+	// Defaults to `http`.
+	Scheme string `json:"scheme,omitempty"`
+	// Path to collect metrics from.
+	// Defaults to `/probe`.
+	Path string `json:"path,omitempty"`
+	// Optional ProxyURL.
+	ProxyURL string `json:"proxyUrl,omitempty"`
+}
 
-				if c.Action != "" {
-					relabeling = append(relabeling, yaml.MapItem{Key: "action", Value: c.Action})
-				}
-				relabelings = append(relabelings, relabeling)
-			}
+// OAuth2 allows an endpoint to authenticate with OAuth2.
+// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#oauth2
+// +k8s:openapi-gen=true
+type OAuth2 struct {
+	// The secret or configmap containing the OAuth2 client id
+	ClientID SecretOrConfigMap `json:"clientId"`
+	// The secret containing the OAuth2 client secret
+	ClientSecret v1.SecretKeySelector `json:"clientSecret"`
+	// The URL to fetch the token from
+	// +kubebuilder:validation:MinLength=1
+	TokenURL string `json:"tokenUrl"`
+	// OAuth2 scopes used for the token request
+	Scopes []string `json:"scopes,omitempty"`
+	// Parameters to append to the token URL
+	EndpointParams map[string]string `json:"endpointParams,omitempty"`
+}
 
-			cfg = append(cfg, yaml.MapItem{Key: "write_relabel_configs", Value: relabelings})
+type OAuth2ValidationError struct {
+	err string
+}
 
-		}
+func (e *OAuth2ValidationError) Error() string {
+	return e.err
+}
 
-		if spec.BasicAuth != nil {
-			if s, ok := basicAuthSecrets[fmt.Sprintf("remoteWrite/%d", i)]; ok {
-				cfg = append(cfg, yaml.MapItem{
-					Key: "basic_auth", Value: yaml.MapSlice{
-						{Key: "username", Value: s.Username},
-						{Key: "password", Value: s.Password},
-					},
-				})
-			}
-		}
-
-		if spec.BearerToken != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token", Value: spec.BearerToken})
-		}
-
-		if spec.BearerTokenFile != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "bearer_token_file", Value: spec.BearerTokenFile})
-		}
-
-		if spec.OAuth2 != nil && version.GTE(semver.MustParse("2.27.0")) {
-			oauth2Cfg := yaml.MapSlice{}
-			if s, ok := oauth2Secrets[fmt.Sprintf("remoteWrite/%d", i)]; ok {
-				oauth2Cfg = append(oauth2Cfg,
-					yaml.MapItem{Key: "client_id", Value: s.ClientID},
-					yaml.MapItem{Key: "client_secret", Value: s.ClientSecret},
-					yaml.MapItem{Key: "token_url", Value: spec.OAuth2.TokenURL},
-				)
-
-				if len(spec.OAuth2.Scopes) > 0 {
-					oauth2Cfg = append(oauth2Cfg, yaml.MapItem{Key: "scopes", Value: spec.OAuth2.Scopes})
-				}
-
-				if len(spec.OAuth2.EndpointParams) > 0 {
-					oauth2Cfg = append(oauth2Cfg, yaml.MapItem{Key: "endpoint_params", Value: spec.OAuth2.EndpointParams})
-				}
-
-				cfg = append(cfg, yaml.MapItem{Key: "oauth2", Value: oauth2Cfg})
-			}
-		}
-
-		cfg = addTLStoYaml(cfg, p.ObjectMeta.Namespace, spec.TLSConfig)
-
-		if spec.ProxyURL != "" {
-			cfg = append(cfg, yaml.MapItem{Key: "proxy_url", Value: spec.ProxyURL})
-		}
-
-		if spec.QueueConfig != nil {
-			queueConfig := yaml.MapSlice{}
-
-			if spec.QueueConfig.Capacity != int(0) {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "capacity", Value: spec.QueueConfig.Capacity})
-			}
-
-			if version.GTE(semver.MustParse("2.6.0")) {
-				if spec.QueueConfig.MinShards != int(0) {
-					queueConfig = append(queueConfig, yaml.MapItem{Key: "min_shards", Value: spec.QueueConfig.MinShards})
-				}
-			}
-
-			if spec.QueueConfig.MaxShards != int(0) {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "max_shards", Value: spec.QueueConfig.MaxShards})
-			}
-
-			if spec.QueueConfig.MaxSamplesPerSend != int(0) {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "max_samples_per_send", Value: spec.QueueConfig.MaxSamplesPerSend})
-			}
-
-			if spec.QueueConfig.BatchSendDeadline != "" {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "batch_send_deadline", Value: spec.QueueConfig.BatchSendDeadline})
-			}
-
-			if version.LT(semver.MustParse("2.11.0")) {
-				if spec.QueueConfig.MaxRetries != int(0) {
-					queueConfig = append(queueConfig, yaml.MapItem{Key: "max_retries", Value: spec.QueueConfig.MaxRetries})
-				}
-			}
-
-			if spec.QueueConfig.MinBackoff != "" {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "min_backoff", Value: spec.QueueConfig.MinBackoff})
-			}
-
-			if spec.QueueConfig.MaxBackoff != "" {
-				queueConfig = append(queueConfig, yaml.MapItem{Key: "max_backoff", Value: spec.QueueConfig.MaxBackoff})
-			}
-
-			cfg = append(cfg, yaml.MapItem{Key: "queue_config", Value: queueConfig})
-		}
-
-		if spec.MetadataConfig != nil && version.GTE(semver.MustParse("2.23.0")) {
-			metadataConfig := yaml.MapSlice{}
-			metadataConfig = append(metadataConfig, yaml.MapItem{Key: "send", Value: spec.MetadataConfig.Send})
-			if spec.MetadataConfig.SendInterval != "" {
-				metadataConfig = append(metadataConfig, yaml.MapItem{Key: "send_interval", Value: spec.MetadataConfig.SendInterval})
-			}
-			cfg = append(cfg, yaml.MapItem{Key: "metadata_config", Value: metadataConfig})
-		}
-
-		cfgs = append(cfgs, cfg)
+func (o *OAuth2) Validate() error {
+	if o.TokenURL == "" {
+		return &OAuth2ValidationError{err: "OAuth2 token url must be specified"}
 	}
 
-	return yaml.MapItem{
-		Key:   "remote_write",
-		Value: cfgs,
+	if o.ClientID == (SecretOrConfigMap{}) {
+		return &OAuth2ValidationError{err: "OAuth2 client id must be specified"}
 	}
+
+	if err := o.ClientID.Validate(); err != nil {
+		return &OAuth2ValidationError{
+			err: fmt.Sprintf("invalid OAuth2 client id: %s", err.Error()),
+		}
+	}
+
+	return nil
+}
+
+// BasicAuth allow an endpoint to authenticate over basic authentication
+// More info: https://prometheus.io/docs/operating/configuration/#endpoints
+// +k8s:openapi-gen=true
+type BasicAuth struct {
+	// The secret in the service monitor namespace that contains the username
+	// for authentication.
+	Username v1.SecretKeySelector `json:"username,omitempty"`
+	// The secret in the service monitor namespace that contains the password
+	// for authentication.
+	Password v1.SecretKeySelector `json:"password,omitempty"`
+}
+
+// SecretOrConfigMap allows to specify data as a Secret or ConfigMap. Fields are mutually exclusive.
+type SecretOrConfigMap struct {
+	// Secret containing data to use for the targets.
+	Secret *v1.SecretKeySelector `json:"secret,omitempty"`
+	// ConfigMap containing data to use for the targets.
+	ConfigMap *v1.ConfigMapKeySelector `json:"configMap,omitempty"`
+}
+
+// SecretOrConfigMapValidationError is returned by SecretOrConfigMap.Validate()
+// on semantically invalid configurations.
+// +k8s:openapi-gen=false
+type SecretOrConfigMapValidationError struct {
+	err string
+}
+
+func (e *SecretOrConfigMapValidationError) Error() string {
+	return e.err
+}
+
+// Validate semantically validates the given TLSConfig.
+func (c *SecretOrConfigMap) Validate() error {
+	if c.Secret != nil && c.ConfigMap != nil {
+		return &SecretOrConfigMapValidationError{"SecretOrConfigMap can not specify both Secret and ConfigMap"}
+	}
+
+	return nil
+}
+
+// SafeTLSConfig specifies safe TLS configuration parameters.
+// +k8s:openapi-gen=true
+type SafeTLSConfig struct {
+	// Struct containing the CA cert to use for the targets.
+	CA SecretOrConfigMap `json:"ca,omitempty"`
+	// Struct containing the client cert file for the targets.
+	Cert SecretOrConfigMap `json:"cert,omitempty"`
+	// Secret containing the client key file for the targets.
+	KeySecret *v1.SecretKeySelector `json:"keySecret,omitempty"`
+	// Used to verify the hostname for the targets.
+	ServerName string `json:"serverName,omitempty"`
+	// Disable target certificate validation.
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+// Validate semantically validates the given SafeTLSConfig.
+func (c *SafeTLSConfig) Validate() error {
+	if c.CA != (SecretOrConfigMap{}) {
+		if err := c.CA.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if c.Cert != (SecretOrConfigMap{}) {
+		if err := c.Cert.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if c.Cert != (SecretOrConfigMap{}) && c.KeySecret == nil {
+		return &TLSConfigValidationError{"client cert specified without client key"}
+	}
+
+	if c.KeySecret != nil && c.Cert == (SecretOrConfigMap{}) {
+		return &TLSConfigValidationError{"client key specified without client cert"}
+	}
+
+	return nil
+}
+
+// TLSConfig extends the safe TLS configuration with file parameters.
+// +k8s:openapi-gen=true
+type TLSConfig struct {
+	SafeTLSConfig `json:",inline"`
+	// Path to the CA cert in the Prometheus container to use for the targets.
+	CAFile string `json:"caFile,omitempty"`
+	// Path to the client cert file in the Prometheus container for the targets.
+	CertFile string `json:"certFile,omitempty"`
+	// Path to the client key file in the Prometheus container for the targets.
+	KeyFile string `json:"keyFile,omitempty"`
+}
+
+// TLSConfigValidationError is returned by TLSConfig.Validate() on semantically
+// invalid tls configurations.
+// +k8s:openapi-gen=false
+type TLSConfigValidationError struct {
+	err string
+}
+
+func (e *TLSConfigValidationError) Error() string {
+	return e.err
+}
+
+// Validate semantically validates the given TLSConfig.
+func (c *TLSConfig) Validate() error {
+	if c.CA != (SecretOrConfigMap{}) {
+		if c.CAFile != "" {
+			return &TLSConfigValidationError{"tls config can not both specify CAFile and CA"}
+		}
+		if err := c.CA.Validate(); err != nil {
+			return &TLSConfigValidationError{"tls config CA is invalid"}
+		}
+	}
+
+	if c.Cert != (SecretOrConfigMap{}) {
+		if c.CertFile != "" {
+			return &TLSConfigValidationError{"tls config can not both specify CertFile and Cert"}
+		}
+		if err := c.Cert.Validate(); err != nil {
+			return &TLSConfigValidationError{"tls config Cert is invalid"}
+		}
+	}
+
+	if c.KeyFile != "" && c.KeySecret != nil {
+		return &TLSConfigValidationError{"tls config can not both specify KeyFile and KeySecret"}
+	}
+
+	hasCert := c.CertFile != "" || c.Cert != (SecretOrConfigMap{})
+	hasKey := c.KeyFile != "" || c.KeySecret != nil
+
+	if hasCert && !hasKey {
+		return &TLSConfigValidationError{"tls config can not specify client cert without client key"}
+	}
+
+	if hasKey && !hasCert {
+		return &TLSConfigValidationError{"tls config can not specify client key without client cert"}
+	}
+
+	return nil
+}
+
+// ServiceMonitorList is a list of ServiceMonitors.
+// +k8s:openapi-gen=true
+type ServiceMonitorList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of ServiceMonitors
+	Items []*ServiceMonitor `json:"items"`
+}
+
+// PodMonitorList is a list of PodMonitors.
+// +k8s:openapi-gen=true
+type PodMonitorList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of PodMonitors
+	Items []*PodMonitor `json:"items"`
+}
+
+// ProbeList is a list of Probes.
+// +k8s:openapi-gen=true
+type ProbeList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of Probes
+	Items []*Probe `json:"items"`
+}
+
+// PrometheusRuleList is a list of PrometheusRules.
+// +k8s:openapi-gen=true
+type PrometheusRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of Rules
+	Items []*PrometheusRule `json:"items"`
+}
+
+// PrometheusRule defines recording and alerting rules for a Prometheus instance
+// +genclient
+// +k8s:openapi-gen=true
+type PrometheusRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of desired alerting rule definitions for Prometheus.
+	Spec PrometheusRuleSpec `json:"spec"`
+}
+
+// PrometheusRuleSpec contains specification parameters for a Rule.
+// +k8s:openapi-gen=true
+type PrometheusRuleSpec struct {
+	// Content of Prometheus rule file
+	Groups []RuleGroup `json:"groups,omitempty"`
+}
+
+// RuleGroup and Rule are copied instead of vendored because the
+// upstream Prometheus struct definitions don't have json struct tags.
+
+// RuleGroup is a list of sequentially evaluated recording and alerting rules.
+// Note: PartialResponseStrategy is only used by ThanosRuler and will
+// be ignored by Prometheus instances.  Valid values for this field are 'warn'
+// or 'abort'.  More info: https://github.com/thanos-io/thanos/blob/master/docs/components/rule.md#partial-response
+// +k8s:openapi-gen=true
+type RuleGroup struct {
+	Name                    string `json:"name"`
+	Interval                string `json:"interval,omitempty"`
+	Rules                   []Rule `json:"rules"`
+	PartialResponseStrategy string `json:"partial_response_strategy,omitempty"`
+}
+
+// Rule describes an alerting or recording rule
+// See Prometheus documentation: [alerting](https://www.prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) or [recording](https://www.prometheus.io/docs/prometheus/latest/configuration/recording_rules/#recording-rules) rule
+// +k8s:openapi-gen=true
+type Rule struct {
+	Record      string             `json:"record,omitempty"`
+	Alert       string             `json:"alert,omitempty"`
+	Expr        intstr.IntOrString `json:"expr"`
+	For         string             `json:"for,omitempty"`
+	Labels      map[string]string  `json:"labels,omitempty"`
+	Annotations map[string]string  `json:"annotations,omitempty"`
+}
+
+// Alertmanager describes an Alertmanager cluster.
+// +genclient
+// +k8s:openapi-gen=true
+// +kubebuilder:resource:categories="prometheus-operator"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.version",description="The version of Alertmanager"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="The desired replicas number of Alertmanagers"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+type Alertmanager struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of the desired behavior of the Alertmanager cluster. More info:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	Spec AlertmanagerSpec `json:"spec"`
+	// Most recent observed status of the Alertmanager cluster. Read-only. Not
+	// included when requesting from the apiserver, only from the Prometheus
+	// Operator API itself. More info:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	Status *AlertmanagerStatus `json:"status,omitempty"`
+}
+
+// AlertmanagerSpec is a specification of the desired behavior of the Alertmanager cluster. More info:
+// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+// +k8s:openapi-gen=true
+type AlertmanagerSpec struct {
+	// PodMetadata configures Labels and Annotations which are propagated to the alertmanager pods.
+	PodMetadata *EmbeddedObjectMetadata `json:"podMetadata,omitempty"`
+	// Image if specified has precedence over baseImage, tag and sha
+	// combinations. Specifying the version is still necessary to ensure the
+	// Prometheus Operator knows what version of Alertmanager is being
+	// configured.
+	Image *string `json:"image,omitempty"`
+	// Version the cluster should be on.
+	Version string `json:"version,omitempty"`
+	// Tag of Alertmanager container image to be deployed. Defaults to the value of `version`.
+	// Version is ignored if Tag is set.
+	// Deprecated: use 'image' instead.  The image tag can be specified
+	// as part of the image URL.
+	Tag string `json:"tag,omitempty"`
+	// SHA of Alertmanager container image to be deployed. Defaults to the value of `version`.
+	// Similar to a tag, but the SHA explicitly deploys an immutable container image.
+	// Version and Tag are ignored if SHA is set.
+	// Deprecated: use 'image' instead.  The image digest can be specified
+	// as part of the image URL.
+	SHA string `json:"sha,omitempty"`
+	// Base image that is used to deploy pods, without tag.
+	// Deprecated: use 'image' instead
+	BaseImage string `json:"baseImage,omitempty"`
+	// An optional list of references to secrets in the same namespace
+	// to use for pulling prometheus and alertmanager images from registries
+	// see http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod
+	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// Secrets is a list of Secrets in the same namespace as the Alertmanager
+	// object, which shall be mounted into the Alertmanager Pods.
+	// The Secrets are mounted into /etc/alertmanager/secrets/<secret-name>.
+	Secrets []string `json:"secrets,omitempty"`
+	// ConfigMaps is a list of ConfigMaps in the same namespace as the Alertmanager
+	// object, which shall be mounted into the Alertmanager Pods.
+	// The ConfigMaps are mounted into /etc/alertmanager/configmaps/<configmap-name>.
+	ConfigMaps []string `json:"configMaps,omitempty"`
+	// ConfigSecret is the name of a Kubernetes Secret in the same namespace as the
+	// Alertmanager object, which contains configuration for this Alertmanager
+	// instance. Defaults to 'alertmanager-<alertmanager-name>'
+	// The secret is mounted into /etc/alertmanager/config.
+	ConfigSecret string `json:"configSecret,omitempty"`
+	// Log level for Alertmanager to be configured with.
+	LogLevel string `json:"logLevel,omitempty"`
+	// Log format for Alertmanager to be configured with.
+	LogFormat string `json:"logFormat,omitempty"`
+	// Size is the expected size of the alertmanager cluster. The controller will
+	// eventually make the size of the running cluster equal to the expected
+	// size.
+	Replicas *int32 `json:"replicas,omitempty"`
+	// Time duration Alertmanager shall retain data for. Default is '120h',
+	// and must match the regular expression `[0-9]+(ms|s|m|h)` (milliseconds seconds minutes hours).
+	Retention string `json:"retention,omitempty"`
+	// Storage is the definition of how storage will be used by the Alertmanager
+	// instances.
+	Storage *StorageSpec `json:"storage,omitempty"`
+	// Volumes allows configuration of additional volumes on the output StatefulSet definition.
+	// Volumes specified will be appended to other volumes that are generated as a result of
+	// StorageSpec objects.
+	Volumes []v1.Volume `json:"volumes,omitempty"`
+	// VolumeMounts allows configuration of additional VolumeMounts on the output StatefulSet definition.
+	// VolumeMounts specified will be appended to other VolumeMounts in the alertmanager container,
+	// that are generated as a result of StorageSpec objects.
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
+	// The external URL the Alertmanager instances will be available under. This is
+	// necessary to generate correct URLs. This is necessary if Alertmanager is not
+	// served from root of a DNS name.
+	ExternalURL string `json:"externalUrl,omitempty"`
+	// The route prefix Alertmanager registers HTTP handlers for. This is useful,
+	// if using ExternalURL and a proxy is rewriting HTTP routes of a request,
+	// and the actual ExternalURL is still true, but the server serves requests
+	// under a different route prefix. For example for use with `kubectl proxy`.
+	RoutePrefix string `json:"routePrefix,omitempty"`
+	// If set to true all actions on the underlying managed objects are not
+	// goint to be performed, except for delete actions.
+	Paused bool `json:"paused,omitempty"`
+	// Define which Nodes the Pods are scheduled on.
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Define resources requests and limits for single Pods.
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+	// If specified, the pod's scheduling constraints.
+	Affinity *v1.Affinity `json:"affinity,omitempty"`
+	// If specified, the pod's tolerations.
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
+	// If specified, the pod's topology spread constraints.
+	TopologySpreadConstraints []v1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+	// SecurityContext holds pod-level security attributes and common container settings.
+	// This defaults to the default PodSecurityContext.
+	SecurityContext *v1.PodSecurityContext `json:"securityContext,omitempty"`
+	// ServiceAccountName is the name of the ServiceAccount to use to run the
+	// Prometheus Pods.
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+	// ListenLocal makes the Alertmanager server listen on loopback, so that it
+	// does not bind against the Pod IP. Note this is only for the Alertmanager
+	// UI, not the gossip communication.
+	ListenLocal bool `json:"listenLocal,omitempty"`
+	// Containers allows injecting additional containers. This is meant to
+	// allow adding an authentication proxy to an Alertmanager pod.
+	// Containers described here modify an operator generated container if they
+	// share the same name and modifications are done via a strategic merge
+	// patch. The current container names are: `alertmanager` and
+	// `config-reloader`. Overriding containers is entirely outside the scope
+	// of what the maintainers will support and by doing so, you accept that
+	// this behaviour may break at any time without notice.
+	Containers []v1.Container `json:"containers,omitempty"`
+	// InitContainers allows adding initContainers to the pod definition. Those can be used to e.g.
+	// fetch secrets for injection into the Alertmanager configuration from external sources. Any
+	// errors during the execution of an initContainer will lead to a restart of the Pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+	// Using initContainers for any use case other then secret fetching is entirely outside the scope
+	// of what the maintainers will support and by doing so, you accept that this behaviour may break
+	// at any time without notice.
+	InitContainers []v1.Container `json:"initContainers,omitempty"`
+	// Priority class assigned to the Pods
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+	// AdditionalPeers allows injecting a set of additional Alertmanagers to peer with to form a highly available cluster.
+	AdditionalPeers []string `json:"additionalPeers,omitempty"`
+	// ClusterAdvertiseAddress is the explicit address to advertise in cluster.
+	// Needs to be provided for non RFC1918 [1] (public) addresses.
+	// [1] RFC1918: https://tools.ietf.org/html/rfc1918
+	ClusterAdvertiseAddress string `json:"clusterAdvertiseAddress,omitempty"`
+	// Interval between gossip attempts.
+	ClusterGossipInterval string `json:"clusterGossipInterval,omitempty"`
+	// Interval between pushpull attempts.
+	ClusterPushpullInterval string `json:"clusterPushpullInterval,omitempty"`
+	// Timeout for cluster peering.
+	ClusterPeerTimeout string `json:"clusterPeerTimeout,omitempty"`
+	// Port name used for the pods and governing service.
+	// This defaults to web
+	PortName string `json:"portName,omitempty"`
+	// ForceEnableClusterMode ensures Alertmanager does not deactivate the cluster mode when running with a single replica.
+	// Use case is e.g. spanning an Alertmanager cluster across Kubernetes clusters with a single replica in each.
+	ForceEnableClusterMode bool `json:"forceEnableClusterMode,omitempty"`
+	// AlertmanagerConfigs to be selected for to merge and configure Alertmanager with.
+	AlertmanagerConfigSelector *metav1.LabelSelector `json:"alertmanagerConfigSelector,omitempty"`
+	// Namespaces to be selected for AlertmanagerConfig discovery. If nil, only
+	// check own namespace.
+	AlertmanagerConfigNamespaceSelector *metav1.LabelSelector `json:"alertmanagerConfigNamespaceSelector,omitempty"`
+}
+
+// AlertmanagerList is a list of Alertmanagers.
+// +k8s:openapi-gen=true
+type AlertmanagerList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// List of Alertmanagers
+	Items []Alertmanager `json:"items"`
+}
+
+// Configures the sending of series metadata to remote storage.
+// +k8s:openapi-gen=true
+type MetadataConfig struct {
+	// Whether metric metadata is sent to remote storage or not.
+	Send bool `json:"send,omitempty"`
+	// How frequently metric metadata is sent to remote storage.
+	SendInterval string `json:"sendInterval,omitempty"`
+}
+
+// AlertmanagerStatus is the most recent observed status of the Alertmanager cluster. Read-only. Not
+// included when requesting from the apiserver, only from the Prometheus
+// Operator API itself. More info:
+// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+// +k8s:openapi-gen=true
+type AlertmanagerStatus struct {
+	// Represents whether any actions on the underlying managed objects are
+	// being performed. Only delete actions will be performed.
+	Paused bool `json:"paused"`
+	// Total number of non-terminated pods targeted by this Alertmanager
+	// cluster (their labels match the selector).
+	Replicas int32 `json:"replicas"`
+	// Total number of non-terminated pods targeted by this Alertmanager
+	// cluster that have the desired version spec.
+	UpdatedReplicas int32 `json:"updatedReplicas"`
+	// Total number of available pods (ready for at least minReadySeconds)
+	// targeted by this Alertmanager cluster.
+	AvailableReplicas int32 `json:"availableReplicas"`
+	// Total number of unavailable pods targeted by this Alertmanager cluster.
+	UnavailableReplicas int32 `json:"unavailableReplicas"`
+}
+
+// NamespaceSelector is a selector for selecting either all namespaces or a
+// list of namespaces.
+// +k8s:openapi-gen=true
+type NamespaceSelector struct {
+	// Boolean describing whether all namespaces are selected in contrast to a
+	// list restricting them.
+	Any bool `json:"any,omitempty"`
+	// List of namespace names.
+	MatchNames []string `json:"matchNames,omitempty"`
+
+	// TODO(fabxc): this should embed metav1.LabelSelector eventually.
+	// Currently the selector is only used for namespaces which require more complex
+	// implementation to support label selections.
+}
+
+// /--rules.*/ command-line arguments
+// +k8s:openapi-gen=true
+type Rules struct {
+	Alert RulesAlert `json:"alert,omitempty"`
+}
+
+// /--rules.alert.*/ command-line arguments
+// +k8s:openapi-gen=true
+type RulesAlert struct {
+	// Max time to tolerate prometheus outage for restoring 'for' state of alert.
+	ForOutageTolerance string `json:"forOutageTolerance,omitempty"`
+	// Minimum duration between alert and restored 'for' state.
+	// This is maintained only for alerts with configured 'for' time greater than grace period.
+	ForGracePeriod string `json:"forGracePeriod,omitempty"`
+	// Minimum amount of time to wait before resending an alert to Alertmanager.
+	ResendDelay string `json:"resendDelay,omitempty"`
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *Alertmanager) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *AlertmanagerList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *Prometheus) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *PrometheusList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *ServiceMonitor) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *ServiceMonitorList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *PodMonitor) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *PodMonitorList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *Probe) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *ProbeList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (f *PrometheusRule) DeepCopyObject() runtime.Object {
+	return f.DeepCopy()
+}
+
+// DeepCopyObject implements the runtime.Object interface.
+func (l *PrometheusRuleList) DeepCopyObject() runtime.Object {
+	return l.DeepCopy()
+}
+
+// ProbeTLSConfig specifies TLS configuration parameters.
+// +k8s:openapi-gen=true
+type ProbeTLSConfig struct {
+	SafeTLSConfig `json:",inline"`
 }

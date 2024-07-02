@@ -91,7 +91,6 @@ func (fo unaryOutboundWithMiddleware) IsRunning() bool {
 	return fo.o.IsRunning()
 }
 
-func (fo unaryOutboundWithMiddleware) Introspect() introspection.OutboundStatus {
 	if o, ok := fo.o.(introspection.IntrospectableOutbound); ok {
 		return o.Introspect()
 	}

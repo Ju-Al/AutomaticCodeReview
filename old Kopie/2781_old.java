@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.fragment;
-        controller.init();
 
 import android.content.Intent;
 import android.os.Build;
@@ -131,8 +130,8 @@ public class ExternalPlayerFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        controller.init();
         onPositionObserverUpdate();
-        new Thread(() -> controller.init()).start();
     }
 
     @Override

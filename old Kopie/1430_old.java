@@ -1,18 +1,4 @@
 /*
-            TopicConfig topicConfig = new TopicConfig();
-            String topic = commandLine.getOptionValue('t').trim();
-
-            topicConfig.setPerm(queueData.getPerm());
-
-            int perm = Integer.parseInt(commandLine.getOptionValue('p').trim());
-            int oldPerm = topicConfig.getPerm();
-            if (perm == oldPerm) {
-                System.out.printf("new perm equals to the old one!%n");
-                String addr = commandLine.getOptionValue('b').trim();
-                defaultMQAdminExt.createAndUpdateTopicConfig(addr, topicConfig);
-                System.out.printf("update topic perm from %s to %s in %s success.%n", oldPerm, perm, addr);
-                System.out.printf("%s%n", topicConfig);
-                return;
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -84,8 +70,21 @@ public class UpdateTopicPermSubCommand implements SubCommand {
 
     @Override
     public void execute(final CommandLine commandLine, final Options options,
-        RPCHook rpcHook) throws SubCommandException {
+            TopicConfig topicConfig = new TopicConfig();
+            String topic = commandLine.getOptionValue('t').trim();
 
+            topicConfig.setPerm(queueData.getPerm());
+
+            int perm = Integer.parseInt(commandLine.getOptionValue('p').trim());
+            int oldPerm = topicConfig.getPerm();
+            if (perm == oldPerm) {
+                System.out.printf("new perm equals to the old one!%n");
+                String addr = commandLine.getOptionValue('b').trim();
+                defaultMQAdminExt.createAndUpdateTopicConfig(addr, topicConfig);
+                System.out.printf("update topic perm from %s to %s in %s success.%n", oldPerm, perm, addr);
+                System.out.printf("%s%n", topicConfig);
+                return;
+        RPCHook rpcHook) throws SubCommandException {
         DefaultMQAdminExt defaultMQAdminExt = new DefaultMQAdminExt(rpcHook);
         defaultMQAdminExt.setInstanceName(Long.toString(System.currentTimeMillis()));
 

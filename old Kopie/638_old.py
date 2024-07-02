@@ -1,5 +1,4 @@
 # Microsoft Azure Linux Agent
-    def _read_response_error(self, response):
 #
 # Copyright 2014 Microsoft Corporation
 #
@@ -277,7 +276,7 @@ class HostPluginProtocol(object):
             return s.decode('utf-8')
         return s
     
-    @staticmethod
+    def _read_response_error(self, response):
     def read_response_error(response):
         if response is None:
             return ''

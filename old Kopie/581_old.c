@@ -45,7 +45,6 @@ static void s2n_fuzz_atexit()
 
 int LLVMFuzzerInitialize(const uint8_t *buf, size_t len)
 {
-#ifdef S2N_TEST_IN_FIPS_MODE
     if (FIPS_mode_set(1) == 0) {
         unsigned long fips_rc = ERR_get_error();
         char ssl_error_buf[256]; // Openssl claims you need no more than 120 bytes for error strings

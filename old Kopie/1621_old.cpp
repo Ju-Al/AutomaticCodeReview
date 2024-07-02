@@ -44,9 +44,6 @@ namespace iroha {
 
     SynchronizerImpl::~SynchronizerImpl() {
       subscription_.unsubscribe();
-    }
-
-    namespace {
       /**
        * Lambda always returning true specially for applying blocks to storage
        */

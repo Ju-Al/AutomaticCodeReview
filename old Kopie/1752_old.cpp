@@ -1047,7 +1047,6 @@ bool Node::setparent(Node* p)
     if (parent)
     {
         child_it = parent->children.insert(parent->children.end(), this);
-
 #ifdef ENABLE_SYNC
         if (parent->type == FILENODE)
         {
@@ -1661,6 +1660,8 @@ LocalNode::~LocalNode()
     }
 
     if (node)
+    {
+        if (!sync->isUpSync())
         {
             node->setSyncable(false);
         }

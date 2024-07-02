@@ -1,7 +1,4 @@
 #
-    def order(self, asset, amount,
-        """
-        Place an order using the specified parameters.
 # Copyright 2015 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

@@ -1,5 +1,4 @@
 import { useCallback, useState, useMemo } from 'react';
-    const operations = mergeOperations(DEFAULT_OPERATIONS, props.operations);
 import {useMutation, useQuery} from '@apollo/client';
 import DEFAULT_OPERATIONS from './wishlist.gql';
 import getWishlistConfigQuery from './wishlistConfig.gql';
@@ -22,7 +21,7 @@ const dialogs = {
  */
 export const useActionMenu = (props = {}) => {
     const { id } = props;
-    const operations = mergeOperations(DEFAULT_OPERATIONS, props.operations, getWishlistConfigQuery);
+    const operations = mergeOperations(DEFAULT_OPERATIONS, props.operations);
     const { getCustomerWishlistQuery, updateWishlistMutation } = operations;
     const [currentDialog, setCurrentDialog] = useState(dialogs.NONE);
     const [displayError, setDisplayError] = useState(false);

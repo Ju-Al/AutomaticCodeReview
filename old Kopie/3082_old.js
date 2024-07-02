@@ -1,7 +1,4 @@
 /**
-          log.table(data, function (row, provider) {
-            row.cell($('Namespace'), provider.namespace);
-            row.cell($('Registered'), provider.registrationState);
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,9 +39,10 @@ exports.init = function (cli) {
       withProgress($('Getting ARM registered providers'),
         function (log, _) {
           providers = providerUtils.getAllProviders(client, _);
+          log.table(data, function (row, provider) {
+            row.cell($('Namespace'), provider.namespace);
+            row.cell($('Registered'), provider.registrationState);
         }, _);
-
-      var RsrcLocObj = {};
       cli.interaction.formatOutput(providers, function (data) {
 
         if (data.length === 0) {

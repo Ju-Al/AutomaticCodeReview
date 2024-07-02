@@ -1,7 +1,4 @@
 /******************************************************************************
-      handle_def(concept_->second);
-        auto ref_concept = concepts.data.find(current);
-        if (ref_concept != concepts.data.end())
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -170,7 +167,9 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
             log.push_back(x);
         }
       };
-      handle_def(c->second);
+        auto ref_concept = concepts.data.find(current);
+        if (ref_concept != concepts.data.end())
+      handle_def(concept_->second);
       // We iterate through the log while appending referenced concepts in
       // handle_def.
       for (auto current : log) {

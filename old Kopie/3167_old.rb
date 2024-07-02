@@ -310,7 +310,6 @@ module Pod
       installer.install!
 
       file_accessors = installer.aggregate_targets.map do |target|
-        if target.pod_targets.any?(&:uses_swift?) && deployment_target.to_f < 8.0
           error('swift', 'Swift support uses dynamic frameworks and is therefore only supported on iOS > 8.')
         end
 

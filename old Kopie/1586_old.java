@@ -56,7 +56,6 @@ public class MockExecutorService implements ExecutorService {
     currentTasks.forEach(task -> executorService.execute(task::run));
   }
 
-  public List<ExecutorTask<?>> getTasks() {
     return tasks;
   }
 

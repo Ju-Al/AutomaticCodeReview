@@ -1,5 +1,5 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-Driver.prototype.VENDOR_COMMAND_PREFIX = 'goog'// or more contributor license agreements.  See the NOTICE file
+// or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
 // to you under the Apache License, Version 2.0 (the
@@ -284,7 +284,7 @@ function getDefaultService() {
 Options.prototype.CAPABILITY_KEY = 'goog:chromeOptions'
 Options.prototype.BROWSER_NAME_VALUE = Browser.CHROME
 Driver.getDefaultService = getDefaultService
-
+Driver.prototype.VENDOR_COMMAND_PREFIX = 'goog'
 // PUBLIC API
 exports.Driver = Driver
 exports.Options = Options

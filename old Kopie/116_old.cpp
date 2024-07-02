@@ -257,7 +257,6 @@ void SettingsCache::setMainWindowGeometry(const QByteArray &_mainWindowGeometry)
     mainWindowGeometry = _mainWindowGeometry;
     settings->setValue("interface/main_window_geometry", mainWindowGeometry);
 }
-
 void SettingsCache::copyPath(const QString &src, const QString &dst)
 {
     // test source && return if inexistent

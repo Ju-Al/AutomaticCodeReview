@@ -1,22 +1,5 @@
 // +build functional
 
-	testTask, err := agent.StartTask(t, "{{ $el.TaskDefinition }}")
-		t.Fatal("Could not start task", err)
-	timeout, err := time.ParseDuration("{{ $el.Timeout }}")
-		t.Fatal("Could not parse timeout", err)
-	err = testTask.WaitStopped(timeout)
-		t.Fatalf("Timed out waiting for task to reach stopped. Error %%#v, task %%#v", err, testTask)
-	{{ range $name, $code := $el.ExitCodes }}
-	if exit, ok := testTask.ContainerExitcode("{{$name}}"); !ok || exit != {{ $code }} {
-		t.Errorf("Expected {{$name}} to exit with {{$code}}; actually exited (%%v) with %%v", ok, exit)
-	{{ end }}
-		Name           string
-		Description    string
-		TaskDefinition string
-		Timeout        string
-		ExitCodes      map[string]int
-		Tags           []string
-		Version        string
 // Copyright 2014-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -79,8 +62,24 @@ import (
 {{ range $i,$el := $ }}
 
 // Test{{ $el.Name }} {{ $el.Description }}
+	testTask, err := agent.StartTask(t, "{{ $el.TaskDefinition }}")
+		t.Fatal("Could not start task", err)
+	timeout, err := time.ParseDuration("{{ $el.Timeout }}")
+		t.Fatal("Could not parse timeout", err)
+	err = testTask.WaitStopped(timeout)
+		t.Fatalf("Timed out waiting for task to reach stopped. Error %%#v, task %%#v", err, testTask)
+	{{ range $name, $code := $el.ExitCodes }}
+	if exit, ok := testTask.ContainerExitcode("{{$name}}"); !ok || exit != {{ $code }} {
+		t.Errorf("Expected {{$name}} to exit with {{$code}}; actually exited (%%v) with %%v", ok, exit)
+	{{ end }}
+		Name           string
+		Description    string
+		TaskDefinition string
+		Timeout        string
+		ExitCodes      map[string]int
+		Tags           []string
+		Version        string
 func Test{{ $el.Name }}(t *testing.T) {
-	{{if $el.DockerVersion}}
 	// Test only available for docker version {{ $el.DockerVersion }}
 	RequireDockerVersion(t, "{{ $el.DockerVersion }}") 
 	{{end}}

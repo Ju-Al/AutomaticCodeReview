@@ -55,9 +55,6 @@ public abstract class NodeGenerator extends Generator {
         CompilationUnit nodeCu = sourceRoot.parse(nodeMetaModel.getPackageName(), nodeMetaModel.getTypeName() + ".java");
         ClassOrInterfaceDeclaration nodeCoid = nodeCu.getClassByName(nodeMetaModel.getTypeName()).orElseThrow(() -> new AssertionError("Can't find class"));
         return new Pair<>(nodeCu, nodeCoid);
-    }
-
-    /**
      * Annotate a method with the {@link Override} annotation, if it overrides other method.
      *
      * @param nodeMetaModel     The current meta model.

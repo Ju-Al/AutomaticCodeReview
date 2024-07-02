@@ -1,5 +1,4 @@
 from nvidia.dali.pipeline import Pipeline
-import nvidia.dali.ops as ops
 import nvidia.dali.fn as fn
 import nvidia.dali.types as types
 import nvidia.dali.backend as backend

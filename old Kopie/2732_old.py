@@ -1,17 +1,4 @@
 #
-        subctx.expr_exposed = False
-        expr = setgen.ensure_set(
-            dispatch.compile(shape_expr, ctx=subctx), ctx=subctx)
-    expr_stype = setgen.get_set_type(expr, ctx=ctx)
-    if not isinstance(expr_stype, s_objtypes.ObjectType):
-        raise errors.QueryError(
-            f'shapes cannot be applied to '
-            f'{expr_stype.get_verbosename(ctx.env.schema)}',
-            context=shape.context,
-        )
-    view_type = viewgen.process_view(
-        stype=expr_stype, path_id=expr.path_id,
-        elements=shape.elements, parser_context=shape.context, ctx=ctx)
 # This source file is part of the EdgeDB open source project.
 #
 # Copyright 2008-present MagicStack Inc. and the EdgeDB authors.
@@ -1062,7 +1049,19 @@ def compile_Shape(
         shape: qlast.Shape, *, ctx: context.ContextLevel) -> irast.Set:
     shape_expr = shape.expr or qlutils.ANONYMOUS_SHAPE_EXPR
     with ctx.new() as subctx:
-        subctx.qlstmt = shape
+        subctx.expr_exposed = False
+        expr = setgen.ensure_set(
+            dispatch.compile(shape_expr, ctx=subctx), ctx=subctx)
+    expr_stype = setgen.get_set_type(expr, ctx=ctx)
+    if not isinstance(expr_stype, s_objtypes.ObjectType):
+        raise errors.QueryError(
+            f'shapes cannot be applied to '
+            f'{expr_stype.get_verbosename(ctx.env.schema)}',
+            context=shape.context,
+        )
+    view_type = viewgen.process_view(
+        stype=expr_stype, path_id=expr.path_id,
+        elements=shape.elements, parser_context=shape.context, ctx=ctx)
         subctx.stmt = stmt = irast.SelectStmt()
         ctx.env.compiled_stmts[shape] = stmt
         subctx.class_view_overrides = subctx.class_view_overrides.copy()

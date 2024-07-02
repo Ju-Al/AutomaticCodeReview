@@ -766,7 +766,6 @@ public class JdbcRules {
      */
     public RelNode convert(Sort sort, boolean convertInputTraits) {
       final RelTraitSet traitSet = sort.getTraitSet().replace(out);
-      RelTraitSet inputTraitSet = traitSet.replace(RelCollations.EMPTY);
 
       final RelNode input;
       if (convertInputTraits) {

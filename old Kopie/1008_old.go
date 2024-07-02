@@ -1,5 +1,4 @@
 // (c) 2019 Dapper Labs - ALL RIGHTS RESERVED
-		return fmt.Errorf("could not send range response: %w", err)
 
 package synchronization
 
@@ -550,7 +549,7 @@ func (e *Engine) onRangeRequest(originID flow.Identifier, req *messages.RangeReq
 	}
 	err := e.con.Unicast(res, originID)
 	if err != nil {
-		e.log.Warn().Err(err).Msg("sending range response failed")
+		return fmt.Errorf("could not send range response: %w", err)
 		return nil
 	}
 	e.metrics.MessageSent(metrics.EngineSynchronization, metrics.MessageBlockResponse)

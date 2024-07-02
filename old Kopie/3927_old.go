@@ -232,9 +232,6 @@ func (a *API) GetMystExchangeRateFor(curr string) (float64, error) {
 		return 0, errors.New("currency not supported")
 	}
 	return rate, nil
-}
-
-// GatewaysResponse holds data about payment gateways.
 type GatewaysResponse struct {
 	Name         string              `json:"name"`
 	OrderOptions PaymentOrderOptions `json:"order_options"`

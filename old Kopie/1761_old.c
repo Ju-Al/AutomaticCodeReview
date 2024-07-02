@@ -1,16 +1,4 @@
 /*
-struct jx * jx_iterate_keys(struct jx *j, void **i) {
-	if (*i) {
-		struct jx_pair *next = ((struct jx_pair *) *i)->next;
-		if (next) {
-			*i = next;
-			return next->key;
-		} else {
-			return NULL;
-		}
-	} else {
-		*i = j->u.pairs;
-		return *i ? ((struct jx_pair *) *i)->key : NULL;
 Copyright (C) 2015- The University of Notre Dame
 This software is distributed under the GNU General Public License.
 See the file COPYING for details.
@@ -679,7 +667,18 @@ struct jx * jx_iterate_array(struct jx *j, void **i) {
 	}
 }
 
-const char *jx_iterate_keys(struct jx *j, void **i) {
+	if (*i) {
+		struct jx_pair *next = ((struct jx_pair *) *i)->next;
+		if (next) {
+			*i = next;
+			return next->key;
+		} else {
+			return NULL;
+		}
+	} else {
+		*i = j->u.pairs;
+		return *i ? ((struct jx_pair *) *i)->key : NULL;
+struct jx * jx_iterate_keys(struct jx *j, void **i) {
 	assert(i);
 	if (!i) return NULL;
 	// The caller must initialize *i to NULL.

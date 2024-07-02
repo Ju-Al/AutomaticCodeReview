@@ -1,7 +1,4 @@
 // 
-        customDataBase64 = loadCustomData(options.customData);
-        if (customDataBase64) {
-          provisioningConfig.CustomData = customDataBase64;
 // Copyright (c) Microsoft and contributors.  All rights reserved.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1088,7 +1085,9 @@ exports.init = function(cli) {
           });
         }
 
-        if (options.customData) {
+        customDataBase64 = loadCustomData(options.customData);
+        if (customDataBase64) {
+          provisioningConfig.CustomData = customDataBase64;
           //check for file size which should be less than 64Kb
           if (fs.statSync(options.customData)['size'] < 65535) {
             customDataBase64 = loadCustomData(options.customData);

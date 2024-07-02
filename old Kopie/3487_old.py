@@ -1,5 +1,4 @@
 """Cluster-GCN subgraph iterators."""
-import os
 import pickle
 import numpy as np
 

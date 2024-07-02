@@ -1,88 +1,115 @@
-# Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-    return _gelu_py(x, approximate)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+from datetime import datetime
+from enum import Enum
 
-import tensorflow as tf
-import math
-import warnings
+import marshmallow as ma
+import marshmallow_enum as ma_enum
 
-from tensorflow_addons.utils import types
-from distutils.version import LooseVersion
+from app.utility.base_object import BaseObject
 
-
-@tf.keras.utils.register_keras_serializable(package="Addons")
-def gelu(x: types.TensorLike, approximate: bool = True) -> tf.Tensor:
-    r"""Gaussian Error Linear Unit.
-
-    Computes gaussian error linear:
-
-    $$
-    \mathrm{gelu}(x) = x \Phi(x),
-    $$
-
-    where
-
-    $$
-    \Phi(x) = \frac{1}{2} \left[ 1 + \mathrm{erf}(\frac{x}{\sqrt{2}}) \right]$
-    $$
-
-    when `approximate` is `False`; or
-
-    $$
-    \Phi(x) = \frac{x}{2} \left[ 1 + \tanh(\sqrt{\frac{2}{\pi}} \cdot (x + 0.044715 \cdot x^3)) \right]
-    $$
-
-    when `approximate` is `True`.
-
-    See [Gaussian Error Linear Units (GELUs)](https://arxiv.org/abs/1606.08415)
-    and [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805).
-
-    Usage:
-
-    >>> tfa.options.TF_ADDONS_PY_OPS = True
-    >>> x = tf.constant([-1.0, 0.0, 1.0])
-    >>> tfa.activations.gelu(x, approximate=False)
-    <tf.Tensor: shape=(3,), dtype=float32, numpy=array([-0.15865529,  0.        ,  0.8413447 ], dtype=float32)>
-    >>> tfa.activations.gelu(x, approximate=True)
-    <tf.Tensor: shape=(3,), dtype=float32, numpy=array([-0.158808,  0.      ,  0.841192], dtype=float32)>
-
-    Args:
-        x: A `Tensor`. Must be one of the following types:
-            `float16`, `float32`, `float64`.
-        approximate: bool, whether to enable approximation.
-    Returns:
-        A `Tensor`. Has the same type as `x`.
-    """
-    warnings.warn(
-        "gelu activation has been migrated to core TensorFlow, "
-        "and will be deprecated in Addons 0.13.",
-        DeprecationWarning,
-    )
-
-    x = tf.convert_to_tensor(x)
-
-    gelu_op = tf.nn.gelu if LooseVersion(tf.__version__) >= "2.4" else _gelu_py
-
-    return gelu_op(x, approximate)
+escape_ref = {
+    'sh': {
+        'special': ['\\', ' ', '$', '#', '^', '&', '*', '|', '`', '>',
+                    '<', '"', '\'', '[', ']', '{', '}', '?', '~', '%'],
+        'escape_prefix': '\\'
+    },
+    'psh': {
+        'special': ['`', '^', '(', ')', '[', ']', '|', '+', '%',
+                    '?', '$', '#', '&', '@', '>', '<', '\'', '"', ' '],
+        'escape_prefix': '`'
+    },
+    'cmd': {
+        'special': ['^', '&', '<', '>', '|', ' ', '?', '\'', '"'],
+        'escape_prefix': '^'
+    }
+}
 
 
-def _gelu_py(x: types.TensorLike, approximate: bool = True) -> tf.Tensor:
-    x = tf.convert_to_tensor(x)
-    if approximate:
-        pi = tf.cast(math.pi, x.dtype)
-        coeff = tf.cast(0.044715, x.dtype)
-        return 0.5 * x * (1.0 + tf.tanh(tf.sqrt(2.0 / pi) * (x + coeff * tf.pow(x, 3))))
-    else:
-        return 0.5 * x * (1.0 + tf.math.erf(x / tf.cast(tf.sqrt(2.0), x.dtype)))
+class OriginType(Enum):
+    DOMAIN = 0
+    SEEDED = 1
+    LEARNED = 2
+    IMPORTED = 3
+    USER = 4
+
+
+WILDCARD_STRING = '[USER INPUT THIS UNBOUNDED FACT/RELATIONSHIP]'
+
+
+class FactSchema(ma.Schema):
+
+    class Meta:
+        unknown = ma.EXCLUDE
+
+    unique = ma.fields.String(dump_only=True)
+    trait = ma.fields.String(required=True)
+    name = ma.fields.String(dump_only=True)
+    value = ma.fields.Function(lambda x: x.value, deserialize=lambda x: str(x), allow_none=True)
+    created = ma.fields.DateTime(format=BaseObject.TIME_FORMAT, dump_only=True)
+    score = ma.fields.Integer()
+    source = ma.fields.String(allow_none=True)
+    origin_type = ma_enum.EnumField(OriginType, allow_none=True)
+    links = ma.fields.List(ma.fields.String())
+    relationships = ma.fields.List(ma.fields.String())
+    limit_count = ma.fields.Integer()
+    collected_by = ma.fields.String(allow_none=True)
+    technique_id = ma.fields.String(allow_none=True)
+
+    @ma.post_load()
+    def build_fact(self, data, **_):
+        return Fact(**data)
+
+
+class Fact(BaseObject):
+
+    schema = FactSchema()
+    load_schema = FactSchema(exclude=['unique'])
+
+    @property
+    def unique(self):
+        return self.hash('%s%s' % (self.trait, self.value))
+
+    @property
+    def name(self):
+        return self._trait
+
+    @name.setter
+    def name(self, value):
+        # Keep both values in sync if changed. (backwards compatibility)
+        self._trait = value
+
+    @property
+    def trait(self):
+        return self._trait
+
+    @trait.setter
+    def trait(self, value):
+        # Keep both values in sync if changed. (backwards compatibility)
+        self._trait = value
+
+    def escaped(self, executor):
+        if executor not in escape_ref:
+            return self.value
+        escaped_value = str(self.value)
+        for char in escape_ref[executor]['special']:
+            escaped_value = escaped_value.replace(char, (escape_ref[executor]['escape_prefix'] + char))
+        return escaped_value
+
+    def __eq__(self, other):
+        if isinstance(other, Fact):
+            return self.unique == other.unique and self.source == other.source
+        return False
+
+    def __init__(self, trait, value=None, score=1, source=None, origin_type=None, links=None,
+                 relationships=None, limit_count=-1, collected_by=None, technique_id=None):
+        super().__init__()
+        self.trait = trait
+        self.value = value
+        self.created = datetime.now()
+        self.score = score
+        self.source = source
+        self.origin_type = origin_type
+        self.links = links or []
+        self.relationships = relationships or []
+        self.limit_count = limit_count
+        self.collected_by = collected_by
+        self.technique_id = technique_id

@@ -1,6 +1,5 @@
 package detailed
 
-func (c *connectionCounters) add(outgoing bool, localNode, remoteNode, localEndpoint, remoteEndpoint report.Node) {
 import (
 	"fmt"
 	"sort"
@@ -74,6 +73,7 @@ func newConnectionCounters() *connectionCounters {
 	return &connectionCounters{counted: map[string]struct{}{}, counts: map[connection]int{}}
 }
 
+func (c *connectionCounters) add(outgoing bool, localNode, remoteNode, localEndpoint, remoteEndpoint report.Node) {
 func (c *connectionCounters) add(dns report.DNSRecords, outgoing bool, localNode, remoteNode, localEndpoint, remoteEndpoint report.Node) {
 	// We identify connections by their source endpoint, pre-NAT, to
 	// ensure we only count them once.

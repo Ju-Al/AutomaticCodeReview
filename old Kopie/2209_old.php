@@ -1,11 +1,5 @@
 <?php
 
-		$strTemp = md5(uniqid(mt_rand(), true));
-		$objFile = fopen(TL_ROOT . '/system/tmp/' . $strTemp, 'w');
-		if (!filesize(TL_ROOT . '/system/tmp/' . $strTemp))
-		$this->Files->chmod('system/tmp/' . $strTemp, \Config::get('defaultFileChmod'));
-		$this->Files->rename('system/tmp/' . $strTemp, 'system/config/localconfig.php');
-			opcache_invalidate(TL_ROOT . '/system/config/localconfig.php', true);
 /*
  * This file is part of Contao.
  *
@@ -253,7 +247,12 @@ class Config
 			$strFile .= "\n" . $this->strBottom . "\n";
 		}
 
-		$strTemp = Path::join(TL_ROOT, 'system/tmp', md5(uniqid(mt_rand(), true)));
+		$objFile = fopen(TL_ROOT . '/system/tmp/' . $strTemp, 'w');
+		if (!filesize(TL_ROOT . '/system/tmp/' . $strTemp))
+		$this->Files->chmod('system/tmp/' . $strTemp, \Config::get('defaultFileChmod'));
+		$this->Files->rename('system/tmp/' . $strTemp, 'system/config/localconfig.php');
+			opcache_invalidate(TL_ROOT . '/system/config/localconfig.php', true);
+		$strTemp = md5(uniqid(mt_rand(), true));
 
 		// Write to a temp file first
 		$objFile = fopen($strTemp, 'w');

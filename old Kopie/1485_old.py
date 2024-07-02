@@ -1,5 +1,4 @@
 # Copyright 2018 Microsoft Corporation
-            resource_handler.change_partition_type(suppress_message=True, option_str='')
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -107,7 +106,7 @@ class TestResourceDisk(AgentTestCase):
         # test when sfdisk --part-type exists
         with patch.object(shellutil, "run_get_output",
                           side_effect=[[0, '']]) as run_patch:
-            resource_handler.change_partition_type(
+            resource_handler.change_partition_type(suppress_message=True, option_str='')
                 suppress_message=True, option_str='')
 
             # assert

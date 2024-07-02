@@ -181,7 +181,6 @@ Template.adminFeatureKeyModifyForm.events({
   "click button.feature-key-delete-button"(evt) {
     Template.instance().showForm.set("delete");
   },
-
   "click .feature-key-renewal-problem button.retry"(evt) {
     const instance = Template.instance();
     const state = Iron.controller().state;

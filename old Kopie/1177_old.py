@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-    except IOError:
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -374,6 +373,7 @@ def anyopen(datasource, mode='r', reset=True):
     return stream
 
 
+    except IOError:
 def _get_stream(filename, openfunction=open, mode='r'):
     """Return open stream if *filename* can be opened with *openfunction* or else ``None``."""
     try:

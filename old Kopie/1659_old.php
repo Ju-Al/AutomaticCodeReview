@@ -56,7 +56,6 @@ class FrontendMenuExtension extends AbstractExtension
 
         return $twig->render($template, $context);
     }
-
     public function isCurrent($item): bool
     {
         $uri = $item['uri'] ?? '';

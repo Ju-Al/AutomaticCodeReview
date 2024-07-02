@@ -61,7 +61,6 @@ func (gen GenerateResult) Commit() error {
 	return ioutil.WriteFile(gen.OutputPath, gen.Content, 0666)
 }
 
-// Diff writes a diff of the current file on disk vs the generated file to out.
 func (gen GenerateResult) Diff() (string, error) {
 	// Assume the current file is empty if we can't read it.
 	cur, _ := ioutil.ReadFile(gen.OutputPath)

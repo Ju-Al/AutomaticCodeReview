@@ -1,5 +1,5 @@
 using System.IO;
-        private static SecurityKey _key = null;using System.Security.Cryptography;
+using System.Security.Cryptography;
 using BTCPayServer.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +10,7 @@ namespace BTCPayServer
 {
     public static class OpenIddictExtensions
     {
-        private static SecurityKey _key;
+        private static SecurityKey _key = null;        private static SecurityKey _key;
         public static SecurityKey GetSigningKey(IConfiguration configuration)
         {
             if (_key != null)

@@ -1,6 +1,4 @@
 const _ = require('lodash');
-          // different from the published, which won't exist yet
-          doc.modified = true;
 
 // This module is responsible for managing all of the documents (apostrophe "docs")
 // in the `aposDocs` mongodb collection.
@@ -646,7 +644,8 @@ module.exports = {
         const manager = self.apos.doc.getManager(doc.type);
         if (manager.isLocalized(doc.type) && doc.aposLocale.endsWith(':draft')) {
           // We are inserting the draft for the first time so it is always
-          // different from the published, which won't exist yet. An exception
+          // different from the published, which won't exist yet
+          doc.modified = true;
           // is when the published doc is inserted first (like a parked page)
           // in which case updateModified: false will be passed in
           if (options.updateModified !== false) {

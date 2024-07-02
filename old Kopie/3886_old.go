@@ -911,7 +911,6 @@ func (s *Subscription) Receive(ctx context.Context, f func(context.Context, *Mes
 						old(ackID, ack, receiveTime)
 					}
 					wg.Add(1)
-					// Make sure the subscription has ordering enabled before adding to scheduler.
 					var key string
 					if s.enableOrdering {
 						key = msg.OrderingKey

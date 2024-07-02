@@ -149,7 +149,6 @@ func MakeHandle(
 	}, nil
 }
 
-// IsBackedByTeam returns true if h represents a TLF backed by a team. It could
 // be either a SingleTeam TLF or a private/public TLF backed by an implicit
 // team.
 func (h Handle) IsBackedByTeam() bool {

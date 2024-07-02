@@ -1,11 +1,5 @@
 package service
 
-func (svc *Service) shouldUpdate(lastUpdated time.Time, interval time.Duration) bool {
-		maxJitter := time.Duration(svc.config.Osquery.MaxJitterPercent) * interval / time.Duration(100.0)
-		randDuration, err := rand.Int(rand.Reader, big.NewInt(int64(maxJitter)))
-		if err == nil {
-			jitter = time.Duration(randDuration.Int64())
-		}
 import (
 	"context"
 	"encoding/json"
@@ -458,7 +452,12 @@ func (svc *Service) detailQueriesForHost(ctx context.Context, host fleet.Host) (
 	return queries, nil
 }
 
-func (svc *Service) shouldUpdate(lastUpdated time.Time, interval time.Duration, hostID uint) bool {
+		maxJitter := time.Duration(svc.config.Osquery.MaxJitterPercent) * interval / time.Duration(100.0)
+		randDuration, err := rand.Int(rand.Reader, big.NewInt(int64(maxJitter)))
+		if err == nil {
+			jitter = time.Duration(randDuration.Int64())
+		}
+func (svc *Service) shouldUpdate(lastUpdated time.Time, interval time.Duration) bool {
 	var jitter time.Duration
 	if svc.config.Osquery.MaxJitterPercent > 0 {
 		maxJitter := int64(svc.config.Osquery.MaxJitterPercent) * int64(interval.Seconds()) / 100.0

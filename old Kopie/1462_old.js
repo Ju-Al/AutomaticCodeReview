@@ -23,7 +23,6 @@ registerPromiseWorker(message => {
         return null;
       }
 
-    case "getAvailablePresets":
       try {
         return Object.keys(Babel.availablePresets);
       } catch (error) {

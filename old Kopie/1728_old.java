@@ -219,7 +219,6 @@ public abstract class AccumuloClusterHarness extends AccumuloITBase
     }
   }
 
-  public void checkConnection() {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
       // Use prefix so cleanupTables deletes it
       String tablePrefix = this.getClass().getSimpleName() + "_";

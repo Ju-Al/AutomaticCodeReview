@@ -92,7 +92,6 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to netlink stub")
 	}
-	filteredUpdates := make(chan netlink.LinkUpdate, 10)
 	filteredAddrUpdates := make(chan netlink.AddrUpdate, 10)
 	updateFilter := NewUpdateFilter()
 	go updateFilter.FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)

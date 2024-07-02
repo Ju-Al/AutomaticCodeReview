@@ -8,7 +8,6 @@ module Pod
     module ErrorReport
       class << self
         def report(exception)
-          pathless_exception_message = exception.message.gsub(/- \(.*\):/, '- ():')
           return <<-EOS
 
 #{'――― MARKDOWN TEMPLATE ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――'.reversed}

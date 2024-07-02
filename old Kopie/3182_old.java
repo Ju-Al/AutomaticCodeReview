@@ -1,14 +1,4 @@
 /*
-    private ResolvedType getType() {
-        return concrete;
-    }
-    /**
-     * Get the concrete {@link ResolvedType} for the current {@link LazyType}.
-     *
-     * @return The {@link ResolvedType} if already resolved, otherwise empty.
-     */
-    public Optional<ResolvedType> getConcreteType() {
-        return Optional.ofNullable(concrete);
  * Copyright (C) 2015-2016 Federico Tomassetti
  * Copyright (C) 2017-2020 The JavaParser Team.
  *
@@ -62,7 +52,16 @@ public class LazyType implements ResolvedType {
         this.supplier = supplier;
     }
 
+        return concrete;
+    }
     /**
+     * Get the concrete {@link ResolvedType} for the current {@link LazyType}.
+     *
+     * @return The {@link ResolvedType} if already resolved, otherwise empty.
+     */
+    public Optional<ResolvedType> getConcreteType() {
+        return Optional.ofNullable(concrete);
+    private ResolvedType getType() {
      * Get the type wrapped by a {@link LazyType}.
      *
      * This method is used to get and unpack the {@link LazyType} when they are nested.

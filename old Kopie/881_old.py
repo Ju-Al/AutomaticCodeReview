@@ -1,10 +1,4 @@
 import os
-class _ScriptModificationHandler(PatternMatchingEventHandler):
-    def __init__(self, callback):
-        # We could enumerate all relevant *.py files (as werkzeug does it),
-        # but our case looks like it isn't as simple as enumerating sys.modules.
-        # This should be good enough for now.
-            patterns=["*.py"]
 import sys
 from watchdog.events import RegexMatchingEventHandler 
 if sys.platform == 'darwin':
@@ -36,7 +30,12 @@ def unwatch(script):
         observer.join()
 
 
-class _ScriptModificationHandler(RegexMatchingEventHandler):
+class _ScriptModificationHandler(PatternMatchingEventHandler):
+    def __init__(self, callback):
+        # We could enumerate all relevant *.py files (as werkzeug does it),
+        # but our case looks like it isn't as simple as enumerating sys.modules.
+            patterns=["*.py"]
+        # This should be good enough for now.
     def __init__(self, callback, filename='.*'):
 
         super(_ScriptModificationHandler, self).__init__(

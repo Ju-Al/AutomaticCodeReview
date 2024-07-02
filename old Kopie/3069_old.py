@@ -482,7 +482,6 @@ class DistGraph:
         self._ntype_map = {ntype:i for i, ntype in enumerate(self.ntypes)}
         self._etype_map = {etype:i for i, etype in enumerate(self.etypes)}
 
-        # Get canonical edge types.
         # TODO(zhengda) this requires the server to store the graph with coo format.
         eid = []
         for etype in self.etypes:

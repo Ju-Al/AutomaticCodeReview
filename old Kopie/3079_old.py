@@ -1,12 +1,4 @@
 import time
-    cw_client.put_metric_data(Namespace='AWS/Lambda',
-        MetricData=[{
-            'MetricName': metric,
-            'Dimensions': dimension_lambda(kwargs),
-            'Timestamp': datetime.now(),
-            'Value': value
-        }]
-    )
 import logging
 from datetime import datetime
 from flask import Response
@@ -35,7 +27,13 @@ def publish_lambda_metric(metric, value, kwargs):
     if not config.service_port('cloudwatch'):
         return
     cw_client = aws_stack.connect_to_service('cloudwatch')
-    try:
+    cw_client.put_metric_data(Namespace='AWS/Lambda',
+        MetricData=[{
+            'MetricName': metric,
+            'Dimensions': dimension_lambda(kwargs),
+            'Timestamp': datetime.now(),
+            'Value': value
+        }]
         cw_client.put_metric_data(Namespace='AWS/Lambda',
             MetricData=[{
                 'MetricName': metric,

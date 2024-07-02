@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-    def get_as_string(self, s3_path):
-        Get the contents of an object stored in S3 as a string.
-
-        # get the content
-        contents = obj.get()['Body'].read().decode('utf-8')
 #
 # Copyright 2012-2015 Spotify AB
 #
@@ -393,7 +388,11 @@ class S3Client(FileSystem):
         # download the file
         self.s3.meta.client.download_file(bucket, key, destination_local_path)
 
-    def get_as_bytes(self, s3_path):
+        Get the contents of an object stored in S3 as a string.
+
+        # get the content
+        contents = obj.get()['Body'].read().decode('utf-8')
+    def get_as_string(self, s3_path):
         """
         Get the contents of an object stored in S3 as bytes
         """

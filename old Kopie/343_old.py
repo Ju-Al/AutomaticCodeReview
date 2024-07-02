@@ -1,5 +1,4 @@
 import os.path
-import re
 import time
 
 from streamlink.plugin import Plugin

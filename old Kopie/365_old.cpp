@@ -1,5 +1,4 @@
 /******************************************************************************
-  };
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -411,7 +410,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](status_atom) -> caf::config_value::dictionary {
       return self->state.status();
     }
-  );
+  };
   return {[=](worker_atom, caf::actor& worker) {
             auto& st = self->state;
             st.idle_workers.emplace_back(std::move(worker));

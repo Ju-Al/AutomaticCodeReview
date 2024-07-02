@@ -233,7 +233,6 @@ int main(int argc, char **argv)
     int debug = 0;
     bool preserve_root = false;
     bool list_usdts = false;
-    bool appdata = false;
     FILE *outfp = stdout;
     std::vector<std::string> response_header_filters;
     int c;

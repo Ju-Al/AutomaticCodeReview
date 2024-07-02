@@ -621,7 +621,6 @@ var buildFunctions = map[string]func() bool{
 			query.Roots(state.Graph, opts.Query.Roots.Args.Targets)
 		})
 	},
-	"filter": func() bool {
 		return runQuery(true, opts.Query.Filter.Args.Targets, func(state *core.BuildState) {
 			query.Filter(state.Graph, state.ExpandOriginalTargets(), opts.Query.Filter.IncludeLabels, opts.Query.Filter.ExcludeLabels)
 		})

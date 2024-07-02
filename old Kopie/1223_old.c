@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-static inline void tdd_write(struct cf_axi_tdd_state *st,
-			     unsigned reg, unsigned val)
 /*
  * TDD HDL CORE driver
  *
@@ -177,7 +175,8 @@ enum {
 	CF_AXI_TDD_PROFILE_CONFIG,
 };
 
-static inline void tdd_write(struct cf_axi_tdd_state *st, const u32 reg, const u32 val)
+static inline void tdd_write(struct cf_axi_tdd_state *st,
+			     unsigned reg, unsigned val)
 {
 	iowrite32(val, st->regs + reg);
 }

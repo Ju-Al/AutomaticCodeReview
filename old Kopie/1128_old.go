@@ -1,9 +1,5 @@
 package sql
 
-	SpiffeID     string `gorm:"unique_index"`
-	DataType     string
-	SerialNumber string
-	ExpiresAt    time.Time
 import (
 	"time"
 )
@@ -30,7 +26,10 @@ type Bundle struct {
 type AttestedNode struct {
 	Model
 
-	SpiffeID             string `gorm:"unique_index"`
+	SpiffeID     string `gorm:"unique_index"`
+	DataType     string
+	SerialNumber string
+	ExpiresAt    time.Time
 	DataType             string
 	SerialNumber         string
 	ExpiresAt            time.Time

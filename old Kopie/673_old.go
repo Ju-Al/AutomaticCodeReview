@@ -1,6 +1,5 @@
 package main
 
-	g := NewGenerator(req)
 import (
 	"bytes"
 	"flag"
@@ -33,7 +32,7 @@ func main() {
 	req := new(plugin.CodeGeneratorRequest)
 	panice(proto.Unmarshal(reqData, req))
 
-	// parse parameters
+	g := NewGenerator(req)
 	options := parseOptions(req.GetParameter())
 	options = options
 

@@ -513,7 +513,6 @@ class Configuration implements ConfigurationInterface
             ->getRootNode()
             ->addDefaultsIfNotSet()
             ->children()
-                ->scalarNode('route_prefix')
                     ->info('Define the path of the Contao backend.')
                     ->example('/admin')
                     ->defaultValue('/contao')

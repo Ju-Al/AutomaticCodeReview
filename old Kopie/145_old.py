@@ -1,6 +1,4 @@
 # Copyright 2017 The TensorFlow Authors. All Rights Reserved.
-        with ops.name_scope(self.name, "BaseAttentionMechanismInit",
-                            nest.flatten(memory)):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -279,7 +277,8 @@ class _BaseAttentionMechanism(AttentionMechanism, layers.Layer):
             raise ValueError(
                 "memory_sequence_length and memory_mask cannot be "
                 "used at same time for attention.")
-        with tf.name_scope(self.name or "BaseAttentionMechanismInit"):
+        with ops.name_scope(self.name, "BaseAttentionMechanismInit",
+                            nest.flatten(memory)):
             #tf.nest.flatten(memory)):
             self.values = _prepare_memory(
                 memory,

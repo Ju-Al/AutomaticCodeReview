@@ -1,5 +1,4 @@
 <?php
-	return get_theme_mod( 'neve_new_skin', false ) === 'new';
 /**
  * Author:          Andrei Baicus <andrei@themeisle.com>
  * Created on:      17/10/2018
@@ -1471,7 +1470,7 @@ function neve_is_new_builder() {
  * @since 3.0.0
  */
 function neve_is_new_skin() {
-	return get_theme_mod( 'neve_new_skin', 'new' ) === 'new';
+	return get_theme_mod( 'neve_new_skin', false ) === 'new';
 }
 
 /**

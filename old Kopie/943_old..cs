@@ -1,5 +1,4 @@
 ﻿using BenchmarkDotNet.Attributes;
-using MicroBenchmarks;
 
 namespace System.Xml.Linq
 {

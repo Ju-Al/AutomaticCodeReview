@@ -1,5 +1,5 @@
 /* -------------------------------------------------------------------------- *
- *                       OpenSim:  PrescribedForce.cpp                        *
+ *                         OpenSim:  XMLDocument.cpp                          *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
  * See http://opensim.stanford.edu and the NOTICE file for more information.  *
@@ -8,6 +8,7 @@
  * through the Warrior Web program.                                           *
  *                                                                            *
  * Copyright (c) 2005-2012 Stanford University and the Authors                *
+ * Author(s): Frank C. Anderson                                               *
  *                                                                            *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may    *
  * not use this file except in compliance with the License. You may obtain a  *
@@ -20,412 +21,444 @@
  * limitations under the License.                                             *
  * -------------------------------------------------------------------------- */
 
-//=============================================================================
+/* Note: This code was originally developed by Realistic Dynamics Inc. 
+ * Author: Frank C. Anderson 
+ */
+
+
+//-----------------------------------------------------------------------------
 // INCLUDES
-//=============================================================================
-#include <OpenSim/Simulation/Model/Model.h>
-#include <OpenSim/Simulation/Model/BodySet.h>
-#include <OpenSim/Common/SimmSpline.h>
-#include "PrescribedForce.h"
+//-----------------------------------------------------------------------------
+#include <fstream>  // Ayman: remove .h per .NET 2003
+#include "osimCommonDLL.h"
+#include "XMLDocument.h"
+#include "Exception.h"
+#include "Object.h"
 
-//=============================================================================
-// STATICS
-//=============================================================================
+
 using namespace OpenSim;
-using SimTK::Vec3;
 using namespace std;
+
+
+//-----------------------------------------------------------------------------
+// CONSTANTS
+//-----------------------------------------------------------------------------
+
+// This list of version numbers is not complete
+// 20301 for separation of RRATool, CMCTool
+// 20302 for Muscle's pennation_angle -> pennation_angle_at_optimal
+// 20303
+// 30000 for OpenSim 3.0 release
+// 30500 for OpenSim 4.0 development and Connectors
+// 30501 for Changing serialization of Marker
+// 30502 for Changing serialization of Geometry
+// 30503 for Changing serialization of Ground
+// 30505 for Changing serialization of Joint to create offset frames
+const int XMLDocument::LatestVersion = 30505;   
+const int XMLDocument::LatestVersion = 30506;   
 //=============================================================================
-// CONSTRUCTOR(S) AND DESTRUCTOR
+// DESTRUCTOR AND CONSTRUCTOR(S)
 //=============================================================================
-// default destructor, copy constructor, copy assignment
+//-----------------------------------------------------------------------------
+// DESTRUCTOR
+//-----------------------------------------------------------------------------
 //_____________________________________________________________________________
 /**
- * Default constructor.
+ * Handle delete of an XMLDocument object.
  */
-PrescribedForce::PrescribedForce(const PhysicalFrame* body)
+XMLDocument::~XMLDocument()
 {
-    setNull();
-    constructInfrastructure();
+    for(int i = 0; i < _defaultObjects.size(); i++) {
+        delete _defaultObjects.get(i);
+    }
+    _defaultObjects.setSize(0);
+}
 
-    if (body)
-        updConnector<PhysicalFrame>("frame").setConnecteeName(body->getName());
+//-----------------------------------------------------------------------------
+// CONSTRUCTOR(S)
+//-----------------------------------------------------------------------------
+//_____________________________________________________________________________
+/**
+ * Construct a XMLDocument object with a locally generated DOMDocument.
+ * This constructor is used when an XML document is going to be generated
+ * locally in memory without reference to an XML file.  The initial
+ * DOMDocument is empty.
+ */
+XMLDocument::XMLDocument()
+{
+    setRootTag("OpenSimDocument");
+    stringstream latestVersionString;
+    latestVersionString << LatestVersion;
+    _documentVersion = LatestVersion;
+    getRootElement().setAttributeValue("Version", latestVersionString.str());
 }
 
 //_____________________________________________________________________________
 /**
- * Constructor from XML file
+ * Construct an XMLDocument object from an XML document.
+ * A parser is created for the purpose of reading in the XML file.
+ *
+ * @param aFileName File name of the XML document.
  */
-PrescribedForce::PrescribedForce(SimTK::Xml::Element& aNode) : Super(aNode)
+XMLDocument::XMLDocument(const string &aFileName) :
+SimTK::Xml::Document(aFileName)
 {
-    setNull();
-    constructProperties();
-    updateFromXMLNode(aNode);
+
+
+    _fileName = aFileName;
+
+    // Update document version based on parsing
+    updateDocumentVersion();
+}
+
+//_____________________________________________________________________________
+/**
+ * Construct a copy of an XMLDocument object.  The document an all its nodes
+ * are copied; however, the parser associated with the copied document, if
+ * any, is not copied.
+ */
+XMLDocument::XMLDocument(const XMLDocument &aDocument):
+SimTK::Xml::Document(aDocument)
+{
+    _documentVersion = aDocument.getDocumentVersion();
+    _fileName = aDocument.getFileName();
 }
 
 
+
+//=============================================================================
+// CONSTRUCTION
+//=============================================================================
+//_____________________________________________________________________________
+
+
+//=============================================================================
+// SET AND GET
+//=============================================================================
 //-----------------------------------------------------------------------------
-// UPDATE FROM XML NODE
+// DOCUMENT
+//-----------------------------------------------------------------------------
+
+void XMLDocument::
+setFileName(const string &aFileName)
+{
+    _fileName = aFileName;
+}
+
+const string &XMLDocument::
+getFileName() const
+{
+    return _fileName;
+}
+
+//=============================================================================
+// IO
+//=============================================================================
+//-----------------------------------------------------------------------------
+// PRINT
 //-----------------------------------------------------------------------------
 //_____________________________________________________________________________
 /**
- * Update this object based on its XML node.
+ * Print the XML document to file.
+ *
+ * @param aFileName File name of the document to which to print
  */
-void PrescribedForce::updateFromXMLNode(SimTK::Xml::Element& aNode, int versionNumber)
+bool XMLDocument::
+print(const string &aFileName)
 {
-    // Base class
-    if (versionNumber < 30506) {
-        // Convert body property into a connector to PhysicalFrame with name "frame"
-        SimTK::Xml::element_iterator bodyElement = aNode.element_begin("body");
-        std::string frame_name("");
-        if (bodyElement != aNode.element_end()) {
-            bodyElement->getValueAs<std::string>(frame_name);
-            XMLDocument::addConnector(aNode, "Connector_PhysicalFrame_", "frame", frame_name);
+    // Standard Out
+    if(aFileName.empty()) {
+        cout << *this;
+        cout << flush;
+    // File
+    } else {
+        setIndentString("\t");
+        writeToFile(aFileName);
+    }
+    return true;
+}
+//_____________________________________________________________________________
+
+//-----------------------------------------------------------------------------
+// FORMATTER
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// STREAM OUTPUT
+//-----------------------------------------------------------------------------
+//_____________________________________________________________________________
+
+//--------------------------------------------------------------------------
+// VERSIONING /BACKWARD COMPATIBILITY SUPPORT
+//--------------------------------------------------------------------------    
+//_____________________________________________________________________________
+/**
+ * Convert passed in version number to a string 
+ * The string is usually more compact e.g. 010100 -> 1_1 (rather than 11 which would confuse 110000 with 010100)
+ */
+void XMLDocument::
+getVersionAsString(const int aVersion, std::string& aString)
+{
+    char pad[3];
+    int ver = aVersion;
+    aString = "";
+    int div = 10000;
+    for(int i=0; i<3; i++)
+    {
+        int digits = ver / div;
+        sprintf(pad, "%02d",digits); 
+        ver -= div*(ver / div);
+        div /=100;
+        aString += string(pad);
+        if (ver ==0) break;
+        aString +=(i<2?"_":"");
+    }
+}
+//_____________________________________________________________________________
+/**
+ * Update member variable  _documentVersion based on parsing
+ * Key assumption is that parsing has finished but no Object parsing is done yet
+ */
+void XMLDocument::
+updateDocumentVersion()
+{
+    // Check root node if it's OpenSimDocument
+    std::string rootTag = getRootTag();
+    if (rootTag == "OpenSimDocument"){
+        _documentVersion = getRootElement().getRequiredAttributeValueAs<int>("Version");
+    }
+    else {
+        _documentVersion = 10500;  // Old version pre 1.6
+    }
+
+    // Validate >=  10500 and < latest as sanity check
+    assert(_documentVersion >= 10500 && _documentVersion <= LatestVersion);
+}
+//_____________________________________________________________________________
+/**
+ * getRootDataElement returns a pointer to the real root node that contains objects 
+ * works as a wrapper to get around the new root node <OpenSimDocument introduced in 1.6
+ */
+SimTK::Xml::Element  XMLDocument::
+getRootDataElement()
+{
+    // Check root node if it's OpenSimDocument
+    std::string rootTag = getRootTag();
+    if (rootTag == "OpenSimDocument"){
+        _documentVersion = getRootElement().getRequiredAttributeValueAs<int>("Version");
+        return (*getRootElement().element_begin());
+        }
+    else {
+        _documentVersion = 10500;  // Old version pre 1.6
+        return  getRootElement();
+    }
+}
+/**
+ */
+void XMLDocument::addDefaultObject(OpenSim::Object *aDefaultObject)
+{
+    _defaultObjects.append(aDefaultObject);
+}
+void XMLDocument::writeDefaultObjects(SimTK::Xml::Element& elmt)
+{
+    if (_defaultObjects.getSize()==0) return;
+    // Make node for "defaults"
+    SimTK::Xml::Element defaultsElement("defaults");
+    
+    elmt.insertNodeAfter(elmt.node_end(), defaultsElement);
+    for(int i=0; i < _defaultObjects.getSize(); i++){
+        _defaultObjects.get(i)->updateXMLNode(defaultsElement);
+    }
+}
+
+void XMLDocument::copyDefaultObjects(const XMLDocument &aDocument){
+        _defaultObjects.setSize(0);
+        for (int i=0; i< aDocument._defaultObjects.getSize(); i++)
+            _defaultObjects.append(aDocument._defaultObjects.get(i)->clone());
+}
+
+/*static*/ 
+void  XMLDocument::renameChildNode(SimTK::Xml::Element& aNode, std::string oldElementName, std::string newElementName)
+{
+    SimTK::Xml::element_iterator elmtIter(aNode.element_begin(oldElementName));
+    if (elmtIter!=aNode.element_end()){
+        elmtIter->setElementTag(newElementName);
+    }
+}
+
+bool XMLDocument::isEqualTo(XMLDocument& aOtherDocument, double toleranceForDoubles, bool compareDefaults, bool compareVersionNumbers) 
+{
+    bool equal = true;
+
+    if (compareVersionNumbers)
+        equal = (_documentVersion == aOtherDocument._documentVersion);
+    if (!equal) return false;
+    // Get Roots 
+    SimTK::Xml::Element root1=  getRootElement();
+    SimTK::Xml::Element root2=  aOtherDocument.getRootElement();
+
+    //if (!equal) return false;
+    // Cycle through children and compare. Order is assumed to be the same for now
+    SimTK::Array_<SimTK::Xml::Element> elts1 = root1.getAllElements();
+    SimTK::Array_<SimTK::Xml::Element> elts2 = root2.getAllElements();
+    if (elts1.size() != elts2.size()){
+        cout << "Different number of children at Top level" << endl;
+        equal = false;
+    }
+    if (!equal) return false;
+    // Recursively compare Elements
+    SimTK::String s1,s2;
+    for(unsigned it = 0; it < elts1.size(); it++){
+        elts1[it].writeToString(s1);
+        elts2[it].writeToString(s2);
+
+        if (elts1[it].getElementTag()==elts2[it].getElementTag() && elts1[it].getElementTag()=="defaults" && !compareDefaults) 
+            continue;
+        equal = isElementEqual(elts1[it], elts2[it], toleranceForDoubles);
+        if (!equal){ 
+            cout << elts1[it].getElementTag() << " is different" << endl;  
+            return false; 
         }
     }
-    Super::updateFromXMLNode(aNode, versionNumber);
+    return true;
+}
 
-    const FunctionSet& forceFunctions  = getForceFunctions();
-    const FunctionSet& pointFunctions  = getPointFunctions();
-    const FunctionSet& torqueFunctions = getTorqueFunctions();
+bool XMLDocument::isElementEqual(SimTK::Xml::Element& elt1, SimTK::Xml::Element& elt2, double toleranceForDoubles)
+{
+    SimTK::String s1,s2;
+    elt1.writeToString(s1);
+    elt2.writeToString(s2);
+    SimTK::Xml::attribute_iterator att1 = elt1.attribute_begin();
+    SimTK::Xml::attribute_iterator att2 = elt2.attribute_begin();
+    // Handle different # attributes
+    if ( (att1 == elt1.attribute_end() && att2 != elt2.attribute_end()) ||
+         (att1 != elt1.attribute_end() && att2 == elt2.attribute_end()) ){
+            cout << "Number of attributes is different, element " << elt1.getElementTag() << endl;
+            return false;
+    }
+    bool equal =true;
+    // Same size attributes including none
+    for(att1 = elt1.attribute_begin(); att1 != elt1.attribute_end() && equal; att1++, att2++){
+        equal = (att1->getName() == att2->getName());
+        equal = equal && (att1->getValue() == att2->getValue());
+        if (!equal) {
+            cout << "Attribute " << att1->getName() << " is different " << att1->getValue() << 
+            "vs." << att2->getValue() << endl;
+        }
+    }
+    if (!equal) return false;
 
-    //Specify all or none of the components
-    if(forceFunctions.getSize() != 3 && forceFunctions.getSize() != 0)
-    {
-        throw Exception("PrescribedForce:: three components of the force must be specified.");
+    // Attributes match now children
+    SimTK::Array_<SimTK::Xml::Element> elts1 = elt1.getAllElements();
+    SimTK::Array_<SimTK::Xml::Element> elts2 = elt2.getAllElements();
+    if (elts1.size() != elts2.size()){
+        cout << "Different number of children for Element " << elt1.getElementTag() << endl;
+        equal = false;
+    }
+    if (!equal) return false;
+    // Recursively compare Elements unless Value Elements in that case do direct compare
+    for(unsigned it = 0; it < elts1.size() && equal; it++){
+        SimTK::String elt1Tag = elts1[it].getElementTag();
+        cout << "Compare " << elt1Tag << endl;
+        SimTK::Xml::element_iterator elt2_iter = elt2.element_begin(elt1Tag);
+        if (elt2_iter==elt2.element_end()){
+            cout << "Element " << elt1Tag << " was not found in reference document" << endl;
+            equal = false;
+            break;
+        }
+        bool value1 = elts1[it].isValueElement();
+        bool value2 = elt2_iter->isValueElement();
+        equal = (value1 == value2);
+        if (!equal){ 
+            cout << elts1[it].getElementTag() << " is different. One is Value Element the other isn't" << endl;  
+            return false; 
+        }
+        if (value1){
+            // We should check if this's a double or array of doubles in that case we can getValueAs<double>
+            try {
+                SimTK::Array_<double> v1, v2;
+                elts1[it].getValueAs(v1);
+                elt2_iter->getValueAs(v2);
+                for(unsigned ix=0; ix<v1.size() && equal; ix++)
+                    equal = (std::fabs(v1[ix]-v2[ix]) < toleranceForDoubles);
+            }
+            catch(...){
+                equal = (elts1[it].getValue() == elt2_iter->getValue());
+            }
+        }
+        else    // recur
+            equal = isElementEqual(elts1[it], elts2[it], toleranceForDoubles);
+        if (!equal){ 
+            cout << elts1[it].getElementTag() << " is different" << endl;  
+            SimTK::String pad;
+            elts1[it].writeToString(pad);
+            cout << pad << endl;
+            cout << "------------------- vs. ------" << endl;
+            elts2[it].writeToString(pad);
+            cout << pad << endl;
+            return equal; 
+        }
     }
 
-    if(pointFunctions.getSize() != 3 && pointFunctions.getSize() != 0)
-    {
-        throw Exception("PrescribedForce:: three components of the point must be specified.");
-    }
-
-    if(torqueFunctions.getSize() != 3 && torqueFunctions.getSize() != 0)
-    {
-        throw Exception("PrescribedForce:: three components of the torque must be specified.");
-    }
-}   
-
+    return equal;
+}
 
 /*
- * Construct and initialize properties.
+ * Helper function to add connector to the xmlElement passed in
  */
-void PrescribedForce::constructProperties()
+void XMLDocument::addConnector(SimTK::Xml::Element& element,
+    const std::string& connectorTag, const std::string& connectorName, 
+    const std::string& connectorValue)
 {
-    constructProperty_pointIsGlobal(false);
-    constructProperty_forceIsGlobal(true);
-    constructProperty_forceFunctions(FunctionSet());
-    constructProperty_pointFunctions(FunctionSet());
-    constructProperty_torqueFunctions(FunctionSet());
-}
-
-
-void PrescribedForce::constructConnectors()
-{
-    constructConnector<PhysicalFrame>("frame");
-}
-
-
-void PrescribedForce::setFrameName(const std::string& frameName) {
-    updConnector<PhysicalFrame>("frame").setConnecteeName(frameName);
-}
-const std::string& PrescribedForce::getFrameName() const {
-    return getConnector<PhysicalFrame>("frame").getConnecteeName();
-}
-
-void PrescribedForce::setForceFunctions(Function* forceX, Function* forceY, Function* forceZ)
-{
-    FunctionSet& forceFunctions = updForceFunctions();
-
-    forceFunctions.setSize(0);
-    forceFunctions.cloneAndAppend(*forceX);
-    forceFunctions.cloneAndAppend(*forceY);
-    forceFunctions.cloneAndAppend(*forceZ);
-}
-
-
-void PrescribedForce::setPointFunctions(Function* pointX, Function* pointY, Function* pointZ)
-{
-    FunctionSet& pointFunctions = updPointFunctions();
-
-    pointFunctions.setSize(0);
-    pointFunctions.cloneAndAppend(*pointX);
-    pointFunctions.cloneAndAppend(*pointY);
-    pointFunctions.cloneAndAppend(*pointZ);
-}
-
-void PrescribedForce::setTorqueFunctions(Function* torqueX, Function* torqueY, Function* torqueZ)
-{
-    FunctionSet& torqueFunctions = updTorqueFunctions();
-
-    torqueFunctions.setSize(0);
-    torqueFunctions.cloneAndAppend(*torqueX);
-    torqueFunctions.cloneAndAppend(*torqueY);
-    torqueFunctions.cloneAndAppend(*torqueZ);
-
-}
-
-void PrescribedForce::setTorqueFunctionNames
-   (const OpenSim::Array<std::string>& aFunctionNames, 
-    const Storage& kineticsStore)  
-{
-    FunctionSet& torqueFunctions = updTorqueFunctions();
-
-    int forceSize = kineticsStore.getSize();
-    if(forceSize<=0) return;
-    double *t=0;
-    // Expected column labels for the file
-    kineticsStore.getTimeColumn(t);
-    double *column=0;
-    SimmSpline** tSpline = new SimmSpline*[3];
-    for(int i=0;i<aFunctionNames.getSize();i++)
-    {
-        kineticsStore.getDataColumn(aFunctionNames[i], column);
-        tSpline[i]= new SimmSpline((forceSize>10?10:forceSize), t, column, aFunctionNames[i]);
+    SimTK::Xml::element_iterator  connectors_node =  element.element_begin("connectors");
+    //SimTK::String debug; //Only used for debugging
+    if (connectors_node == element.element_end()){
+        SimTK::Xml::Element connectorsElement("connectors");
+        element.insertNodeBefore(element.element_begin(), connectorsElement);
+        connectors_node =  element.element_begin("connectors");
     }
-    setTorqueFunctions(tSpline[0], tSpline[1], tSpline[2]);
-    for (int i=0; i<aFunctionNames.getSize();i++)
-        torqueFunctions[i].setName(aFunctionNames.get(i));
+    // Here we're guaranteed connectors node exists, add individual connector
+    SimTK::Xml::Element newConnectorElement(connectorTag);
+    newConnectorElement.setAttributeValue("name", connectorName);
+    //newConnectorElement.writeToString(debug);
+
+    SimTK::Xml::Element connecteeElement("connectee_name");
+    connecteeElement.insertNodeAfter(connecteeElement.element_end(), SimTK::Xml::Text(connectorValue));
+    // Insert text under newConnectorElement
+    newConnectorElement.insertNodeAfter(newConnectorElement.element_end(), connecteeElement);
+    connectors_node->insertNodeAfter(connectors_node->element_end(), newConnectorElement);
+    //connectors_node->writeToString(debug);
 }
-void PrescribedForce::setForceFunctionNames
-   (const OpenSim::Array<std::string>& aFunctionNames, 
-    const Storage& kineticsStore)  
+
+void XMLDocument::addPhysicalOffsetFrame(SimTK::Xml::Element& element,
+    const std::string& frameName,
+    const std::string& parentFrameName, 
+    const SimTK::Vec3& location, const SimTK::Vec3& orientation)
 {
-    FunctionSet& forceFunctions = updForceFunctions();
-
-    int forceSize = kineticsStore.getSize();
-    if(forceSize<=0) return;
-    double *t=0;
-    // Expected column labels for the file
-    kineticsStore.getTimeColumn(t);
-    double *column=0;
-    SimmSpline** tSpline = new SimmSpline*[3];
-    for(int i=0;i<aFunctionNames.getSize();i++)
-    {
-        kineticsStore.getDataColumn(aFunctionNames[i], column);
-        tSpline[i]= new SimmSpline((forceSize>10?10:forceSize), t, column, aFunctionNames[i]);
+    SimTK::Xml::element_iterator  frames_node = element.element_begin("frames");
+    //SimTK::String debug; //Only used for debugging
+    
+    if (frames_node == element.element_end()) {
+        SimTK::Xml::Element framesElement("frames");
+        element.insertNodeBefore(element.element_begin(), framesElement);
+        frames_node = element.element_begin("frames");
     }
-    setForceFunctions(tSpline[0], tSpline[1], tSpline[2]);
-    for (int i=0; i<aFunctionNames.getSize();i++)
-        forceFunctions[i].setName(aFunctionNames.get(i));
-}
-void PrescribedForce::setPointFunctionNames
-   (const OpenSim::Array<std::string>& aFunctionNames, 
-    const Storage& kineticsStore)  
-{
-    FunctionSet& pointFunctions = updPointFunctions();
+    // Here we're guaranteed frames node exists, add individual frame
+    SimTK::Xml::Element newFrameElement("PhysicalOffsetFrame");
+    newFrameElement.setAttributeValue("name", frameName);
+    //newFrameElement.writeToString(debug);
 
-    int forceSize = kineticsStore.getSize();
-    if(forceSize<=0) return;
-    double *t=0;
-    // Expected column labels for the file
-    kineticsStore.getTimeColumn(t);
-    double *column=0;
-    SimmSpline** tSpline = new SimmSpline*[3];
-    for(int i=0;i<aFunctionNames.getSize();i++)
-    {
-        kineticsStore.getDataColumn(aFunctionNames[i], column);
-        tSpline[i]= new SimmSpline((forceSize>10?10:forceSize), 
-                                           t, column, aFunctionNames[i]);
-    }
-    setPointFunctions(tSpline[0], tSpline[1], tSpline[2]);
-    for (int i=0; i<aFunctionNames.getSize();i++)
-        pointFunctions[i].setName(aFunctionNames.get(i));
-}
+    XMLDocument::addConnector(newFrameElement, "Connector_PhysicalFrame_", "parent", parentFrameName);
 
+    std::ostringstream transValue;
+    transValue << location[0] << " " << location[1] << " " << location[2];
+    SimTK::Xml::Element translationElement("translation", transValue.str());
+    newFrameElement.insertNodeAfter(newFrameElement.element_end(), translationElement);
 
-//-----------------------------------------------------------------------------
-// ABSTRACT METHODS
-//-----------------------------------------------------------------------------
-//_____________________________________________________________________________
+    std::ostringstream orientValue; 
+    orientValue << orientation[0] << " " << orientation[1] << " " << orientation[2];
+    SimTK::Xml::Element orientationElement("orientation", orientValue.str());
+    newFrameElement.insertNodeAfter(newFrameElement.element_end(), orientationElement);
 
-void PrescribedForce::computeForce(const SimTK::State& state, 
-                              SimTK::Vector_<SimTK::SpatialVec>& bodyForces, 
-                              SimTK::Vector& generalizedForces) const
-{
-    const bool pointIsGlobal = get_pointIsGlobal();
-    const bool forceIsGlobal = get_forceIsGlobal();
-    const FunctionSet& forceFunctions = getForceFunctions();
-    const FunctionSet& pointFunctions = getPointFunctions();
-    const FunctionSet& torqueFunctions = getTorqueFunctions();
-
-    double time = state.getTime();
-    const SimbodyEngine& engine = getModel().getSimbodyEngine();
-    SimTK::Vector  timeAsVector(1, time);
-
-    const bool hasForceFunctions  = forceFunctions.getSize()==3;
-    const bool hasPointFunctions  = pointFunctions.getSize()==3;
-    const bool hasTorqueFunctions = torqueFunctions.getSize()==3;
-
-            engine.transform(state, *_body,                 force, 
-    assert(_body!=0);
-        getConnector<PhysicalFrame>("frame").getConnectee();
-
-    if (hasForceFunctions) {
-        Vec3 force(forceFunctions[0].calcValue(timeAsVector), 
-                   forceFunctions[1].calcValue(timeAsVector), 
-                   forceFunctions[2].calcValue(timeAsVector));
-        if (!forceIsGlobal)
-            engine.transform(state, frame,                 force,
-                                    getModel().getGround(), force);
-        Vec3 point(0); // Default is body origin.
-        if (hasPointFunctions) {
-            // Apply force to a specified point on the body.
-            point = Vec3(pointFunctions[0].calcValue(timeAsVector), 
-                         pointFunctions[1].calcValue(timeAsVector), 
-                         pointFunctions[2].calcValue(timeAsVector));
-            if (pointIsGlobal)
-                engine.transformPosition(state, getModel().getGround(), point,
-                    frame,                 point);
-        }
-        applyForceToPoint(state, frame, point, force, bodyForces);
-    }
-    if (hasTorqueFunctions){
-        Vec3 torque(torqueFunctions[0].calcValue(timeAsVector), 
-                    torqueFunctions[1].calcValue(timeAsVector), 
-                    torqueFunctions[2].calcValue(timeAsVector));
-        if (!forceIsGlobal)
-            engine.transform(state, frame,                 torque,
-                                    getModel().getGround(), torque);
-        applyTorque(state, frame, torque, bodyForces);
-    }
-}
-
-/**
- * Convenience methods to access prescribed force functions
- */
-Vec3 PrescribedForce::getForceAtTime(double aTime) const    
-{
-    const FunctionSet& forceFunctions = getForceFunctions();
-
-    if (forceFunctions.getSize() != 3)
-        return Vec3(0);
-
-    const SimTK::Vector timeAsVector(1, aTime);
-    const Vec3 force(forceFunctions[0].calcValue(timeAsVector), 
-                     forceFunctions[1].calcValue(timeAsVector), 
-                     forceFunctions[2].calcValue(timeAsVector));
-    return force;
-}
-
-Vec3 PrescribedForce::getPointAtTime(double aTime) const
-{
-    const FunctionSet& pointFunctions = getPointFunctions();
-
-    if (pointFunctions.getSize() != 3)
-        return Vec3(0);
-
-    const SimTK::Vector timeAsVector(1, aTime);
-    const Vec3 point(pointFunctions[0].calcValue(timeAsVector), 
-                     pointFunctions[1].calcValue(timeAsVector), 
-                     pointFunctions[2].calcValue(timeAsVector));
-    return point;
-}
-
-Vec3 PrescribedForce::getTorqueAtTime(double aTime) const
-{
-    const FunctionSet& torqueFunctions = getTorqueFunctions();
-
-    if (torqueFunctions.getSize() != 3)
-        return Vec3(0);
-
-    const SimTK::Vector timeAsVector(1, aTime);
-    const Vec3 torque(torqueFunctions[0].calcValue(timeAsVector), 
-                      torqueFunctions[1].calcValue(timeAsVector), 
-                      torqueFunctions[2].calcValue(timeAsVector));
-    return torque;
-}
-
-
-//-----------------------------------------------------------------------------
-// Reporting
-//-----------------------------------------------------------------------------
-
-OpenSim::Array<std::string> PrescribedForce::getRecordLabels() const {
-    OpenSim::Array<std::string> labels("");
-
-    const bool forceIsGlobal = get_forceIsGlobal();
-
-    const FunctionSet& forceFunctions = getForceFunctions();
-    const FunctionSet& pointFunctions = getPointFunctions();
-    const FunctionSet& torqueFunctions = getTorqueFunctions();
-
-    const bool appliesForce   = forceFunctions.getSize()==3;
-    const bool pointSpecified = pointFunctions.getSize()==3;
-    const bool appliesTorque  = torqueFunctions.getSize()==3;
-    const PhysicalFrame& frame =
-        getConnector<PhysicalFrame>("frame").getConnectee();
-    std::string BodyToReport = (forceIsGlobal?"ground": frame.getName());
-    if (appliesForce) {
-        labels.append(BodyToReport+"_"+getName()+"_fx");
-        labels.append(BodyToReport+"_"+getName()+"_fy");
-        labels.append(BodyToReport+"_"+getName()+"_fz");
-    }
-    if (pointSpecified) {
-        labels.append(BodyToReport+"_"+getName()+"_px");
-        labels.append(BodyToReport+"_"+getName()+"_py");
-        labels.append(BodyToReport+"_"+getName()+"_pz");
-    }
-    if (appliesTorque) {
-        labels.append(BodyToReport+"_"+getName()+"_torque_x");
-        labels.append(BodyToReport+"_"+getName()+"_torque_y");
-        labels.append(BodyToReport+"_"+getName()+"_torque_z");
-    }
-    return labels;
-}
-/**
- * Given SimTK::State object extract all the values necessary to report forces, application location
- * frame, etc. used in conjunction with getRecordLabels and should return same size Array
- */
-OpenSim::Array<double> PrescribedForce::getRecordValues(const SimTK::State& state) const {
-    OpenSim::Array<double>  values(SimTK::NaN);
-
-    const bool pointIsGlobal = get_pointIsGlobal();
-    const bool forceIsGlobal = get_forceIsGlobal();
-
-    const FunctionSet& forceFunctions = getForceFunctions();
-    const FunctionSet& pointFunctions = getPointFunctions();
-    const FunctionSet& torqueFunctions = getTorqueFunctions();
-
-    const bool appliesForce   = forceFunctions.getSize()==3;
-    const bool pointSpecified = pointFunctions.getSize()==3;
-    const bool appliesTorque  = torqueFunctions.getSize()==3;
-
-    // This is bad as it duplicates the code in computeForce we'll cleanup after it works!
-    const double time = state.getTime();
-    const SimbodyEngine& engine = getModel().getSimbodyEngine();
-    const SimTK::Vector timeAsVector(1, time);
-    const PhysicalFrame& frame =
-        getConnector<PhysicalFrame>("frame").getConnectee();
-    if (appliesForce) {
-        Vec3 force = getForceApplied(state);
-        if (!forceIsGlobal)
-            engine.transform(state, frame, force,
-                             getModel().getGround(), force);
-        if (!pointSpecified) {
-            //applyForce(*_body, force);
-            for (int i=0; i<3; i++) values.append(force[i]);
-        } else {
-            Vec3 point = getApplicationPoint(state);
-            if (pointIsGlobal)
-                engine.transformPosition(state, getModel().getGround(), point, 
-                    frame, point);
-            //applyForceToPoint(*_body, point, force);
-            for (int i=0; i<3; i++) values.append(force[i]);
-            for (int i=0; i<3; i++) values.append(point[i]);
-        }
-    }
-    if (appliesTorque) {
-        Vec3 torque = getTorqueApplied(state);
-        if (!forceIsGlobal)
-            engine.transform(state, frame, torque,
-                             getModel().getGround(), torque);
-        for (int i=0; i<3; i++) values.append(torque[i]);
-        //applyTorque(*_body, torque);
-    }
-    return values;
-};
-
-void PrescribedForce::setNull()
-{
-    setAuthors("Peter Eastman, Matt DeMers, Ayman Habib");
+    frames_node->insertNodeAfter(frames_node->element_end(), newFrameElement);
+    //frames_node->writeToString(debug);
 }

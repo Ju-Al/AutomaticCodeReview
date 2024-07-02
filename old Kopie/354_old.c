@@ -1,7 +1,4 @@
 /*
-	t->output = malloc(output_length + 1);
-	if(output_length > 0) {
-		debug(D_WQ, "Receiving stdout of task %"PRId64" (size: %"PRId64" bytes) from %s (%s) ...", taskid, output_length, w->addrport, w->hostname);
 Copyright (C) 2008- The University of Notre Dame
 This software is distributed under the GNU General Public License.
 See the file COPYING for details.
@@ -1094,7 +1091,9 @@ static int process_result(struct work_queue *q, struct work_queue_worker *w, con
 		t->cmd_execution_time = observed_execution_time;
 	}
 
-	if(q->bandwidth) {
+	t->output = malloc(output_length + 1);
+	if(output_length > 0) {
+		debug(D_WQ, "Receiving stdout of task %"PRId64" (size: %"PRId64" bytes) from %s (%s) ...", taskid, output_length, w->addrport, w->hostname);
 		effective_stoptime = (output_length/q->bandwidth)*1000000 + timestamp_get();
 	}
 

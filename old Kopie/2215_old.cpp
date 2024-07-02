@@ -1,6 +1,4 @@
 /**
-  std::shared_ptr<MockOdOsNotification> notification;
- * Separate action required because CollectionType is non-copyable
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -48,8 +46,9 @@ struct OnDemandOsServerGrpcTest : public ::testing::Test {
             std::move(proto_transaction_validator));
     auto batch_parser =
         std::make_shared<shared_model::interface::TransactionBatchParserImpl>();
+  std::shared_ptr<MockOdOsNotification> notification;
+ * Separate action required because CollectionType is non-copyable
     batch_factory = std::make_shared<MockTransactionBatchFactory>();
-    // todo rework field validator with mock
     auto field_validator =
         std::make_shared<shared_model::validation::FieldValidator>();
 

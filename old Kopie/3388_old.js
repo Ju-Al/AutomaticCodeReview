@@ -1,6 +1,5 @@
 import intersect from './intersect';
 
-  for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
 
 /**
  * Appends a new point to the lasso
@@ -91,7 +90,7 @@ export function intersectLasso(markname, pixelLasso) {
 function pointInPolygon(testx, testy, polygon) {
   let intersections = 0;
 
-  let (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+  for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const [prevX, prevY] = polygon[j];
     const [x, y] = polygon[i];
 

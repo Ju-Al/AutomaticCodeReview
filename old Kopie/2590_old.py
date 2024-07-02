@@ -1,5 +1,4 @@
 from django.http import HttpResponseBadRequest
-            return HttpResponseBadRequest('Bad Request: {err}'.format(err=e))
 from graphite.logger import log
 
 
@@ -82,7 +81,7 @@ def handleInputParameterError(f):
         try:
             return f(*args, **kwargs)
         except InputParameterError as e:
-            msg = e.describe()
+            return HttpResponseBadRequest('Bad Request: {err}'.format(err=e))
             log.warning(msg)
             return HttpResponseBadRequest(msg)
 

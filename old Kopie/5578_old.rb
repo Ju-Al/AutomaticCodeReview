@@ -1,5 +1,4 @@
 require 'molinillo'
-    def valid_dependencies_for_target_from_node(target, node)
 require 'cocoapods/resolver/lazy_specification'
 
 module Pod
@@ -473,7 +472,7 @@ module Pod
     #         An array of target-appropriate nodes whose `payload`s are
     #         dependencies for `target`.
     #
-    def valid_dependencies_for_target_from_node(target, cached_dependencys, node)
+    def valid_dependencies_for_target_from_node(target, node)
       cache_dependency = cached_dependencys[node.name]
 
       if cache_dependency

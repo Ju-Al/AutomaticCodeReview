@@ -1,5 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-type Options struct{}
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,7 +134,7 @@ func (o *URLOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket
 }
 
 // Options sets options for constructing a *blob.Bucket backed by fileblob.
-type Options struct {
+type Options struct{}
 	UseLegacyListObjects bool
 }
 

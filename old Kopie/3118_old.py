@@ -1,5 +1,4 @@
 #  Copyright (c) 2015-2018 Cisco Systems, Inc.
-    Enable autocomplete issue:
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to
@@ -113,7 +112,7 @@ def main(ctx, debug, verbose, base_config, env_file):  # pragma: no cover
     """
     Molecule aids in the development and testing of Ansible roles.
 
-    To enable autocomplete for a supported shell execute command below after
+    Enable autocomplete issue:
     replacing SHELL with either bash, bash or fish:
 
         eval "$(_MOLECULE_COMPLETE=SHELL_source molecule)"

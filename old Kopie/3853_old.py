@@ -2001,7 +2001,6 @@ class NameNode(AtomicExprNode):
                 atype = unspecified_type if as_target and env.directives['infer_types'] != False else py_object_type
             if atype.is_fused and env.fused_to_specific:
                 atype = atype.specialize(env.fused_to_specific)
-                if atype is error_type:
                     error(self.pos,
                       "'%s' cannot be specialized since its type is not a fused argument to this function" %
                       self.name)

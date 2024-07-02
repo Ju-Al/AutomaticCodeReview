@@ -1,14 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-		// Ignore pass or fail events that don't have a Test; they refer to the
-		// package as a whole, and we would be over-counting if we included them.
-		// However, skips of an entire package are not duplicated with individual
-		// test skips.
-		if event.Test == "" && (event.Action == "pass" || event.Action == "fail") {
-			continue
-		}
-		counts[event.Action]++
-		if event.Action == "fail" {
-			failedTests = append(failedTests, filepath.Join(event.Package, event.Test))
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,9 +73,17 @@ func run(r io.Reader) (msg string, failures bool, err error) {
 
 		var event TestEvent
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return "", false, fmt.Errorf("%q: %v", scanner.Text(), err)
+		// Ignore pass or fail events that don't have a Test; they refer to the
+		// package as a whole, and we would be over-counting if we included them.
+		// However, skips of an entire package are not duplicated with individual
+		// test skips.
+		if event.Test == "" && (event.Action == "pass" || event.Action == "fail") {
+			continue
 		}
-
+		counts[event.Action]++
+		if event.Action == "fail" {
+			failedTests = append(failedTests, filepath.Join(event.Package, event.Test))
+			return "", false, fmt.Errorf("%q: %v", scanner.Text(), err)
 		if event.Action == "fail" {
 			failedTests = append(failedTests, filepath.Join(event.Package, event.Test))
 		}

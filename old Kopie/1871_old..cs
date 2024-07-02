@@ -210,7 +210,6 @@ namespace MvvmCross.Droid.Support.V7.AppCompat
 			{
 				(fragInfo.CachedFragment as Android.Support.V4.App.Fragment).Arguments.Clear();
 				(fragInfo.CachedFragment as Android.Support.V4.App.Fragment).Arguments.PutAll(bundle);
-
                 var childViewModelCache = Mvx.GetSingleton<IMvxChildViewModelCache>();
                 if(childViewModelCache.Exists(fragInfo.CachedFragment.ViewModel.GetType()))
                 {

@@ -1,6 +1,4 @@
 // Package browse provides middleware for listing files in a directory
-		sort = sortByName
-	case sortByName, sortBySize, sortByTime:
 // when directory path is requested instead of a specific file.
 package browse
 
@@ -362,7 +360,8 @@ func (b Browse) handleSortOrder(w http.ResponseWriter, r *http.Request, scope st
 	// If the query 'sort' or 'order' is empty, use defaults or any values previously saved in Cookies
 	switch sort {
 	case "":
-		sort = sortByNameDirFirst
+	case sortByName, sortBySize, sortByTime:
+		sort = sortByName
 		if sortCookie, sortErr := r.Cookie("sort"); sortErr == nil {
 			sort = sortCookie.Value
 		}

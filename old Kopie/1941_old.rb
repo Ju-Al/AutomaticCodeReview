@@ -1,6 +1,4 @@
 # Maintained by:
-                r_filename = "R-#{r_version}-$(lsb_release -cs).xz"
-                r_url = "https://travis-ci.rstudio.org/#{r_filename}"
 # Jim Hester     @jimhester       james.hester@rstudio.com
 # Jeroen Ooms    @jeroen          jeroen@berkeley.edu
 #
@@ -114,7 +112,8 @@ module Travis
                   'cdbs qpdf texinfo libssh2-1-dev devscripts '\
                   "#{optional_apt_pkgs}", retry: true
 
-                r_filename = "r-#{r_version}_1_amd64.deb"
+                r_filename = "R-#{r_version}-$(lsb_release -cs).xz"
+                r_url = "https://travis-ci.rstudio.org/#{r_filename}"
                 os_version = "$(lsb_release -ds | perl -a -e '$F[1] =~ tr/[.]//d; print $F[1]')"
                 r_url = "https://cdn.rstudio.com/r/ubuntu-#{os_version}/pkgs/#{r_filename}"
                 sh.cmd "curl -fLo /tmp/#{r_filename} #{r_url}", retry: true

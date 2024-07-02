@@ -1,5 +1,4 @@
 
-
 #include "IMUInverseKinematicsTool.h"
 #include <OpenSim/Simulation/OpenSense/OpenSenseUtilities.h>
 #include <OpenSim/Common/IO.h>
@@ -165,7 +164,7 @@ void IMUInverseKinematicsTool::runInverseKinematicsWithOrientationsFromFile(
     ikSolver.setAccuracy(accuracy);
 
     auto& times = oRefs.getTimes();
-    Storage* modelOrientationErrors =
+
             get_report_errors() ? new Storage(times.size(), "ModelOrientationErrors")
                                 : nullptr;
     s0.updTime() = times[0];

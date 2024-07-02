@@ -1,15 +1,4 @@
 /***************************************************************************
-    void AIToTeleports( Heroes & hero, s32 index_from )
-        int indexTo = world.NextTeleport( index_from );
-
-        if ( !path.empty() ) {
-            const int dest = path.front().GetIndex();
-            while ( indexTo != dest ) {
-                indexTo = world.NextTeleport( index_from );
-                const Maps::Tiles & tile = world.GetTiles( indexTo );
-                if ( index_from == indexTo || tile.isFog( hero.GetColor() ) || tile.GetObject() == MP2::OBJ_HEROES )
-                    break;
-            }
  *   Copyright (C) 2010 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -899,7 +888,17 @@ namespace AI
         DEBUG_LOG( DBG_AI, DBG_INFO, hero.GetName() );
     }
 
-    void AIToTeleports( Heroes & hero, const int32_t startIndex )
+        int indexTo = world.NextTeleport( index_from );
+
+        if ( !path.empty() ) {
+            const int dest = path.front().GetIndex();
+            while ( indexTo != dest ) {
+                indexTo = world.NextTeleport( index_from );
+                const Maps::Tiles & tile = world.GetTiles( indexTo );
+                if ( index_from == indexTo || tile.isFog( hero.GetColor() ) || tile.GetObject() == MP2::OBJ_HEROES )
+                    break;
+            }
+    void AIToTeleports( Heroes & hero, s32 index_from )
     {
         const Route::Path & path = hero.GetPath();
         if ( path.empty() ) {

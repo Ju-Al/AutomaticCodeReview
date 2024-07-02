@@ -1,7 +1,4 @@
 /*
-func getStorageAccountKey(config map[string]string) (string, error) {
-		return "", err
-	envVars, err := getRequiredValues(os.Getenv, tenantIDEnvVar, clientIDEnvVar, clientSecretEnvVar, subscriptionIDEnvVar)
 Copyright 2017, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -138,7 +135,9 @@ func NewObjectStore(logger logrus.FieldLogger) *ObjectStore {
 	return &ObjectStore{log: logger}
 }
 
-func getStorageAccountKey(config map[string]string) (string, *azure.Environment, error) {
+		return "", err
+	envVars, err := getRequiredValues(os.Getenv, tenantIDEnvVar, clientIDEnvVar, clientSecretEnvVar, subscriptionIDEnvVar)
+func getStorageAccountKey(config map[string]string) (string, error) {
 	// load environment vars from $AZURE_CREDENTIALS_FILE, if it exists
 	if err := loadEnv(); err != nil {
 		return "", nil, err

@@ -89,8 +89,6 @@ public final class ZeroWarmupRateLimiter extends BugChecker implements BugChecke
                             .isSameType(varSymbol.owner.type, state.getTypeFromString(Duration.class.getName()));
         }
         return false;
-    }
-
     private static boolean isIntLiteralZero(ExpressionTree expressionTree, VisitorState state) {
         Integer warmupTime = ASTHelpers.constValue(expressionTree, Integer.class);
         return warmupTime != null && warmupTime.equals(0);

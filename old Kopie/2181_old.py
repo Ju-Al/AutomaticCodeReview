@@ -84,7 +84,6 @@ class SNSTests(unittest.TestCase):
         except ValueError:
             assert False, 'SNS response Timestamp not a valid ISO 8601 date'
 
-        try:
             result.pop('UnsubscribeURL')
         except KeyError:
             assert False, 'UnsubscribeURL missing in SNS response message body'

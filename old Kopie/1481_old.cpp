@@ -1,5 +1,4 @@
 // Copyright 2020 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-        PoolConfig config)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -279,7 +278,7 @@ bool TopicPayloadPool::shrink (
 }
 
 std::shared_ptr<ITopicPayloadPool> TopicPayloadPool::get(
-        const PoolConfig& config)
+        PoolConfig config)
 {
     switch (config.memory_policy)
     {

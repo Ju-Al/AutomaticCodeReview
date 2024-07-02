@@ -60,7 +60,6 @@ class FileFormatWarning(Warning):
     """Warning indicating possible problems with a file format."""
 
 
-class FileIOError(Exception):
     """Exception indicating errors with I/O paths."""
 
 

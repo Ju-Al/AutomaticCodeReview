@@ -467,8 +467,6 @@ func testCanceledWrite(t *testing.T, newHarness HarnessMaker, pathToTestdata str
 		})
 	}
 }
-
-// testMetadata tests writing and reading the key/value metadata for a blob.
 func testMetadata(t *testing.T, newHarness HarnessMaker) {
 	const key = "blob-for-metadata"
 	hello := []byte("hello")

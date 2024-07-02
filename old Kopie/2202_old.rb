@@ -1,5 +1,4 @@
 module Admin
-    def auth!
   class MembersController < ApplicationController
     before_action :admin?
     load_and_authorize_resource
@@ -15,10 +14,8 @@ module Admin
     def destroy
       @member = Member.find_by!(slug: params[:slug])
       @member.discard
+    def auth!
       redirect_to admin_members_path
-    end
-
-    def edit
       @member = Member.find_by!(slug: params[:slug])
     end
 

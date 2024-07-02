@@ -1,8 +1,4 @@
 /***************************************************************************
-            if ( hero.GetColor() == castle->GetColor() )
-                return castle->getVisitValue( hero );
-            else
-                return castle->getBuildingValue() * 70.0 + 1250;
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -55,7 +51,10 @@ namespace AI
             if ( !castle )
                 return valueToIgnore;
 
-            if ( hero.GetColor() == castle->GetColor() ) {
+            if ( hero.GetColor() == castle->GetColor() )
+                return castle->getVisitValue( hero );
+            else
+                return castle->getBuildingValue() * 70.0 + 1250;
                 double value = castle->getVisitValue( hero );
                 if ( value < 1000 )
                     value = valueToIgnore;

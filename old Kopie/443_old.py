@@ -1,15 +1,14 @@
 import asyncio
 import json
 import typing
+    def __init__(self):
 from datetime import datetime
-from datetime import datetime, timedelta
 
 from app.service.base_service import BaseService
 
 
 class AgentService(BaseService):
 
-    def __init__(self):
     def __init__(self, untrusted_timer):
         self.log = self.add_service('agent_svc', self)
         self.loop = asyncio.get_event_loop()

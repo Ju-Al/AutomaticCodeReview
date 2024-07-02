@@ -1,337 +1,355 @@
-// Copyright The OpenTelemetry Authors
-		wait := make(chan struct{})
-				otel.Handle(err)
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package trace // import "go.opentelemetry.io/otel/sdk/trace"
+package mysql
 
 import (
-	"context"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
+	"fmt"
+	"strings"
 
-	"go.opentelemetry.io/otel"
+	"github.com/fleetdm/fleet/v4/server/fleet"
+	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 const (
-	DefaultMaxQueueSize       = 2048
-	DefaultBatchTimeout       = 5000 * time.Millisecond
-	DefaultExportTimeout      = 30000 * time.Millisecond
-	DefaultMaxExportBatchSize = 512
+	maxSoftwareNameLen    = 255
+	maxSoftwareVersionLen = 255
+	maxSoftwareSourceLen  = 64
 )
 
-type BatchSpanProcessorOption func(o *BatchSpanProcessorOptions)
-
-type BatchSpanProcessorOptions struct {
-	// MaxQueueSize is the maximum queue size to buffer spans for delayed processing. If the
-	// queue gets full it drops the spans. Use BlockOnQueueFull to change this behavior.
-	// The default value of MaxQueueSize is 2048.
-	MaxQueueSize int
-
-	// BatchTimeout is the maximum duration for constructing a batch. Processor
-	// forcefully sends available spans when timeout is reached.
-	// The default value of BatchTimeout is 5000 msec.
-	BatchTimeout time.Duration
-
-	// ExportTimeout specifies the maximum duration for exporting spans. If the timeout
-	// is reached, the export will be cancelled.
-	// The default value of ExportTimeout is 30000 msec.
-	ExportTimeout time.Duration
-
-	// MaxExportBatchSize is the maximum number of spans to process in a single batch.
-	// If there are more than one batch worth of spans then it processes multiple batches
-	// of spans one batch after the other without any delay.
-	// The default value of MaxExportBatchSize is 512.
-	MaxExportBatchSize int
-
-	// BlockOnQueueFull blocks onEnd() and onStart() method if the queue is full
-	// AND if BlockOnQueueFull is set to true.
-	// Blocking option should be used carefully as it can severely affect the performance of an
-	// application.
-	BlockOnQueueFull bool
+func truncateString(str string, length int) string {
+	if len(str) > length {
+		return str[:length]
+	}
+	return str
 }
 
-// batchSpanProcessor is a SpanProcessor that batches asynchronously-received
-// SpanSnapshots and sends them to a trace.Exporter when complete.
-type batchSpanProcessor struct {
-	e SpanExporter
-	o BatchSpanProcessorOptions
-
-	queue   chan *SpanSnapshot
-	dropped uint32
-
-	batch      []*SpanSnapshot
-	batchMutex sync.Mutex
-	timer      *time.Timer
-	stopWait   sync.WaitGroup
-	stopOnce   sync.Once
-	stopCh     chan struct{}
+func softwareToUniqueString(s fleet.Software) string {
+	return strings.Join([]string{s.Name, s.Version, s.Source}, "\u0000")
 }
 
-var _ SpanProcessor = (*batchSpanProcessor)(nil)
-
-// NewBatchSpanProcessor creates a new SpanProcessor that will send completed
-// span batches to the exporter with the supplied options.
-//
-// If the exporter is nil, the span processor will preform no action.
-func NewBatchSpanProcessor(exporter SpanExporter, options ...BatchSpanProcessorOption) SpanProcessor {
-	o := BatchSpanProcessorOptions{
-		BatchTimeout:       DefaultBatchTimeout,
-		ExportTimeout:      DefaultExportTimeout,
-		MaxQueueSize:       DefaultMaxQueueSize,
-		MaxExportBatchSize: DefaultMaxExportBatchSize,
+func uniqueStringToSoftware(s string) fleet.Software {
+	parts := strings.Split(s, "\u0000")
+	return fleet.Software{
+		Name:    truncateString(parts[0], maxSoftwareNameLen),
+		Version: truncateString(parts[1], maxSoftwareVersionLen),
+		Source:  truncateString(parts[2], maxSoftwareSourceLen),
 	}
-	for _, opt := range options {
-		opt(&o)
-	}
-	bsp := &batchSpanProcessor{
-		e:      exporter,
-		o:      o,
-		batch:  make([]*SpanSnapshot, 0, o.MaxExportBatchSize),
-		timer:  time.NewTimer(o.BatchTimeout),
-		queue:  make(chan *SpanSnapshot, o.MaxQueueSize),
-		stopCh: make(chan struct{}),
-	}
-
-	bsp.stopWait.Add(1)
-	go func() {
-		defer bsp.stopWait.Done()
-		bsp.processQueue()
-		bsp.drainQueue()
-	}()
-
-	return bsp
 }
 
-// OnStart method does nothing.
-func (bsp *batchSpanProcessor) OnStart(parent context.Context, s ReadWriteSpan) {}
-
-// OnEnd method enqueues a ReadOnlySpan for later processing.
-func (bsp *batchSpanProcessor) OnEnd(s ReadOnlySpan) {
-	// Do not enqueue spans if we are just going to drop them.
-	if bsp.e == nil {
-		return
+func softwareSliceToSet(softwares []fleet.Software) map[string]bool {
+	result := make(map[string]bool)
+	for _, s := range softwares {
+		result[softwareToUniqueString(s)] = true
 	}
-	bsp.enqueue(s.Snapshot())
+	return result
 }
 
-// Shutdown flushes the queue and waits until all spans are processed.
-// It only executes once. Subsequent call does nothing.
-func (bsp *batchSpanProcessor) Shutdown(ctx context.Context) error {
-	var err error
-	bsp.stopOnce.Do(func() {
-		wait := make(chan struct{})
-		go func() {
-			close(bsp.stopCh)
-			bsp.stopWait.Wait()
-			if bsp.e != nil {
-				if err := bsp.e.Shutdown(ctx); err != nil {
-					otel.Handle(err)
-				}
+func softwareSliceToIdMap(softwareSlice []fleet.Software) map[string]uint {
+	result := make(map[string]uint)
+	for _, s := range softwareSlice {
+		result[softwareToUniqueString(s)] = s.ID
+	}
+	return result
+}
+
+func (d *Datastore) SaveHostSoftware(host *fleet.Host) error {
+	if !host.HostSoftware.Modified {
+		return nil
+	}
+
+	if err := d.withRetryTxx(func(tx *sqlx.Tx) error {
+		if len(host.HostSoftware.Software) == 0 {
+			// Clear join table for this host
+			sql := "DELETE FROM host_software WHERE host_id = ?"
+			if _, err := tx.Exec(sql, host.ID); err != nil {
+				return errors.Wrap(err, "clear join table entries")
 			}
-			close(wait)
-		}()
-		// Wait until the wait group is done or the context is cancelled
-		select {
-		case <-wait:
-		case <-ctx.Done():
-			err = ctx.Err()
+
+			return nil
 		}
-	})
-	return err
-}
 
-// ForceFlush exports all ended spans that have not yet been exported.
-func (bsp *batchSpanProcessor) ForceFlush(ctx context.Context) error {
-	var err error
-	if bsp.e != nil {
-		wait := make(chan error)
-		go func() {
-			if err := bsp.exportSpans(ctx); err != nil {
-				wait <- err
-			}
-			close(wait)
-		}()
-		// Wait until the export is finished or the context is cancelled/timed out
-		select {
-		case err = <-wait:
-		case <-ctx.Done():
-			err = ctx.Err()
-		}
-	}
-	return err
-}
-
-func WithMaxQueueSize(size int) BatchSpanProcessorOption {
-	return func(o *BatchSpanProcessorOptions) {
-		o.MaxQueueSize = size
-	}
-}
-
-func WithMaxExportBatchSize(size int) BatchSpanProcessorOption {
-	return func(o *BatchSpanProcessorOptions) {
-		o.MaxExportBatchSize = size
-	}
-}
-
-func WithBatchTimeout(delay time.Duration) BatchSpanProcessorOption {
-	return func(o *BatchSpanProcessorOptions) {
-		o.BatchTimeout = delay
-	}
-}
-
-func WithExportTimeout(timeout time.Duration) BatchSpanProcessorOption {
-	return func(o *BatchSpanProcessorOptions) {
-		o.ExportTimeout = timeout
-	}
-}
-
-func WithBlocking() BatchSpanProcessorOption {
-	return func(o *BatchSpanProcessorOptions) {
-		o.BlockOnQueueFull = true
-	}
-}
-
-// exportSpans is a subroutine of processing and draining the queue.
-func (bsp *batchSpanProcessor) exportSpans(ctx context.Context) error {
-	bsp.timer.Reset(bsp.o.BatchTimeout)
-
-	bsp.batchMutex.Lock()
-	defer bsp.batchMutex.Unlock()
-
-	if bsp.o.ExportTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, bsp.o.ExportTimeout)
-		defer cancel()
-	}
-
-	if l := len(bsp.batch); l > 0 {
-		err := bsp.e.ExportSpans(ctx, bsp.batch)
-
-		// A new batch is always created after exporting, even if the batch failed to be exported.
-		//
-		// It is up to the exporter to implement any type of retry logic if a batch is failing
-		// to be exported, since it is specific to the protocol and backend being sent to.
-		bsp.batch = bsp.batch[:0]
-
-		if err != nil {
+		if err := d.applyChangesForNewSoftware(tx, host); err != nil {
 			return err
 		}
+
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "save host software")
+	}
+
+	host.HostSoftware.Modified = false
+	return nil
+}
+
+func nothingChanged(current []fleet.Software, incoming []fleet.Software) bool {
+	if len(current) != len(incoming) {
+		return false
+	}
+
+	currentBitmap := make(map[string]bool)
+	for _, s := range current {
+		currentBitmap[softwareToUniqueString(s)] = true
+	}
+	for _, s := range incoming {
+		if _, ok := currentBitmap[softwareToUniqueString(s)]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (d *Datastore) applyChangesForNewSoftware(tx *sqlx.Tx, host *fleet.Host) error {
+	storedCurrentSoftware, err := d.hostSoftwareFromHostID(tx, host.ID)
+	if err != nil {
+		return errors.Wrap(err, "loading current software for host")
+	}
+
+	if nothingChanged(storedCurrentSoftware, host.Software) {
+		return nil
+	}
+
+	current := softwareSliceToIdMap(storedCurrentSoftware)
+	incoming := softwareSliceToSet(host.Software)
+
+	if err = d.deleteUninstalledHostSoftware(tx, host.ID, current, incoming); err != nil {
+		return err
+	}
+
+	if err = d.insertNewInstalledHostSoftware(tx, host.ID, current, incoming); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Datastore) deleteUninstalledHostSoftware(
+	tx *sqlx.Tx,
+	hostID uint,
+	currentIdmap map[string]uint,
+	incomingBitmap map[string]bool,
+) error {
+	var deletesHostSoftware []interface{}
+	deletesHostSoftware = append(deletesHostSoftware, hostID)
+
+	for currentKey := range currentIdmap {
+		if _, ok := incomingBitmap[currentKey]; !ok {
+			deletesHostSoftware = append(deletesHostSoftware, currentIdmap[currentKey])
+			// TODO: delete from software if no host has it
+		}
+	}
+	if len(deletesHostSoftware) <= 1 {
+		return nil
+	}
+	sql := fmt.Sprintf(
+		`DELETE FROM host_software WHERE host_id = ? AND software_id IN (%s)`,
+		strings.TrimSuffix(strings.Repeat("?,", len(deletesHostSoftware)-1), ","),
+	)
+	if _, err := tx.Exec(sql, deletesHostSoftware...); err != nil {
+		return errors.Wrap(err, "delete host software")
+	}
+
+	return nil
+}
+
+func (d *Datastore) getOrGenerateSoftwareId(tx *sqlx.Tx, s fleet.Software) (uint, error) {
+	var existingId []int64
+	if err := tx.Select(
+		&existingId,
+		`SELECT id FROM software WHERE name = ? and version = ? and source = ?`,
+		s.Name, s.Version, s.Source,
+	); err != nil {
+		return 0, err
+	}
+	if len(existingId) > 0 {
+		return uint(existingId[0]), nil
+	}
+
+	result, err := tx.Exec(
+		`INSERT IGNORE INTO software (name, version, source) VALUES (?, ?, ?)`,
+		s.Name, s.Version, s.Source,
+	)
+	if err != nil {
+		return 0, errors.Wrap(err, "insert software")
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, errors.Wrap(err, "last id from software")
+	}
+	return uint(id), nil
+}
+
+func (d *Datastore) insertNewInstalledHostSoftware(
+	tx *sqlx.Tx,
+	hostID uint,
+	currentIdmap map[string]uint,
+	incomingBitmap map[string]bool,
+) error {
+	var insertsHostSoftware []interface{}
+	for s := range incomingBitmap {
+		if _, ok := currentIdmap[s]; !ok {
+			id, err := d.getOrGenerateSoftwareId(tx, uniqueStringToSoftware(s))
+			if err != nil {
+				return err
+			}
+			insertsHostSoftware = append(insertsHostSoftware, hostID, id)
+		}
+	}
+	if len(insertsHostSoftware) > 0 {
+		values := strings.TrimSuffix(strings.Repeat("(?,?),", len(insertsHostSoftware)/2), ",")
+		sql := fmt.Sprintf(`INSERT IGNORE INTO host_software (host_id, software_id) VALUES %s`, values)
+		if _, err := tx.Exec(sql, insertsHostSoftware...); err != nil {
+			return errors.Wrap(err, "insert host software")
+		}
+	}
+
+	return nil
+}
+
+func (d *Datastore) hostSoftwareFromHostID(tx *sqlx.Tx, id uint) ([]fleet.Software, error) {
+	selectFunc := d.db.Select
+	if tx != nil {
+		selectFunc = tx.Select
+	}
+	sql := `
+		SELECT s.id, s.name, s.version, s.source, coalesce(scp.cpe, "") as generated_cpe,
+			IF(
+				COUNT(scv.cve) = 0,
+				null,
+				GROUP_CONCAT(
+					JSON_OBJECT(
+						"cve", scv.cve,
+						"details_link", CONCAT('https://nvd.nist.gov/vuln/detail/', scv.cve)
+					)
+				)
+		LEFT JOIN software_cve scv ON (scp.id=scv.cpe_id)
+	var result []fleet.Software
+	return result, nil
+			) as vulnerabilities FROM software s
+		FROM software s
+		LEFT JOIN software_cpe scp ON (s.id=scp.software_id)
+		WHERE s.id IN
+			(SELECT software_id FROM host_software WHERE host_id = ?)
+		group by s.id, s.name, s.version, s.source, generated_cpe
+	`
+	var result []*fleet.Software
+	if err := selectFunc(&result, sql, id); err != nil {
+		return nil, errors.Wrap(err, "load host software")
+	}
+
+	sql = `
+		SELECT s.id, scv.cve
+		FROM software s
+		JOIN software_cpe scp ON (s.id=scp.software_id)
+		JOIN software_cve scv ON (scp.id=scv.cpe_id)
+		WHERE s.id IN
+			(SELECT software_id FROM host_software WHERE host_id = ?)
+	`
+	queryFunc := d.db.Queryx
+	if tx != nil {
+		queryFunc = tx.Queryx
+	}
+
+	rows, err := queryFunc(sql, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "load host software")
+	}
+	defer rows.Close()
+
+	cvesBySoftware := make(map[uint]fleet.VulnerabilitiesSlice)
+	for rows.Next() {
+		var id uint
+		var cve string
+		if err := rows.Scan(&id, &cve); err != nil {
+			return nil, errors.Wrap(err, "scanning cve")
+		}
+		cvesBySoftware[id] = append(cvesBySoftware[id], fleet.SoftwareCVE{
+			CVE:         cve,
+			DetailsLink: fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", cve),
+		})
+	}
+	var resultWithCVEs []fleet.Software
+	for _, software := range result {
+		software.Vulnerabilities = cvesBySoftware[software.ID]
+		resultWithCVEs = append(resultWithCVEs, *software)
+	}
+
+	return resultWithCVEs, nil
+}
+
+func (d *Datastore) LoadHostSoftware(host *fleet.Host) error {
+	host.HostSoftware = fleet.HostSoftware{Modified: false}
+	software, err := d.hostSoftwareFromHostID(nil, host.ID)
+	if err != nil {
+		return err
+	}
+	host.Software = software
+	return nil
+}
+
+type softwareIterator struct {
+	rows *sqlx.Rows
+}
+
+func (si *softwareIterator) Value() (*fleet.Software, error) {
+	dest := fleet.Software{}
+	err := si.rows.StructScan(&dest)
+	if err != nil {
+		return nil, err
+	}
+	return &dest, nil
+}
+
+func (si *softwareIterator) Err() error {
+	return si.rows.Err()
+}
+
+func (si *softwareIterator) Close() error {
+	return si.rows.Close()
+}
+
+func (si *softwareIterator) Next() bool {
+	return si.rows.Next()
+}
+
+func (d *Datastore) AllSoftwareWithoutCPEIterator() (fleet.SoftwareIterator, error) {
+	sql := `SELECT s.* FROM software s LEFT JOIN software_cpe sc on (s.id=sc.software_id) WHERE sc.id is null`
+	// The rows.Close call is done by the caller once iteration using the
+	// returned fleet.SoftwareIterator is done.
+	rows, err := d.db.Queryx(sql) //nolint:sqlclosecheck
+	if err != nil {
+		return nil, errors.Wrap(err, "load host software")
+	}
+	return &softwareIterator{rows: rows}, nil
+}
+
+func (d *Datastore) AddCPEForSoftware(software fleet.Software, cpe string) error {
+	sql := `INSERT INTO software_cpe (software_id, cpe) VALUES (?, ?)`
+	if _, err := d.db.Exec(sql, software.ID, cpe); err != nil {
+		return errors.Wrap(err, "insert software cpe")
 	}
 	return nil
 }
 
-// processQueue removes spans from the `queue` channel until processor
-// is shut down. It calls the exporter in batches of up to MaxExportBatchSize
-// waiting up to BatchTimeout to form a batch.
-func (bsp *batchSpanProcessor) processQueue() {
-	defer bsp.timer.Stop()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for {
-		select {
-		case <-bsp.stopCh:
-			return
-		case <-bsp.timer.C:
-			if err := bsp.exportSpans(ctx); err != nil {
-				otel.Handle(err)
-			}
-		case sd := <-bsp.queue:
-			bsp.batchMutex.Lock()
-			bsp.batch = append(bsp.batch, sd)
-			shouldExport := len(bsp.batch) >= bsp.o.MaxExportBatchSize
-			bsp.batchMutex.Unlock()
-			if shouldExport {
-				if !bsp.timer.Stop() {
-					<-bsp.timer.C
-				}
-				if err := bsp.exportSpans(ctx); err != nil {
-					otel.Handle(err)
-				}
-			}
-		}
+func (d *Datastore) AllCPEs() ([]string, error) {
+	sql := `SELECT cpe FROM software_cpe`
+	var cpes []string
+	err := d.db.Select(&cpes, sql)
+	if err != nil {
+		return nil, errors.Wrap(err, "loads cpes")
 	}
+	return cpes, nil
 }
 
-// drainQueue awaits the any caller that had added to bsp.stopWait
-// to finish the enqueue, then exports the final batch.
-func (bsp *batchSpanProcessor) drainQueue() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for {
-		select {
-		case sd := <-bsp.queue:
-			if sd == nil {
-				if err := bsp.exportSpans(ctx); err != nil {
-					otel.Handle(err)
-				}
-				return
-			}
-
-			bsp.batchMutex.Lock()
-			bsp.batch = append(bsp.batch, sd)
-			shouldExport := len(bsp.batch) == bsp.o.MaxExportBatchSize
-			bsp.batchMutex.Unlock()
-
-			if shouldExport {
-				if err := bsp.exportSpans(ctx); err != nil {
-					otel.Handle(err)
-				}
-			}
-		default:
-			close(bsp.queue)
-		}
+func (d *Datastore) InsertCVEForCPE(cve string, cpes []string) error {
+	values := strings.TrimSuffix(strings.Repeat("((SELECT id FROM software_cpe WHERE cpe=?),?),", len(cpes)), ",")
+	sql := fmt.Sprintf(`INSERT IGNORE INTO software_cve (cpe_id, cve) VALUES %s`, values)
+	var args []interface{}
+	for _, cpe := range cpes {
+		args = append(args, cpe, cve)
 	}
-}
-
-func (bsp *batchSpanProcessor) enqueue(sd *SpanSnapshot) {
-	if !sd.SpanContext.IsSampled() {
-		return
+	_, err := d.db.Exec(sql, args...)
+	if err != nil {
+		return errors.Wrap(err, "insert software cve")
 	}
-
-	// This ensures the bsp.queue<- below does not panic as the
-	// processor shuts down.
-	defer func() {
-		x := recover()
-		switch err := x.(type) {
-		case nil:
-			return
-		case runtime.Error:
-			if err.Error() == "send on closed channel" {
-				return
-			}
-		}
-		panic(x)
-	}()
-
-	select {
-	case <-bsp.stopCh:
-		return
-	default:
-	}
-
-	if bsp.o.BlockOnQueueFull {
-		bsp.queue <- sd
-		return
-	}
-
-	select {
-	case bsp.queue <- sd:
-	default:
-		atomic.AddUint32(&bsp.dropped, 1)
-	}
+	return nil
 }

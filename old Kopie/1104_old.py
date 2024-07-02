@@ -1,5 +1,4 @@
 """
-                concurrency_list.append(group.get_concurrency(raw=raw))
 Module holds JMX handlers implementations
 
 Copyright 2017 BlazeMeter Inc.
@@ -123,7 +122,7 @@ class LoadSettingsProcessor(object):
 
             concurrency_list = []
             for group in groups:
-                concurrency = group.get_concurrency(raw=raw)
+                concurrency_list.append(group.get_concurrency(raw=raw))
                 concurrency_list.append(concurrency or 0)
 
             if not raw:  # divide numeric concurrency

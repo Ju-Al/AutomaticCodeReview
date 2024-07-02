@@ -1,272 +1,142 @@
-package endpoint
+// Copyright The OpenTelemetry Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package attribute // import "go.opentelemetry.io/otel/attribute"
 
 import (
-	"bytes"
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"math"
-	"time"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/bluele/gcache"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"reflect"
 )
 
-const (
-	bufSize                 = 8 * 1024 * 1024 // 8MB
-	maxReverseDNSrecords    = 10000
-	maxLogsPerDecodingError = 4
-)
-
-// DNSSnooper is a snopper of DNS queries
-type DNSSnooper struct {
-	stop                chan struct{}
-	pcapHandle          *pcap.Handle
-	reverseDNSCache     gcache.Cache
-	decodingErrorCounts map[string]uint64 // for limiting
+// KeyValue holds a key and value pair.
+type KeyValue struct {
+	Key   Key
+	Value Value
 }
 
-// NewDNSSnooper creates a new snooper of DNS queries
-func NewDNSSnooper() (*DNSSnooper, error) {
-	pcapHandle, err := newPcapHandle()
-	if err != nil {
-		return nil, err
-	}
-	reverseDNSCache := gcache.New(maxReverseDNSrecords).LRU().Build()
-
-	s := &DNSSnooper{
-		stop:                make(chan struct{}),
-		pcapHandle:          pcapHandle,
-		reverseDNSCache:     reverseDNSCache,
-		decodingErrorCounts: map[string]uint64{},
-	}
-	go s.run()
-	return s, nil
+// Valid returns if kv is a valid OpenTelemetry attribute.
+func (kv KeyValue) Valid() bool {
+	return kv.Key != "" && kv.Value.Type() != INVALID
 }
 
-func newPcapHandle() (*pcap.Handle, error) {
-	inactive, err := pcap.NewInactiveHandle("any")
-	if err != nil {
-		return nil, err
-	}
-	defer inactive.CleanUp()
-	// pcap timeout blackmagic copied from Weave Net to reduce CPU consumption
-	// see https://github.com/weaveworks/weave/commit/025315363d5ea8b8265f1b3ea800f24df2be51a4
-	if err = inactive.SetTimeout(time.Duration(math.MaxInt64)); err != nil {
-		return nil, err
-	}
-	if err = inactive.SetImmediateMode(true); err != nil {
-		// If gopacket is compiled against an older pcap.h that
-		// doesn't have pcap_set_immediate_mode, it supplies a dummy
-		// definition that always returns PCAP_ERROR.  That becomes
-		// "Generic error", which is not very helpful.  The real
-		// pcap_set_immediate_mode never returns PCAP_ERROR, so this
-		// turns it into a more informative message.
-		if fmt.Sprint(err) == "Generic error" {
-			return nil, fmt.Errorf("compiled against an old version of libpcap; please compile against libpcap-1.5.0 or later")
-		}
-
-		return nil, err
-	}
-	if err = inactive.SetBufferSize(bufSize); err != nil {
-		return nil, err
-	}
-	pcapHandle, err := inactive.Activate()
-	if err != nil {
-		return nil, err
-	}
-	if err := pcapHandle.SetDirection(pcap.DirectionIn); err != nil {
-		pcapHandle.Close()
-		return nil, err
-	}
-	if err := pcapHandle.SetBPFFilter("inbound and port 53"); err != nil {
-		pcapHandle.Close()
-		return nil, err
-	}
-
-	return pcapHandle, nil
+// Bool creates a KeyValue with a BOOL Value type.
+func Bool(k string, v bool) KeyValue {
+	return Key(k).Bool(v)
 }
 
-// CachedNamesForIP obtains the domains associated to an IP,
-// obtained while snooping A-record queries
-func (s *DNSSnooper) CachedNamesForIP(ip string) []string {
-	result := []string{}
-	if s == nil {
-		return result
-	}
-	domains, err := s.reverseDNSCache.Get(ip)
-	if err != nil {
-		return result
-	}
-
-	for domain := range domains.(map[string]struct{}) {
-		result = append(result, domain)
-	}
-
-	return result
+// BoolSlice creates a KeyValue with a BOOLSLICE Value type.
+func BoolSlice(k string, v []bool) KeyValue {
+	return Key(k).BoolSlice(v)
 }
 
-// Stop makes the snooper stop inspecting DNS communications
-func (s *DNSSnooper) Stop() {
-	if s != nil {
-		close(s.stop)
+// Int creates a KeyValue with an INT64 Value type.
+func Int(k string, v int) KeyValue {
+	return Key(k).Int(v)
+}
+
+// IntSlice creates a KeyValue with an INT64SLICE Value type.
+func IntSlice(k string, v []int) KeyValue {
+	return Key(k).IntSlice(v)
+}
+
+// Int64 creates a KeyValue with an INT64 Value type.
+func Int64(k string, v int64) KeyValue {
+	return Key(k).Int64(v)
+}
+
+// Int64Slice creates a KeyValue with an INT64SLICE Value type.
+func Int64Slice(k string, v []int64) KeyValue {
+	return Key(k).Int64Slice(v)
+}
+
+// Float64 creates a KeyValue with a FLOAT64 Value type.
+func Float64(k string, v float64) KeyValue {
+	return Key(k).Float64(v)
+}
+
+// Float64Slice creates a KeyValue with a FLOAT64SLICE Value type.
+func Float64Slice(k string, v []float64) KeyValue {
+	return Key(k).Float64Slice(v)
+}
+
+// String creates a KeyValue with a STRING Value type.
+func String(k, v string) KeyValue {
+	return Key(k).String(v)
+}
+
+// StringSlice creates a KeyValue with a STRINGSLICE Value type.
+func StringSlice(k string, v []string) KeyValue {
+	return Key(k).StringSlice(v)
+}
+
+// Stringer creates a new key-value pair with a passed name and a string
+// value generated by the passed Stringer interface.
+func Stringer(k string, v fmt.Stringer) KeyValue {
+	return Key(k).String(v.String())
+}
+
+// Array creates a new key-value pair with a passed name and a array.
+// Only arrays of primitive type are supported.
+//
+// Deprecated: Use the typed *Slice functions instead.
+func Array(k string, v interface{}) KeyValue {
+	return Key(k).Array(v)
+}
+
+// Any creates a new key-value pair instance with a passed name and
+// automatic type inference. This is slower, and not type-safe.
+func Any(k string, value interface{}) KeyValue {
+	if value == nil {
+		return String(k, "<nil>")
 	}
-}
 
-// Gopacket doesn't provide direct support for DNS over TCP, see https://github.com/google/gopacket/issues/236
-type tcpWithDNSSupport struct {
-	tcp layers.TCP
-}
-
-func (m *tcpWithDNSSupport) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	return m.tcp.DecodeFromBytes(data, df)
-}
-
-func (m *tcpWithDNSSupport) CanDecode() gopacket.LayerClass { return m.tcp.CanDecode() }
-
-// Determine if a TCP segment contains a full DNS message (i.e. not fragmented)
-func (m *tcpWithDNSSupport) hasSelfContainedDNSPayload() bool {
-	payload := m.tcp.LayerPayload()
-	if len(payload) < 2 {
-		return false
+	if stringer, ok := value.(fmt.Stringer); ok {
+		return String(k, stringer.String())
 	}
 
-	// Assume it's a self-contained DNS message if the Length field
-	// matches the length of the TCP segment
-	dnsLengthField := binary.BigEndian.Uint16(payload)
-	return int(dnsLengthField) == len(payload)-2
-}
+	rv := reflect.ValueOf(value)
 
-func (m *tcpWithDNSSupport) NextLayerType() gopacket.LayerType {
-	// TODO: deal with TCP fragmentation and out-of-order segments
-	if (m.tcp.SrcPort == 53 || m.tcp.DstPort == 53) && m.hasSelfContainedDNSPayload() {
-		return layers.LayerTypeDNS
-	}
-	return m.tcp.NextLayerType()
-}
-
-func (m *tcpWithDNSSupport) LayerPayload() []byte {
-	payload := m.tcp.LayerPayload()
-	if len(payload) > 1 && (m.tcp.SrcPort == 53 || m.tcp.DstPort == 53) {
-		// Omit the DNS length field, only included
-		// in TCP, in order to reuse the DNS UDP parser
-		payload = payload[2:]
-	}
-	return payload
-}
-
-func (s *DNSSnooper) run() {
-	var (
-		decodedLayers []gopacket.LayerType
-		dns           layers.DNS
-		udp           layers.UDP
-		tcp           tcpWithDNSSupport
-		ip4           layers.IPv4
-		ip6           layers.IPv6
-		eth           layers.Ethernet
-		dot1q         layers.Dot1Q
-		sll           layers.LinuxSLL
-	)
-
-	// assumes that the "any" interface is being used (see https://wiki.wireshark.org/SLL)
-	packetParser := gopacket.NewDecodingLayerParser(layers.LayerTypeLinuxSLL, &sll, &dot1q, &eth, &ip4, &ip6, &udp, &tcp, &dns)
-
-	for {
-		select {
-		case <-s.stop:
-			s.pcapHandle.Close()
-			return
+	switch rv.Kind() {
+	case reflect.Array, reflect.Slice:
+		return Array(k, value)
+	case reflect.Slice:
+		switch reflect.TypeOf(value).Elem().Kind() {
+		case reflect.Bool:
+			return BoolSlice(k, rv.Interface().([]bool))
+		case reflect.Int:
+			return IntSlice(k, rv.Interface().([]int))
+		case reflect.Int64:
+			return Int64Slice(k, rv.Interface().([]int64))
+		case reflect.Float64:
+			return Float64Slice(k, rv.Interface().([]float64))
+		case reflect.String:
+			return StringSlice(k, rv.Interface().([]string))
 		default:
+			return Array(k, value)
 		}
-
-		packet, _, err := s.pcapHandle.ZeroCopyReadPacketData()
-		if err != nil {
-			// TimeoutExpired is acceptable due to the Timeout black magic
-			// on the handle.
-			if err != pcap.NextErrorTimeoutExpired {
-				log.Errorf("DNSSnooper: error reading packet data: %s", err)
-			}
-			continue
-		}
-
-		if err := packetParser.DecodeLayers(packet, &decodedLayers); err != nil {
-			// LayerTypePayload indicates the TCP payload has non-DNS data, which we are not interested in
-			if layer, ok := err.(gopacket.UnsupportedLayerType); !ok || gopacket.LayerType(layer) != gopacket.LayerTypePayload {
-				s.handleDecodingError(err)
-			}
-			continue
-		}
-
-		for _, layerType := range decodedLayers {
-			if layerType == layers.LayerTypeDNS {
-				s.processDNSMessage(&dns)
-			}
-		}
+	case reflect.Bool:
+		return Bool(k, rv.Bool())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return Int64(k, rv.Int())
+	case reflect.Float64:
+		return Float64(k, rv.Float())
+	case reflect.String:
+		return String(k, rv.String())
 	}
-}
-
-// handleDecodeError logs errors up to the maximum allowed count
-func (s *DNSSnooper) handleDecodingError(err error) {
-	str := err.Error()
-	count := s.decodingErrorCounts[str]
-	count++
-	s.decodingErrorCounts[str] = count
-	switch {
-	case count == maxLogsPerDecodingError:
-		log.Errorf("DNSSnooper: error decoding packet: %s (reached %d occurrences, silencing)", str, maxLogsPerDecodingError)
-	case count < maxLogsPerDecodingError:
-		log.Errorf("DNSSnooper: error decoding packet: %s", str)
+	if b, err := json.Marshal(value); b != nil && err == nil {
+		return String(k, string(b))
 	}
-}
-
-func (s *DNSSnooper) processDNSMessage(dns *layers.DNS) {
-
-	// Only consider responses to singleton, A-record questions
-	if !dns.QR || dns.ResponseCode != 0 || len(dns.Questions) != 1 {
-		return
-	}
-	question := dns.Questions[0]
-	if question.Type != layers.DNSTypeA || question.Class != layers.DNSClassIN {
-		return
-	}
-
-	var (
-		domainQueried = question.Name
-		records       = append(dns.Answers, dns.Additionals...)
-		ips           = map[string]struct{}{}
-		alias         []byte
-	)
-
-	// Traverse records for a CNAME first since the DNS RFCs don't seem to guarantee it
-	// appearing before its A-records
-	for _, record := range records {
-		if record.Type == layers.DNSTypeCNAME && record.Class == layers.DNSClassIN && bytes.Equal(domainQueried, record.Name) {
-			alias = record.CNAME
-			break
-		}
-	}
-
-	// Finally, get the answer
-	for _, record := range records {
-		if record.Type != layers.DNSTypeA || record.Class != layers.DNSClassIN {
-			continue
-		}
-		if bytes.Equal(domainQueried, record.Name) || (alias != nil && bytes.Equal(alias, record.Name)) {
-			ips[record.IP.String()] = struct{}{}
-		}
-	}
-
-	// Update cache
-	newDomain := string(domainQueried)
-	log.Debugf("DNSSnooper: caught DNS lookup: %s -> %v", newDomain, ips)
-	for ip := range ips {
-		if existingDomains, err := s.reverseDNSCache.Get(ip); err != nil {
-			s.reverseDNSCache.Set(ip, map[string]struct{}{newDomain: {}})
-		} else {
-			// TODO: Be smarter about the expiration of entries with pre-existing associated domains
-			existingDomains.(map[string]struct{})[newDomain] = struct{}{}
-		}
-	}
+	return String(k, fmt.Sprint(value))
 }

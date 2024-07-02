@@ -1,5 +1,4 @@
 // 
-                this.perfCounter.Increment();
 // Copyright (c) 2004-2011 Jaroslaw Kowalski <jaak@jkowalski.net>
 // 
 // All rights reserved.
@@ -244,7 +243,7 @@ namespace NLog.Targets
         {
             if (this.EnsureInitialized())
             {
-                long incrementValue = Int64.Parse(IncrementValue.Render(logEvent));
+                this.perfCounter.Increment();
                 this.perfCounter.IncrementBy(incrementValue);
             }
         }

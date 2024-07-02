@@ -1,5 +1,4 @@
 package authtoken
-	"github.com/hashicorp/boundary/internal/oplog"
 
 import (
 	"context"
@@ -13,6 +12,7 @@ import (
 	"github.com/hashicorp/boundary/internal/db/timestamp"
 	"github.com/hashicorp/boundary/internal/iam"
 	"github.com/hashicorp/boundary/internal/kms"
+	"github.com/hashicorp/boundary/internal/oplog"
 )
 
 // TODO (ICU-406): Make these fields configurable.
@@ -20,7 +20,6 @@ var (
 	lastAccessedUpdateDuration = 10 * time.Minute
 	maxStaleness               = 24 * time.Hour
 	maxTokenDuration           = 7 * 24 * time.Hour
-	timeSkew                   = 20 * time.Millisecond
 )
 
 // A Repository stores and retrieves the persistent types in the authtoken

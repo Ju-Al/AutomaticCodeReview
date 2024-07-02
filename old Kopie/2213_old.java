@@ -1,21 +1,4 @@
 /* Licensed under the Apache License, Version 2.0 (the "License");
-                assertEquals("task2", cancelledEvent.getActivityId());
-                assertEquals("userTask", cancelledEvent.getActivityType());
-                assertEquals("Multi User Task-${loopCounter}", cancelledEvent.getActivityName());
-                    assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
-                }
-                else if (multiExecutionId2.equals(eventExecutionId)) {
-                    assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
-                }
-                else if (rootMultiExecutionId.equals(eventExecutionId)) {
-                    assertEquals(FlowableEngineEventType.MULTI_INSTANCE_ACTIVITY_CANCELLED, activityEvent.getType());
-                assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
-                assertEquals("cancelBoundaryEvent1", cancelledEvent.getActivityId());
-                assertEquals(boundaryExecution.getId(), activityEvent.getExecutionId());
-        assert(foundMultiExec1);
-        assert(foundMultiExec2);
-        assert(foundRootExec);
-        assert(foundBoundaryExec);
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -197,7 +180,23 @@ public class MultiInstanceUserTaskEventsTest extends PluggableFlowableTestCase {
             FlowableActivityCancelledEvent cancelledEvent = (FlowableActivityCancelledEvent) activityEvent;
 
             if ("task2".equals(cancelledEvent.getActivityId())) {
-                assertThat(cancelledEvent.getActivityId()).isEqualTo("task2");
+                assertEquals("task2", cancelledEvent.getActivityId());
+                assertEquals("userTask", cancelledEvent.getActivityType());
+                    assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
+                }
+                else if (multiExecutionId2.equals(eventExecutionId)) {
+                    assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
+                }
+                else if (rootMultiExecutionId.equals(eventExecutionId)) {
+                    assertEquals(FlowableEngineEventType.MULTI_INSTANCE_ACTIVITY_CANCELLED, activityEvent.getType());
+                assertEquals(FlowableEngineEventType.ACTIVITY_CANCELLED, activityEvent.getType());
+                assertEquals("cancelBoundaryEvent1", cancelledEvent.getActivityId());
+                assertEquals(boundaryExecution.getId(), activityEvent.getExecutionId());
+        assert(foundMultiExec1);
+        assert(foundMultiExec2);
+        assert(foundRootExec);
+        assert(foundBoundaryExec);
+                assertEquals("Multi User Task-${loopCounter}", cancelledEvent.getActivityName());
                 assertThat(cancelledEvent.getActivityType()).isEqualTo("userTask");
                 assertThat(cancelledEvent.getActivityName()).isEqualTo("Multi User Task-${loopCounter}");
                 String eventExecutionId = activityEvent.getExecutionId();

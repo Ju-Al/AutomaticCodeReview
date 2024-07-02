@@ -1,96 +1,121 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
-
-using BenchmarkDotNet.Disassemblers;
-using BenchmarkDotNet.Exporters;
-using BenchmarkDotNet.Loggers;
-using BenchmarkDotNet.Parameters;
-using BenchmarkDotNet.Reports;
-using BenchmarkDotNet.Running;
-using Reporting;
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
 
-namespace BenchmarkDotNet.Extensions
+using NHibernate.Id;
+
+namespace NHibernate.Engine
 {
-    internal class PerfLabExporter : ExporterBase
-    {
-        protected override string FileExtension => "json";
-        protected override string FileCaption => "perf-lab-report";
-        public PerfLabExporter()
-        {
-        }
-        public override void ExportToLog(Summary summary, ILogger logger)
-        {
-            var reporter = Reporter.CreateReporter();
-            if (!reporter.InLab) // not running in the perf lab
-                return;
+	/// <summary>
+	/// A strategy for determining if a version value is an version of
+	/// a new transient instance or a previously persistent transient instance.
+	/// The strategy is determined by the <c>Unsaved-Value</c> attribute in the mapping file.
+	/// </summary>
+	public class VersionValue
+	{
+		private static readonly IInternalLogger2 log = LoggerProvider.LoggerFor(typeof(VersionValue));
 
-            foreach (var report in summary.Reports)
-            {
-                var test = new Test();
-                test.Name = FullNameProvider.GetBenchmarkName(report.BenchmarkCase);
-                test.Categories = report.BenchmarkCase.Descriptor.Categories;
+		private readonly object value;
 
-                var results = from result in report.AllMeasurements
-                              where result.IterationMode == Engines.IterationMode.Workload && result.IterationStage == Engines.IterationStage.Result
-                              orderby result.LaunchIndex, result.IterationIndex
-                              select new { result.Nanoseconds, result.Operations };
-                test.Counters.Add(new Counter
-                {
-                    Name = "Duration of single invocation",
-                    TopCounter = true,
-                    DefaultCounter = true,
-                    HigherIsBetter = false,
-                    MetricName = "ns",
-                    Results = (from result in results
-                               select result.Nanoseconds / result.Operations).ToList()
-                });
-                test.Counters.Add(new Counter
-                {
-                    Name = "Duration",
-                    TopCounter = false,
-                    DefaultCounter = false,
-                    HigherIsBetter = false,
-                    MetricName = "ms",
-                    Results = (from result in results
-                               select result.Nanoseconds).ToList()
-                });
+		/// <summary></summary>
+		protected VersionValue()
+		{
+			value = null;
+		}
 
-                test.Counters.Add(new Counter
-                {
-                    Name = "Operations",
-                    TopCounter = false,
-                    DefaultCounter = false,
-                    HigherIsBetter = true,
-                    MetricName = "Count",
-                    Results = (from result in results
-                               select  (double)result.Operations).ToList()
-                });
+		/// <summary>
+		/// Assume the transient instance is newly instantiated if its version is null or
+		/// equal to <c>Value</c>
+		/// </summary>
+		/// <param name="value"></param>
+		public VersionValue(object value)
+		{
+			this.value = value;
+		}
 
-                foreach (var metric in report.Metrics.Keys)
-                {
-                    var m = report.Metrics[metric];
-                    test.Counters.Add(new Counter
-                    {
-                        Name = m.Descriptor.DisplayName,
-                        TopCounter = false,
-                        DefaultCounter = false,
-                        HigherIsBetter = m.Descriptor.TheGreaterTheBetter,
-                        MetricName = m.Descriptor.Unit,
-                        Results = new[] { m.Value }
-                    });
-                }
+		/// <summary>
+		/// Does the given identifier belong to a new instance
+		/// </summary>
+		public virtual bool? IsUnsaved(object version)
+		{
+			if (log.IsDebugEnabled())
+			{
+				log.Debug("unsaved-value: {0}", value);
+			}
+			return version == null || version.Equals(value);
+		}
 
-                reporter.AddTest(test);
-            }
+		public virtual object GetDefaultValue(object currentValue)
+		{
+			return value;
+		}
 
-            logger.WriteLine(reporter.GetJson());
-        }
-    }
+		/// <summary>
+		/// Assume the transient instance is newly instantiated if the version
+		/// is null, otherwise assume it is a detached instance.
+		/// </summary>
+		public static VersionValue VersionSaveNull = new VersionSaveNullClass();
+
+		private class VersionSaveNullClass : VersionValue
+		{
+			public override bool? IsUnsaved(object version)
+			{
+				log.Debug("version unsaved-value strategy NULL");
+				return version == null;
+			}
+
+			public override object GetDefaultValue(object currentValue)
+			{
+				return null;
+			}
+		}
+
+		/// <summary>
+		/// Assume the transient instance is newly instantiated if the version
+		/// is null, otherwise defer to the identifier unsaved-value.
+		/// </summary>
+		public static VersionValue VersionUndefined = new VersionUndefinedClass();
+
+		private class VersionUndefinedClass : VersionValue
+		{
+			public override bool? IsUnsaved(object version)
+			{
+				log.Debug("version unsaved-value strategy {0}", "UNDEFINED");
+				if (version == null)
+					return true;
+				else
+					return null;
+			}
+
+			public override object GetDefaultValue(object currentValue)
+			{
+				return currentValue;
+			}
+		}
+
+		/// <summary>
+		/// Assume the transient instance is newly instantiated if the identifier
+		/// is null.
+		/// </summary>
+		public static VersionValue VersionNegative = new VersionNegativeClass();
+
+		private class VersionNegativeClass : VersionValue
+		{
+			public override bool? IsUnsaved(object version)
+			{
+				log.Debug("version unsaved-value strategy {0}", "NEGATIVE");
+				if (version is short || version is int || version is long)
+				{
+					return Convert.ToInt64(version) < 0L;
+				}
+				else
+				{
+					throw new MappingException("unsaved-value strategy NEGATIVE may only be used with short, int and long types");
+				}
+			}
+
+			public override object GetDefaultValue(object currentValue)
+			{
+				return IdentifierGeneratorFactory.CreateNumber(-1L, currentValue.GetType());
+			}
+		}
+	}
 }

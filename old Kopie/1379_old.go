@@ -1,12 +1,13 @@
 package httpserver
 
-	"github.com/mholt/caddy"
-
-	"gopkg.in/natefinch/lumberjack.v2"import (
+import (
 	"io"
 	"path/filepath"
 	"strconv"
-)
+
+	"github.com/mholt/caddy"
+
+	"gopkg.in/natefinch/lumberjack.v2")
 
 // LogRoller implements a type that provides a rolling logger.
 type LogRoller struct {

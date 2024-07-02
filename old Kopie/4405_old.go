@@ -436,7 +436,6 @@ type QueryStatistics struct {
 	// statements INSERT, UPDATE or DELETE.
 	NumDMLAffectedRows int64
 
-	// DMLStatistics provides statistics about the row mutations performed by
 	// DML statements.
 	DMLStats *DMLStats
 

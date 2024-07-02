@@ -1,5 +1,5 @@
 /**
-        addRule(RULESET, "LongVariable"); * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
+ * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
 package net.sourceforge.pmd.lang.java.rule.codestyle;
@@ -36,8 +36,7 @@ public class CodeStyleRulesTest extends SimpleAggregatorTst {
         addRule(RULESET, "ExtendsObject");
         addRule(RULESET, "FieldDeclarationsShouldBeAtStartOfClass");
         addRule(RULESET, "ForLoopsMustUseBraces");
-        addRule(RULESET, "ForLoopShouldBeWhileLoop");
-        addRule(RULESET, "FormalParameterNamingConventions");
+        addRule(RULESET, "LongVariable");        addRule(RULESET, "ForLoopShouldBeWhileLoop");
         addRule(RULESET, "GenericsNaming");
         addRule(RULESET, "IdenticalCatchBranches");
         addRule(RULESET, "IfElseStmtsMustUseBraces");

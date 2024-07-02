@@ -1,6 +1,4 @@
 using System;
-        private const string PASSWORD_REPLACEMENT = "|||%%PREVJACKPASSWD%%|||";
-        protected Dictionary<string, Item> dynamics = new Dictionary<string, Item>(); // list for dynamic items
 using System.Collections.Generic;
 using System.Linq;
 using Jackett.Common.Services.Interfaces;
@@ -11,7 +9,8 @@ namespace Jackett.Common.Models.IndexerConfig
 {
     public class ConfigurationData
     {
-        private const string PasswordReplacement = "|||%%PREVJACKPASSWD%%|||";
+        private const string PASSWORD_REPLACEMENT = "|||%%PREVJACKPASSWD%%|||";
+        protected Dictionary<string, Item> dynamics = new Dictionary<string, Item>(); // list for dynamic items
         protected readonly Dictionary<string, Item> dynamics = new Dictionary<string, Item>(); // list for dynamic items
         public ConfigurationData() {}
 

@@ -131,7 +131,6 @@ func (c *CloneSetController) RolloutOneBatchPods(ctx context.Context) (bool, err
 	newPodTarget := c.calculateNewPodTarget(int(cloneSetSize))
 	// set the Partition as the desired number of pods in old revisions.
 	clonePatch := client.MergeFrom(c.cloneSet.DeepCopyObject())
-
 	if err := c.handler.rolloutOneBatchPods(ctx, c.cloneSet, newPodTarget); err != nil {
 		return false, err
 	}

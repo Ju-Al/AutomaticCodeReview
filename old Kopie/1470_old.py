@@ -1,5 +1,4 @@
 # coding: utf-8
-        it's deprecated after 2.0.4 and same as Booster.feature_importance() now.
 # pylint: disable = invalid-name, W0105, C0111, C0301
 """Scikit-Learn Wrapper interface for LightGBM."""
 from __future__ import absolute_import
@@ -611,7 +610,7 @@ class LGBMModel(_LGBMModelBase):
         Note
         ----
         Feature importance in sklearn interface used to normalize to 1,
-        it's deprecated after 2.0.4 and is the same as Booster.feature_importance() now.
+        it's deprecated after 2.0.4 and same as Booster.feature_importance() now.
         ``importance_type`` attribute is passed to the function to configure the 
         type of importance values to be extracted.
         """

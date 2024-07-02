@@ -1,5 +1,4 @@
 #
-def typeref_to_ast(schema, t, *, _name=None) -> qlast.TypeName:
 # This source file is part of the EdgeDB open source project.
 #
 # Copyright 2008-present MagicStack Inc. and the EdgeDB authors.
@@ -156,9 +155,8 @@ def ast_to_typeref(
 
     elif isinstance(node.maintype, qlast.AnyTuple):
         from . import pseudo as s_pseudo
+def typeref_to_ast(schema, t, *, _name=None) -> qlast.TypeName:
         return s_pseudo.AnyTupleRef()
-
-    assert isinstance(node.maintype, qlast.ObjectRef)
 
     return ast_objref_to_objref(
         node.maintype, modaliases=modaliases,

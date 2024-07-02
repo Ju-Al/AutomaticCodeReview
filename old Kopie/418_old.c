@@ -1,7 +1,4 @@
 #define _XOPEN_SOURCE 700
-	wlr_seat_pointer_clear_focus(seat);
-	wlr_seat_keyboard_start_grab(seat, &drag->keyboard_grab);
-	wlr_seat_pointer_start_grab(seat, &drag->pointer_grab);
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -665,9 +662,10 @@ static bool seat_client_start_drag(struct wlr_seat_client *client,
 
 	drag->seat_client = client;
 	drag->pointer_grab.data = drag;
+	wlr_seat_pointer_clear_focus(seat);
+	wlr_seat_keyboard_start_grab(seat, &drag->keyboard_grab);
+	wlr_seat_pointer_start_grab(seat, &drag->pointer_grab);
 	drag->pointer_grab.interface = &wlr_data_device_pointer_drag_interface;
-
-	drag->touch_grab.data = drag;
 	drag->touch_grab.interface = &wlr_data_device_touch_drag_interface;
 	drag->grab_touch_id = drag->seat->touch_state.grab_id;
 

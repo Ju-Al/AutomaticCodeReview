@@ -2010,7 +2010,6 @@ autocomplete::ACN autocompleteSyntax()
 }
 #endif
 
-bool extractparam(const std::string& p, vector<string>& words)
 {
     for (unsigned i = 0; i < words.size(); ++i)
     {

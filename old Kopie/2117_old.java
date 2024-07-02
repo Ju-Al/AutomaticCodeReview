@@ -1,5 +1,4 @@
 /*
-      return Collections.emptyList();
  * Copyright 2016 Federico Tomassetti
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -71,7 +70,7 @@ public class JavassistTypeDeclarationAdapter {
 
   public List<ResolvedTypeParameterDeclaration> getTypeParameters() {
     if (null == ctClass.getGenericSignature()) {
-      return new ArrayList<>();
+      return Collections.emptyList();
     } else {
       try {
         SignatureAttribute.ClassSignature classSignature =

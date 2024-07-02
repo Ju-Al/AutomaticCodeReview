@@ -1,5 +1,4 @@
 /*
-    return rexBuilder.makeFieldAccess(getDynamicParam(nonNullableInt, "int"), arg);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -497,7 +496,7 @@ public abstract class RexProgramBuilderBase {
    */
   protected RexNode vInt(int arg) {
     assertArgValue(arg);
-    return rexBuilder.makeFieldAccess(getDynamicParam(nullableInt, "int"), arg);
+    return rexBuilder.makeFieldAccess(getDynamicParam(nonNullableInt, "int"), arg);
   }
 
   /**

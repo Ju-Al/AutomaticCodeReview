@@ -1,11 +1,4 @@
 // Copyright 2019 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-        auto it = participants_.find(part->get_domain_id());
-        if (it != participants_.end())
-            auto pit = std::find(it->second.begin(), it->second.end(), part->impl_);
-            if (pit != it->second.end())
-                it->second.erase(pit);
-                delete *pit;
-                return true;
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,7 +126,13 @@ bool DomainParticipantFactory::delete_instance()
 bool DomainParticipantFactory::delete_participant(
         DomainParticipant* part)
 {
-    using PartVectorIt = std::vector<DomainParticipantImpl*>::iterator;
+        auto it = participants_.find(part->get_domain_id());
+        if (it != participants_.end())
+            auto pit = std::find(it->second.begin(), it->second.end(), part->impl_);
+            if (pit != it->second.end())
+                it->second.erase(pit);
+                delete *pit;
+                return true;
     using VectorIt = std::map<uint8_t, std::vector<DomainParticipantImpl*>>::iterator;
 
     if (part != nullptr)

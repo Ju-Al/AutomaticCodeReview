@@ -1,5 +1,4 @@
 /******************************************************************************
-
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -200,7 +199,7 @@ void TetrahedronSetTopologyContainer::createEdgesInTetrahedronArray()
                         foundEdge=true;
                     }
                 }
-                if (foundEdge == false)  // The edges and triangles in this mesh are only on the border: this mesh was probably created using Gmsh
+
                     break;
                 if (CHECK_TOPOLOGY)
                     msg_warning_when(!foundEdge) << " In getTetrahedronArray, cannot find edge for tetrahedron " << i << "and edge "<< j;

@@ -1,5 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                            minimumDesiredPercentage: 100, // since we are executing across partitions in parallel, we will have results from all partitions, so fill up the page.
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -490,7 +489,7 @@ namespace Microsoft.Health.Fhir.CosmosDb.Features.Search
                             queryRequestOptions,
                             includeResponse.continuationToken,
                             false,
-                            minimumDesiredPercentage: (int)Math.Ceiling(maxIncludeCount * 100.0 / queryRequestOptions.MaxItemCount.Value), // ensure we fill up to maxIncludeCount in the initial query, as the SDK does not parallelize queries when there is a continuation token
+                            minimumDesiredPercentage: 100, // since we are executing across partitions in parallel, we will have results from all partitions, so fill up the page.
                             cancellationToken);
 
                         includes.AddRange(includeResponse.results);

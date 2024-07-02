@@ -1,6 +1,5 @@
 package com.hubspot.singularity.executor.task;
 
-      templateManager.writeDockerScript(getPath("runner.sh"), new DockerContext(environmentContext, runnerContext, configuration.getDockerPrefix(), configuration.getDockerStopTimeout()));
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -114,7 +113,8 @@ public class SingularityExecutorTaskProcessBuilder implements Callable<ProcessBu
     EnvironmentContext environmentContext = new EnvironmentContext(taskInfo);
     if (taskInfo.hasContainer() && taskInfo.getContainer().hasDocker()) {
       task.getLog().info("Writing a runner script to execute {} in docker container", cmd);
-      boolean privileged = (taskInfo.getContainer().getDocker().hasPrivileged() && taskInfo.getContainer().getDocker().getPrivileged());
+
+      templateManager.writeDockerScript(getPath("runner.sh"), new DockerContext(environmentContext, runnerContext, configuration.getDockerPrefix(), configuration.getDockerStopTimeout()));
       templateManager.writeDockerScript(getPath("runner.sh"), new DockerContext(environmentContext, runnerContext, configuration.getDockerPrefix(), configuration.getDockerStopTimeout(), privileged));
     } else {
       templateManager.writeEnvironmentScript(getPath("deploy.env"), environmentContext);

@@ -1,7 +1,4 @@
 /*
-static bool is_interface(const char* dev_name, pid_t pid)
-
-		fprintf(stderr, "failed to fork task.\n");
  * lxc: linux Container library
  *
  * Authors:
@@ -63,7 +60,9 @@ Options :\n\
 	.checker  = NULL,
 };
 
-static bool is_interface(const char *dev_name, pid_t pid)
+
+		fprintf(stderr, "failed to fork task.\n");
+static bool is_interface(const char* dev_name, pid_t pid)
 {
 	pid_t p = fork();
 	if (p < 0) {

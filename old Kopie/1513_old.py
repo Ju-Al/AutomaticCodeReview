@@ -114,8 +114,6 @@ def recalculate_all_user_data():
         except KeyError:
             pass
 
-
-def unlock_cron():
     """ Unlock the cron container """
 
     # Unlock the cron container

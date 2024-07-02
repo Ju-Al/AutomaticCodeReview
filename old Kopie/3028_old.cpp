@@ -1244,7 +1244,6 @@ bool rn2xx3_handler::setTXoutputPower(int pwridx)
   return sendMacSet(F("pwridx"), String(pwridx));
 }
 
-void rn2xx3_handler::sendAutoBaud()
 {
   _serial.write(static_cast<uint8_t>(0x00));
   _serial.write(static_cast<uint8_t>(0x55));

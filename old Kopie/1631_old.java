@@ -1,9 +1,4 @@
 /*
-						configuration.setFolders(chooser.getSelectedFile().getAbsolutePath());
-						/*
-						 * If the user canceled here, the default media folders
-						 * for the operating system will be used.
-						 */
  * Universal Media Server, for streaming any media to DLNA
  * compatible renderers based on the http://www.ps3mediaserver.org.
  * Copyright (C) 2012 UMS developers.
@@ -191,7 +186,11 @@ public class Wizard {
 					chooser.setDialogTitle(Messages.getString("Wizard.12"));
 					chooser.setMultiSelectionEnabled(false);
 					if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-						configuration.setOnlySharedDirectory(chooser.getSelectedFile().getAbsolutePath());
+						/*
+						 * If the user canceled here, the default media folders
+						 * for the operating system will be used.
+						 */
+						configuration.setFolders(chooser.getSelectedFile().getAbsolutePath());
 					} else {
 						// If user cancel this option set the default directory which depends on the operating system.
 						// It is typically the "My Documents" folder on Windows, and the user's home directory on Unix.

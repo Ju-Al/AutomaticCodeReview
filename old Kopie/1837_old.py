@@ -1,7 +1,4 @@
 # Copyright 2019 Google LLC
-  for index in range(len(revision_list)):
-    if revision_list[index] >= min_revision:
-      return revision_list[index]
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -623,7 +620,9 @@ def get_first_revision_in_list(revision_list):
   if not min_revision:
     return first_revision
 
-  for revision_list_item in revision_list:
+  for index in range(len(revision_list)):
+    if revision_list[index] >= min_revision:
+      return revision_list[index]
     if revision_list_item >= min_revision:
       return revision_list_item
 

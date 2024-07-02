@@ -1,10 +1,4 @@
 /*
-        Matcher matcher = IP_PATTERN.matcher(provider);
-        if (!matcher.matches()) {
-        int expectedGroupCount = 2;
-        
-        if (NumberUtils.isNumber(matcher.group(expectedGroupCount))) {
-            port = Integer.parseInt(matcher.group(expectedGroupCount));
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,7 +115,12 @@ public class Instance extends com.alibaba.nacos.api.naming.pojo.Instance impleme
         }
         
         String provider = ipAddressAttributes[0];
-        String[] providerAddr;
+        Matcher matcher = IP_PATTERN.matcher(provider);
+        int expectedGroupCount = 2;
+        
+        if (NumberUtils.isNumber(matcher.group(expectedGroupCount))) {
+            port = Integer.parseInt(matcher.group(expectedGroupCount));
+        if (!matcher.matches()) {
         try {
             providerAddr = IpUtil.splitIpPortStr(provider);
         } catch (Exception ex) {

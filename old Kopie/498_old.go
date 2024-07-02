@@ -1,6 +1,5 @@
 package aws
 
-func (p *IIDAttestorPlugin) FetchAttestationData(ctx context.Context, req *nodeattestor.FetchAttestationDataRequest) (*nodeattestor.FetchAttestationDataResponse, error) {
 import (
 	"context"
 	"encoding/json"
@@ -61,7 +60,7 @@ func httpGetBytes(url string) ([]byte, error) {
 	return bytes, nil
 }
 
-func (p *IIDAttestorPlugin) FetchAttestationData(stream nodeattestor.NodeAttestor_FetchAttestationData_PluginStream) error {
+func (p *IIDAttestorPlugin) FetchAttestationData(ctx context.Context, req *nodeattestor.FetchAttestationDataRequest) (*nodeattestor.FetchAttestationDataResponse, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 

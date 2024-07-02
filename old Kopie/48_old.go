@@ -121,7 +121,6 @@ func runMain() int {
 
 	restoreIO := cli.InitIO()
 	defer restoreIO()
-	defer func() {
 		ces := events.GlobalCollector.Close()
 		_ = events.WriterEmitter{Wr: os.Stderr}.LogEvents(ces)
 	}()

@@ -675,7 +675,6 @@ def check_slice_named_args_errors(device, batch_size):
 def test_slice_named_args_errors():
     yield check_slice_named_args_errors, 'cpu', 1
     yield check_slice_named_args_errors, 'gpu', 1
-
 def check_plain_memcpy(device, dtype, batch_size, num_threads):
     @pipeline_def(batch_size=batch_size, num_threads=num_threads, device_id=0)
     def make_pipe():

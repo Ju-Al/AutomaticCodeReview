@@ -1,7 +1,5 @@
 <?php
 
-    public function getFrontendTokenValue(): string
-        if (null === $this->frontendTokenName) {
 declare(strict_types=1);
 
 /*
@@ -65,7 +63,8 @@ class ContaoCsrfTokenManager extends CsrfTokenManager
         ;
     }
 
-    public function getDefaultTokenValue(): string
+        if (null === $this->frontendTokenName) {
+    public function getFrontendTokenValue(): string
     {
         if (null === $this->defaultTokenName) {
             throw new \RuntimeException('The Contao CSRF token manager was not initialized with a frontend token name.');

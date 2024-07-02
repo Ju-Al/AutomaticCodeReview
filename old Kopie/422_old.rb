@@ -1,5 +1,4 @@
 module ViewComponents
-  class PublishedSolution < ViewComponent
     extend Mandate::Memoize
 
     def initialize(solution)

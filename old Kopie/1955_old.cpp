@@ -1,6 +1,4 @@
 /**
-                SyncConfig syncConfig{local_folder, n->nodehandle, 0};
-                error err = client->addsync(std::move(syncConfig), DEBRISFOLDER, NULL);
  * @file examples/megasimplesync.cpp
  * @brief sample daemon, which synchronizes local and remote folders
  *
@@ -446,7 +444,8 @@ void SyncApp::fetchnodes_result(error e)
             }
             else
             {
-                SyncConfig syncConfig{1, local_folder, n->nodehandle, 0};
+                SyncConfig syncConfig{local_folder, n->nodehandle, 0};
+                error err = client->addsync(std::move(syncConfig), DEBRISFOLDER, NULL);
                 syncerror_t syncError;
                 error err = client->addsync(std::move(syncConfig), DEBRISFOLDER, NULL, syncError);
                 if (err)

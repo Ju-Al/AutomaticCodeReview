@@ -19,7 +19,6 @@ export default class ThemeManager extends Component {
     });
   }
   render() {
-    // eslint-disable-next-line
     return <Fragment>{this.props.children}</Fragment>;
   }
 }

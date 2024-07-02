@@ -1,15 +1,45 @@
-<tr>
-  <td><%= purchase_row.purchased_from_view %></td>
-  <td><%= purchase_row.storage_location.name %></td>
-  <td><%= purchase_row.line_items.total %></td>
-  <td><%= purchase_row.line_items.size %></td>
-  <td><%= purchase_row.amount_spent_in_cents %></td>
-  <td><%= purchase_row.issued_at.strftime("%F") %></td>
-  <td class="numeric"><%= purchase_row.line_items.size %></td>
-  <td class="numeric"><%= purchase_row.line_items.total %></td>
-  <td class="numeric"><%= purchase_row.amount_spent_in_cents %></td>
-  <td class="date"><%= purchase_row.issued_at.strftime("%F") %></td>
-  <td class="text-right">
-    <%= view_button_to purchase_path(purchase_row) %>
-  </td>
-</tr>
+# frozen_string_literal: true
+
+module Bolt
+  class Secret
+    class Base
+      def hooks
+        %i[resolve_reference secret_encrypt secret_decrypt secret_createkeys validate_resolve_reference]
+      end
+
+      def encode(raw)
+        coded = Base64.encode64(raw).strip
+        "ENC[#{name.upcase},#{coded}]"
+      end
+
+      def decode(code)
+        format = %r{\AENC\[(?<plugin>\w+),(?<encoded>[\w\s+-=/]+)\]\s*\z}
+        match = format.match(code)
+
+        raise Bolt::ValidationError, "Could not parse as an encrypted value: #{code}" unless match
+
+        raw = Base64.decode64(match[:encoded])
+        [raw, match[:plugin]]
+      end
+
+      def secret_encrypt(opts)
+        encrypted = encrypt_value(opts['plaintext_value'])
+        encode(encrypted)
+      end
+
+      def secret_decrypt(opts)
+        raw, _plugin = decode(opts['encrypted_value'])
+        decrypt_value(raw)
+      end
+      alias resolve_reference secret_decrypt
+
+      def validate_resolve_reference(opts)
+        # TODO: Remove deprecation warning
+        if opts.include?('encrypted-value')
+          raise Bolt::ValidationError, "The 'encrypted-value' key is deprecated migrate to to 'encrypted_value'"
+        end
+        decode(opts['encrypted_value'])
+      end
+    end
+  end
+end

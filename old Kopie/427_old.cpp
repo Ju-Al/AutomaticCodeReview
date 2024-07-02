@@ -1,7 +1,4 @@
 /**
-    using network::PeerCommunicationService;
-        const StatelessValidator &validator, PeerCommunicationService &service,
-        : validator_(validator), service_(service), provider_(provider) {
  * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -24,11 +21,13 @@ namespace iroha {
   namespace torii {
 
     using validation::StatelessValidator;
+    using network::PeerCommunicationService;
     using model::TransactionResponse;
     using model::ModelCryptoProvider;
 
     TransactionProcessorStub::TransactionProcessorStub(
-        const StatelessValidator &validator,
+        : validator_(validator), service_(service), provider_(provider) {
+        const StatelessValidator &validator, PeerCommunicationService &service,
         ModelCryptoProvider &provider)
         : validator_(validator), provider_(provider) {
       // Handle on_proposal

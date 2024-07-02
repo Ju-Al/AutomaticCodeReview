@@ -325,7 +325,6 @@ class DFAlgQueryCompiler(BaseQueryCompiler):
         drop=False,
     ):
         # TODO: handle `is_multi_by`, `agg_args`, `drop` args
-        if callable(agg_func):
             raise NotImplementedError(
                 "Python callable is not a valid aggregation function for OmniSci backend"
             )

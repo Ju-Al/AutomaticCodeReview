@@ -1,5 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-    if os.path.isabs(filename) and os.path.isdir(filename):
 
 # Copyright 2014-2017 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
@@ -139,7 +138,7 @@ def create_full_filename(basename, filename):
     encoding = sys.getfilesystemencoding()
     filename = utils.force_encoding(filename, encoding)
     basename = utils.force_encoding(basename, encoding)
-    if os.path.isabs(filename) and (os.path.isdir(filename) or
+    if os.path.isabs(filename) and os.path.isdir(filename):
                                     os.path.join(filename, "") == filename):
         # We got an absolute directory from the user, so we save it under
         # the default filename in that directory.

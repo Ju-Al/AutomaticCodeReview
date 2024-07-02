@@ -240,8 +240,6 @@ public class ClassTypeResolver extends JavaParserVisitorAdapter {
                 parent = node.getFirstParentOfType(ASTEnumDeclaration.class);
             }
             typeName = parent.getImage() + "$" + anonymousClassCounter;
-        }
-
         populateType(node, typeName);
 
         ASTTypeArguments typeArguments = node.getFirstChildOfType(ASTTypeArguments.class);

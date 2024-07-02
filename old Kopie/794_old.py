@@ -1,870 +1,1340 @@
-import warnings
-from operator import itemgetter
-from itertools import product
-import numpy as np
-import colorsys
-import param
+from copy import deepcopy
+from functools import reduce
+from uuid import uuid4
 
-from ..core import util
-from ..core.data import (ArrayInterface, NdElementInterface,
-                         DictInterface, GridInterface)
-from ..core import (Dimension, NdMapping, Element2D,
-                    Overlay, Element, Dataset, NdElement)
-from ..core.boundingregion import BoundingRegion, BoundingBox
-from ..core.sheetcoords import SheetCoordinateSystem, Slice
-from ..core.util import pd
-from .chart import Curve
-from .tabular import Table
-from .util import compute_edges, toarray
+from cryptoconditions import (Fulfillment as CCFulfillment,
+                              ThresholdSha256Fulfillment, Ed25519Fulfillment,
+                              PreimageSha256Fulfillment)
+from cryptoconditions.exceptions import ParsingError
 
-try:
-    from ..core.data import PandasInterface
-except ImportError:
-    PandasInterface = None
+from bigchaindb.common.crypto import SigningKey, hash_data
+from bigchaindb.common.exceptions import (KeypairMismatchException,
+                                          InvalidHash, InvalidSignature,
+                                          AmountError, AssetIdMismatch)
+from bigchaindb.common.util import serialize, gen_timestamp
 
 
-class Raster(Element2D):
-    """
-    Raster is a basic 2D element type for presenting either numpy or
-    dask arrays as two dimensional raster images.
+class Fulfillment(object):
+    """A Fulfillment is used to spend assets locked by a Condition.
 
-    Arrays with a shape of (N,M) are valid inputs for Raster wheras
-    subclasses of Raster (e.g. RGB) may also accept 3D arrays
-    containing channel information.
-
-    Raster does not support slicing like the Image or RGB subclasses
-    and the extents are in matrix coordinates if not explicitly
-    specified.
+        Attributes:
+            fulfillment (:class:`cryptoconditions.Fulfillment`): A Fulfillment
+                to be signed with a private key.
+            owners_before (:obj:`list` of :obj:`str`): A list of owners after a
+                Transaction was confirmed.
+            tx_input (:class:`~bigchaindb.common.transaction. TransactionLink`,
+                optional): A link representing the input of a `TRANSFER`
+                Transaction.
     """
 
-    group = param.String(default='Raster', constant=True)
+    def __init__(self, fulfillment, owners_before, tx_input=None):
+        """Fulfillment shims a Cryptocondition Fulfillment for BigchainDB.
 
-    kdims = param.List(default=[Dimension('x'), Dimension('y')],
-                       bounds=(2, 2), constant=True, doc="""
-        The label of the x- and y-dimension of the Raster in form
-        of a string or dimension object.""")
+            Args:
+                fulfillment (:class:`cryptoconditions.Fulfillment`): A
+                    Fulfillment to be signed with a private key.
+                owners_before (:obj:`list` of :obj:`str`): A list of owners
+                    after a Transaction was confirmed.
+                tx_input (:class:`~bigchaindb.common.transaction.
+                    TransactionLink`, optional): A link representing the input
+                    of a `TRANSFER` Transaction.
+        """
+        self.fulfillment = fulfillment
 
-    vdims = param.List(default=[Dimension('z')], bounds=(1, 1), doc="""
-        The dimension description of the data held in the data array.""")
-
-    def __init__(self, data, extents=None, **params):
-        if extents is None:
-            (d1, d2) = data.shape[:2]
-            extents = (0, 0, d2, d1)
-        super(Raster, self).__init__(data, extents=extents, **params)
-
-
-    @property
-    def _zdata(self):
-        return self.data
-
-
-    def __getitem__(self, slices):
-        if slices in self.dimensions(): return self.dimension_values(slices)
-        slices = util.process_ellipses(self,slices)
-        if not isinstance(slices, tuple):
-            slices = (slices, slice(None))
-        elif len(slices) > (2 + self.depth):
-            raise KeyError("Can only slice %d dimensions" % 2 + self.depth)
-        elif len(slices) == 3 and slices[-1] not in [self.vdims[0].name, slice(None)]:
-            raise KeyError("%r is the only selectable value dimension" % self.vdims[0].name)
-
-        slc_types = [isinstance(sl, slice) for sl in slices[:2]]
-        data = self.data.__getitem__(slices[:2][::-1])
-        if all(slc_types):
-            return self.clone(data, extents=None)
-        elif not any(slc_types):
-            return toarray(data, index_value=True)
+        if tx_input is not None and not isinstance(tx_input, TransactionLink):
+            raise TypeError('`tx_input` must be a TransactionLink instance')
         else:
-            return self.clone(np.expand_dims(data, axis=slc_types.index(True)),
-                              extents=None)
+            self.tx_input = tx_input
 
-
-    def _coord2matrix(self, coord):
-        return int(round(coord[1])), int(round(coord[0]))
-
-
-    @classmethod
-    def collapse_data(cls, data_list, function, kdims=None, **kwargs):
-        if isinstance(function, np.ufunc):
-            return function.reduce(data_list)
+        if not isinstance(owners_before, list):
+            raise TypeError('`owners_after` must be a list instance')
         else:
-            return function(np.dstack(data_list), axis=-1, **kwargs)
+            self.owners_before = owners_before
 
+    def __eq__(self, other):
+        # TODO: If `other !== Fulfillment` return `False`
+        return self.to_dict() == other.to_dict()
 
-    def sample(self, samples=[], **sample_values):
-        """
-        Sample the Raster along one or both of its dimensions,
-        returning a reduced dimensionality type, which is either
-        a ItemTable, Curve or Scatter. If two dimension samples
-        and a new_xaxis is provided the sample will be the value
-        of the sampled unit indexed by the value in the new_xaxis
-        tuple.
-        """
-        if isinstance(samples, tuple):
-            X, Y = samples
-            samples = zip(X, Y)
-        params = dict(self.get_param_values(onlychanged=True),
-                      vdims=self.vdims)
-        params.pop('extents', None)
-        params.pop('bounds', None)
-        if len(sample_values) == self.ndims or len(samples):
-            if not len(samples):
-                samples = zip(*[c if isinstance(c, list) else [c] for _, c in
-                               sorted([(self.get_dimension_index(k), v) for k, v in
-                                       sample_values.items()])])
-            table_data = [c+(self._zdata[self._coord2matrix(c)],)
-                          for c in samples]
-            params['kdims'] = self.kdims
-            return Table(table_data, **params)
-        else:
-            dimension, sample_coord = list(sample_values.items())[0]
-            if isinstance(sample_coord, slice):
-                raise ValueError(
-                    'Raster sampling requires coordinates not slices,'
-                    'use regular slicing syntax.')
-            # Indices inverted for indexing
-            sample_ind = self.get_dimension_index(dimension)
-            if sample_ind is None:
-                raise Exception("Dimension %s not found during sampling" % dimension)
-            other_dimension = [d for i, d in enumerate(self.kdims) if
-                               i != sample_ind]
+    def to_dict(self, fid=None):
+        """Transforms the object to a Python dictionary.
 
-            # Generate sample slice
-            sample = [slice(None) for i in range(self.ndims)]
-            coord_fn = (lambda v: (v, 0)) if not sample_ind else (lambda v: (0, v))
-            sample[sample_ind] = self._coord2matrix(coord_fn(sample_coord))[abs(sample_ind-1)]
+            Note:
+                A `fid` can be submitted to be included in the dictionary
+                representation.
 
-            # Sample data
-            x_vals = self.dimension_values(other_dimension[0].name, False)
-            ydata = self._zdata[sample[::-1]]
-            if hasattr(self, 'bounds') and sample_ind == 0: ydata = ydata[::-1]
-            data = list(zip(x_vals, ydata))
-            params['kdims'] = other_dimension
-            return Curve(data, **params)
+                If a Fulfillment hasn't been signed yet, this method returns a
+                dictionary representation.
 
+            Args:
+                fid (int, optional): The Fulfillment's index in a Transaction.
 
-    def reduce(self, dimensions=None, function=None, **reduce_map):
-        """
-        Reduces the Raster using functions provided via the
-        kwargs, where the keyword is the dimension to be reduced.
-        Optionally a label_prefix can be provided to prepend to
-        the result Element label.
-        """
-        function, dims = self._reduce_map(dimensions, function, reduce_map)
-        if len(dims) == self.ndims:
-            if isinstance(function, np.ufunc):
-                return function.reduce(self.data, axis=None)
-            else:
-                return function(self.data)
-        else:
-            dimension = dims[0]
-            other_dimension = [d for d in self.kdims if d.name != dimension]
-            oidx = self.get_dimension_index(other_dimension[0])
-            x_vals = self.dimension_values(other_dimension[0].name, False)
-            reduced = function(self._zdata, axis=oidx)
-            if oidx and hasattr(self, 'bounds'):
-                reduced = reduced[::-1]
-            data = zip(x_vals, reduced)
-            params = dict(dict(self.get_param_values(onlychanged=True)),
-                          kdims=other_dimension, vdims=self.vdims)
-            params.pop('bounds', None)
-            params.pop('extents', None)
-            return Table(data, **params)
-
-
-    def dimension_values(self, dim, expanded=True, flat=True):
-        """
-        The set of samples available along a particular dimension.
-        """
-        dim_idx = self.get_dimension_index(dim)
-        if not expanded and dim_idx == 0:
-            return np.array(range(self.data.shape[1]))
-        elif not expanded and dim_idx == 1:
-            return np.array(range(self.data.shape[0]))
-        elif dim_idx in [0, 1]:
-            values = np.mgrid[0:self.data.shape[1], 0:self.data.shape[0]][dim_idx]
-            return values.flatten() if flat else values
-        elif dim_idx == 2:
-            return toarray(self.data.T).flatten()
-        else:
-            return super(Raster, self).dimension_values(dim)
-
-
-    @property
-    def depth(self):
-        return 1 if len(self.data.shape) == 2 else self.data.shape[2]
-
-
-    @property
-    def mode(self):
-        """
-        Mode specifying the color space for visualizing the array data
-        and is a function of the depth. For a depth of one, a colormap
-        is used as determined by the style. If the depth is 3 or 4,
-        the mode is 'rgb' or 'rgba' respectively.
-        """
-        if   self.depth == 1:  return 'cmap'
-        elif self.depth == 3:  return 'rgb'
-        elif self.depth == 4:  return 'rgba'
-        else:
-            raise Exception("Mode cannot be determined from the depth")
-
-
-
-class QuadMesh(Raster):
-    """
-    QuadMesh is a Raster type to hold x- and y- bin values
-    with associated values. The x- and y-values of the QuadMesh
-    may be supplied either as the edges of each bin allowing
-    uneven sampling or as the bin centers, which will be converted
-    to evenly sampled edges.
-
-    As a secondary but less supported mode QuadMesh can contain
-    a mesh of quadrilateral coordinates that is not laid out in
-    a grid. The data should then be supplied as three separate
-    2D arrays for the x-/y-coordinates and grid values.
-    """
-
-    group = param.String(default="QuadMesh", constant=True)
-
-    kdims = param.List(default=[Dimension('x'), Dimension('y')])
-
-    vdims = param.List(default=[Dimension('z')], bounds=(1,1))
-
-    def __init__(self, data, **params):
-        data = self._process_data(data)
-        Element2D.__init__(self, data, **params)
-        self.data = self._validate_data(self.data)
-        self._grid = self.data[0].ndim == 1
-
-
-    @property
-    def depth(self): return 1
-
-    def _process_data(self, data):
-        data = tuple(np.array(el) for el in data)
-        x, y, zarray = data
-        ys, xs = zarray.shape
-        if x.ndim == 1 and len(x) == xs:
-            x = compute_edges(x)
-        if y.ndim == 1 and len(y) == ys:
-            y = compute_edges(y)
-        return (x, y, zarray)
-
-
-    @property
-    def _zdata(self):
-        return self.data[2]
-
-
-    def _validate_data(self, data):
-        x, y, z = data
-        if not z.ndim == 2:
-            raise ValueError("Z-values must be 2D array")
-
-        ys, xs = z.shape
-        shape_errors = []
-        if x.ndim == 1 and xs+1 != len(x):
-            shape_errors.append('x')
-        if x.ndim == 1 and ys+1 != len(y):
-            shape_errors.append('y')
-        if shape_errors:
-            raise ValueError("%s-edges must match shape of z-array." %
-                             '/'.join(shape_errors))
-        return data
-
-
-    def __getitem__(self, slices):
-        if slices in self.dimensions(): return self.dimension_values(slices)
-        slices = util.process_ellipses(self,slices)
-        if not self._grid:
-            raise KeyError("Indexing of non-grid based QuadMesh"
-                             "currently not supported")
-        if len(slices) > (2 + self.depth):
-            raise KeyError("Can only slice %d dimensions" % (2 + self.depth))
-        elif len(slices) == 3 and slices[-1] not in [self.vdims[0].name, slice(None)]:
-            raise KeyError("%r is the only selectable value dimension" % self.vdims[0].name)
-        slices = slices[:2]
-        if not isinstance(slices, tuple): slices = (slices, slice(None))
-        slc_types = [isinstance(sl, slice) for sl in slices]
-        if not any(slc_types):
-            indices = []
-            for idx, data in zip(slices, self.data[:self.ndims]):
-                indices.append(np.digitize([idx], data)-1)
-            return self.data[2][tuple(indices[::-1])]
-        else:
-            sliced_data, indices = [], []
-            for slc, data in zip(slices, self.data[:self.ndims]):
-                if isinstance(slc, slice):
-                    low, high = slc.start, slc.stop
-                    lidx = ([None] if low is None else
-                            max((np.digitize([low], data)-1, 0)))[0]
-                    hidx = ([None] if high is None else
-                            np.digitize([high], data))[0]
-                    sliced_data.append(data[lidx:hidx])
-                    indices.append(slice(lidx, (hidx if hidx is None else hidx-1)))
-                else:
-                    index = (np.digitize([slc], data)-1)[0]
-                    sliced_data.append(data[index:index+2])
-                    indices.append(index)
-            z = np.atleast_2d(self.data[2][tuple(indices[::-1])])
-            if not all(slc_types) and not slc_types[0]:
-                z = z.T
-            return self.clone(tuple(sliced_data+[z]))
-
-
-    @classmethod
-    def collapse_data(cls, data_list, function, kdims=None, **kwargs):
-        """
-        Allows collapsing the data of a number of QuadMesh
-        Elements with a function.
-        """
-        if not all(data[0].ndim == 1 for data in data_list):
-            raise Exception("Collapsing of non-grid based QuadMesh"
-                            "currently not supported")
-        xs, ys, zs = zip(data_list)
-        if isinstance(function, np.ufunc):
-            z = function.reduce(zs)
-        else:
-            z = function(np.dstack(zs), axis=-1, **kwargs)
-        return xs[0], ys[0], z
-
-
-    def _coord2matrix(self, coord):
-        return tuple((np.digitize([coord[i]], self.data[i])-1)[0]
-                     for i in [1, 0])
-
-
-    def range(self, dimension):
-        idx = self.get_dimension_index(dimension)
-        if idx in [0, 1]:
-            data = self.data[idx]
-            return np.min(data), np.max(data)
-        elif idx == 2:
-            data = self.data[idx]
-            return np.nanmin(data), np.nanmax(data)
-        super(QuadMesh, self).range(dimension)
-
-
-    def dimension_values(self, dimension, expanded=True, flat=True):
-        idx = self.get_dimension_index(dimension)
-        data = self.data[idx]
-        if idx in [0, 1]:
-            if not self._grid:
-                return data.flatten()
-            odim = self.data[2].shape[idx] if expanded else 1
-            vals = np.tile(np.convolve(data, np.ones((2,))/2, mode='valid'), odim)
-            if idx:
-                return np.sort(vals)
-            else:
-                return vals
-        elif idx == 2:
-            return data.flatten() if flat else data
-        else:
-            return super(QuadMesh, self).dimension_values(idx)
-
-
-
-class HeatMap(Dataset, Element2D):
-    """
-    HeatMap is an atomic Element used to visualize two dimensional
-    parameter spaces. It supports sparse or non-linear spaces, dynamically
-    upsampling them to a dense representation, which can be visualized.
-
-    A HeatMap can be initialized with any dict or NdMapping type with
-    two-dimensional keys. Once instantiated the dense representation is
-    available via the .data property.
-    """
-
-    group = param.String(default='HeatMap', constant=True)
-
-    kdims = param.List(default=[Dimension('x'), Dimension('y')])
-
-    vdims = param.List(default=[Dimension('z')])
-
-    def __init__(self, data, extents=None, **params):
-        super(HeatMap, self).__init__(data, **params)
-        data, self.raster = self._compute_raster()
-        self.data = data.data
-        self.interface = data.interface
-        self.depth = 1
-        if extents is None:
-            (d1, d2) = self.raster.shape[:2]
-            self.extents = (0, 0, d2, d1)
-        else:
-            self.extents = extents
-
-
-    def _compute_raster(self):
-        if issubclass(self.interface, GridInterface):
-            return self, np.flipud(self.dimension_values(2, flat=False))
-        d1keys = self.dimension_values(0, False)
-        d2keys = self.dimension_values(1, False)
-        coords = [(d1, d2, np.NaN) for d1 in d1keys for d2 in d2keys]
-        dtype = 'dataframe' if pd else 'dictionary'
-        dense_data = Dataset(coords, kdims=self.kdims, vdims=self.vdims, datatype=[dtype])
-        concat_data = self.interface.concatenate([dense_data, Dataset(self)], datatype=dtype)
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', r'Mean of empty slice')
-            data = concat_data.aggregate(self.kdims, np.nanmean)
-        array = data.dimension_values(2).reshape(len(d1keys), len(d2keys))
-        return data, np.flipud(array.T)
-
-
-    def __setstate__(self, state):
-        if '_data' in state:
-            data = state['_data']
-            if isinstance(data, NdMapping):
-                items = [tuple(k)+((v,) if np.isscalar(v) else tuple(v))
-                         for k, v in data.items()]
-                kdims = state['kdims'] if 'kdims' in state else self.kdims
-                vdims = state['vdims'] if 'vdims' in state else self.vdims
-                data = Dataset(items, kdims=kdims, vdims=vdims).data
-            elif isinstance(data, Dataset):
-                data = data.data
-                kdims = data.kdims
-                vdims = data.vdims
-            state['data'] = data
-            state['kdims'] = kdims
-            state['vdims'] = vdims
-        self.__dict__ = state
-
-        if isinstance(self.data, NdElement):
-            self.interface = NdElementInterface
-        elif isinstance(self.data, np.ndarray):
-            self.interface = ArrayInterface
-        elif util.is_dataframe(self.data):
-            self.interface = PandasInterface
-        elif isinstance(self.data, dict):
-            self.interface = DictInterface
-        self.depth = 1
-        data, self.raster = self._compute_raster()
-        self.interface = data.interface
-        self.data = data.data
-        if 'extents' not in state:
-            (d1, d2) = self.raster.shape[:2]
-            self.extents = (0, 0, d2, d1)
-
-        super(HeatMap, self).__setstate__(state)
-
-    def dense_keys(self):
-        d1keys = self.dimension_values(0, False)
-        d2keys = self.dimension_values(1, False)
-        return list(zip(*[(d1, d2) for d1 in d1keys for d2 in d2keys]))
-
-
-    def dframe(self, dense=False):
-        if dense:
-            keys1, keys2 = self.dense_keys()
-            dense_map = self.clone({(k1, k2): self._data.get((k1, k2), np.NaN)
-                                 for k1, k2 in product(keys1, keys2)})
-            return dense_map.dframe()
-        return super(HeatMap, self).dframe()
-
-
-
-class Image(SheetCoordinateSystem, Raster):
-    """
-    Image is the atomic unit as which 2D data is stored, along with
-    its bounds object. The input data may be a numpy.matrix object or
-    a two-dimensional numpy array.
-
-    Allows slicing operations of the data in sheet coordinates or direct
-    access to the data, via the .data attribute.
-    """
-
-    bounds = param.ClassSelector(class_=BoundingRegion, default=BoundingBox(), doc="""
-       The bounding region in sheet coordinates containing the data.""")
-
-    group = param.String(default='Image', constant=True)
-
-    vdims = param.List(default=[Dimension('z')],
-                       bounds=(1, 1), doc="""
-        The dimension description of the data held in the matrix.""")
-
-
-    def __init__(self, data, bounds=None, extents=None, xdensity=None, ydensity=None, **params):
-        bounds = bounds if bounds is not None else BoundingBox()
-        if np.isscalar(bounds):
-            bounds = BoundingBox(radius=bounds)
-        elif isinstance(bounds, (tuple, list, np.ndarray)):
-            l, b, r, t = bounds
-            bounds = BoundingBox(points=((l, b), (r, t)))
-        if data is None: data = np.array([[0]])
-        l, b, r, t = bounds.lbrt()
-        extents = extents if extents else (None, None, None, None)
-        Element2D.__init__(self, data, extents=extents, bounds=bounds,
-                           **params)
-
-        (dim1, dim2) = self.data.shape[1], self.data.shape[0]
-        xdensity = xdensity if xdensity else dim1/float(r-l)
-        ydensity = ydensity if ydensity else dim2/float(t-b)
-        SheetCoordinateSystem.__init__(self, bounds, xdensity, ydensity)
-
-        if len(self.data.shape) == 3:
-            if self.data.shape[2] != len(self.vdims):
-                raise ValueError("Input array has shape %r but %d value dimensions defined"
-                                 % (self.data.shape, len(self.vdims)))
-
-
-    def _convert_element(self, data):
-        if isinstance(data, (Raster, HeatMap)):
-            return data.data
-        else:
-            return super(Image, self)._convert_element(data)
-
-
-    def closest(self, coords=[], **kwargs):
-        """
-        Given a single coordinate or multiple coordinates as
-        a tuple or list of tuples or keyword arguments matching
-        the dimension closest will find the closest actual x/y
-        coordinates.
-        """
-        if kwargs and coords:
-            raise ValueError("Specify coordinate using as either a list "
-                             "keyword arguments not both")
-        if kwargs:
-            coords = []
-            getter = []
-            for k, v in kwargs.items():
-                idx = self.get_dimension_index(k)
-                if np.isscalar(v):
-                    coords.append((0, v) if idx else (v, 0))
-                else:
-                    if isinstance(coords, tuple):
-                        coords = [(0, c) if idx else (c, 0) for c in v]
-                    if len(coords) not in [0, len(v)]:
-                        raise ValueError("Length of samples must match")
-                    elif len(coords):
-                        coords = [(t[abs(idx-1)], c) if idx else (c, t[abs(idx-1)])
-                                  for c, t in zip(v, coords)]
-                getter.append(idx)
-        else:
-            getter = [0, 1]
-        getter = itemgetter(*sorted(getter))
-        coords = list(coords)
-        if len(coords) == 1:
-            coords = coords[0]
-        if isinstance(coords, tuple):
-            return getter(self.closest_cell_center(*coords))
-        else:
-            return [getter(self.closest_cell_center(*el)) for el in coords]
-
-
-    def __getitem__(self, coords):
-        """
-        Slice the underlying numpy array in sheet coordinates.
-        """
-        if coords in self.dimensions(): return self.dimension_values(coords)
-        coords = util.process_ellipses(self,coords)
-        if coords is () or coords == slice(None, None):
-            return self
-
-        if not isinstance(coords, tuple):
-            coords = (coords, slice(None))
-        if len(coords) > (2 + self.depth):
-            raise KeyError("Can only slice %d dimensions" % 2 + self.depth)
-        elif len(coords) == 3 and coords[-1] not in [self.vdims[0].name, slice(None)]:
-            raise KeyError("%r is the only selectable value dimension" % self.vdims[0].name)
-
-        coords = coords[:2]
-        if not any([isinstance(el, slice) for el in coords]):
-            return self.data[self.sheet2matrixidx(*coords)]
-        if all([isinstance(c, slice) for c in coords]):
-            l, b, r, t = self.bounds.lbrt()
-            xcoords, ycoords = coords
-            xstart = l if xcoords.start is None else max(l, xcoords.start)
-            xend = r if xcoords.stop is None else min(r, xcoords.stop)
-            ystart = b if ycoords.start is None else max(b, ycoords.start)
-            yend = t if ycoords.stop is None else min(t, ycoords.stop)
-            bounds = BoundingBox(points=((xstart, ystart), (xend, yend)))
-        else:
-            raise KeyError('Indexing requires x- and y-slice ranges.')
-
-        return self.clone(Slice(bounds, self).submatrix(self.data),
-                          bounds=bounds)
-
-
-    def range(self, dim, data_range=True):
-        dim_idx = dim if isinstance(dim, int) else self.get_dimension_index(dim)
-        dim = self.get_dimension(dim_idx)
-        if dim.range != (None, None):
-            return dim.range
-        elif dim_idx in [0, 1]:
-            l, b, r, t = self.bounds.lbrt()
-            if dim_idx:
-                drange = (b, t)
-            else:
-                drange = (l, r)
-        elif dim_idx < len(self.vdims) + 2:
-            dim_idx -= 2
-            data = np.atleast_3d(self.data)[:, :, dim_idx]
-            drange = (np.nanmin(data), np.nanmax(data))
-        if data_range:
-            soft_range = [sr for sr in dim.soft_range if sr is not None]
-            if soft_range:
-                return util.max_range([drange, soft_range])
-            else:
-                return drange
-        else:
-            return dim.soft_range
-
-
-    def _coord2matrix(self, coord):
-        return self.sheet2matrixidx(*coord)
-
-
-    def dimension_values(self, dim, expanded=True, flat=True):
-        """
-        The set of samples available along a particular dimension.
-        """
-        dim_idx = self.get_dimension_index(dim)
-        if dim_idx in [0, 1]:
-            l, b, r, t = self.bounds.lbrt()
-            dim2, dim1 = self.data.shape[:2]
-            d1_half_unit = (r - l)/dim1/2.
-            d2_half_unit = (t - b)/dim2/2.
-            d1lin = np.linspace(l+d1_half_unit, r-d1_half_unit, dim1)
-            d2lin = np.linspace(b+d2_half_unit, t-d2_half_unit, dim2)
-            if expanded:
-                values = np.meshgrid(d2lin, d1lin)[abs(dim_idx-1)]
-                return values.flatten() if flat else values
-            else:
-                return d2lin if dim_idx else d1lin
-        elif dim_idx == 2:
-            # Raster arrays are stored with different orientation
-            # than expanded column format, reorient before expanding
-            data = np.flipud(self.data).T
-            return data.flatten() if flat else data
-        else:
-            super(Image, self).dimension_values(dim)
-
-
-
-class GridImage(Dataset, Element2D):
-    """
-    Grid interface based version of an Image, which will
-    eventually supercede the original Image implementation.
-    """
-
-    group = param.String(default='GridImage', constant=True)
-
-    kdims = param.List(default=[Dimension('x'), Dimension('y')],
-                       bounds=(2, 2))
-
-    vdims = param.List(default=[Dimension('z')], bounds=(1, 1))
-
-    def __init__(self, data, **params):
-        super(GridImage, self).__init__(data, **params)
-        (l, r), (b, t) = self.interface.range(self, 0), self.interface.range(self, 1)
-        (ys, xs) = self.dimension_values(2, flat=False).shape
-        xsampling = (float(r-l)/(xs-1))/2.
-        ysampling = (float(t-b)/(ys-1))/2.
-        l, r = l-xsampling, r+xsampling
-        b, t = b-ysampling, t+ysampling
-        self.bounds = BoundingBox(points=((l, b), (r, t)))
-
-    def range(self, dim, data_range=True):
-        dim_idx = dim if isinstance(dim, int) else self.get_dimension_index(dim)
-        dim = self.get_dimension(dim_idx)
-        if dim.range != (None, None):
-            return dim.range
-        elif dim_idx in [0, 1]:
-            l, b, r, t = self.bounds.lbrt()
-            if dim_idx:
-                drange = (b, t)
-            else:
-                drange = (l, r)
-            return drange
-        else:
-            return self.interface.range(self, dim)
-
-
-
-class RGB(Image):
-    """
-    An RGB element is a Image containing channel data for the the
-    red, green, blue and (optionally) the alpha channels. The values
-    of each channel must be in the range 0.0 to 1.0.
-
-    In input array may have a shape of NxMx4 or NxMx3. In the latter
-    case, the defined alpha dimension parameter is appended to the
-    list of value dimensions.
-    """
-
-    group = param.String(default='RGB', constant=True)
-
-    alpha_dimension = param.ClassSelector(default=Dimension('A',range=(0,1)),
-                                          class_=Dimension, instantiate=False,  doc="""
-        The alpha dimension definition to add the value dimensions if
-        an alpha channel is supplied.""")
-
-    vdims = param.List(
-        default=[Dimension('R', range=(0,1)), Dimension('G',range=(0,1)),
-                 Dimension('B', range=(0,1))], bounds=(3, 4), doc="""
-        The dimension description of the data held in the matrix.
-
-        If an alpha channel is supplied, the defined alpha_dimension
-        is automatically appended to this list.""")
-
-    @property
-    def rgb(self):
-        """
-        Returns the corresponding RGB element.
-
-        Other than the updating parameter definitions, this is the
-        only change needed to implemented an arbitrary colorspace as a
-        subclass of RGB.
-        """
-        return self
-
-
-    @classmethod
-    def load_image(cls, filename, height=1, array=False, bounds=None, bare=False, **kwargs):
-        """
-        Returns an raster element or raw numpy array from a PNG image
-        file, using matplotlib.
-
-        The specified height determines the bounds of the raster
-        object in sheet coordinates: by default the height is 1 unit
-        with the width scaled appropriately by the image aspect ratio.
-
-        Note that as PNG images are encoded as RGBA, the red component
-        maps to the first channel, the green component maps to the
-        second component etc. For RGB elements, this mapping is
-        trivial but may be important for subclasses e.g. for HSV
-        elements.
-
-        Setting bare=True will apply options disabling axis labels
-        displaying just the bare image. Any additional keyword
-        arguments will be passed to the Image object.
+            Returns:
+                dict: The Fulfillment as an alternative serialization format.
         """
         try:
-            from matplotlib import pyplot as plt
-        except:
-            raise ImportError("RGB.load_image requires matplotlib.")
+            fulfillment = self.fulfillment.serialize_uri()
+        except (TypeError, AttributeError):
+            # NOTE: When a non-signed transaction is casted to a dict,
+            #       `self.fulfillments` value is lost, as in the node's
+            #       transaction model that is saved to the database, does not
+            #       account for its dictionary form but just for its signed uri
+            #       form.
+            #       Hence, when a non-signed fulfillment is to be cast to a
+            #       dict, we just call its internal `to_dict` method here and
+            #       its `from_dict` method in `Fulfillment.from_dict`.
+            fulfillment = self.fulfillment.to_dict()
 
-        data = plt.imread(filename)
-        if array:  return data
+        try:
+            # NOTE: `self.tx_input` can be `None` and that's fine
+            tx_input = self.tx_input.to_dict()
+        except AttributeError:
+            tx_input = None
 
-        (h, w, _) = data.shape
-        if bounds is None:
-            f = float(height) / h
-            xoffset, yoffset = w*f/2, h*f/2
-            bounds=(-xoffset, -yoffset, xoffset, yoffset)
-        rgb = cls(data, bounds=bounds, **kwargs)
-        if bare: rgb = rgb(plot=dict(xaxis=None, yaxis=None))
-        return rgb
+        ffill = {
+            'owners_before': self.owners_before,
+            'input': tx_input,
+            'fulfillment': fulfillment,
+        }
+        if fid is not None:
+            ffill['fid'] = fid
+        return ffill
 
+    @classmethod
+        # TODO: write docstring
 
-    def dimension_values(self, dim, expanded=True, flat=True):
+        if len(owners_before) == 1:
+            ffill = Ed25519Fulfillment(public_key=owners_before[0])
+            return cls(ffill, owners_before)
+
+    @classmethod
+    def from_dict(cls, ffill):
+        """Transforms a Python dictionary to a Fulfillment object.
+
+            Note:
+                Optionally, this method can also serialize a Cryptoconditions-
+                Fulfillment that is not yet signed.
+
+            Args:
+                ffill (dict): The Fulfillment to be transformed.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Fulfillment`
+
+            Raises:
+                InvalidSignature: If a Fulfillment's URI couldn't be parsed.
         """
-        The set of samples available along a particular dimension.
+        try:
+            fulfillment = CCFulfillment.from_uri(ffill['fulfillment'])
+        except ValueError:
+            # TODO FOR CC: Throw an `InvalidSignature` error in this case.
+            raise InvalidSignature("Fulfillment URI couldn't been parsed")
+        except TypeError:
+            # NOTE: See comment about this special case in
+            #       `Fulfillment.to_dict`
+            fulfillment = CCFulfillment.from_dict(ffill['fulfillment'])
+        input_ = TransactionLink.from_dict(ffill['input'])
+        return cls(fulfillment, ffill['owners_before'], input_)
+
+
+class TransactionLink(object):
+    """An object for unidirectional linking to a Transaction's Condition.
+
+        Attributes:
+            txid (str, optional): A Transaction to link to.
+            cid (int, optional): A Condition's index in a Transaction with id
+            `txid`.
+    """
+
+    def __init__(self, txid=None, cid=None):
+        """Used to point to a specific Condition of a Transaction.
+
+            Note:
+                In an IPLD implementation, this class is not necessary anymore,
+                as an IPLD link can simply point to an object, as well as an
+                objects properties. So instead of having a (de)serializable
+                class, we can have a simple IPLD link of the form:
+                `/<tx_id>/transaction/conditions/<cid>/`.
+
+            Args:
+                txid (str, optional): A Transaction to link to.
+                cid (int, optional): A Condition's index in a Transaction with
+                    id `txid`.
         """
-        dim_idx = self.get_dimension_index(dim)
-        if self.ndims <= dim_idx < len(self.dimensions()):
-            data = np.flipud(self.data[:,:,dim_idx-self.ndims]).T
-            return data.flatten() if flat else data
-        return super(RGB, self).dimension_values(dim, expanded, flat)
+        self.txid = txid
+        self.cid = cid
+
+    def __bool__(self):
+        return self.txid is not None and self.cid is not None
+
+    def __eq__(self, other):
+        # TODO: If `other !== TransactionLink` return `False`
+        return self.to_dict() == self.to_dict()
+
+    @classmethod
+    def from_dict(cls, link):
+        """Transforms a Python dictionary to a TransactionLink object.
+
+            Args:
+                link (dict): The link to be transformed.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.TransactionLink`
+        """
+        try:
+            return cls(link['txid'], link['cid'])
+        except TypeError:
+            return cls()
+
+    def to_dict(self):
+        """Transforms the object to a Python dictionary.
+
+            Returns:
+                (dict|None): The link as an alternative serialization format.
+        """
+        if self.txid is None and self.cid is None:
+            return None
+        else:
+            return {
+                'txid': self.txid,
+                'cid': self.cid,
+            }
 
 
-    def __init__(self, data, **params):
-        sliced = None
-        if isinstance(data, Overlay):
-            images = data.values()
-            if not all(isinstance(im, Image) for im in images):
-                raise ValueError("Input overlay must only contain Image elements")
-            shapes = [im.data.shape for im in images]
-            if not all(shape==shapes[0] for shape in shapes):
-                raise ValueError("Images in the input overlays must contain data of the consistent shape")
-            ranges = [im.vdims[0].range for im in images]
-            if any(None in r for r in ranges):
-                raise ValueError("Ranges must be defined on all the value dimensions of all the Images")
-            arrays = [(im.data - r[0]) / (r[1] - r[0]) for r,im in zip(ranges, images)]
-            data = np.dstack(arrays)
+class Condition(object):
+    """A Condition is used to lock an asset.
 
-        if not isinstance(data, Element):
-            if len(data.shape) != 3:
-                raise ValueError("Three dimensional matrices or arrays required")
-            elif data.shape[2] == 4:
-                sliced = data[:,:,:-1]
+        Attributes:
+            fulfillment (:class:`cryptoconditions.Fulfillment`): A Fulfillment
+                to extract a Condition from.
+            owners_after (:obj:`list` of :obj:`str`, optional): A list of
+                owners before a Transaction was confirmed.
+    """
 
-        if len(params.get('vdims',[])) == 4:
-            alpha_dim = params['vdims'].pop(3)
-            params['alpha_dimension'] = alpha_dim
+    def __init__(self, fulfillment, owners_after=None, amount=1):
+        """Condition shims a Cryptocondition condition for BigchainDB.
 
-        super(RGB, self).__init__(data if sliced is None else sliced, **params)
-        if sliced is not None:
-            self.vdims.append(self.alpha_dimension)
+            Args:
+                fulfillment (:class:`cryptoconditions.Fulfillment`): A
+                    Fulfillment to extract a Condition from.
+                owners_after (:obj:`list` of :obj:`str`, optional): A list of
+                    owners before a Transaction was confirmed.
+                amount (int): The amount of Assets to be locked with this
+                    Condition.
+
+            Raises:
+                TypeError: if `owners_after` is not instance of `list`.
+        """
+        self.fulfillment = fulfillment
+        # TODO: Not sure if we should validate for value here
+        self.amount = amount
+
+        if not isinstance(owners_after, list) and owners_after is not None:
+            raise TypeError('`owners_after` must be a list instance or None')
+        else:
+            self.owners_after = owners_after
+
+    def __eq__(self, other):
+        # TODO: If `other !== Condition` return `False`
+        return self.to_dict() == other.to_dict()
+
+    def to_dict(self, cid=None):
+        """Transforms the object to a Python dictionary.
+
+            Note:
+                A `cid` can be submitted to be included in the dictionary
+                representation.
+
+                A dictionary serialization of the Fulfillment the Condition was
+                derived from is always provided.
+
+            Args:
+                cid (int, optional): The Condition's index in a Transaction.
+
+            Returns:
+                dict: The Condition as an alternative serialization format.
+        """
+        # TODO FOR CC: It must be able to recognize a hashlock condition
+        #              and fulfillment!
+        condition = {}
+        try:
+            condition['details'] = self.fulfillment.to_dict()
+        except AttributeError:
+            pass
+
+        try:
+            condition['uri'] = self.fulfillment.condition_uri
+        except AttributeError:
+            condition['uri'] = self.fulfillment
+
+        cond = {
+            'owners_after': self.owners_after,
+            'condition': condition,
+            'amount': self.amount
+        }
+        if cid is not None:
+            cond['cid'] = cid
+        return cond
+
+    @classmethod
+    def generate(cls, owners_after, amount):
+        # TODO: Update docstring
+        """Generates a Condition from a specifically formed tuple or list.
+
+            Note:
+                If a ThresholdCondition has to be generated where the threshold
+                is always the number of subconditions it is split between, a
+                list of the following structure is sufficient:
+
+                [(address|condition)*, [(address|condition)*, ...], ...]
+
+                If however, the thresholds of individual threshold conditions
+                to be created have to be set specifically, a tuple of the
+                following structure is necessary:
+
+                ([(address|condition)*,
+                  ([(address|condition)*, ...], subthreshold),
+                  ...], threshold)
+
+            Args:
+                owners_after (:obj:`list` of :obj:`str`|tuple): The users that
+                    should be able to fulfill the Condition that is being
+                    created.
+
+            Returns:
+                A Condition that can be used in a Transaction.
+
+            Returns:
+                TypeError: If `owners_after` is not an instance of `list`.
+                TypeError: If `owners_after` is an empty list.
+        """
+        # TODO: We probably want to remove the tuple logic for weights here
+        # again:
+        # github.com/bigchaindb/bigchaindb/issues/730#issuecomment-255144756
+        if isinstance(owners_after, tuple):
+            owners_after, threshold = owners_after
+        else:
+            threshold = len(owners_after)
+
+        if not isinstance(amount, int):
+            raise TypeError('`amount` must be a int')
+        if not isinstance(owners_after, list):
+            raise TypeError('`owners_after` must be an instance of list')
+        if len(owners_after) == 0:
+            raise ValueError('`owners_after` needs to contain at least one'
+                             'owner')
+        elif len(owners_after) == 1 and not isinstance(owners_after[0], list):
+            try:
+                ffill = Ed25519Fulfillment(public_key=owners_after[0])
+            except TypeError:
+                ffill = owners_after[0]
+            return cls(ffill, owners_after, amount=amount)
+        else:
+            initial_cond = ThresholdSha256Fulfillment(threshold=threshold)
+            threshold_cond = reduce(cls._gen_condition, owners_after,
+                                    initial_cond)
+            return cls(threshold_cond, owners_after, amount=amount)
+
+    @classmethod
+    def _gen_condition(cls, initial, current):
+        """Generates ThresholdSha256 conditions from a list of new owners.
+
+            Note:
+                This method is intended only to be used with a reduce function.
+                For a description on how to use this method, see
+                `Condition.generate`.
+
+            Args:
+                initial (:class:`cryptoconditions.ThresholdSha256Fulfillment`):
+                    A Condition representing the overall root.
+                current (:obj:`list` of :obj:`str`|str): A list of new owners
+                    or a single new owner.
+
+            Returns:
+                :class:`cryptoconditions.ThresholdSha256Fulfillment`:
+        """
+        if isinstance(current, tuple):
+            owners_after, threshold = current
+        else:
+            owners_after = current
+            try:
+                threshold = len(owners_after)
+            except TypeError:
+                threshold = None
+
+        if isinstance(owners_after, list) and len(owners_after) > 1:
+            ffill = ThresholdSha256Fulfillment(threshold=threshold)
+            reduce(cls._gen_condition, owners_after, ffill)
+        elif isinstance(owners_after, list) and len(owners_after) <= 1:
+            raise ValueError('Sublist cannot contain single owner')
+        else:
+            try:
+                owners_after = owners_after.pop()
+            except AttributeError:
+                pass
+            try:
+                ffill = Ed25519Fulfillment(public_key=owners_after)
+            except TypeError:
+                # NOTE: Instead of submitting base58 encoded addresses, a user
+                #       of this class can also submit fully instantiated
+                #       Cryptoconditions. In the case of casting `owners_after`
+                #       to a Ed25519Fulfillment with the result of a
+                #       `TypeError`, we're assuming that `owners_after` is a
+                #       Cryptocondition then.
+                ffill = owners_after
+        initial.add_subfulfillment(ffill)
+        return initial
+
+    @classmethod
+    def from_dict(cls, cond):
+        """Transforms a Python dictionary to a Condition object.
+
+            Note:
+                To pass a serialization cycle multiple times, a
+                Cryptoconditions Fulfillment needs to be present in the
+                passed-in dictionary, as Condition URIs are not serializable
+                anymore.
+
+            Args:
+                cond (dict): The Condition to be transformed.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Condition`
+        """
+        try:
+            fulfillment = CCFulfillment.from_dict(cond['condition']['details'])
+        except KeyError:
+            # NOTE: Hashlock condition case
+            fulfillment = cond['condition']['uri']
+        return cls(fulfillment, cond['owners_after'], cond['amount'])
+
+
+class Asset(object):
+    """An Asset is a fungible unit to spend and lock with Transactions.
+
+        Note:
+            Currently, the following flags are not yet fully supported:
+                - `divisible`
+                - `updatable`
+                - `refillable`
+
+        Attributes:
+            data (dict): A dictionary of data that can be added to an Asset.
+            data_id (str): A unique identifier of `data`'s content.
+            divisible (bool): A flag indicating if an Asset can be divided.
+            updatable (bool): A flag indicating if an Asset can be updated.
+            refillable (bool): A flag indicating if an Asset can be refilled.
+    """
+
+    def __init__(self, data=None, data_id=None, divisible=False,
+                 updatable=False, refillable=False):
+        """An Asset is not required to contain any extra data from outside."""
+        self.data = data
+        self.data_id = data_id if data_id is not None else self.to_hash()
+        self.divisible = divisible
+        self.updatable = updatable
+        self.refillable = refillable
+
+        self._validate_asset()
+
+    def __eq__(self, other):
+        try:
+            other_dict = other.to_dict()
+        except AttributeError:
+            return False
+        return self.to_dict() == other_dict
+
+    def to_dict(self):
+        """Transforms the object to a Python dictionary.
+
+            Returns:
+                (dict): The Asset object as an alternative serialization
+                    format.
+        """
+        return {
+            'id': self.data_id,
+            'divisible': self.divisible,
+            'updatable': self.updatable,
+            'refillable': self.refillable,
+            'data': self.data,
+        }
+
+    @classmethod
+    def from_dict(cls, asset):
+        """Transforms a Python dictionary to an Asset object.
+
+            Args:
+                asset (dict): The dictionary to be serialized.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Asset`
+        """
+        # TODO: This is not correct. If using Transaction.from_dict() from a
+        #       TRANSFER transaction we only have information about the `id`,
+        #       meaning that even if its a divisible asset, since the key does
+        #       not exist if will be set to False by default.
+        #       Maybe use something like an AssetLink similar to
+        #       TransactionLink for TRANSFER transactions
+        return cls(asset.get('data'), asset['id'],
+                   asset.get('divisible', False),
+                   asset.get('updatable', False),
+                   asset.get('refillable', False))
+
+    def to_hash(self):
+        """Generates a unqiue uuid for an Asset"""
+        return str(uuid4())
+
+    @staticmethod
+    def get_asset_id(transactions):
+        """Get the asset id from a list of transaction ids.
+
+        This is useful when we want to check if the multiple inputs of a
+        transaction are related to the same asset id.
+
+        Args:
+            transactions (list): list of transaction usually inputs that should
+                                 have a matching asset_id
+
+        Returns:
+            str: uuid of the asset.
+
+        Raises:
+            AssetIdMismatch: If the inputs are related to different assets.
+        """
+
+        if not isinstance(transactions, list):
+            transactions = [transactions]
+
+        # create a set of asset_ids
+        asset_ids = {tx.asset.data_id for tx in transactions}
+
+        # check that all the transasctions have the same asset_id
+        if len(asset_ids) > 1:
+            raise AssetIdMismatch(('All inputs of a transaction need'
+                                   ' to have the same asset id.'))
+        return asset_ids.pop()
+
+    def _validate_asset(self, amount=None):
+        """Validates the asset"""
+        if self.data is not None and not isinstance(self.data, dict):
+            raise TypeError('`data` must be a dict instance or None')
+        if not isinstance(self.divisible, bool):
+            raise TypeError('`divisible` must be a boolean')
+        if not isinstance(self.refillable, bool):
+            raise TypeError('`refillable` must be a boolean')
+        if not isinstance(self.updatable, bool):
+            raise TypeError('`updatable` must be a boolean')
+
+        if self.refillable:
+            raise NotImplementedError('Refillable assets are not yet'
+                                      ' implemented')
+        if self.updatable:
+            raise NotImplementedError('Updatable assets are not yet'
+                                      ' implemented')
+
+        # If the amount is supplied we can perform extra validations to
+        # the asset
+        if amount is not None:
+            if not isinstance(amount, int):
+                raise TypeError('`amount` must be an int')
+
+            if self.divisible is False and amount != 1:
+                raise AmountError('non divisible assets always have'
+                                  ' amount equal to one')
+
+            # Since refillable assets are not yet implemented this should
+            # raise and exception
+            if self.divisible is True and amount < 2:
+                raise AmountError('divisible assets must have an amount'
+                                  ' greater than one')
+
+
+class Metadata(object):
+    """Metadata is used to store a dictionary and its hash in a Transaction."""
+
+    def __init__(self, data=None, data_id=None):
+        """Metadata stores a payload `data` as well as data's hash, `data_id`.
+
+            Note:
+                When no `data_id` is provided, one is being generated by
+                this method.
+
+            Args:
+                data (dict): A dictionary to be held by Metadata.
+                data_id (str): A hash corresponding to the contents of
+                    `data`.
+        """
+        # TODO: Rename `payload_id` to `id`
+        if data_id is not None:
+            self.data_id = data_id
+        else:
+            self.data_id = self.to_hash()
+
+        if data is not None and not isinstance(data, dict):
+            raise TypeError('`data` must be a dict instance or None')
+        else:
             self.data = data
 
+    def __eq__(self, other):
+        # TODO: If `other !== Data` return `False`
+        return self.to_dict() == other.to_dict()
 
-    def __getitem__(self, coords):
+    @classmethod
+    def from_dict(cls, data):
+        """Transforms a Python dictionary to a Metadata object.
+
+            Args:
+                data (dict): The dictionary to be serialized.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Metadata`
         """
-        Slice the underlying numpy array in sheet coordinates.
+        try:
+            return cls(data['data'], data['id'])
+        except TypeError:
+            return cls()
+
+    def to_dict(self):
+        """Transforms the object to a Python dictionary.
+
+            Returns:
+                (dict|None): The Metadata object as an alternative
+                    serialization format.
         """
-        if coords in self.dimensions(): return self.dimension_values(coords)
-        coords = util.process_ellipses(self, coords)
-        if not isinstance(coords, slice) and len(coords) > self.ndims:
-            values = coords[self.ndims:]
-            channels = [el for el in values
-                        if isinstance(el, (str, util.unicode, Dimension))]
-            if len(channels) == 1:
-                sliced = super(RGB, self).__getitem__(coords[:self.ndims])
-                if channels[0] not in self.vdims:
-                    raise KeyError("%r is not an available value dimension"
-                                    % channels[0])
-                vidx = self.get_dimension_index(channels[0])
-                val_index = vidx - self.ndims
-                data = sliced.data[:,:, val_index]
-                return Image(data, **dict(util.get_param_values(self),
-                                          vdims=[self.vdims[val_index]]))
-            elif len(channels) > 1:
-                raise KeyError("Channels can only be selected once in __getitem__")
-            elif all(v==slice(None) for v in values):
-                coords = coords[:self.ndims]
-            else:
-                raise KeyError("Only empty value slices currently supported in RGB")
-        return super(RGB, self).__getitem__(coords)
+        if self.data is None:
+            return None
+        else:
+            return {
+                'data': self.data,
+                'id': self.data_id,
+            }
+
+    def to_hash(self):
+        """A hash corresponding to the contents of `payload`."""
+        return str(uuid4())
 
 
-class HSV(RGB):
+class Transaction(object):
+    """A Transaction is used to create and transfer assets.
+
+        Note:
+            For adding Fulfillments and Conditions, this class provides methods
+            to do so.
+
+        Attributes:
+            operation (str): Defines the operation of the Transaction.
+            fulfillments (:obj:`list` of :class:`~bigchaindb.common.
+                transaction.Fulfillment`, optional): Define the assets to
+                spend.
+            conditions (:obj:`list` of :class:`~bigchaindb.common.
+                transaction.Condition`, optional): Define the assets to lock.
+            metadata (:class:`~bigchaindb.common.transaction.Metadata`):
+                Metadata to be stored along with the Transaction.
+            timestamp (int): Defines the time a Transaction was created.
+            version (int): Defines the version number of a Transaction.
     """
-    Example of a commonly used color space subclassed from RGB used
-    for working in a HSV (hue, saturation and value) color space.
-    """
+    CREATE = 'CREATE'
+    TRANSFER = 'TRANSFER'
+    GENESIS = 'GENESIS'
+    ALLOWED_OPERATIONS = (CREATE, TRANSFER, GENESIS)
+    VERSION = 1
 
-    group = param.String(default='HSV', constant=True)
+    def __init__(self, operation, asset, fulfillments=None, conditions=None,
+                 metadata=None, timestamp=None, version=None):
+        """The constructor allows to create a customizable Transaction.
 
-    alpha_dimension = param.ClassSelector(default=Dimension('A',range=(0,1)),
-                                          class_=Dimension, instantiate=False,  doc="""
-        The alpha dimension definition to add the value dimensions if
-        an alpha channel is supplied.""")
+            Note:
+                When no `version` or `timestamp`, is provided, one is being
+                generated by this method.
 
-    vdims = param.List(
-        default=[Dimension('H', range=(0,1), cyclic=True),
-                 Dimension('S',range=(0,1)),
-                 Dimension('V', range=(0,1))], bounds=(3, 4), doc="""
-        The dimension description of the data held in the array.
+            Args:
+                operation (str): Defines the operation of the Transaction.
+                asset (:class:`~bigchaindb.common.transaction.Asset`): An Asset
+                    to be transferred or created in a Transaction.
+                fulfillments (:obj:`list` of :class:`~bigchaindb.common.
+                    transaction.Fulfillment`, optional): Define the assets to
+                    spend.
+                conditions (:obj:`list` of :class:`~bigchaindb.common.
+                    transaction.Condition`, optional): Define the assets to
+                    lock.
+                metadata (:class:`~bigchaindb.common.transaction.Metadata`):
+                    Metadata to be stored along with the Transaction.
+                timestamp (int): Defines the time a Transaction was created.
+                version (int): Defines the version number of a Transaction.
 
-        If an alpha channel is supplied, the defined alpha_dimension
-        is automatically appended to this list.""")
+        """
+        if version is not None:
+            self.version = version
+        else:
+            self.version = self.__class__.VERSION
 
-    hsv_to_rgb = np.vectorize(colorsys.hsv_to_rgb)
+        if timestamp is not None:
+            self.timestamp = timestamp
+        else:
+            self.timestamp = gen_timestamp()
+
+        if operation not in Transaction.ALLOWED_OPERATIONS:
+            allowed_ops = ', '.join(self.__class__.ALLOWED_OPERATIONS)
+            raise ValueError('`operation` must be one of {}'
+                             .format(allowed_ops))
+        else:
+            self.operation = operation
+
+        # If an asset is not defined in a `CREATE` transaction, create a
+        # default one.
+        if asset is None and operation == Transaction.CREATE:
+            asset = Asset()
+
+        if not isinstance(asset, Asset):
+            raise TypeError('`asset` must be an Asset instance')
+        else:
+            self.asset = asset
+
+        if conditions is not None and not isinstance(conditions, list):
+            raise TypeError('`conditions` must be a list instance or None')
+        # TODO: Check if there is a case in which conditions may be None
+        elif conditions is None:
+            self.conditions = []
+        else:
+            self.conditions = conditions
+
+        if fulfillments is not None and not isinstance(fulfillments, list):
+            raise TypeError('`fulfillments` must be a list instance or None')
+        # TODO: Check if there is a case in which fulfillments may be None
+        elif fulfillments is None:
+            self.fulfillments = []
+        else:
+            self.fulfillments = fulfillments
+
+        if metadata is not None and not isinstance(metadata, Metadata):
+            raise TypeError('`metadata` must be a Metadata instance or None')
+        else:
+            self.metadata = metadata
+
+        # validate asset
+        # we know that each transaction relates to a single asset
+        # we can sum the amount of all the conditions
+
+        if self.operation == self.CREATE:
+            amount = sum([condition.amount for condition in self.conditions])
+            self.asset._validate_asset(amount=amount)
+        else:
+            # In transactions other then `CREATE` we don't know if its a
+            # divisible asset or not, so we cannot validate the amount here
+            self.asset._validate_asset()
+
+    @classmethod
+    def create(cls, owners_before, owners_after, metadata=None, asset=None,
+               secret=None, time_expire=None):
+        # TODO: Update docstring
+        """A simple way to generate a `CREATE` transaction.
+
+            Note:
+                This method currently supports the following Cryptoconditions
+                use cases:
+                    - Ed25519
+                    - ThresholdSha256
+                    - PreimageSha256.
+
+                Additionally, it provides support for the following BigchainDB
+                use cases:
+                    - Multiple inputs and outputs.
+
+            Args:
+                owners_before (:obj:`list` of :obj:`str`): A list of keys that
+                    represent the creators of this asset.
+                owners_after (:obj:`list` of :obj:`str`): A list of keys that
+                    represent the receivers of this Transaction.
+                metadata (dict): Python dictionary to be stored along with the
+                    Transaction.
+                asset (:class:`~bigchaindb.common.transaction.Asset`): An Asset
+                    to be created in this Transaction.
+                secret (binarystr, optional): A secret string to create a hash-
+                    lock Condition.
+                time_expire (int, optional): The UNIX time a Transaction is
+                    valid.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Transaction`
+        """
+        if not isinstance(owners_before, list):
+            raise TypeError('`owners_before` must be a list instance')
+        if not isinstance(owners_after, list):
+            raise TypeError('`owners_after` must be a list instance')
+
+        if (len(owners_before) > 0 and len(owners_after) == 0 and
+                time_expire is not None):
+            raise NotImplementedError('Timeout conditions will be implemented '
+                                      'later')
+        elif (len(owners_before) > 0 and len(owners_after) == 0 and
+              secret is None):
+            raise ValueError('Define a secret to create a hashlock condition')
+
+        else:
+            raise ValueError("These are not the cases you're looking for ;)")
+
+        metadata = Metadata(metadata)
+
+        # TODO: Not sure there is a need to ensure that `owners_before == 1`
+        # TODO: For divisible assets we will need to create one hashlock
+        #       condition per output
+        # if (len(owners_before) == 1 and len(owners_after) == 0 and
+        #         secret is not None):
+        #     # NOTE: Hashlock condition case
+        #     hashlock = PreimageSha256Fulfillment(preimage=secret)
+        #     cond_tx = Condition(hashlock.condition_uri, amount=amount)
+        #     ffill = Ed25519Fulfillment(public_key=owners_before[0])
+        #     ffill_tx = Fulfillment(ffill, owners_before)
+        #     return cls(cls.CREATE, asset, [ffill_tx], [cond_tx], metadata)
+
+        ffils = []
+        conds = []
+
+        # generate_conditions
+        for owner_after in owners_after:
+            # TODO: Check types so this doesn't fail unpacking
+            pub_keys, amount = owner_after
+            conds.append(Condition.generate(pub_keys, amount))
+
+        # generate fulfillments
+        ffils.append(Fulfillment.generate(owners_before))
+
+        return cls(cls.CREATE, asset, ffils, conds, metadata)
+
+    @classmethod
+    def transfer(cls, inputs, owners_after, asset, metadata=None):
+        """A simple way to generate a `TRANSFER` transaction.
+
+            Note:
+                Different cases for threshold conditions:
+
+                Combining multiple `inputs` with an arbitrary number of
+                `owners_after` can yield interesting cases for the creation of
+                threshold conditions we'd like to support. The following
+                notation is proposed:
+
+                1. The index of an `owner_after` corresponds to the index of
+                   an input:
+                   e.g. `transfer([input1], [a])`, means `input1` would now be
+                        owned by user `a`.
+
+                2. `owners_after` can (almost) get arbitrary deeply nested,
+                   creating various complex threshold conditions:
+                   e.g. `transfer([inp1, inp2], [[a, [b, c]], d])`, means
+                        `a`'s signature would have a 50% weight on `inp1`
+                        compared to `b` and `c` that share 25% of the leftover
+                        weight respectively. `inp2` is owned completely by `d`.
+
+            Args:
+                inputs (:obj:`list` of :class:`~bigchaindb.common.transaction.
+                    Fulfillment`): Converted "output" Conditions, intended to
+                    be used as "input" Fulfillments in the transfer to
+                    generate.
+                owners_after (:obj:`list` of :obj:`str`): A list of keys that
+                    represent the receivers of this Transaction.
+                asset (:class:`~bigchaindb.common.transaction.Asset`): An Asset
+                    to be transferred in this Transaction.
+                metadata (dict): Python dictionary to be stored along with the
+                    Transaction.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Transaction`
+        """
+        if not isinstance(inputs, list):
+            raise TypeError('`inputs` must be a list instance')
+        if len(inputs) == 0:
+            raise ValueError('`inputs` must contain at least one item')
+        if not isinstance(owners_after, list):
+            raise TypeError('`owners_after` must be a list instance')
+
+        # # NOTE: See doc strings `Note` for description.
+        # if len(inputs) == len(owners_after):
+        #     if len(owners_after) == 1:
+        #         conditions = [Condition.generate(owners_after)]
+        #     elif len(owners_after) > 1:
+        #         conditions = [Condition.generate(owners) for owners
+        #                       in owners_after]
+        # else:
+        #     # TODO: Why??
+        #     raise ValueError("`inputs` and `owners_after`'s count must be the "
+        #                      "same")
+
+        conds = []
+        for owner_after in owners_after:
+            pub_keys, amount = owner_after
+            conds.append(Condition.generate(pub_keys, amount))
+
+
+        metadata = Metadata(metadata)
+        inputs = deepcopy(inputs)
+        return cls(cls.TRANSFER, asset, inputs, conds, metadata)
+
+    def __eq__(self, other):
+        try:
+            other = other.to_dict()
+        except AttributeError:
+            return False
+        return self.to_dict() == other
+
+    def to_inputs(self, condition_indices=None):
+        """Converts a Transaction's Conditions to spendable Fulfillments.
+
+            Note:
+                Takes the Transaction's Conditions and derives Fulfillments
+                from it that can then be passed into `Transaction.transfer` as
+                `inputs`.
+                A list of integers can be passed to `condition_indices` that
+                defines which Conditions should be returned as inputs.
+                If no `condition_indices` are passed (empty list or None) all
+                Condition of the Transaction are passed.
+
+            Args:
+                condition_indices (:obj:`list` of int): Defines which
+                    Conditions should be returned as inputs.
+
+            Returns:
+                :obj:`list` of :class:`~bigchaindb.common.transaction.
+                    Fulfillment`
+        """
+        inputs = []
+        if condition_indices is None or len(condition_indices) == 0:
+            # NOTE: If no condition indices are passed, we just assume to
+            #       take all conditions as inputs.
+            condition_indices = [index for index, _
+                                 in enumerate(self.conditions)]
+
+        for cid in condition_indices:
+            input_cond = self.conditions[cid]
+            ffill = Fulfillment(input_cond.fulfillment,
+                                input_cond.owners_after,
+                                TransactionLink(self.id, cid))
+            inputs.append(ffill)
+        return inputs
+
+    def add_fulfillment(self, fulfillment):
+        """Adds a Fulfillment to a Transaction's list of Fulfillments.
+
+            Args:
+                fulfillment (:class:`~bigchaindb.common.transaction.
+                    Fulfillment`): A Fulfillment to be added to the
+                    Transaction.
+        """
+        if not isinstance(fulfillment, Fulfillment):
+            raise TypeError('`fulfillment` must be a Fulfillment instance')
+        self.fulfillments.append(fulfillment)
+
+    def add_condition(self, condition):
+        """Adds a Condition to a Transaction's list of Conditions.
+
+            Args:
+                condition (:class:`~bigchaindb.common.transaction.
+                    Condition`): A Condition to be added to the
+                    Transaction.
+        """
+        if not isinstance(condition, Condition):
+            raise TypeError('`condition` must be a Condition instance or None')
+        self.conditions.append(condition)
+
+    def sign(self, private_keys):
+        """Fulfills a previous Transaction's Condition by signing Fulfillments.
+
+            Note:
+                This method works only for the following Cryptoconditions
+                currently:
+                    - Ed25519Fulfillment
+                    - ThresholdSha256Fulfillment
+                Furthermore, note that all keys required to fully sign the
+                Transaction have to be passed to this method. A subset of all
+                will cause this method to fail.
+
+            Args:
+                private_keys (:obj:`list` of :obj:`str`): A complete list of
+                    all private keys needed to sign all Fulfillments of this
+                    Transaction.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Transaction`
+        """
+        # TODO: Singing should be possible with at least one of all private
+        #       keys supplied to this method.
+        if private_keys is None or not isinstance(private_keys, list):
+            raise TypeError('`private_keys` must be a list instance')
+
+        # NOTE: Generate public keys from private keys and match them in a
+        #       dictionary:
+        #                   key:     public_key
+        #                   value:   private_key
+        def gen_public_key(private_key):
+            # TODO FOR CC: Adjust interface so that this function becomes
+            #              unnecessary
+
+            # cc now provides a single method `encode` to return the key
+            # in several different encodings.
+            public_key = private_key.get_verifying_key().encode()
+            # Returned values from cc are always bytestrings so here we need
+            # to decode to convert the bytestring into a python str
+            return public_key.decode()
+
+        key_pairs = {gen_public_key(SigningKey(private_key)):
+                     SigningKey(private_key) for private_key in private_keys}
+
+        # TODO: What does the conditions of this transaction have to do with the 
+        #       fulfillments, and why does this enforce for the number of fulfillments
+        #       and conditions to be the same?
+        # TODO: Need to check how this was done before common but I from what I remember we
+        #       included the condition that we were fulfilling in the message to be signed.
+        # zippedIO = enumerate(zip(self.fulfillments, self.conditions))
+        for index, fulfillment in enumerate(self.fulfillments):
+            # NOTE: We clone the current transaction but only add the condition
+            #       and fulfillment we're currently working on plus all
+            #       previously signed ones.
+            tx_partial = Transaction(self.operation, self.asset, [fulfillment],
+                                     self.conditions, self.metadata,
+                                     self.timestamp, self.version)
+
+            tx_partial_dict = tx_partial.to_dict()
+            tx_partial_dict = Transaction._remove_signatures(tx_partial_dict)
+            tx_serialized = Transaction._to_str(tx_partial_dict)
+            self._sign_fulfillment(fulfillment, index, tx_serialized,
+                                   key_pairs)
+        return self
+
+    def _sign_fulfillment(self, fulfillment, index, tx_serialized, key_pairs):
+        """Signs a single Fulfillment with a partial Transaction as message.
+
+            Note:
+                This method works only for the following Cryptoconditions
+                currently:
+                    - Ed25519Fulfillment
+                    - ThresholdSha256Fulfillment.
+
+            Args:
+                fulfillment (:class:`~bigchaindb.common.transaction.
+                    Fulfillment`) The Fulfillment to be signed.
+                index (int): The index (or `fid`) of the Fulfillment to be
+                    signed.
+                tx_serialized (str): The Transaction to be used as message.
+                key_pairs (dict): The keys to sign the Transaction with.
+        """
+        if isinstance(fulfillment.fulfillment, Ed25519Fulfillment):
+            self._sign_simple_signature_fulfillment(fulfillment, index,
+                                                    tx_serialized, key_pairs)
+        elif isinstance(fulfillment.fulfillment, ThresholdSha256Fulfillment):
+            self._sign_threshold_signature_fulfillment(fulfillment, index,
+                                                       tx_serialized,
+                                                       key_pairs)
+        else:
+            raise ValueError("Fulfillment couldn't be matched to "
+                             'Cryptocondition fulfillment type.')
+
+    def _sign_simple_signature_fulfillment(self, fulfillment, index,
+                                           tx_serialized, key_pairs):
+        """Signs a Ed25519Fulfillment.
+
+            Args:
+                fulfillment (:class:`~bigchaindb.common.transaction.
+                    Fulfillment`) The Fulfillment to be signed.
+                index (int): The index (or `fid`) of the Fulfillment to be
+                    signed.
+                tx_serialized (str): The Transaction to be used as message.
+                key_pairs (dict): The keys to sign the Transaction with.
+        """
+        # NOTE: To eliminate the dangers of accidentally signing a condition by
+        #       reference, we remove the reference of fulfillment here
+        #       intentionally. If the user of this class knows how to use it,
+        #       this should never happen, but then again, never say never.
+        fulfillment = deepcopy(fulfillment)
+        owner_before = fulfillment.owners_before[0]
+        try:
+            # cryptoconditions makes no assumptions of the encoding of the
+            # message to sign or verify. It only accepts bytestrings
+            fulfillment.fulfillment.sign(tx_serialized.encode(),
+                                         key_pairs[owner_before])
+        except KeyError:
+            raise KeypairMismatchException('Public key {} is not a pair to '
+                                           'any of the private keys'
+                                           .format(owner_before))
+        self.fulfillments[index] = fulfillment
+
+    def _sign_threshold_signature_fulfillment(self, fulfillment, index,
+                                              tx_serialized, key_pairs):
+        """Signs a ThresholdSha256Fulfillment.
+
+            Args:
+                fulfillment (:class:`~bigchaindb.common.transaction.
+                    Fulfillment`) The Fulfillment to be signed.
+                index (int): The index (or `fid`) of the Fulfillment to be
+                    signed.
+                tx_serialized (str): The Transaction to be used as message.
+                key_pairs (dict): The keys to sign the Transaction with.
+        """
+        fulfillment = deepcopy(fulfillment)
+        for owner_before in fulfillment.owners_before:
+            try:
+                # TODO: CC should throw a KeypairMismatchException, instead of
+                #       our manual mapping here
+
+                # TODO FOR CC: Naming wise this is not so smart,
+                #              `get_subcondition` in fact doesn't return a
+                #              condition but a fulfillment
+
+                # TODO FOR CC: `get_subcondition` is singular. One would not
+                #              expect to get a list back.
+                ccffill = fulfillment.fulfillment
+                subffill = ccffill.get_subcondition_from_vk(owner_before)[0]
+            except IndexError:
+                raise KeypairMismatchException('Public key {} cannot be found '
+                                               'in the fulfillment'
+                                               .format(owner_before))
+            try:
+                private_key = key_pairs[owner_before]
+            except KeyError:
+                raise KeypairMismatchException('Public key {} is not a pair '
+                                               'to any of the private keys'
+                                               .format(owner_before))
+
+            # cryptoconditions makes no assumptions of the encoding of the
+            # message to sign or verify. It only accepts bytestrings
+            subffill.sign(tx_serialized.encode(), private_key)
+        self.fulfillments[index] = fulfillment
+
+    def fulfillments_valid(self, input_conditions=None):
+        """Validates the Fulfillments in the Transaction against given
+        Conditions.
+
+            Note:
+                Given a `CREATE` or `GENESIS` Transaction is passed,
+                dummyvalues for Conditions are submitted for validation that
+                evaluate parts of the validation-checks to `True`.
+
+            Args:
+                input_conditions (:obj:`list` of :class:`~bigchaindb.common.
+                    transaction.Condition`): A list of Conditions to check the
+                    Fulfillments against.
+
+            Returns:
+                bool: If all Fulfillments are valid.
+        """
+        if self.operation in (Transaction.CREATE, Transaction.GENESIS):
+            # NOTE: Since in the case of a `CREATE`-transaction we do not have
+            #       to check for input_conditions, we're just submitting dummy
+            #       values to the actual method. This simplifies it's logic
+            #       greatly, as we do not have to check against `None` values.
+            return self._fulfillments_valid(['dummyvalue'
+                                             for cond in self.fulfillments])
+        elif self.operation == Transaction.TRANSFER:
+            return self._fulfillments_valid([cond.fulfillment.condition_uri
+                                             for cond in input_conditions])
+        else:
+            allowed_ops = ', '.join(self.__class__.ALLOWED_OPERATIONS)
+            raise TypeError('`operation` must be one of {}'
+                            .format(allowed_ops))
+
+    def _fulfillments_valid(self, input_condition_uris):
+        """Validates a Fulfillment against a given set of Conditions.
+
+            Note:
+                The number of `input_condition_uris` must be equal to the
+                number of Fulfillments a Transaction has.
+
+            Args:
+                input_condition_uris (:obj:`list` of :obj:`str`): A list of
+                    Conditions to check the Fulfillments against.
+
+            Returns:
+                bool: If all Fulfillments are valid.
+        """
+        input_condition_uris_count = len(input_condition_uris)
+        fulfillments_count = len(self.fulfillments)
+        conditions_count = len(self.conditions)
+
+        def gen_tx(fulfillment, condition, input_condition_uri=None):
+            """Splits multiple IO Transactions into partial single IO
+            Transactions.
+            """
+            # TODO: Understand how conditions are being handled
+            tx = Transaction(self.operation, self.asset, [fulfillment],
+                             self.conditions, self.metadata, self.timestamp,
+                             self.version)
+            tx_dict = tx.to_dict()
+            tx_dict = Transaction._remove_signatures(tx_dict)
+            tx_serialized = Transaction._to_str(tx_dict)
+
+            # TODO: Use local reference to class, not `Transaction.`
+            return Transaction._fulfillment_valid(fulfillment, self.operation,
+                                                  tx_serialized,
+                                                  input_condition_uri)
+
+        # TODO: Why?? Need to ask @TimDaub
+        # if not fulfillments_count == conditions_count == \
+        #    input_condition_uris_count:
+        #     raise ValueError('Fulfillments, conditions and '
+        #                      'input_condition_uris must have the same count')
+        # else:
+        if not fulfillments_count == input_condition_uris_count:
+            raise ValueError('Fulfillments and '
+                             'input_condition_uris must have the same count')
+        else:
+            partial_transactions = map(gen_tx, self.fulfillments,
+                                       self.conditions, input_condition_uris)
+        return all(partial_transactions)
+
+    @staticmethod
+    def _fulfillment_valid(fulfillment, operation, tx_serialized,
+                           input_condition_uri=None):
+        """Validates a single Fulfillment against a single Condition.
+
+            Note:
+                In case of a `CREATE` or `GENESIS` Transaction, this method
+                does not validate against `input_condition_uri`.
+
+            Args:
+                fulfillment (:class:`~bigchaindb.common.transaction.
+                    Fulfillment`) The Fulfillment to be signed.
+                operation (str): The type of Transaction.
+                tx_serialized (str): The Transaction used as a message when
+                    initially signing it.
+                input_condition_uri (str, optional): A Condition to check the
+                    Fulfillment against.
+
+            Returns:
+                bool: If the Fulfillment is valid.
+        """
+        ccffill = fulfillment.fulfillment
+        try:
+            parsed_ffill = CCFulfillment.from_uri(ccffill.serialize_uri())
+        except (TypeError, ValueError, ParsingError):
+            return False
+
+        if operation in (Transaction.CREATE, Transaction.GENESIS):
+            # NOTE: In the case of a `CREATE` or `GENESIS` transaction, the
+            #       input condition is always validate to `True`.
+            input_cond_valid = True
+        else:
+            input_cond_valid = input_condition_uri == ccffill.condition_uri
+
+        # NOTE: We pass a timestamp to `.validate`, as in case of a timeout
+        #       condition we'll have to validate against it
+
+        # cryptoconditions makes no assumptions of the encoding of the
+        # message to sign or verify. It only accepts bytestrings
+        return parsed_ffill.validate(message=tx_serialized.encode(),
+                                     now=gen_timestamp()) and input_cond_valid
+
+    def to_dict(self):
+        """Transforms the object to a Python dictionary.
+
+            Returns:
+                dict: The Transaction as an alternative serialization format.
+        """
+        try:
+            metadata = self.metadata.to_dict()
+        except AttributeError:
+            # NOTE: metadata can be None and that's OK
+            metadata = None
+
+        if self.operation in (self.__class__.GENESIS, self.__class__.CREATE):
+            asset = self.asset.to_dict()
+        else:
+            # NOTE: An `asset` in a `TRANSFER` only contains the asset's id
+            asset = {'id': self.asset.data_id}
+
+        tx_body = {
+            'fulfillments': [fulfillment.to_dict(fid) for fid, fulfillment
+                             in enumerate(self.fulfillments)],
+            'conditions': [condition.to_dict(cid) for cid, condition
+                           in enumerate(self.conditions)],
+            'operation': str(self.operation),
+            'timestamp': self.timestamp,
+            'metadata': metadata,
+            'asset': asset,
+        }
+        tx = {
+            'version': self.version,
+            'transaction': tx_body,
+        }
+
+        tx_no_signatures = Transaction._remove_signatures(tx)
+        tx_serialized = Transaction._to_str(tx_no_signatures)
+        tx_id = Transaction._to_hash(tx_serialized)
+
+        tx['id'] = tx_id
+        return tx
+
+    @staticmethod
+    # TODO: Remove `_dict` prefix of variable.
+    def _remove_signatures(tx_dict):
+        """Takes a Transaction dictionary and removes all signatures.
+
+            Args:
+                tx_dict (dict): The Transaction to remove all signatures from.
+
+            Returns:
+                dict
+
+        """
+        # NOTE: We remove the reference since we need `tx_dict` only for the
+        #       transaction's hash
+        tx_dict = deepcopy(tx_dict)
+        for fulfillment in tx_dict['transaction']['fulfillments']:
+            # NOTE: Not all Cryptoconditions return a `signature` key (e.g.
+            #       ThresholdSha256Fulfillment), so setting it to `None` in any
+            #       case could yield incorrect signatures. This is why we only
+            #       set it to `None` if it's set in the dict.
+            fulfillment['fulfillment'] = None
+        return tx_dict
+
+    @staticmethod
+    def _to_hash(value):
+        return hash_data(value)
 
     @property
-    def rgb(self):
-        """
-        Conversion from HSV to RGB.
-        """
-        hsv = self.hsv_to_rgb(self.data[:,:,0],
-                              self.data[:,:,1],
-                              self.data[:,:,2])
-        if len(self.vdims) == 4:
-            hsv += (self.data[:,:,3],)
+    def id(self):
+        return self.to_hash()
 
-        return RGB(np.dstack(hsv), bounds=self.bounds,
-                   group=self.group,
-                   label=self.label)
+    def to_hash(self):
+        return self.to_dict()['id']
+
+    @staticmethod
+    def _to_str(value):
+        return serialize(value)
+
+    # TODO: This method shouldn't call `_remove_signatures`
+    def __str__(self):
+        tx = Transaction._remove_signatures(self.to_dict())
+        return Transaction._to_str(tx)
+
+    @classmethod
+    # TODO: Make this method more pretty
+    def from_dict(cls, tx_body):
+        """Transforms a Python dictionary to a Transaction object.
+
+            Args:
+                tx_body (dict): The Transaction to be transformed.
+
+            Returns:
+                :class:`~bigchaindb.common.transaction.Transaction`
+        """
+        # NOTE: Remove reference to avoid side effects
+        tx_body = deepcopy(tx_body)
+        try:
+            proposed_tx_id = tx_body.pop('id')
+        except KeyError:
+            raise InvalidHash()
+
+        tx_body_no_signatures = Transaction._remove_signatures(tx_body)
+        tx_body_serialized = Transaction._to_str(tx_body_no_signatures)
+        valid_tx_id = Transaction._to_hash(tx_body_serialized)
+
+        if proposed_tx_id != valid_tx_id:
+            raise InvalidHash()
+        else:
+            tx = tx_body['transaction']
+            fulfillments = [Fulfillment.from_dict(fulfillment) for fulfillment
+                            in tx['fulfillments']]
+            conditions = [Condition.from_dict(condition) for condition
+                          in tx['conditions']]
+            metadata = Metadata.from_dict(tx['metadata'])
+            asset = Asset.from_dict(tx['asset'])
+
+            return cls(tx['operation'], asset, fulfillments, conditions,
+                       metadata, tx['timestamp'], tx_body['version'])

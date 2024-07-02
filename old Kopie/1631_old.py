@@ -56,7 +56,6 @@ class RelGraphConv(gluon.Block):
         Activation function. Default: None
     self_loop : bool, optional
         True to include self loop message. Default: False
-    low_mem : bool, optional
         MXNet currently not support low mem RelGraphConv. Default: False
     dropout : float, optional
         Dropout rate. Default: 0.0

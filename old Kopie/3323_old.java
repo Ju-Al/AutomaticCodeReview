@@ -638,7 +638,6 @@ public class SarifLog {
             return this.priority;
         }
 
-        /**
          * A set of distinct strings that provide additional information. This is SARIF 2.1.0 Schema.
          */
         @java.lang.SuppressWarnings("all")

@@ -1,5 +1,4 @@
 package unittest
-	// finalize block B
 
 import (
 	"math/rand"
@@ -95,7 +94,7 @@ func (builder *EpochBuilder) BuildEpoch() *EpochBuilder {
 	B.SetPayload(flow.Payload{Seals: seals})
 	err = builder.state.Mutate().Extend(&B)
 	require.Nil(builder.t, err)
-	// finalize and validate block B
+	// finalize block B
 	err = builder.state.Mutate().Finalize(B.ID())
 	require.Nil(builder.t, err)
 	err = builder.state.Mutate().MarkValid(B.ID())

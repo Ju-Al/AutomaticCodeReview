@@ -1,8 +1,5 @@
 // Copyright 2021 Google LLC
 //
-// The format of the row data is binary serialized protocol buffer bytes, and and the message
-// must adhere to the format of the schema Descriptor passed in when creating the managed stream.
-func (ms *ManagedStream) AppendRows(ctx context.Context, data [][]byte, offset int64) (*AppendResult, error) {
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -334,7 +331,9 @@ func (ms *ManagedStream) Close() error {
 // AppendRows sends the append requests to the service, and returns a single AppendResult for tracking
 // the set of data.
 //
-// The format of the row data is binary serialized protocol buffer bytes.  The message must be compatible
+// The format of the row data is binary serialized protocol buffer bytes, and and the message
+// must adhere to the format of the schema Descriptor passed in when creating the managed stream.
+func (ms *ManagedStream) AppendRows(ctx context.Context, data [][]byte, offset int64) (*AppendResult, error) {
 // with the schema currently set for the stream.
 //
 // Use the sentinel value NoStreamOffset to omit sending of the offset value.

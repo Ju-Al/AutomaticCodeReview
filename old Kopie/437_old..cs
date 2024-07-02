@@ -76,7 +76,6 @@ namespace Microsoft.Health.Fhir.Api.Controllers
         [Route(KnownRoutes.Export)]
         [ValidateExportHeadersFilter]
         [AuditEventType(AuditEventSubType.Export)]
-        [Authorize(PolicyNames.ExportPolicy)]
         public async Task<IActionResult> Export()
         {
             if (!_exportConfig.Enabled)

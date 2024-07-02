@@ -1,21 +1,5 @@
 #include "diablo.h"
 
-void gmenu_call_proc(TMenuItem *pItem, void(*gmFunc)(TMenuItem *))
-	TMenuItem *v2;         // eax
-	int v3;                // ecx
-	void(* *v4)(BOOL); // edx
-	mouseNavigation = 0;
-	v2 = pItem;
-	dword_63447C = gmFunc;
-		gmFunc(sgpCurrentMenu);
-		v2 = sgpCurrentMenu;
-	v3 = 0;
-	if (v2) {
-		v4 = &v2->fnMenu;
-		while (*v4) {
-			++v3;
-			v4 += 3;
-			sgCurrentMenuIdx = v3;
 void *optbar_cel;
 BOOLEAN mouseNavigation; // weak
 void *PentSpin_cel;
@@ -109,7 +93,22 @@ BOOL gmenu_exception()
 	return sgpCurrentMenu != 0;
 }
 
-void gmenu_call_proc(TMenuItem *pItem, void (*gmFunc)(TMenuItem *))
+	TMenuItem *v2;         // eax
+	int v3;                // ecx
+	void(* *v4)(BOOL); // edx
+	mouseNavigation = 0;
+	v2 = pItem;
+	dword_63447C = gmFunc;
+		gmFunc(sgpCurrentMenu);
+		v2 = sgpCurrentMenu;
+	v3 = 0;
+	if (v2) {
+		v4 = &v2->fnMenu;
+		while (*v4) {
+			++v3;
+			v4 += 3;
+			sgCurrentMenuIdx = v3;
+void gmenu_call_proc(TMenuItem *pItem, void(*gmFunc)(TMenuItem *))
 {
 	void (**v4)(BOOL);
 

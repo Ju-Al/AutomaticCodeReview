@@ -1,5 +1,4 @@
 /*
-        EXPECT_SUCCESS(bytes_written = s2n_record_write(conn, TLS_APPLICATION_DATA, &in));
  * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -290,7 +289,7 @@ int main(int argc, char **argv)
         EXPECT_SUCCESS(s2n_hmac_update(&check_mac, conn->initial.client_sequence_number, 8));
 
         EXPECT_SUCCESS(s2n_stuffer_wipe(&conn->out));
-        EXPECT_SUCCESS(bytes_written = conn->secure.cipher_suite->record_alg->record_write(conn, TLS_APPLICATION_DATA, &in));
+        EXPECT_SUCCESS(bytes_written = s2n_record_write(conn, TLS_APPLICATION_DATA, &in));
 
         if (i < max_aligned_fragment - 20 - 16 - 1) {
             EXPECT_EQUAL(bytes_written, i);

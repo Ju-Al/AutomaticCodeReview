@@ -85,7 +85,6 @@ const VeniaAdapter = props => {
         }
     }, [initialized, persistor]);
 
-    useEffect(() => {
         if (initialized) {
             import(/* webpackChunkName: "acdl" */
             /* webpackMode: "lazy" */

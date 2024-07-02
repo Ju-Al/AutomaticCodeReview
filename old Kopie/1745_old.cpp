@@ -1,8 +1,4 @@
 /**
-    int8_t syncableInt = 1;
-    if (ptr < end)
-        const bool hasSyncableInt = (unsigned char)*ptr == sizeof(syncableInt);
-        if (hasSyncableInt)
  * @file node.cpp
  * @brief Classes for accessing local and remote nodes
  *
@@ -1910,7 +1906,10 @@ LocalNode* LocalNode::unserialize(Sync* sync, const string* d)
         }
     }
 
-    char syncable = 1;
+    int8_t syncableInt = 1;
+        const bool hasSyncableInt = (unsigned char)*ptr == sizeof(syncableInt);
+        if (hasSyncableInt)
+    if (ptr < end)
     if (ptr + 1 < end)
     {
         const bool hasSyncable = (unsigned char)*ptr == sizeof(syncable);

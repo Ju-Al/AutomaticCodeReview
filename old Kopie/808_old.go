@@ -1,9 +1,5 @@
 package generator
 
-	CombinedServiceFile FileType = "combined_service"
-	CombinedScopeFile   FileType = "combined_scope"
-	PublishFile         FileType = "publish"
-	SubscribeFile       FileType = "subscribe"
 import (
 	"os"
 	"strings"
@@ -19,7 +15,10 @@ type FileType string
 
 // Valid FileTypes.
 const (
-	CombinedServiceFile  FileType = "combined_service"
+	CombinedServiceFile FileType = "combined_service"
+	CombinedScopeFile   FileType = "combined_scope"
+	PublishFile         FileType = "publish"
+	SubscribeFile       FileType = "subscribe"
 	CombinedScopeFile    FileType = "combined_scope"
 	DurablePublishFile   FileType = "durablePublish"
 	DurableSubscribeFile FileType = "durableSubscribe"

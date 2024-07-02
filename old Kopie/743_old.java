@@ -1,461 +1,321 @@
-/*
-            if (name.equals(partitionKey.get(i).getName())) {
- *      Copyright (C) 2012-2015 DataStax Inc.
- *
- *   Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- */
-package com.datastax.driver.core.querybuilder;
+package com.hubspot.singularity.resources;
 
-import com.datastax.driver.core.*;
-import com.datastax.driver.core.exceptions.CodecNotFoundException;
-import com.datastax.driver.core.policies.RetryPolicy;
+import static com.hubspot.singularity.WebExceptions.checkNotFound;
+import static com.hubspot.singularity.WebExceptions.timeout;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-/**
- * Common ancestor to statements generated with the {@link QueryBuilder}.
- * <p/>
- * The actual query string will be generated and cached the first time it is requested,
- * which is either when the driver tries to execute the query, or when you call certain
- * public methods (for example {@link RegularStatement#getQueryString(CodecRegistry)},
- * {@link #getObject(int, CodecRegistry)}).
- * <p/>
- * Whenever possible (and unless you call {@link #setForceNoValues(boolean)}, the builder
- * will try to handle values passed to its methods as standalone values bound to the query
- * string with placeholders. For instance:
- * <pre>
- *     select().all().from("foo").where(eq("k", "the key"));
- *     // Is equivalent to:
- *     new SimpleStatement("SELECT * FROM foo WHERE k=?", "the key");
- * </pre>
- * There are a few exceptions to this rule:
- * <ul>
- * <li>for fixed-size number types, the builder can't guess what the actual CQL type
- * is. Standalone values are sent to Cassandra in their serialized form, and number
- * types aren't all serialized in the same way, so picking the wrong type could
- * lead to a query error;</li>
- * <li>if the value is a "special" element like a function call, it can't be serialized.
- * This also applies to collections mixing special elements and regular objects.</li>
- * </ul>
- * In these cases, the builder will inline the value in the query string:
- * <pre>
- *     select().all().from("foo").where(eq("k", 1));
- *     // Is equivalent to:
- *     new SimpleStatement("SELECT * FROM foo WHERE k=1");
- * </pre>
- * One final thing to consider is {@link CodecRegistry custom codecs}. If you've registered
- * codecs to handle your own Java types against the cluster, then you can pass instances of
- * those types to query builder methods. But should the builder have to inline those values,
- * it needs your codecs to {@link TypeCodec#format(Object) convert them to string form}.
- * That is why some of the public methods of this class take a {@code CodecRegistry} as a
- * parameter:
- * <pre>
- *     BuiltStatement s = select().all().from("foo").where(eq("k", myCustomObject));
- *     // if we do this codecs will definitely be needed:
- *     s.forceNoValues(true);
- *     s.getQueryString(myCodecRegistry);
- * </pre>
- * For convenience, there are no-arg versions of those methods that use
- * {@link CodecRegistry#DEFAULT_INSTANCE}. But you should only use them if you are sure that
- * no custom values will need to be inlined while building the statement, or if you have
- * registered your custom codecs with the default registry instance. Otherwise, you will get
- * a {@link CodecNotFoundException}.
- */
-public abstract class BuiltStatement extends RegularStatement {
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
 
-    private static final Pattern lowercaseAlphanumeric = Pattern.compile("[a-z][a-z0-9_]*");
+import org.jets3t.service.S3Service;
+import org.jets3t.service.model.S3Object;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-    private final List<ColumnMetadata> partitionKey;
-    private final List<Object> routingKeyValues;
-    final String keyspace;
+import com.google.common.base.Optional;
+import com.google.common.base.Throwables;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.primitives.Longs;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.Inject;
+import com.hubspot.mesos.JavaUtils;
+import com.hubspot.singularity.SingularityDeployHistory;
+import com.hubspot.singularity.SingularityRequest;
+import com.hubspot.singularity.SingularityRequestHistory;
+import com.hubspot.singularity.SingularityRequestHistory.RequestHistoryType;
+import com.hubspot.singularity.SingularityRequestWithState;
+import com.hubspot.singularity.SingularityS3FormatHelper;
+import com.hubspot.singularity.SingularityS3Log;
+import com.hubspot.singularity.SingularityService;
+import com.hubspot.singularity.SingularityTaskHistory;
+import com.hubspot.singularity.SingularityTaskHistoryUpdate;
+import com.hubspot.singularity.SingularityTaskHistoryUpdate.SimplifiedTaskState;
+import com.hubspot.singularity.SingularityTaskId;
+import com.hubspot.singularity.SingularityUser;
+import com.hubspot.singularity.auth.SingularityAuthorizationHelper;
+import com.hubspot.singularity.config.S3Configuration;
+import com.hubspot.singularity.data.DeployManager;
+import com.hubspot.singularity.data.RequestManager;
+import com.hubspot.singularity.data.TaskManager;
+import com.hubspot.singularity.data.history.HistoryManager;
+import com.hubspot.singularity.data.history.RequestHistoryHelper;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 
-    private boolean dirty;
-    private String cache;
-    private List<Object> values;
-    Boolean isCounterOp;
-    boolean hasNonIdempotentOps;
+@Path(S3LogResource.PATH)
+@Produces({ MediaType.APPLICATION_JSON })
+@Api(description="Manages Singularity task logs stored in S3.", value=S3LogResource.PATH)
+public class S3LogResource extends AbstractHistoryResource {
+  public static final String PATH = SingularityService.API_BASE_PATH + "/logs";
 
-    // Whether the user has inputted bind markers. If that's the case, we never generate values as
-    // it means the user meant for the statement to be prepared and we shouldn't add our own markers.
-    boolean hasBindMarkers;
-    private boolean forceNoValues;
+  private static final Logger LOG = LoggerFactory.getLogger(S3LogResource.class);
 
-    BuiltStatement(String keyspace, List<ColumnMetadata> partitionKey, List<Object> routingKeyValues) {
-        this.partitionKey = partitionKey;
-        this.routingKeyValues = routingKeyValues;
-        this.keyspace = keyspace;
-    }
+  private final Optional<S3Service> s3ServiceDefault;
+  private final Map<String, S3Service> s3GroupOverride;
+  private final Optional<S3Configuration> configuration;
+  private final RequestHistoryHelper requestHistoryHelper;
+  private final RequestManager requestManager;
 
-    // Same as Metadata.escapeId, but we don't have access to it here.
-    protected static String escapeId(String ident) {
-        // we don't need to escape if it's lowercase and match non-quoted CQL3 ids.
-        return lowercaseAlphanumeric.matcher(ident).matches() ? ident : Metadata.quote(ident);
-    }
+  private static final Comparator<SingularityS3Log> LOG_COMPARATOR = new Comparator<SingularityS3Log>() {
 
     @Override
-    public String getQueryString(CodecRegistry codecRegistry) {
-        maybeRebuildCache(codecRegistry);
-        return cache;
+    public int compare(SingularityS3Log o1, SingularityS3Log o2) {
+      return Longs.compare(o2.getLastModified(), o1.getLastModified());
     }
 
-    /**
-     * Returns the {@code i}th value as the Java type matching its CQL type.
-     *
-     * @param i             the index to retrieve.
-     * @param codecRegistry the codec registry that will be used if the statement must be
-     *                      rebuilt in order to determine if it has values, and Java objects
-     *                      must be inlined in the process (see {@link BuiltStatement} for
-     *                      more explanations on why this is so).
-     * @return the value of the {@code i}th value of this statement.
-     * @throws IllegalStateException     if this statement does not have values.
-     * @throws IndexOutOfBoundsException if {@code i} is not a valid index for this object.
-     * @see #getObject(int)
-     */
-    public Object getObject(int i, CodecRegistry codecRegistry) {
-        maybeRebuildCache(codecRegistry);
-        if (values == null || values.isEmpty())
-            throw new IllegalStateException("This statement does not have values");
-        if (i < 0 || i >= values.size())
-            throw new ArrayIndexOutOfBoundsException(i);
-        return values.get(i);
+  };
+
+  @Inject
+  public S3LogResource(RequestManager requestManager, HistoryManager historyManager, RequestHistoryHelper requestHistoryHelper, TaskManager taskManager, DeployManager deployManager, Optional<S3Service> s3ServiceDefault,
+      Optional<S3Configuration> configuration, SingularityAuthorizationHelper authorizationHelper, Optional<SingularityUser> user, Map<String, S3Service> s3GroupOverride) {
+    super(historyManager, taskManager, deployManager, authorizationHelper, user);
+    this.requestManager = requestManager;
+    this.s3ServiceDefault = s3ServiceDefault;
+    this.configuration = configuration;
+    this.requestHistoryHelper = requestHistoryHelper;
+    this.s3GroupOverride = s3GroupOverride;
+  }
+
+  private Collection<String> getS3PrefixesForTask(SingularityTaskId taskId, Optional<Long> startArg, Optional<Long> endArg) {
+    SingularityTaskHistory history = getTaskHistory(taskId);
+
+    SimplifiedTaskState taskState = SingularityTaskHistoryUpdate.getCurrentState(history.getTaskUpdates());
+
+    long start = taskId.getStartedAt();
+    if (startArg.isPresent()) {
+      start = Math.max(startArg.get(), start);
     }
 
-    /**
-     * Returns the {@code i}th value as the Java type matching its CQL type.
-     * <p/>
-     * This method calls {@link #getObject(int, CodecRegistry)} with
-     * {@link CodecRegistry#DEFAULT_INSTANCE}.
-     * It's safe to use if you don't use any custom codecs, or if your custom codecs are in
-     * the default registry; otherwise, use the other method and provide the registry that
-     * contains your codecs.
-     *
-     * @param i the index to retrieve.
-     * @return the value of the {@code i}th value of this statement.
-     * @throws IllegalStateException     if this statement does not have values.
-     * @throws IndexOutOfBoundsException if {@code i} is not a valid index for this object.
-     */
-    public Object getObject(int i) {
-        return getObject(i, CodecRegistry.DEFAULT_INSTANCE);
+    long end = taskState == SimplifiedTaskState.DONE ? Iterables.getLast(history.getTaskUpdates()).getTimestamp() : System.currentTimeMillis();
+    if (endArg.isPresent()) {
+      end = Math.min(endArg.get(), end);
     }
 
-    private void maybeRebuildCache(CodecRegistry codecRegistry) {
-        if (!dirty && cache != null)
-            return;
-
-        StringBuilder sb;
-        values = null;
-
-        if (hasBindMarkers || forceNoValues) {
-            sb = buildQueryString(null, codecRegistry);
-        } else {
-            values = new ArrayList<Object>();
-            sb = buildQueryString(values, codecRegistry);
-
-            if (values.size() > 65535)
-                throw new IllegalArgumentException("Too many values for built statement, the maximum allowed is 65535");
-
-            if (values.isEmpty())
-                values = null;
-        }
-
-        maybeAddSemicolon(sb);
-
-        cache = sb.toString();
-        dirty = false;
+    Optional<String> tag = Optional.absent();
+    if (history.getTask().getTaskRequest().getDeploy().getExecutorData().isPresent()) {
+      tag = history.getTask().getTaskRequest().getDeploy().getExecutorData().get().getLoggingTag();
     }
 
-    static StringBuilder maybeAddSemicolon(StringBuilder sb) {
-        // Use the same test that String#trim() uses to determine
-        // if a character is a whitespace character.
-        int l = sb.length();
-        while (l > 0 && sb.charAt(l - 1) <= ' ')
-            l -= 1;
-        if (l != sb.length())
-            sb.setLength(l);
+    Collection<String> prefixes = SingularityS3FormatHelper.getS3KeyPrefixes(configuration.get().getS3KeyFormat(), taskId, tag, start, end);
 
-        if (l == 0 || sb.charAt(l - 1) != ';')
-            sb.append(';');
-        return sb;
+    LOG.trace("Task {} got S3 prefixes {} for start {}, end {}, tag {}", taskId, prefixes, start, end, tag);
+
+    return prefixes;
+  }
+
+  private boolean isCurrentDeploy(String requestId, String deployId) {
+    return deployId.equals(deployManager.getInUseDeployId(requestId).orNull());
+  }
+
+  private Collection<String> getS3PrefixesForRequest(String requestId, Optional<Long> startArg, Optional<Long> endArg) {
+    Optional<SingularityRequestHistory> firstHistory = requestHistoryHelper.getFirstHistory(requestId);
+
+    checkNotFound(firstHistory.isPresent(), "No request history found for %s", requestId);
+
+    long start = firstHistory.get().getCreatedAt();
+    if (startArg.isPresent()) {
+      start = Math.max(startArg.get(), start);
     }
 
-    abstract StringBuilder buildQueryString(List<Object> variables, CodecRegistry codecRegistry);
+    Optional<SingularityRequestHistory> lastHistory = requestHistoryHelper.getLastHistory(requestId);
 
-    boolean isCounterOp() {
-        return isCounterOp == null ? false : isCounterOp;
+    long end = System.currentTimeMillis();
+
+    if (lastHistory.isPresent() && (lastHistory.get().getEventType() == RequestHistoryType.DELETED || lastHistory.get().getEventType() == RequestHistoryType.PAUSED)) {
+      end = lastHistory.get().getCreatedAt() + TimeUnit.DAYS.toMillis(1);
     }
 
-    void setCounterOp(boolean isCounterOp) {
-        this.isCounterOp = isCounterOp;
+    if (endArg.isPresent()) {
+      end = Math.min(endArg.get(), end);
     }
 
-    boolean hasNonIdempotentOps() {
-        return hasNonIdempotentOps;
+    Collection<String> prefixes = SingularityS3FormatHelper.getS3KeyPrefixes(configuration.get().getS3KeyFormat(), requestId, start, end);
+
+    LOG.trace("Request {} got S3 prefixes {} for start {}, end {}", requestId, prefixes, start, end);
+
+    return prefixes;
+  }
+
+  private Collection<String> getS3PrefixesForDeploy(String requestId, String deployId, Optional<Long> startArg, Optional<Long> endArg) {
+    SingularityDeployHistory deployHistory = getDeployHistory(requestId, deployId);
+
+    long start = deployHistory.getDeployMarker().getTimestamp();
+    if (startArg.isPresent()) {
+      start = Math.max(startArg.get(), start);
     }
 
-    void setNonIdempotentOps() {
-        hasNonIdempotentOps = true;
+    long end = System.currentTimeMillis();
+
+    if (!isCurrentDeploy(requestId, deployId) && deployHistory.getDeployStatistics().isPresent() && deployHistory.getDeployStatistics().get().getLastFinishAt().isPresent()) {
+      end = deployHistory.getDeployStatistics().get().getLastFinishAt().get() + TimeUnit.DAYS.toMillis(1);
     }
 
-    void setDirty() {
-        dirty = true;
+    if (endArg.isPresent()) {
+      end = Math.min(endArg.get(), end);
     }
 
-    void checkForBindMarkers(Object value) {
-        dirty = true;
-        if (Utils.containsBindMarker(value))
-            hasBindMarkers = true;
+    Optional<String> tag = Optional.absent();
+
+    if (deployHistory.getDeploy().isPresent() && deployHistory.getDeploy().get().getExecutorData().isPresent()) {
+      tag = deployHistory.getDeploy().get().getExecutorData().get().getLoggingTag();
     }
 
-    void checkForBindMarkers(Utils.Appendeable value) {
-        dirty = true;
-        if (value != null && value.containsBindMarker())
-            hasBindMarkers = true;
-    }
+    Collection<String> prefixes = SingularityS3FormatHelper.getS3KeyPrefixes(configuration.get().getS3KeyFormat(), requestId, deployId, tag, start, end);
 
-    // TODO: Correctly document the InvalidTypeException
-    void maybeAddRoutingKey(String name, Object value) {
-        if (routingKeyValues == null || name == null || value == null || Utils.containsSpecialValue(value))
-            return;
+    LOG.trace("Request {}, deploy {} got S3 prefixes {} for start {}, end {}, tag {}", requestId, deployId, prefixes, start, end, tag);
 
-        for (int i = 0; i < partitionKey.size(); i++) {
-            if (name.equalsIgnoreCase(partitionKey.get(i).getName())) {
-                routingKeyValues.set(i, value);
-                return;
-            }
-        }
-    }
+    return prefixes;
+  }
 
-    @Override
-    public ByteBuffer getRoutingKey(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        if (routingKeyValues == null)
-            return null;
-        ByteBuffer[] routingKeyParts = new ByteBuffer[partitionKey.size()];
-        for (int i = 0; i < partitionKey.size(); i++) {
-            Object value = routingKeyValues.get(i);
-            if (value == null)
-                return null;
-            TypeCodec<Object> codec = codecRegistry.codecFor(partitionKey.get(i).getType(), value);
-            routingKeyParts[i] = codec.serialize(value, protocolVersion);
-        }
-        return routingKeyParts.length == 1
-                ? routingKeyParts[0]
-                : Utils.compose(routingKeyParts);
-    }
+  private List<SingularityS3Log> getS3LogsWithExecutorService(Optional<String> group, ListeningExecutorService executorService, Collection<String> prefixes) throws InterruptedException, ExecutionException, TimeoutException {
+    List<ListenableFuture<S3Object[]>> futures = Lists.newArrayListWithCapacity(prefixes.size());
 
-    @Override
-    public String getKeyspace() {
-        return keyspace;
-    }
+    final String s3Bucket = (group.isPresent() && configuration.get().getGroupOverrides().containsKey(group.get())) ? configuration.get().getGroupOverrides().get(group.get()).getS3Bucket() : configuration.get().getS3Bucket();
 
-    @Override
-    public ByteBuffer[] getValues(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        maybeRebuildCache(codecRegistry);
-        return values == null ? null : Utils.convert(values.toArray(), protocolVersion, codecRegistry);
-    }
+    final S3Service s3Service = (group.isPresent() && s3GroupOverride.containsKey(group.get())) ? s3GroupOverride.get(group.get()) : s3ServiceDefault.get();
 
-    @Override
-    public boolean hasValues(CodecRegistry codecRegistry) {
-        maybeRebuildCache(codecRegistry);
-        return values != null;
-    }
-
-    @Override
-    public Map<String, ByteBuffer> getNamedValues(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        // Built statements never return named values
-        return null;
-    }
-
-    @Override
-    public boolean usesNamedValues() {
-        return false;
-    }
-
-    @Override
-    public Boolean isIdempotent() {
-        // If a value was forced with setIdempotent, it takes priority
-        if (idempotent != null)
-            return idempotent;
-
-        // Otherwise return the computed value
-        return !hasNonIdempotentOps();
-    }
-
-    @Override
-    public String toString() {
-        try {
-            try {
-                if (forceNoValues)
-                    return getQueryString();
-                // 1) try first with all values inlined (will not work if some values require custom codecs)
-                return maybeAddSemicolon(buildQueryString(null, CodecRegistry.DEFAULT_INSTANCE)).toString();
-            } catch (CodecNotFoundException e) {
-                // 2) try next with bind markers for all values to avoid usage of custom codecs
-                return maybeAddSemicolon(buildQueryString(new ArrayList<Object>(), CodecRegistry.DEFAULT_INSTANCE)).toString();
-            }
-        } catch (RuntimeException e) {
-            // Ugly but we have absolutely no context to get the registry from
-            return String.format("built query (could not generate with default codec registry: %s)", e.getMessage());
-        }
-    }
-
-    /**
-     * Allows to force this builder to not generate values (through its {@code getValues()} method).
-     * <p/>
-     * By default (and unless the protocol version 1 is in use, see below) and
-     * for performance reasons, the query builder will not serialize all values
-     * provided to strings. This means that {@link #getQueryString(CodecRegistry)}
-     * may return a query string with bind markers (where and when is at the
-     * discretion of the builder) and {@link #getValues} will return the binary
-     * values for those markers. This method allows to force the builder to not
-     * generate binary values but rather to inline them all in the query
-     * string. In practice, this means that if you call {@code
-     * setForceNoValues(true)}, you are guaranteed that {@code getValues()} will
-     * return {@code null} and that the string returned by {@code
-     * getQueryString()} will contain no other bind markers than the ones
-     * specified by the user.
-     * <p/>
-     * If the native protocol version 1 is in use, the driver will default
-     * to not generating values since those are not supported by that version of
-     * the protocol. In practice, the driver will automatically call this method
-     * with {@code true} as argument prior to execution. Hence, calling this
-     * method when the protocol version 1 is in use is basically a no-op.
-     * <p/>
-     * Note that this method is mainly useful for debugging purpose. In general,
-     * the default behavior should be the correct and most efficient one.
-     *
-     * @param forceNoValues whether or not this builder may generate values.
-     * @return this statement.
-     */
-    public RegularStatement setForceNoValues(boolean forceNoValues) {
-        this.forceNoValues = forceNoValues;
-        this.dirty = true;
-        return this;
-    }
-
-    /**
-     * An utility class to create a BuiltStatement that encapsulate another one.
-     */
-    abstract static class ForwardingStatement<T extends BuiltStatement> extends BuiltStatement {
-
-        T statement;
-
-        ForwardingStatement(T statement) {
-            super(null, null, null);
-            this.statement = statement;
-        }
+    for (final String s3Prefix : prefixes) {
+      futures.add(executorService.submit(new Callable<S3Object[]>() {
 
         @Override
-        public String getQueryString(CodecRegistry codecRegistry) {
-            return statement.getQueryString(codecRegistry);
+        public S3Object[] call() throws Exception {
+          return s3Service.listObjects(s3Bucket, s3Prefix, null);
         }
-
-        @Override
-        StringBuilder buildQueryString(List<Object> values, CodecRegistry codecRegistry) {
-            return statement.buildQueryString(values, codecRegistry);
-        }
-
-        @Override
-        public ByteBuffer getRoutingKey(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-            return statement.getRoutingKey(protocolVersion, codecRegistry);
-        }
-
-        @Override
-        public String getKeyspace() {
-            return statement.getKeyspace();
-        }
-
-        @Override
-        boolean isCounterOp() {
-            return statement.isCounterOp();
-        }
-
-        @Override
-        boolean hasNonIdempotentOps() {
-            return statement.hasNonIdempotentOps();
-        }
-
-        @Override
-        public RegularStatement setForceNoValues(boolean forceNoValues) {
-            statement.setForceNoValues(forceNoValues);
-            return this;
-        }
-
-        @Override
-        public Statement setConsistencyLevel(ConsistencyLevel consistency) {
-            statement.setConsistencyLevel(consistency);
-            return this;
-        }
-
-        @Override
-        public ConsistencyLevel getConsistencyLevel() {
-            return statement.getConsistencyLevel();
-        }
-
-        @Override
-        public Statement enableTracing() {
-            statement.enableTracing();
-            return this;
-        }
-
-        @Override
-        public Statement disableTracing() {
-            statement.disableTracing();
-            return this;
-        }
-
-        @Override
-        public boolean isTracing() {
-            return statement.isTracing();
-        }
-
-        @Override
-        public Statement setRetryPolicy(RetryPolicy policy) {
-            statement.setRetryPolicy(policy);
-            return this;
-        }
-
-        @Override
-        public RetryPolicy getRetryPolicy() {
-            return statement.getRetryPolicy();
-        }
-
-        @Override
-        public ByteBuffer[] getValues(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-            return statement.getValues(protocolVersion, codecRegistry);
-        }
-
-        @Override
-        public boolean hasValues() {
-            return statement.hasValues();
-        }
-
-        @Override
-        void checkForBindMarkers(Object value) {
-            statement.checkForBindMarkers(value);
-        }
-
-        @Override
-        void checkForBindMarkers(Utils.Appendeable value) {
-            statement.checkForBindMarkers(value);
-        }
-
-        @Override
-        public String toString() {
-            return statement.toString();
-        }
+      }));
     }
+
+    final long start = System.currentTimeMillis();
+    List<S3Object[]> results = Futures.allAsList(futures).get(configuration.get().getWaitForS3ListSeconds(), TimeUnit.SECONDS);
+
+    List<S3Object> objects = Lists.newArrayListWithExpectedSize(results.size() * 2);
+
+    for (S3Object[] s3Objects : results) {
+      for (final S3Object s3Object : s3Objects) {
+        objects.add(s3Object);
+      }
+    }
+
+    LOG.trace("Got {} objects from S3 after {}", objects.size(), JavaUtils.duration(start));
+
+    List<ListenableFuture<SingularityS3Log>> logFutures = Lists.newArrayListWithCapacity(objects.size());
+    final Date expireAt = new Date(System.currentTimeMillis() + configuration.get().getExpireS3LinksAfterMillis());
+
+    for (final S3Object s3Object : objects) {
+      logFutures.add(executorService.submit(new Callable<SingularityS3Log>() {
+
+        @Override
+        public SingularityS3Log call() throws Exception {
+          String getUrl = s3Service.createSignedGetUrl(s3Bucket, s3Object.getKey(), expireAt);
+
+          return new SingularityS3Log(getUrl, s3Object.getKey(), s3Object.getLastModifiedDate().getTime(), s3Object.getContentLength());
+        }
+
+      }));
+    }
+
+    return Futures.allAsList(logFutures).get(configuration.get().getWaitForS3LinksSeconds(), TimeUnit.SECONDS);
+  }
+
+  private List<SingularityS3Log> getS3Logs(Optional<String> group, Collection<String> prefixes) throws InterruptedException, ExecutionException, TimeoutException {
+    ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(Math.min(prefixes.size(), configuration.get().getMaxS3Threads()),
+        new ThreadFactoryBuilder().setNameFormat("S3LogFetcher-%d").build()));
+
+    try {
+      List<SingularityS3Log> logs = Lists.newArrayList(getS3LogsWithExecutorService(group, executorService, prefixes));
+      Collections.sort(logs, LOG_COMPARATOR);
+      return logs;
+    } finally {
+      executorService.shutdownNow();
+    }
+  }
+
+  private void checkS3() {
+    checkNotFound(s3ServiceDefault.isPresent(), "S3 configuration was absent");
+  }
+
+  private SingularityRequestWithState getRequest(final String requestId) {
+    final Optional<SingularityRequestWithState> maybeRequest = requestManager.getRequest(requestId);
+    checkNotFound(maybeRequest.isPresent(), "RequestId %s does not exist", requestId);
+    authorizationHelper.checkForAuthorization(maybeRequest.get().getRequest(), Optional.<SingularityRequest>absent(), user);
+    return maybeRequest.get();
+  }
+
+  @GET
+  @Path("/task/{taskId}")
+  @ApiOperation("Retrieve the list of logs stored in S3 for a specific task.")
+  public List<SingularityS3Log> getS3LogsForTask(
+      @ApiParam("The task ID to search for") @PathParam("taskId") String taskId,
+      @ApiParam("Start timestamp (millis, 13 digit)") @QueryParam("start") Optional<Long> start,
+      @ApiParam("End timestamp (mills, 13 digit)") @QueryParam("end") Optional<Long> end) throws Exception {
+    checkS3();
+
+    SingularityTaskId taskIdObject = getTaskIdObject(taskId);
+
+    try {
+      return getS3Logs(getRequest(taskIdObject.getRequestId()).getRequest().getGroup(), getS3PrefixesForTask(taskIdObject, start, end));
+    } catch (TimeoutException te) {
+      throw timeout("Timed out waiting for response from S3 for %s", taskId);
+    } catch (Throwable t) {
+      throw Throwables.propagate(t);
+    }
+  }
+
+  @GET
+  @Path("/request/{requestId}")
+  @ApiOperation("Retrieve the list of logs stored in S3 for a specific request.")
+  public List<SingularityS3Log> getS3LogsForRequest(
+      @ApiParam("The request ID to search for") @PathParam("requestId") String requestId,
+      @ApiParam("Start timestamp (millis, 13 digit)") @QueryParam("start") Optional<Long> start,
+      @ApiParam("End timestamp (mills, 13 digit)") @QueryParam("end") Optional<Long> end) throws Exception {
+    checkS3();
+
+    try {
+      return getS3Logs(getRequest(requestId).getRequest().getGroup(), getS3PrefixesForRequest(requestId, start, end));
+    } catch (TimeoutException te) {
+      throw timeout("Timed out waiting for response from S3 for %s", requestId);
+    } catch (Throwable t) {
+      throw Throwables.propagate(t);
+    }
+  }
+
+  @GET
+  @Path("/request/{requestId}/deploy/{deployId}")
+  @ApiOperation("Retrieve the list of logs stored in S3 for a specific deploy.")
+  public List<SingularityS3Log> getS3LogsForDeploy(
+      @ApiParam("The request ID to search for") @PathParam("requestId") String requestId,
+      @ApiParam("The deploy ID to search for") @PathParam("deployId") String deployId,
+      @ApiParam("Start timestamp (millis, 13 digit)") @QueryParam("start") Optional<Long> start,
+      @ApiParam("End timestamp (mills, 13 digit)") @QueryParam("end") Optional<Long> end) throws Exception {
+    checkS3();
+
+    try {
+      return getS3Logs(getRequest(requestId).getRequest().getGroup(), getS3PrefixesForDeploy(requestId, deployId, start, end));
+    } catch (TimeoutException te) {
+      throw timeout("Timed out waiting for response from S3 for %s-%s", requestId, deployId);
+    } catch (Throwable t) {
+      throw Throwables.propagate(t);
+    }
+  }
+
 }

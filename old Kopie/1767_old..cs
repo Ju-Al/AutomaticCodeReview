@@ -1,5 +1,4 @@
 using System;
-			return new Hashtable();
 using System.Collections;
 using System.Collections.Generic;
 using NHibernate.Mapping;
@@ -51,7 +50,7 @@ namespace NHibernate.Tuple
 
 		protected virtual IDictionary GenerateMap()
 		{
-			return new Dictionary<string, object>();
+			return new Hashtable();
 		}
 
 		public bool IsInstance(object obj)

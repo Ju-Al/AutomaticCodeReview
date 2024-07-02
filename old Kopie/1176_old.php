@@ -117,7 +117,6 @@ abstract class Abstract_Optimization {
 	protected function get_file_content( $file ) {
 		return rocket_direct_filesystem()->get_contents( $file );
 	}
-
 	/**
 	 * Hides unwanted blocks from the HTML to be parsed for optimization
 	 *

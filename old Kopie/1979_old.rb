@@ -815,7 +815,6 @@ module Mongo
     # @param [ Hash ] filter The filter criteria for getting a list of databases.
     # @param [ Hash ] opts The command options.
     #
-    # @option opts [ true, false ] :authorized_databases A flag that determines
     #   which databases are returned based on user privileges when access control
     #   enabled
     #

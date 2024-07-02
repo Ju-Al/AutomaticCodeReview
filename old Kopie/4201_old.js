@@ -1,5 +1,4 @@
 import * as d3 from 'd3';
-            return field.id === 'name' || field.show || _.some(field.keys, function(key) { return !!tags[key]; });
 import _ from 'lodash';
 import { d3combobox } from '../lib/d3.combobox.js';
 import { t, textDirection } from '../util/locale';
@@ -41,7 +40,7 @@ export function uiPreset(context) {
         field.show = show;
 
         field.shown = function() {
-            return field.id === '' || field.show || _.some(field.keys, function(key) { return !!tags[key]; });
+            return field.id === 'name' || field.show || _.some(field.keys, function(key) { return !!tags[key]; });
         };
 
         field.modified = function() {

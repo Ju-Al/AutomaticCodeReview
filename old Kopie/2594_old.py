@@ -1683,7 +1683,6 @@ class Booster(object):
             if not isinstance(train_set, Dataset):
                 raise TypeError('Training data should be Dataset instance, met {}'
                                 .format(type(train_set).__name__))
-            train_set.construct()
             # copy the parameters from train_set
             params.update(train_set.get_params())
             params_str = param_dict_to_str(params)

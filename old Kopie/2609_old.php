@@ -1,5 +1,4 @@
 <?php
-
 namespace Kunstmaan\MediaBundle\Helper;
 
 use Kunstmaan\MediaBundle\Entity\CroppableMediaLink;

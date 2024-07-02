@@ -1,828 +1,542 @@
+
+# -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
+# vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
+#
+# MDAnalysis --- http://www.MDAnalysis.org
+# Copyright (c) 2006-2015 Naveen Michaud-Agrawal, Elizabeth J. Denning, Oliver Beckstein
+# N. Michaud-Agrawal, E. J. Denning, T. B. Woolf, and O. Beckstein.
+# MDAnalysis: A Toolkit for the Analysis of Molecular Dynamics Simulations.
+# J. Comput. Chem. 32 (2011), 2319--2327, doi:10.1002/jcc.21787
+
+"""DCD trajectory I/O  --- :mod:`MDAnalysis.coordinates.DCD`
+============================================================
+
+Classes to read and write DCD binary trajectories, the format used by
+CHARMM, NAMD, and also LAMMPS. Trajectories can be read regardless of
+system-endianness as this is auto-detected.
+
+Generally, DCD trajectories produced by any code can be read (with the
+:class:`DCDReader`) although there can be issues with the unitcell
+(simulation box) representation (see
+:attr:`Timestep.dimensions`). DCDs can also be written but the
+:class:`DCDWriter` follows recent NAMD/VMD convention for the unitcell
+but still writes AKMA time. Reading and writing these trajectories
+within MDAnalysis will work seamlessly but if you process those
+trajectories with other tools you might need to watch out that time
+and unitcell dimensions are correctly interpreted.
+
+.. Note::
+
+   The DCD file format is not well defined. In particular, NAMD and
+   CHARMM use it differently. Currently, MDAnalysis tries to guess the
+   correct **format for the unitcell representation** but it can be
+   wrong. **Check the unitcell dimensions**, especially for triclinic
+   unitcells (see `Issue 187`_ and :attr:`Timestep.dimensions`). A
+   second potential issue are the units of time which are AKMA for the
+   :class:`DCDReader` (following CHARMM) but ps for NAMD. As a
+   workaround one can employ the configurable
+   :class:`MDAnalysis.coordinates.LAMMPS.DCDReader` for NAMD
+   trajectories.
+
+.. SeeAlso:: The :mod:`MDAnalysis.coordinates.LAMMPS` module provides
+             a more flexible DCD reader/writer.
+
+The classes in this module are the reference implementations for the
+Trajectory API.
+
+.. _Issue 187:
+   https://github.com/MDAnalysis/mdanalysis/issues/187
+
+
+Classes
+-------
+
+.. autoclass:: Timestep
+   :inherited-members:
+.. autoclass:: DCDReader
+   :inherited-members:
+.. autoclass:: DCDWriter
+   :inherited-members:
+
+"""
+from __future__ import absolute_import, division, print_function, unicode_literals
+# and contributors (see AUTHORS for the full list)
+#
+# MDAnalysis --- http://mdanalysis.googlecode.com
+# Copyright (c) 2006-2011 Naveen Michaud-Agrawal,
+#               Elizabeth J. Denning, Oliver Beckstein,
+#               and contributors (see website for details)
+# Released under the GNU Public Licence, v2 or any higher version
+#
+# Please cite your use of MDAnalysis in published work:
+#
+#     N. Michaud-Agrawal, E. J. Denning, T. B. Woolf, and
+#     O. Beckstein. MDAnalysis: A Toolkit for the Analysis of
+#     Molecular Dynamics Simulations. J. Comput. Chem. 32 (2011), 2319--2327,
+#     doi:10.1002/jcc.21787
+#
+
 from __future__ import absolute_import
-        with file_open(filepath, "rb") as f:
-from __future__ import division
-from __future__ import print_function
 
-import pandas
-from pandas.io.common import _infer_compression
-
-import inspect
 import os
-import py
-import ray
-import re
+import errno
+import types
 import numpy as np
-import math
 
-from modin.error_message import ErrorMessage
-from modin.engines.base.io import BaseIO
+from ..core import flags
+from .. import units as mdaunits  # use mdaunits instead of units to avoid a clash
+from ..exceptions import NoDataError
+from . import base
+from . import core
+# dcdtimeseries is implemented with Pyrex - hopefully all dcd reading functionality can move to pyrex
+from . import _dcdmodule
+from . import dcdtimeseries
 
-PQ_INDEX_REGEX = re.compile("__index_level_\d+__")  # noqa W605
-S3_ADDRESS_REGEX = re.compile("s3://(.*?)/(.*)")
+class Timestep(base.Timestep):
+    #: Indices into :attr:`Timestep._unitcell` (``[A, gamma, B, beta, alpha,
+    #: C]``, provided by the :class:`DCDReader` C code) to pull out
+    #: ``[A, B, C, alpha, beta, gamma]``.
+    _ts_order = [0, 2, 5, 4, 3, 1]
 
-
-def file_exists(file_path):
-    if isinstance(file_path, str):
-        match = S3_ADDRESS_REGEX.search(file_path)
-        if match:
-            import s3fs as S3FS
-            from botocore.exceptions import NoCredentialsError
-
-            s3fs = S3FS.S3FileSystem(anon=False)
-            try:
-                return s3fs.exists(file_path)
-            except NoCredentialsError:
-                s3fs = S3FS.S3FileSystem(anon=True)
-                return s3fs.exists(file_path)
-    return os.path.exists(file_path)
-
-
-def file_open(file_path, mode="rb", kwargs=None):
-    if isinstance(file_path, str):
-        match = S3_ADDRESS_REGEX.search(file_path)
-        if match:
-            import s3fs as S3FS
-            from botocore.exceptions import NoCredentialsError
-
-            s3fs = S3FS.S3FileSystem(anon=False)
-            try:
-                return s3fs.open(file_path)
-            except NoCredentialsError:
-                s3fs = S3FS.S3FileSystem(anon=True)
-                return s3fs.open(file_path)
-        elif "compression" in kwargs:
-            if kwargs["compression"] == "gzip":
-                import gzip
-                return gzip.open(file_path, mode=mode)
-    return open(file_path, mode=mode)
-
-
-def file_size(f):
-    cur_pos = f.tell()
-    f.seek(0, os.SEEK_END)
-    size = f.tell()
-    f.seek(cur_pos, os.SEEK_SET)
-    return size
-
-
-@ray.remote
-def get_index(index_name, *partition_indices):  # pragma: no cover
-    """Get the index from the indices returned by the workers.
-
-    Note: Ray functions are not detected by codecov (thus pragma: no cover)"""
-    index = partition_indices[0].append(partition_indices[1:])
-    index.names = index_name
-    return index
-
-
-class RayIO(BaseIO):
-
-    frame_mgr_cls = None
-    frame_partition_cls = None
-    query_compiler_cls = None
-
-    # IMPORTANT NOTE
-    #
-    # Specify these in the child classes to extend the functionality from this class.
-    # The tasks must return a very specific set of objects in the correct order to be
-    # correct. The following must be returned from these remote tasks:
-    # 1.) A number of partitions equal to the `num_partitions` value. If there is not
-    #     enough data to fill the number of partitions, returning empty partitions is
-    #     okay as well.
-    # 2.) The index object if the index is anything but the default type (`RangeIndex`),
-    #     otherwise return the length of the object in the remote task and the logic
-    #     will build the `RangeIndex` correctly. May of these methods have a `index_col`
-    #     parameter that will tell you whether or not to use the default index.
-
-    read_parquet_remote_task = None
-    # For reading parquet files in parallel, this task should read based on the `cols`
-    # value in the task signature. Each task will read a subset of the columns.
-    #
-    # Signature: (path, cols, num_splits, kwargs)
-
-    read_csv_remote_task = None
-    # For reading CSV files and other text files in parallel, this task should read
-    # based on the offsets in the signature (`start` and `stop` are byte offsets).
-    # `prefix_id` is the `b""` prefix for reading with a `BytesIO` object and it will
-    # also contain encoding information in the string.
-    #
-    # Signature: (filepath, num_splits, start, stop, kwargs, prefix_id)
-
-    read_hdf_remote_task = None
-    # For reading HDF5 files in parallel, this task should read based on the `columns`
-    # parameter in the task signature. Each task will read a subset of the columns.
-    #
-    # Signature: (path_or_buf, columns, num_splits, kwargs)
-
-    read_feather_remote_task = None
-    # For reading Feather file format in parallel, this task should read based on the
-    # `columns` parameter in the task signature. Each task will read a subset of the
-    # columns.
-    #
-    # Signature: (path, columns, num_splits)
-
-    read_sql_remote_task = None
-    # For reading SQL tables in parallel, this task should read a number of rows based
-    # on the `sql` string passed to the task. Each task will be given a different LIMIT
-    # and OFFSET as a part of the `sql` query string, so the tasks should perform only
-    # the logic required to read the SQL query and determine the Index (information
-    # above).
-    #
-    # Signature: (num_splits, sql, con, index_col, kwargs)
-
-    @classmethod
-    def read_parquet(cls, path, engine, columns, **kwargs):
-        """Load a parquet object from the file path, returning a DataFrame.
-           Ray DataFrame only supports pyarrow engine for now.
-
-        Args:
-            path: The filepath of the parquet file.
-                  We only support local files for now.
-            engine: Ray only support pyarrow reader.
-                    This argument doesn't do anything for now.
-            kwargs: Pass into parquet's read_pandas function.
-
-        Notes:
-            ParquetFile API is used. Please refer to the documentation here
-            https://arrow.apache.org/docs/python/parquet.html
+    @property
+    def dimensions(self):
+        """unitcell dimensions (*A*, *B*, *C*, *alpha*, *beta*, *gamma*)
+        lengths *A*, *B*, *C* are in the MDAnalysis length unit (Å), and
+        angles are in degrees.
+        :attr:`dimensions` is read-only because it transforms the actual format
+        of the unitcell (which differs between different trajectory formats) to
+        the representation described here, which is used everywhere in
+        MDAnalysis.
+        The ordering of the angles in the unitcell is the same as in recent
+        versions of VMD's DCDplugin_ (2013), namely the `X-PLOR DCD format`_:
+        The original unitcell is read as ``[A, gamma, B, beta, alpha, C]`` from
+        the DCD file (actually, the direction cosines are stored instead of the
+        angles but the underlying C code already does this conversion); if any
+        of these values are < 0 or if any of the angles are > 180 degrees then
+        it is assumed it is a new-style CHARMM unitcell (at least since c36b2)
+        in which box vectors were recorded.
+        .. warning:: The DCD format is not well defined. Check your unit cell
+           dimensions carefully, especially when using triclinic
+           boxes. Different software packages implement different conventions
+           and MDAnalysis is currently implementing the newer NAMD/VMD convention
+           and tries to guess the new CHARMM one. Old CHARMM trajectories might
+           give wrong unitcell values. For more details see `Issue 187`_.
+        .. versionchanged:: 0.9.0
+           Unitcell is now interpreted in the newer NAMD DCD format as ``[A,
+           gamma, B, beta, alpha, C]`` instead of the old MDAnalysis/CHARMM
+           ordering ``[A, alpha, B, beta, gamma, C]``. We attempt to detect the
+           new CHARMM DCD unitcell format (see `Issue 187`_ for a discussion).
+        .. _`X-PLOR DCD format`: http://www.ks.uiuc.edu/Research/vmd/plugins/molfile/dcdplugin.html
+        .. _Issue 187: https://github.com/MDAnalysis/mdanalysis/issues/187
+        .. _DCDplugin: http://www.ks.uiuc.edu/Research/vmd/plugins/doxygen/dcdplugin_8c-source.html#l00947
         """
 
-        from pyarrow.parquet import ParquetFile, ParquetDataset
+        # Layout of unitcell is [A, alpha, B, beta, gamma, C] --- (originally CHARMM DCD)
+        # override for other formats; this strange ordering is kept for historical reasons
+        # (the user should not need concern themselves with this)
+        ## orig MDAnalysis 0.8.1/dcd.c (~2004)
+        ##return np.take(self._unitcell, [0,2,5,1,3,4])
 
-        if cls.read_parquet_remote_task is None:
-            return super(RayIO, cls).read_parquet(path, engine, columns, **kwargs)
+        # MDAnalysis 0.9.0 with recent dcd.c (based on 2013 molfile
+        # DCD plugin, which implements the ordering of recent NAMD
+        # (>2.5?)). See Issue 187.
+        uc = np.take(self._unitcell, self._ts_order)
+        # heuristic sanity check: uc = A,B,C,alpha,beta,gamma
+        # XXX: should we worry about these comparisons with floats?
+        if np.any(uc < 0.) or np.any(uc[3:] > 180.):
+            # might be new CHARMM: box matrix vectors
+            H = self._unitcell
+            e1, e2, e3 = H[[0,1,3]],  H[[1,2,4]], H[[3,4,5]]
+            uc = core.triclinic_box(e1, e2, e3)
+        return uc
 
-        if os.path.isdir(path):
-            directory = True
-            partitioned_columns = set()
-            # We do a tree walk of the path directory because partitioned
-            # parquet directories have a unique column at each directory level.
-            # Thus, we can use os.walk(), which does a dfs search, to walk
-            # through the different columns that the data is partitioned on
-            for (root, dir_names, files) in os.walk(path):
-                if dir_names:
-                    partitioned_columns.add(dir_names[0].split("=")[0])
-                if files:
-                    file_path = os.path.join(root, files[0])
-                    break
-            partitioned_columns = list(partitioned_columns)
-        else:
-            directory = False
+    @dimensions.setter
+    def dimensions(self, box):
+        """Set unitcell with (*A*, *B*, *C*, *alpha*, *beta*, *gamma*)
+        .. versionadded:: 0.9.0
+        """
+        # note that we can re-use self._ts_order with put!
+        np.put(self._unitcell, self._ts_order, box)
 
-        if not columns:
-            if directory:
-                # Path of the sample file that we will read to get the remaining
-                # columns.
-                pd = ParquetDataset(file_path)
-                column_names = pd.schema.names
+class DCDWriter(base.Writer):
+    """Writes to a DCD file
+    Typical usage::
+       with DCDWriter("new.dcd", u.atoms.n_atoms) as w:
+           for ts in u.trajectory
+               w.write_next_timestep(ts)
+    Keywords are available to set some of the low-level attributes of the DCD.
+    :Methods:
+       ``d = DCDWriter(dcdfilename, n_atoms, start, step, delta, remarks)``
+    .. Note::
+       The Writer will write the **unit cell information** to the DCD in a
+       format compatible with NAMD and older CHARMM versions, namely the unit
+       cell lengths in Angstrom and the angle cosines (see
+       :class:`Timestep`). Newer versions of CHARMM (at least c36b2) store the
+       matrix of the box vectors. Writing this matrix to a DCD is currently not
+       supported (although reading is supported with the
+       :class:`DCDReader`); instead the angle cosines are written,
+       which *might make the DCD file unusable in CHARMM itself*. See
+       `Issue 187`_ for further information.
+       The writing behavior of the :class:`DCDWriter` is identical to
+       that of the DCD molfile plugin of VMD with the exception that
+       by default it will use AKMA time units.
+    .. _Issue 187: https://github.com/MDAnalysis/mdanalysis/issues/187
+    """
+    format = 'DCD'
+    multiframe = True
+    flavor = 'CHARMM'
+    units = {'time': 'AKMA', 'length': 'Angstrom'}
+
+    def __init__(self, filename, n_atoms, start=0, step=1,
+                 delta=mdaunits.convert(1., 'ps', 'AKMA'), dt=None,
+                 remarks="Created by DCDWriter", convert_units=None):
+        """Create a new DCDWriter
+        :Arguments:
+         *filename*
+           name of output file
+         *n_atoms*
+           number of atoms in dcd file
+         *start*
+           starting timestep
+         *step*
+           skip between subsequent timesteps (indicate that *step* MD
+           integrator steps (!) make up one trajectory frame); default is 1.
+         *delta*
+           timestep (MD integrator time step (!), in AKMA units); default is
+           20.45482949774598 (corresponding to 1 ps).
+         *remarks*
+           comments to annotate dcd file
+         *dt*
+           **Override** *step* and *delta* so that the DCD records that *dt* ps
+           lie between two frames. (It sets *step* = 1 and *delta* = ``AKMA(dt)``.)
+           The default is ``None``, in which case *step* and *delta* are used.
+         *convert_units*
+           units are converted to the MDAnalysis base format; ``None`` selects
+           the value of :data:`MDAnalysis.core.flags` ['convert_lengths'].
+           (see :ref:`flags-label`)
+       .. Note::
+          The keyword arguments set the low-level attributes of the DCD
+          according to the CHARMM format. The time between two frames would be
+          *delta* * *step* ! For convenience, one can alternatively supply the
+          *dt* keyword (see above) to just tell the writer that it should
+          record "There are dt ps between each frame".
+        """
+        if n_atoms == 0:
+            raise ValueError("DCDWriter: no atoms in output trajectory")
+        elif n_atoms is None:
+            # probably called from MDAnalysis.Writer() so need to give user a gentle heads up...
+            raise ValueError("DCDWriter: REQUIRES the number of atoms in the 'n_atoms' argument\n" +
+                             " " * len("ValueError: ") +
+                             "For example: n_atoms=universe.atoms.n_atoms")
+        self.filename = filename
+        # convert length and time to base units on the fly?
+        self.convert_units = flags['convert_lengths'] if convert_units is None \
+            else convert_units
+        self.n_atoms = n_atoms
+
+        self.frames_written = 0
+        self.start = start
+        if dt is not None:
+            if dt > 0:
+                # ignore step and delta
+                self.step = 1
+                self.delta = mdaunits.convert(dt, 'ps', 'AKMA')
             else:
-                pf = ParquetFile(path)
-                column_names = pf.metadata.schema.names
-            columns = [name for name in column_names if not PQ_INDEX_REGEX.match(name)]
-
-        # Cannot read in parquet file by only reading in the partitioned column.
-        # Thus, we have to remove the partition columns from the columns to
-        # ensure that when we do the math for the blocks, the partition column
-        # will be read in along with a non partition column.
-        if columns and directory and any(col in partitioned_columns for col in columns):
-            # partitioned_columns = [col for col in columns if col in partitioned_columns]
-            columns = [col for col in columns if col not in partitioned_columns]
-            # If all of the columns wanted are partition columns, return an
-            # empty dataframe with the desired columns.
-            if len(columns) == 0:
-                return cls.query_compiler_cls.from_pandas(
-                    pandas.DataFrame(columns=partitioned_columns),
-                    block_partitions_cls=cls.frame_mgr_cls,
-                )
-
-        num_partitions = cls.frame_mgr_cls._compute_num_partitions()
-        num_splits = min(len(columns), num_partitions)
-        # Each item in this list will be a list of column names of the original df
-        column_splits = (
-            len(columns) // num_partitions
-            if len(columns) % num_partitions == 0
-            else len(columns) // num_partitions + 1
-        )
-        col_partitions = [
-            columns[i : i + column_splits]
-            for i in range(0, len(columns), column_splits)
-        ]
-        # Each item in this list will be a list of columns of original df
-        # partitioned to smaller pieces along rows.
-        # We need to transpose the oids array to fit our schema.
-        # TODO (williamma12): This part can be parallelized even more if we
-        # separate the partitioned parquet file code path from the default one.
-        blk_partitions = np.array(
-            [
-                cls.read_parquet_remote_task._remote(
-                    args=(path, cols + partitioned_columns, num_splits, kwargs),
-                    num_return_vals=num_splits + 1,
-                )
-                if directory and cols == col_partitions[len(col_partitions) - 1]
-                else cls.read_parquet_remote_task._remote(
-                    args=(path, cols, num_splits, kwargs),
-                    num_return_vals=num_splits + 1,
-                )
-                for cols in col_partitions
-            ]
-        ).T
-        remote_partitions = np.array(
-            [
-                [cls.frame_partition_cls(obj) for obj in row]
-                for row in blk_partitions[:-1]
-            ]
-        )
-        index_len = ray.get(blk_partitions[-1][0])
-        index = pandas.RangeIndex(index_len)
-        if directory:
-            columns += partitioned_columns
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_mgr_cls(remote_partitions), index, columns
-        )
-
-        return new_query_compiler
-
-    # CSV
-    @classmethod
-    def _skip_header(cls, f, kwargs={}):
-        lines_read = 0
-        comment = kwargs.get("comment", None)
-        skiprows = kwargs.get("skiprows", None)
-        encoding = kwargs.get("encoding", None)
-        header = kwargs.get("header", "infer")
-        names = kwargs.get("names", None)
-
-        if header is None:
-            return lines_read
-        elif header == "infer":
-            if names is not None:
-                return lines_read
-            else:
-                header = 0
-        # Skip lines before the header
-        if isinstance(skiprows, int):
-            lines_read += skiprows
-            for _ in range(skiprows):
-                f.readline()
-            skiprows = None
-
-        header_lines = header + 1 if isinstance(header, int) else max(header) + 1
-        header_lines_skipped = 0
-        # Python 2 files use a read-ahead buffer which breaks our use of tell()
-        for line in iter(f.readline, ""):
-            lines_read += 1
-            skip = False
-            if not skip and comment is not None:
-                if encoding is not None:
-                    skip |= line.decode(encoding)[0] == comment
-                else:
-                    skip |= line.decode()[0] == comment
-            if not skip and callable(skiprows):
-                skip |= skiprows(lines_read)
-            elif not skip and hasattr(skiprows, "__contains__"):
-                skip |= lines_read in skiprows
-
-            if not skip:
-                header_lines_skipped += 1
-                if header_lines_skipped == header_lines:
-                    return lines_read
-        return lines_read
-
-    @classmethod
-    def _read_csv_from_file_pandas_on_ray(cls, filepath, kwargs={}):
-        """Constructs a DataFrame from a CSV file.
-
-        Args:
-            filepath (str): path to the CSV file.
-            npartitions (int): number of partitions for the DataFrame.
-            kwargs (dict): args excluding filepath provided to read_csv.
-
-        Returns:
-            DataFrame or Series constructed from CSV file.
-        """
-        names = kwargs.get("names", None)
-        index_col = kwargs.get("index_col", None)
-        if names is None:
-            # For the sake of the empty df, we assume no `index_col` to get the correct
-            # column names before we build the index. Because we pass `names` in, this
-            # step has to happen without removing the `index_col` otherwise it will not
-            # be assigned correctly
-            kwargs["index_col"] = None
-            f = file_open(filepath, "rb", kwargs)
-            kwargs_uncompressed = kwargs.copy()
-            kwargs_uncompressed["compression"] = None
-            names = pandas.read_csv(
-                f, **dict(kwargs_uncompressed, nrows=0, skipfooter=0)
-            ).columns
-            kwargs["index_col"] = index_col
-
-        f = file_open(filepath, "rb", kwargs)
-        kwargs_uncompressed = kwargs.copy()
-        kwargs_uncompressed["compression"] = None
-        empty_pd_df = pandas.read_csv(
-            f, **dict(kwargs_uncompressed, nrows=0, skipfooter=0)
-        )
-        column_names = empty_pd_df.columns
-        skipfooter = kwargs.get("skipfooter", None)
-        skiprows = kwargs.pop("skiprows", None)
-        parse_dates = kwargs.pop("parse_dates", False)
-        partition_kwargs = dict(
-            kwargs,
-            header=None,
-            names=names
-            if kwargs.get("usecols") is None or kwargs.get("names") is not None
-            else None,
-            skipfooter=0,
-            skiprows=None,
-            parse_dates=parse_dates,
-        )
-        with file_open(filepath, "rb", kwargs) as f:
-            # Get the BOM if necessary
-            prefix = b""
-            if kwargs.get("encoding", None) is not None:
-                prefix = f.readline()
-                partition_kwargs["skiprows"] = 1
-                f.seek(0, os.SEEK_SET)  # Return to beginning of file
-
-            prefix_id = ray.put(prefix)
-            partition_kwargs_id = ray.put(partition_kwargs)
-            # Skip the header since we already have the header information and skip the
-            # rows we are told to skip.
-            kwargs["skiprows"] = skiprows
-            cls._skip_header(f, kwargs)
-            # Launch tasks to read partitions
-            partition_ids = []
-            index_ids = []
-            total_bytes = file_size(f)
-            # Max number of partitions available
-            num_parts = cls.frame_mgr_cls._compute_num_partitions()
-            # This is the number of splits for the columns
-            num_splits = min(len(column_names), num_parts)
-            # This is the chunksize each partition will read
-            chunk_size = max(1, (total_bytes - f.tell()) // num_parts)
-
-            while f.tell() < total_bytes:
-                start = f.tell()
-                f.seek(chunk_size, os.SEEK_CUR)
-                f.readline()  # Read a whole number of lines
-                partition_id = cls.read_csv_remote_task._remote(
-                    args=(
-                        filepath,
-                        num_splits,
-                        start,
-                        f.tell(),
-                        partition_kwargs_id,
-                        prefix_id,
-                    ),
-                    num_return_vals=num_splits + 1,
-                )
-                partition_ids.append(
-                    [cls.frame_partition_cls(obj) for obj in partition_id[:-1]]
-                )
-                index_ids.append(partition_id[-1])
-
-        if index_col is None:
-            new_index = pandas.RangeIndex(sum(ray.get(index_ids)))
+                raise ValueError("DCDWriter: dt must be > 0, not {0}".format(dt))
         else:
-            new_index_ids = get_index.remote([empty_pd_df.index.name], *index_ids)
-            new_index = ray.get(new_index_ids)
+            self.step = step
+            self.delta = delta
+        self.dcdfile = open(self.filename, 'wb')
+        self.remarks = remarks
+        self._write_dcd_header(self.n_atoms, self.start, self.step, self.delta, self.remarks)
 
-        # If parse_dates is present, the column names that we have might not be
-        # the same length as the returned column names. If we do need to modify
-        # the column names, we remove the old names from the column names and
-        # insert the new one at the front of the Index.
-        if parse_dates is not None:
-            # Check if is list of lists
-            if isinstance(parse_dates, list) and isinstance(parse_dates[0], list):
-                for group in parse_dates:
-                    new_col_name = "_".join(group)
-                    column_names = column_names.drop(group).insert(0, new_col_name)
-            # Check if it is a dictionary
-            elif isinstance(parse_dates, dict):
-                for new_col_name, group in parse_dates.items():
-                    column_names = column_names.drop(group).insert(0, new_col_name)
-
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_mgr_cls(np.array(partition_ids)), new_index, column_names
-        )
-
-        if skipfooter:
-            new_query_compiler = new_query_compiler.drop(
-                new_query_compiler.index[-skipfooter:]
-            )
-        if kwargs.get("squeeze", False) and len(new_query_compiler.columns) == 1:
-            return new_query_compiler[new_query_compiler.columns[0]]
-        return new_query_compiler
-
-    @classmethod
-    def _read_csv_from_pandas(cls, filepath_or_buffer, kwargs):
-        # TODO: Should we try to be smart about how we load files here, or naively default to pandas?
-        pd_obj = pandas.read_csv(filepath_or_buffer, **kwargs)
-        if isinstance(pd_obj, pandas.DataFrame):
-            return cls.from_pandas(pd_obj)
-        elif isinstance(pd_obj, pandas.io.parsers.TextFileReader):
-            # Overwriting the read method should return a ray DataFrame for calls
-            # to __next__ and get_chunk
-            pd_read = pd_obj.read
-            pd_obj.read = lambda *args, **kwargs: cls.from_pandas(
-                pd_read(*args, **kwargs)
-            )
-        return pd_obj
-
-    @classmethod
-    def read_csv(
-        cls,
-        filepath_or_buffer,
-        sep=",",
-        delimiter=None,
-        header="infer",
-        names=None,
-        index_col=None,
-        usecols=None,
-        squeeze=False,
-        prefix=None,
-        mangle_dupe_cols=True,
-        dtype=None,
-        engine=None,
-        converters=None,
-        true_values=None,
-        false_values=None,
-        skipinitialspace=False,
-        skiprows=None,
-        nrows=None,
-        na_values=None,
-        keep_default_na=True,
-        na_filter=True,
-        verbose=False,
-        skip_blank_lines=True,
-        parse_dates=False,
-        infer_datetime_format=False,
-        keep_date_col=False,
-        date_parser=None,
-        dayfirst=False,
-        iterator=False,
-        chunksize=None,
-        compression="infer",
-        thousands=None,
-        decimal=b".",
-        lineterminator=None,
-        quotechar='"',
-        quoting=0,
-        escapechar=None,
-        comment=None,
-        encoding=None,
-        dialect=None,
-        tupleize_cols=None,
-        error_bad_lines=True,
-        warn_bad_lines=True,
-        skipfooter=0,
-        doublequote=True,
-        delim_whitespace=False,
-        low_memory=True,
-        memory_map=False,
-        float_precision=None,
-    ):
-        kwargs = {
-            "filepath_or_buffer": filepath_or_buffer,
-            "sep": sep,
-            "delimiter": delimiter,
-            "header": header,
-            "names": names,
-            "index_col": index_col,
-            "usecols": usecols,
-            "squeeze": squeeze,
-            "prefix": prefix,
-            "mangle_dupe_cols": mangle_dupe_cols,
-            "dtype": dtype,
-            "engine": engine,
-            "converters": converters,
-            "true_values": true_values,
-            "false_values": false_values,
-            "skipinitialspace": skipinitialspace,
-            "skiprows": skiprows,
-            "nrows": nrows,
-            "na_values": na_values,
-            "keep_default_na": keep_default_na,
-            "na_filter": na_filter,
-            "verbose": verbose,
-            "skip_blank_lines": skip_blank_lines,
-            "parse_dates": parse_dates,
-            "infer_datetime_format": infer_datetime_format,
-            "keep_date_col": keep_date_col,
-            "date_parser": date_parser,
-            "dayfirst": dayfirst,
-            "iterator": iterator,
-            "chunksize": chunksize,
-            "compression": compression,
-            "thousands": thousands,
-            "decimal": decimal,
-            "lineterminator": lineterminator,
-            "quotechar": quotechar,
-            "quoting": quoting,
-            "escapechar": escapechar,
-            "comment": comment,
-            "encoding": encoding,
-            "dialect": dialect,
-            "tupleize_cols": tupleize_cols,
-            "error_bad_lines": error_bad_lines,
-            "warn_bad_lines": warn_bad_lines,
-            "skipfooter": skipfooter,
-            "doublequote": doublequote,
-            "delim_whitespace": delim_whitespace,
-            "low_memory": low_memory,
-            "memory_map": memory_map,
-            "float_precision": float_precision,
-        }
-        if cls.read_csv_remote_task is None:
-            return super(RayIO, cls).read_csv(**kwargs)
-        return cls._read(**kwargs)
-
-    @classmethod
-    def _read(cls, filepath_or_buffer, **kwargs):
-        """Read csv file from local disk.
-        Args:
-            filepath_or_buffer:
-                  The filepath of the csv file.
-                  We only support local files for now.
-            kwargs: Keyword arguments in pandas.read_csv
+    def _dcd_header(self):
+        """Returns contents of the DCD header C structure::
+             typedef struct {
+               fio_fd fd;                 // FILE *
+               fio_size_t header_size;    // size_t == sizeof(int)
+               int natoms;
+               int nsets;
+               int setsread;
+               int istart;
+               int nsavc;
+               double delta;
+               int nfixed;
+               int *freeind;
+               float *fixedcoords;
+               int reverse;
+               int charmm;
+               int first;
+               int with_unitcell;
+             } dcdhandle;
+        .. deprecated:: 0.7.5
+           This function only exists for debugging purposes and might
+           be removed without notice. Do not rely on it.
         """
-        # The intention of the inspection code is to reduce the amount of
-        # communication we have to do between processes and nodes. We take a quick
-        # pass over the arguments and remove those that are default values so we
-        # don't have to serialize and send them to the workers. Because the
-        # arguments list is so long, this does end up saving time based on the
-        # number of nodes in the cluster.
-        try:
-            args, _, _, defaults, _, _, _ = inspect.getfullargspec(cls.read_csv)
-            defaults = dict(zip(args[2:], defaults))
-            filtered_kwargs = {
-                kw: kwargs[kw]
-                for kw in kwargs
-                if kw in defaults
-                and not isinstance(kwargs[kw], type(defaults[kw]))
-                or kwargs[kw] != defaults[kw]
-            }
-        # This happens on Python2, we will just default to serializing the entire dictionary
-        except AttributeError:
-            filtered_kwargs = kwargs
+        # was broken (no idea why [orbeckst]), see Issue 27
+        # 'PiiiiiidiPPiiii' should be the unpack string according to the struct.
+        #    struct.unpack("LLiiiiidiPPiiii",self._dcd_C_str)
+        # seems to do the job on Mac OS X 10.6.4 ... but I have no idea why,
+        # given that the C code seems to define them as normal integers
+        desc = [
+            'file_desc', 'header_size', 'natoms', 'nsets', 'setsread', 'istart',
+            'nsavc', 'delta', 'nfixed', 'freeind_ptr', 'fixedcoords_ptr',
+            'reverse', 'charmm', 'first', 'with_unitcell']
+        return dict(zip(desc, struct.unpack("LLiiiiidiPPiiii", self._dcd_C_str)))
 
-        if isinstance(filepath_or_buffer, str):
-            if not file_exists(filepath_or_buffer):
-                ErrorMessage.default_to_pandas("File path could not be resolved")
-                return cls._read_csv_from_pandas(filepath_or_buffer, filtered_kwargs)
-        elif not isinstance(filepath_or_buffer, py.path.local):
-            read_from_pandas = True
-            # Pandas read_csv supports pathlib.Path
+    def write_next_timestep(self, ts=None):
+        ''' write a new timestep to the dcd file
+        *ts* - timestep object containing coordinates to be written to dcd file
+        .. versionchanged:: 0.7.5
+           Raises :exc:`ValueError` instead of generic :exc:`Exception`
+           if wrong number of atoms supplied and :exc:`~MDAnalysis.NoDataError`
+           if no coordinates to be written.
+        '''
+        if ts is None:
             try:
-                import pathlib
+                ts = self.ts
+            except AttributeError:
+                raise NoDataError("DCDWriter: no coordinate data to write to trajectory file")
+        if not ts.n_atoms == self.n_atoms:
+            raise ValueError("DCDWriter: Timestep does not have the correct number of atoms")
+        unitcell = self.convert_dimensions_to_unitcell(ts).astype(np.float32)  # must be float32 (!)
+        if not ts._pos.flags.f_contiguous:  # Not in fortran format
+            ts = Timestep.from_timestep(ts)  # wrap in a new fortran formatted Timestep
+        if self.convert_units:
+            pos = self.convert_pos_to_native(ts._pos,
+                                             inplace=False)  # possibly make a copy to avoid changing the trajectory
+        self._write_next_frame(pos[:, 0], pos[:, 1], pos[:, 2], unitcell)
+        self.frames_written += 1
 
-                if isinstance(filepath_or_buffer, pathlib.Path):
-                    read_from_pandas = False
-            except ImportError:  # pragma: no cover
-                pass
-            if read_from_pandas:
-                ErrorMessage.default_to_pandas("Reading from buffer.")
-                return cls._read_csv_from_pandas(filepath_or_buffer, kwargs)
-        if (
-            _infer_compression(filepath_or_buffer, kwargs.get("compression"))
-            is not None
-        ):
-            if _infer_compression(filepath_or_buffer, kwargs.get("compression")) == "gzip":
-                filtered_kwargs["compression"] = "gzip"
-            else:
-                ErrorMessage.default_to_pandas("Compression detected.")
-                return cls._read_csv_from_pandas(filepath_or_buffer, filtered_kwargs)
-
-        chunksize = kwargs.get("chunksize")
-        if chunksize is not None:
-            ErrorMessage.default_to_pandas("Reading chunks from a file.")
-            return cls._read_csv_from_pandas(filepath_or_buffer, filtered_kwargs)
-
-        skiprows = kwargs.get("skiprows")
-        if skiprows is not None and not isinstance(skiprows, int):
-            ErrorMessage.default_to_pandas("skiprows parameter not optimized yet.")
-            return cls._read_csv_from_pandas(filepath_or_buffer, kwargs)
-        # TODO: replace this by reading lines from file.
-        if kwargs.get("nrows") is not None:
-            ErrorMessage.default_to_pandas("`read_csv` with `nrows`")
-            return cls._read_csv_from_pandas(filepath_or_buffer, filtered_kwargs)
-        else:
-            return cls._read_csv_from_file_pandas_on_ray(
-                filepath_or_buffer, filtered_kwargs
-            )
-
-    @classmethod
-    def _validate_hdf_format(cls, path_or_buf):
-        s = pandas.HDFStore(path_or_buf)
-        groups = s.groups()
-        if len(groups) == 0:
-            raise ValueError("No dataset in HDF5 file.")
-        candidate_only_group = groups[0]
-        format = getattr(candidate_only_group._v_attrs, "table_type", None)
-        s.close()
-        return format
-
-    @classmethod
-    def read_hdf(cls, path_or_buf, **kwargs):
-        """Load a h5 file from the file path or buffer, returning a DataFrame.
-
-        Args:
-            path_or_buf: string, buffer or path object
-                Path to the file to open, or an open :class:`pandas.HDFStore` object.
-            kwargs: Pass into pandas.read_hdf function.
-
-        Returns:
-            DataFrame constructed from the h5 file.
+    def convert_dimensions_to_unitcell(self, ts, _ts_order=Timestep._ts_order):
+        """Read dimensions from timestep *ts* and return appropriate native unitcell.
+        .. SeeAlso:: :attr:`Timestep.dimensions`
         """
-        if cls.read_hdf_remote_task is None:
-            return super(RayIO, cls).read_hdf(path_or_buf, **kwargs)
+        # unitcell is A,B,C,alpha,beta,gamma - convert to order expected by low level DCD routines
+        lengths, angles = ts.dimensions[:3], ts.dimensions[3:]
+        self.convert_pos_to_native(lengths)
+        unitcell = np.zeros_like(ts.dimensions)
+        # __write_DCD_frame() wants uc_array = [A, gamma, B, beta, alpha, C] and
+        # will write the lengths and the angle cosines to the DCD. NOTE: It
+        # will NOT write CHARMM36+ box matrix vectors. When round-tripping a
+        # C36+ DCD, we loose the box vector information. However, MDAnalysis
+        # itself will not detect this because the DCDReader contains the
+        # heuristic to deal with either lengths/angles or box matrix on the fly.
+        #
+        # use np.put so that we can re-use ts_order (otherwise we
+        # would need a ts_reverse_order such as _ts_reverse_order = [0, 5, 1, 4, 3, 2])
+        np.put(unitcell, _ts_order, np.concatenate([lengths, angles]))
+        return unitcell
 
-        format = cls._validate_hdf_format(path_or_buf=path_or_buf)
+    def close(self):
+        """Close trajectory and flush buffers."""
+        if hasattr(self, 'dcdfile') and self.dcdfile is not None:
+            self._finish_dcd_write()
+            self.dcdfile.close()
+            self.dcdfile = None
 
-        if format is None:
-            ErrorMessage.default_to_pandas(
-                "File format seems to be `fixed`. For better distribution consider saving the file in `table` format. "
-                "df.to_hdf(format=`table`)."
-            )
-            return cls.from_pandas(pandas.read_hdf(path_or_buf=path_or_buf, **kwargs))
+class DCDReader(base.Reader):
+    format = 'DCD'
+    flavor = 'CHARMM'
+    units = {'time': 'AKMA', 'length': 'Angstrom'}
+    _Timestep = Timestep
+    def __init__( self, dcdfilename, **kwargs ):
+        super(DCDReader, self).__init__(dcdfilename, **kwargs)
 
-        columns = kwargs.get("columns", None)
-        if not columns:
-            start = kwargs.pop("start", None)
-            stop = kwargs.pop("stop", None)
-            empty_pd_df = pandas.read_hdf(path_or_buf, start=0, stop=0, **kwargs)
-            kwargs["start"] = start
-            kwargs["stop"] = stop
-            columns = empty_pd_df.columns
+        self.dcdfilename = self.filename # dcdfilename is legacy
+        self.dcdfile = None  # set right away because __del__ checks
 
-        num_partitions = cls.frame_mgr_cls._compute_num_partitions()
-        num_splits = min(len(columns), num_partitions)
-        # Each item in this list will be a list of column names of the original df
-        column_splits = (
-            len(columns) // num_partitions
-            if len(columns) % num_partitions == 0
-            else len(columns) // num_partitions + 1
-        )
-        col_partitions = [
-            columns[i : i + column_splits]
-            for i in range(0, len(columns), column_splits)
-        ]
-        blk_partitions = np.array(
-            [
-                cls.read_hdf_remote_task._remote(
-                    args=(path_or_buf, cols, num_splits, kwargs),
-                    num_return_vals=num_splits + 1,
-                )
-                for cols in col_partitions
-            ]
-        ).T
-        remote_partitions = np.array(
-            [
-                [cls.frame_partition_cls(obj) for obj in row]
-                for row in blk_partitions[:-1]
-            ]
-        )
-        index_len = ray.get(blk_partitions[-1][0])
-        index = pandas.RangeIndex(index_len)
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_mgr_cls(remote_partitions), index, columns
-        )
-        return new_query_compiler
+        # Issue #32 (MDanalysis): segfault if dcd is 0-size
+        # Hack : test here... (but should be fixed in dcd.c)
+        stats = os.stat( dcdfilename )
+        if stats.st_size == 0:
+            raise IOError( errno.ENODATA, "DCD file is zero size", dcdfilename )
 
-    @classmethod
-    def read_feather(cls, path, columns=None, use_threads=True):
-        """Read a pandas.DataFrame from Feather format.
-           Ray DataFrame only supports pyarrow engine for now.
+        self.dcdfile = dcdfilename
+        self.n_atoms = 0
+        self.n_frames = 0
+        self.fixed = 0
+        self.skip = 1
+        self.periodic = False
 
-        Args:
-            path: The filepath of the feather file.
-                  We only support local files for now.
-                multi threading is set to True by default
-            columns: not supported by pandas api, but can be passed here to read only
-                specific columns
-            use_threads: Whether or not to use threads when reading
+        self._read_dcd_header()
 
-        Notes:
-            pyarrow feather is used. Please refer to the documentation here
-            https://arrow.apache.org/docs/python/api.html#feather-format
+        # Convert delta to ps
+        delta = mdaunits.convert(self.delta, self.units['time'], 'ps')
+
+        self._ts_kwargs.setdefault('dt', self.skip_timestep * delta)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
+        # Read in the first timestep
+        self._read_next_timestep()
+
+
+    def _dcd_header(self):  # pragma: no cover
+        """Returns contents of the DCD header C structure::
+             typedef struct {
+               fio_fd fd;                 // FILE *
+               fio_size_t header_size;    // size_t == sizeof(int)
+               int natoms;
+               int nsets;
+               int setsread;
+               int istart;
+               int nsavc;
+               double delta;
+               int nfixed;
+               int *freeind;
+               float *fixedcoords;
+               int reverse;
+               int charmm;
+               int first;
+               int with_unitcell;
+             } dcdhandle;
+        .. deprecated:: 0.7.5
+           This function only exists for debugging purposes and might
+           be removed without notice. Do not rely on it.
         """
-        if cls.read_feather_remote_task is None:
-            return super(RayIO, cls).read_feather(
-                path, columns=columns, use_threads=use_threads
-            )
+        # was broken (no idea why [orbeckst]), see Issue 27
+        # 'PiiiiiidiPPiiii' should be the unpack string according to the struct.
+        #    struct.unpack("LLiiiiidiPPiiii",self._dcd_C_str)
+        # seems to do the job on Mac OS X 10.6.4 ... but I have no idea why,
+        # given that the C code seems to define them as normal integers
+        desc = [
+            'file_desc', 'header_size', 'natoms', 'nsets', 'setsread', 'istart',
+            'nsavc', 'delta', 'nfixed', 'freeind_ptr', 'fixedcoords_ptr', 'reverse',
+            'charmm', 'first', 'with_unitcell']
+        return dict(zip(desc, struct.unpack("LLiiiiidiPPiiii", self._dcd_C_str)))
 
-        if columns is None:
-            from pyarrow.feather import FeatherReader
+    def _reopen(self):
+        self.ts.frame = -1
+        self._reset_dcd_read()
 
-            fr = FeatherReader(path)
-            columns = [fr.get_column_name(i) for i in range(fr.num_columns)]
-
-        num_partitions = cls.frame_mgr_cls._compute_num_partitions()
-        num_splits = min(len(columns), num_partitions)
-        # Each item in this list will be a list of column names of the original df
-        column_splits = (
-            len(columns) // num_partitions
-            if len(columns) % num_partitions == 0
-            else len(columns) // num_partitions + 1
-        )
-        col_partitions = [
-            columns[i : i + column_splits]
-            for i in range(0, len(columns), column_splits)
-        ]
-        blk_partitions = np.array(
-            [
-                cls.read_feather_remote_task._remote(
-                    args=(path, cols, num_splits), num_return_vals=num_splits + 1
-                )
-                for cols in col_partitions
-            ]
-        ).T
-        remote_partitions = np.array(
-            [
-                [cls.frame_partition_cls(obj) for obj in row]
-                for row in blk_partitions[:-1]
-            ]
-        )
-        index_len = ray.get(blk_partitions[-1][0])
-        index = pandas.RangeIndex(index_len)
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_mgr_cls(remote_partitions), index, columns
-        )
-        return new_query_compiler
-
-    @classmethod
-    def to_sql(cls, qc, **kwargs):
-        """Write records stored in a DataFrame to a SQL database.
-        Args:
-            qc: the query compiler of the DF that we want to run to_sql on
-            kwargs: parameters for pandas.to_sql(**kwargs)
+    def _read_next_timestep(self, ts=None):
+        """Read the next frame
+        .. versionchanged 0.11.0::
+           Native frame read into ts._frame, ts.frame naively iterated
         """
-        # we first insert an empty DF in order to create the full table in the database
-        # This also helps to validate the input against pandas
-        # we would like to_sql() to complete only when all rows have been inserted into the database
-        # since the mapping operation is non-blocking, each partition will return an empty DF
-        # so at the end, the blocking operation will be this empty DF to_pandas
+        if ts is None:
+            ts = self.ts
+        ts._frame = self._read_next_frame(ts._x, ts._y, ts._z, ts._unitcell, 1)
+        ts.frame += 1
+        return ts
 
-        empty_df = qc.head(1).to_pandas().head(0)
-        empty_df.to_sql(**kwargs)
-        # so each partition will append its respective DF
-        kwargs["if_exists"] = "append"
-        columns = qc.columns
-
-        def func(df, **kwargs):
-            df.columns = columns
-            df.to_sql(**kwargs)
-            return pandas.DataFrame()
-
-        map_func = qc._prepare_method(func, **kwargs)
-        result = qc._map_across_full_axis(1, map_func)
-        # blocking operation
-        result.to_pandas()
-
-    @classmethod
-    def read_sql(cls, sql, con, index_col=None, **kwargs):
-        """Reads a SQL query or database table into a DataFrame.
-        Args:
-            sql: string or SQLAlchemy Selectable (select or text object) SQL query to be
-                executed or a table name.
-            con: SQLAlchemy connectable (engine/connection) or database string URI or
-                DBAPI2 connection (fallback mode)
-            index_col: Column(s) to set as index(MultiIndex).
-            kwargs: Pass into pandas.read_sql function.
+    def _read_frame(self, frame):
+        """Skip to frame and read
+        .. versionchanged:: 0.11.0
+           Native frame read into ts._frame, ts.frame naively set to frame
         """
-        if cls.read_sql_remote_task is None:
-            return super(RayIO, cls).read_sql(sql, con, index_col=index_col, **kwargs)
+        self._jump_to_frame(frame)
+        ts = self.ts
+        ts._frame = self._read_next_frame(ts._x, ts._y, ts._z, ts._unitcell, 1)
+        ts.frame = frame
+        return ts
 
-        row_cnt_query = "SELECT COUNT(*) FROM ({})".format(sql)
-        row_cnt = pandas.read_sql(row_cnt_query, con).squeeze()
-        cols_names_df = pandas.read_sql(
-            "SELECT * FROM ({}) LIMIT 0".format(sql), con, index_col=index_col
-        )
-        cols_names = cols_names_df.columns
-        num_parts = cls.frame_mgr_cls._compute_num_partitions()
-        partition_ids = []
-        index_ids = []
-        limit = math.ceil(row_cnt / num_parts)
-        for part in range(num_parts):
-            offset = part * limit
-            query = "SELECT * FROM ({}) LIMIT {} OFFSET {}".format(sql, limit, offset)
-            partition_id = cls.read_sql_remote_task._remote(
-                args=(num_parts, query, con, index_col, kwargs),
-                num_return_vals=num_parts + 1,
-            )
-            partition_ids.append(
-                [cls.frame_partition_cls(obj) for obj in partition_id[:-1]]
-            )
-            index_ids.append(partition_id[-1])
+    def timeseries(self, asel, start=0, stop=-1, skip=1, format='afc'):
+        """Return a subset of coordinate data for an AtomGroup
+        :Arguments:
+            *asel*
+               :class:`~MDAnalysis.core.AtomGroup.AtomGroup` object
+            *start, stop, skip*
+               range of trajectory to access, start and stop are inclusive
+            *format*
+               the order/shape of the return data array, corresponding
+               to (a)tom, (f)rame, (c)oordinates all six combinations
+               of 'a', 'f', 'c' are allowed ie "fac" - return array
+               where the shape is (frame, number of atoms,
+               coordinates)
+        """
+        start, stop, skip = self.check_slice_indices(start, stop, skip)
+        if len(asel) == 0:
+            raise NoDataError("Timeseries requires at least one atom to analyze")
+        if len(format) != 3 and format not in ['afc', 'acf', 'caf', 'cfa', 'fac', 'fca']:
+            raise ValueError("Invalid timeseries format")
+        atom_numbers = list(asel.indices)
+        # Check if the atom numbers can be grouped for efficiency, then we can read partial buffers
+        # from trajectory file instead of an entire timestep
+        # XXX needs to be implemented
+        return self._read_timeseries(atom_numbers, start, stop, skip, format)
 
-        if index_col is None:  # sum all lens returned from partitions
-            index_lens = ray.get(index_ids)
-            new_index = pandas.RangeIndex(sum(index_lens))
-        else:  # concat index returned from partitions
-            index_lst = [x for part_index in ray.get(index_ids) for x in part_index]
-            new_index = pandas.Index(index_lst).set_names(index_col)
+    def correl(self, timeseries, start=0, stop=-1, skip=1):
+        """Populate a TimeseriesCollection object with timeseries computed from the trajectory
+        :Arguments:
+            *timeseries*
+               :class:`MDAnalysis.core.Timeseries.TimeseriesCollection`
+            *start, stop, skip*
+               subset of trajectory to use, with start and stop being inclusive
+        """
+        start, stop, skip = self.check_slice_indices(start, stop, skip)
+        atomlist = timeseries._getAtomList()
+        format = timeseries._getFormat()
+        lowerb, upperb = timeseries._getBounds()
+        sizedata = timeseries._getDataSize()
+        atomcounts = timeseries._getAtomCounts()
+        auxdata = timeseries._getAuxData()
+        return self._read_timecorrel(atomlist, atomcounts, format, auxdata,
+                                     sizedata, lowerb, upperb, start, stop, skip)
 
-        new_query_compiler = cls.query_compiler_cls(
-            cls.frame_mgr_cls(np.array(partition_ids)), new_index, cols_names
-        )
-        return new_query_compiler
+    def close(self):
+        if self.dcdfile is not None:
+            self._finish_dcd_read()
+            #self.dcdfile.close()
+            self.dcdfile = None
+
+    def Writer(self, filename, **kwargs):
+            """Returns a DCDWriter for *filename* with the same parameters as this DCD.
+            All values can be changed through keyword arguments.
+            :Arguments:
+              *filename*
+                  filename of the output DCD trajectory
+            :Keywords:
+              *n_atoms*
+                  number of atoms
+              *start*
+                  number of the first recorded MD step
+              *step*
+                  indicate that *step* MD steps (!) make up one trajectory frame
+              *delta*
+                  MD integrator time step (!), in AKMA units
+              *dt*
+                 **Override** *step* and *delta* so that the DCD records that *dt* ps
+                 lie between two frames. (It sets *step* = 1 and *delta* = ``AKMA(dt)``.)
+                 The default is ``None``, in which case *step* and *delta* are used.
+              *remarks*
+                  string that is stored in the DCD header [XXX -- max length?]
+            :Returns: :class:`DCDWriter`
+            .. Note::
+               The keyword arguments set the low-level attributes of the DCD
+               according to the CHARMM format. The time between two frames would be
+               *delta* * *step* !
+            .. SeeAlso:: :class:`DCDWriter` has detailed argument description
+            """
+            n_atoms = kwargs.pop('n_atoms', self.n_atoms)
+            kwargs.setdefault('start', self.start_timestep)
+            kwargs.setdefault('step', self.skip_timestep)
+            kwargs.setdefault('delta', self.delta)
+            kwargs.setdefault('remarks', self.remarks)
+            # dt keyword is simply passed through if provided
+            return DCDWriter(filename, n_atoms, **kwargs)
+
+    @property
+    def dt(self):
+        """Time between two trajectory frames in picoseconds."""
+        return self.ts.dt
+
+
+
+# Add the c functions to their respective classes so they act as class methods
+
+try:
+    import new
+    DCDReader._read_dcd_header = new.instancemethod( _dcdmodule._read_dcd_header, None, DCDReader )
+    DCDReader._read_next_frame = new.instancemethod( _dcdmodule._read_next_frame, None, DCDReader )
+    DCDReader._jump_to_frame = new.instancemethod( _dcdmodule._jump_to_frame, None, DCDReader )
+    DCDReader._reset_dcd_read = new.instancemethod( _dcdmodule._reset_dcd_read, None, DCDReader )
+    DCDReader._finish_dcd_read = new.instancemethod( _dcdmodule._finish_dcd_read, None, DCDReader )
+    DCDReader._read_timeseries = new.instancemethod( _dcdmodule._read_timeseries, None, DCDReader )
+    del( _dcdmodule )
+except ImportError:
+    DCDReader._read_dcd_header = lambda self: _dcdmodule._read_dcd_header( self )
+    DCDReader._read_next_frame = lambda self, x, y, z, unitcell, skip: _dcdmodule._read_next_frame( self, x, y, z, unitcell, skip )
+    DCDReader._jump_to_frame = lambda self, frame: _dcdmodule._jump_to_frame( self, frame )
+    DCDReader._reset_dcd_read = lambda self: _dcdmodule._reset_dcd_read( self )
+    DCDReader._finish_dcd_read = lambda self: _dcdmodule._finish_dcd_read( self )
+    DCDReader._read_timeseries = lambda self: _dcdmodule._read_timeseries( self )

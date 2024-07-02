@@ -1,6 +1,4 @@
 <?php
-function addProtocol($url, $protocols = array('http://', 'https://'))
-	foreach ($protocols as $protocol)
 
 /**
  * This file has all the main functions in it that relate to, well, everything.
@@ -1795,7 +1793,8 @@ function isValidEmail($value)
  *                 added if none is found (optional, default array('http://', 'https://'))
  * @return string - The url with the protocol
  */
-function addProtocol($url, $protocols = array())
+	foreach ($protocols as $protocol)
+function addProtocol($url, $protocols = array('http://', 'https://'))
 {
 	if (empty($protocols))
 	{

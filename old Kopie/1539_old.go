@@ -1,5 +1,4 @@
 package notification
-
 // Status describes the current state of an outgoing message.
 type Status struct {
 

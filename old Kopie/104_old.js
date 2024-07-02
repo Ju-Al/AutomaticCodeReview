@@ -1,61 +1,31 @@
 import { Component, createElement } from 'react';
-import { connect } from 'react-redux';
-import { func, shape, string } from 'prop-types';
 
-import timeout from 'src/util/timeout';
-import CheckoutFlow from './flow';
+import classify from 'src/classify';
+import ResetButton from './resetButton';
+import defaultClasses from './exit.css';
 
-const delay = 1000;
-
-const resetCheckoutAction = () => async dispatch => {
-    dispatch({ type: 'TOGGLE_DRAWER', payload: null });
-    await timeout(192); // drawer transition duration
-    dispatch({ type: 'RESET_CHECKOUT' });
-};
-
-const requestOrderAction = () => async dispatch => {
-    dispatch({ type: 'REQUEST_ORDER' });
-    await timeout(delay); // TODO: replace with api call
-    dispatch({ type: 'RECEIVE_ORDER' });
-};
-
-const submitOrderAction = () => async dispatch => {
-    dispatch({ type: 'SUBMIT_ORDER' });
-    await timeout(delay); // TODO: replace with api call
-    dispatch({ type: 'ACCEPT_ORDER' });
-};
-
-class CheckoutWrapper extends Component {
+class Exit extends Component {
     static propTypes = {
-        checkout: shape({
-            status: string
+        classes: shape({
+            body: string,
+            footer: string,
+            root: string
         }),
-        submitOrder: func
+        resetCheckout: func
     };
 
     render() {
-        const {
-            checkout,
-            resetCheckout,
-            requestOrder,
-            submitOrder
-        } = this.props;
-        const { status } = checkout;
-        const flowProps = { resetCheckout, requestOrder, status, submitOrder };
+        const { classes, resetCheckout } = this.props;
 
-        return <CheckoutFlow {...flowProps} />;
+        return (
+            <div className={classes.root}>
+                <div className={classes.body}>Thank you for your order!</div>
+                <div className={classes.footer}>
+                    <ResetButton resetCheckout={resetCheckout} />
+                </div>
+            </div>
+        );
     }
 }
 
-const mapStateToProps = ({ checkout }) => ({ checkout });
-
-const mapDispatchToProps = dispatch => ({
-    resetCheckout: () => dispatch(resetCheckoutAction()),
-    requestOrder: () => dispatch(requestOrderAction()),
-    submitOrder: () => dispatch(submitOrderAction())
-});
-
-export default connect(
-    mapStateToProps,
-    mapDispatchToProps
-)(CheckoutWrapper);
+export default classify(defaultClasses)(Exit);

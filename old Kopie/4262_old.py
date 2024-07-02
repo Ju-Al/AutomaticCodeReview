@@ -101,7 +101,6 @@ class beat(Command):
         kwargs.pop('app', None)
         beat = partial(self.app.Beat,
                        logfile=logfile, pidfile=pidfile, **kwargs)
-        # standalone beat does not care about results, so replace on_task_call
         self.app.backend.on_task_call = MethodType(noop, self.app.backend)
 
         if detach:

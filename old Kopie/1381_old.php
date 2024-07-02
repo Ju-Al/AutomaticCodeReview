@@ -1,5 +1,4 @@
 <?php
-namespace Neos\Flow\Core\Migrations;
 
 /*
  * This file is part of the Neos.Flow package.

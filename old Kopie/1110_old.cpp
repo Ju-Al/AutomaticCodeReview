@@ -1,20 +1,4 @@
 /**
-        // TODO IR-975 victordrobny 12.02.2018 convert directly to
-        // shared_model::proto::Block after FlatFile will be reworked to new
-        // model
-          return model::converters::stringToJson(bytesToString(bytes));
-        } | [this](const auto &d) {
-          return serializer_.deserialize(d);
-        } | [](const auto &block_old) {
-          return std::make_shared<shared_model::proto::Block>(
-              shared_model::proto::from_old(block_old));
-        return rxcpp::observable<>::create<PostgresBlockQuery::wBlock>(
-            [this, block{std::move(block)}](auto s) {
-              if (block) {
-                s.on_next(block);
-              }
-              s.on_completed();
-            });
  * Copyright Soramitsu Co., Ltd. 2018 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -58,8 +42,23 @@ namespace iroha {
         return rxcpp::observable<>::empty<wBlock>();
       }
       return rxcpp::observable<>::range(height, to).flat_map([this](auto i) {
+        // TODO IR-975 victordrobny 12.02.2018 convert directly to
+        // shared_model::proto::Block after FlatFile will be reworked to new
+        // model
         auto block = block_store_.get(i) | [](const auto &bytes) {
-          return shared_model::converters::protobuf::jsonToModel<
+          return model::converters::stringToJson(bytesToString(bytes));
+        } | [this](const auto &d) {
+          return serializer_.deserialize(d);
+        } | [](const auto &block_old) {
+          return std::make_shared<shared_model::proto::Block>(
+        return rxcpp::observable<>::create<PostgresBlockQuery::wBlock>(
+            [this, block{std::move(block)}](auto s) {
+              if (block) {
+                s.on_next(block);
+              }
+              s.on_completed();
+            });
+              shared_model::proto::from_old(block_old));
               shared_model::proto::Block>(bytesToString(bytes));
         };
         if (not block) {

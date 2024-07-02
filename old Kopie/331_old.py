@@ -1,10 +1,4 @@
 """Base graph class specialized for neural networks on graphs."""
-        Parameters
-        ----------
-        backtracking : bool, optional
-            Whether the returned line graph is backtracking.
-        shared : bool, optional
-            Whether the returned line graph shares representations with `self`.
 from __future__ import absolute_import
 
 from collections import defaultdict
@@ -2767,7 +2761,12 @@ class DGLGraph(object):
     def line_graph(self, backtracking=True, shared=False):
         """Return the line graph of this graph.
 
-        See :func:`~dgl.transform.line_graph`.
+        Parameters
+        ----------
+        backtracking : bool, optional
+        shared : bool, optional
+            Whether the returned line graph shares representations with `self`.
+            Whether the returned line graph is backtracking.
         """
         return dgl.line_graph(self, backtracking, shared)
 

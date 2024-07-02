@@ -1,60 +1,5 @@
 <?php
-		?>
-		<div id="message" class="updated sensei-message sensei-connect">
-
-			<p>
-				<?php echo wp_kses_post( __( '<strong>Welcome to Sensei LMS</strong> &#8211; You\'re almost ready to create some courses!', 'sensei-lms' ) ); ?>
-			</p>
-
-			<p class="submit">
-
-				<a href="<?php echo esc_url( add_query_arg( 'install_sensei_pages', 'true', admin_url( 'admin.php?page=sensei-settings' ) ) ); ?>"
-				   class="button-primary">
-
-					<?php esc_html_e( 'Install Sensei LMS Pages', 'sensei-lms' ); ?>
-
-				</a>
-
-				<a class="skip button" href="<?php echo esc_url( add_query_arg( 'skip_install_sensei_pages', 'true', admin_url( 'admin.php?page=sensei-settings' ) ) ); ?>">
-
-					<?php esc_html_e( 'Skip setup', 'sensei-lms' ); ?>
-
-				</a>
-
-			</p>
-		</div>
-		<?php
-	} // End admin_install_notice()
-		?>
-		<div id="message" class="updated sensei-message sensei-connect">
-
-			<p>
-				<?php echo wp_kses_post( __( '<strong>Sensei LMS has been installed</strong> &#8211; You\'re ready to start creating courses!', 'sensei-lms' ) ); ?>
-			</p>
-
-			<p class="submit">
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=sensei-settings' ) ); ?>" class="button-primary"><?php esc_html_e( 'Settings', 'sensei-lms' ); ?></a> <a class="docs button" href="http://www.woothemes.com/sensei-docs/">
-					<?php esc_html_e( 'Documentation', 'sensei-lms' ); ?>
-				</a>
-			</p>
-
-			<p>
-				<a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=course' ) ); ?>" class="button-primary">
-					<?php esc_html_e( 'Create a Course', 'sensei-lms' ); ?>
-				</a>
-			</p>
-
-		</div>
-		<?php
-
-		// Set installed option
-		update_option( 'sensei_installed', 0 );
-	} // End admin_installed_notice()
-
-		// Installed notices
-		if ( 1 == get_option( 'sensei_installed' ) ) {
-
-			Sensei()->assets->enqueue( 'sensei-activation', 'css/activation.css' );if ( ! defined( 'ABSPATH' ) ) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
@@ -380,12 +325,66 @@ class Sensei_Admin {
 
 	/**
 	 * admin_install_notice function.
+		?>
+		<div id="message" class="updated sensei-message sensei-connect">
+
+			<p>
+				<?php echo wp_kses_post( __( '<strong>Welcome to Sensei LMS</strong> &#8211; You\'re almost ready to create some courses!', 'sensei-lms' ) ); ?>
+			</p>
+
+			<p class="submit">
+
+				<a href="<?php echo esc_url( add_query_arg( 'install_sensei_pages', 'true', admin_url( 'admin.php?page=sensei-settings' ) ) ); ?>"
+				   class="button-primary">
+
+					<?php esc_html_e( 'Install Sensei LMS Pages', 'sensei-lms' ); ?>
+
+				</a>
+
+				<a class="skip button" href="<?php echo esc_url( add_query_arg( 'skip_install_sensei_pages', 'true', admin_url( 'admin.php?page=sensei-settings' ) ) ); ?>">
+
+					<?php esc_html_e( 'Skip setup', 'sensei-lms' ); ?>
+
+				</a>
+
+			</p>
+		</div>
+		<?php
+	} // End admin_install_notice()
 	 *
-	 * @deprecated since 3.1.0
 	 * @access public
 	 * @return void
 	 */
-	function admin_install_notice() {
+		?>
+		<div id="message" class="updated sensei-message sensei-connect">
+
+			<p>
+				<?php echo wp_kses_post( __( '<strong>Sensei LMS has been installed</strong> &#8211; You\'re ready to start creating courses!', 'sensei-lms' ) ); ?>
+			</p>
+
+			<p class="submit">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=sensei-settings' ) ); ?>" class="button-primary"><?php esc_html_e( 'Settings', 'sensei-lms' ); ?></a> <a class="docs button" href="http://www.woothemes.com/sensei-docs/">
+					<?php esc_html_e( 'Documentation', 'sensei-lms' ); ?>
+				</a>
+			</p>
+
+			<p>
+				<a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=course' ) ); ?>" class="button-primary">
+					<?php esc_html_e( 'Create a Course', 'sensei-lms' ); ?>
+				</a>
+			</p>
+
+		</div>
+		<?php
+
+		// Set installed option
+		update_option( 'sensei_installed', 0 );
+	} // End admin_installed_notice()
+
+		// Installed notices
+		if ( 1 == get_option( 'sensei_installed' ) ) {
+
+			Sensei()->assets->enqueue( 'sensei-activation', 'css/activation.css' );	function admin_install_notice() {
 		_deprecated_function( __METHOD__, '3.1.0', 'Sensei_Onboarding' );
 	}
 

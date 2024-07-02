@@ -1,128 +1,69 @@
-package com.actiontech.dble.services.rwsplit;
+ */
 
-import com.actiontech.dble.net.handler.FrontendQueryHandler;
-import com.actiontech.dble.net.mysql.OkPacket;
-import com.actiontech.dble.rwsplit.RWSplitNonBlockingSession;
-import com.actiontech.dble.server.ServerQueryHandler;
-import com.actiontech.dble.server.handler.UseHandler;
-import com.actiontech.dble.server.parser.ServerParse;
-import com.actiontech.dble.singleton.TraceManager;
-import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.statement.SQLAssignItem;
-import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
-import com.alibaba.druid.sql.ast.statement.SQLSetStatement;
-import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
-import com.alibaba.druid.sql.parser.SQLStatementParser;
-import com.google.common.collect.ImmutableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+package net.sourceforge.pmd.lang.java.metrics.impl;
 
-import java.io.IOException;
-import java.util.List;
+import org.apache.commons.lang3.mutable.MutableInt;
 
-public class RWSplitQueryHandler implements FrontendQueryHandler {
+import net.sourceforge.pmd.lang.java.ast.ASTAnyTypeDeclaration;
+import net.sourceforge.pmd.lang.java.ast.ASTClassOrInterfaceBodyDeclaration;
+import net.sourceforge.pmd.lang.java.ast.MethodLikeNode;
+import net.sourceforge.pmd.lang.java.metrics.impl.internal.CfoVisitor;
+import net.sourceforge.pmd.lang.metrics.MetricOption;
+import net.sourceforge.pmd.lang.metrics.MetricOptions;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ServerQueryHandler.class);
 
-    private final RWSplitNonBlockingSession session;
-    //private Boolean readOnly = true;
-    //private boolean sessionReadOnly = true;
+/**
+ * The ClassFanOutComplexity counts the usage of other classes within this class.
+ *
+ * @author Andreas Pabst
+ * @since October 2019
+ */
+public final class ClassFanOutMetric {
 
-    @Override
-    public void setReadOnly(Boolean readOnly) {
-        //this.readOnly = readOnly;
-    }
+    public enum ClassFanOutOption implements MetricOption {
+        /** Weather to include Classes in the java.lang package. */
+        INCLUDE_JAVA_LANG("includeJavaLang");
 
-    @Override
-    public void setSessionReadOnly(boolean sessionReadOnly) {
-        // this.sessionReadOnly = sessionReadOnly;
-    }
+        private final String vName;
 
-    public RWSplitQueryHandler(RWSplitNonBlockingSession session) {
-        this.session = session;
-    }
+        ClassFanOutOption(String valueName) {
+            this.vName = valueName;
+        }
 
-    @Override
-    public void query(String sql) {
-        TraceManager.TraceObject traceObject = TraceManager.serviceTrace(session.getService(), "handle-query-sql");
-        TraceManager.log(ImmutableMap.of("sql", sql), traceObject);
-        try {
-            int rs = ServerParse.parse(sql);
-            int sqlType = rs & 0xff;
-            switch (sqlType) {
-                case ServerParse.USE:
-                    String schema = UseHandler.getSchemaName(sql, rs >>> 8);
-                    session.execute(false, rwSplitService -> rwSplitService.setSchema(schema));
-                    break;
-                case ServerParse.SHOW:
-                    session.execute(true, null);
-                    break;
-                case ServerParse.SELECT:
-                    session.execute(parseSelectQuery(sql), null);
-                    break;
-                case ServerParse.SET:
-                    parseSet(sql);
-                    break;
-                case ServerParse.LOCK:
-                    session.execute(false, rwSplitService -> rwSplitService.setLocked(true));
-                    break;
-                case ServerParse.UNLOCK:
-                    session.execute(false, rwSplitService -> rwSplitService.setLocked(false));
-                    break;
-                case ServerParse.COMMIT:
-                case ServerParse.ROLLBACK:
-                    session.execute(false, rwSplitService -> rwSplitService.getSession().unbindIfSafe());
-                    break;
-                default:
-                    // 1. DDL
-                    session.execute(false, null);
-                    break;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            TraceManager.finishSpan(traceObject);
+        @Override
+        public String valueName() {
+            return vName;
         }
     }
 
-    private boolean parseSelectQuery(String sql) {
-        boolean canSelectSlave = false;
-        SQLStatementParser parser = new MySqlStatementParser(sql);
-        SQLStatement statement = parser.parseStatement(true);
-        if (statement instanceof SQLSelectStatement) {
-            if (!((SQLSelectStatement) statement).getSelect().getQueryBlock().isForUpdate()) {
-                canSelectSlave = true;
-            }
-        } else {
-            LOGGER.warn("unknown select");
-            throw new UnsupportedOperationException("unknown");
-        }
+    public static final class ClassFanOutClassMetric extends AbstractJavaClassMetric {
 
-        return canSelectSlave;
+        @Override
+        public double computeFor(ASTAnyTypeDeclaration node, MetricOptions options) {
+            MutableInt cfo = (MutableInt) node.jjtAccept(new CfoVisitor(options, node), new MutableInt(0));
+            return (double) cfo.getValue();
+        }
     }
 
-    private void parseSet(String sql) throws IOException {
-        SQLStatementParser parser = new MySqlStatementParser(sql);
-        SQLStatement statement = parser.parseStatement(true);
-        if (statement instanceof SQLSetStatement) {
-            List<SQLAssignItem> assignItems = ((SQLSetStatement) statement).getItems();
-            if (assignItems.size() == 1) {
-                SQLAssignItem item = assignItems.get(0);
-                if (item.getTarget().toString().equalsIgnoreCase("autocommit")) {
-                    if (session.getService().isAutocommit() && item.getValue().toString().equalsIgnoreCase("0")) {
-                        session.getService().setAutocommit(false);
-                        session.getService().writeDirectly(OkPacket.OK);
-                    }
-                    if (!session.getService().isAutocommit() && item.getValue().toString().equalsIgnoreCase("1")) {
-                        session.execute(false, rwSplitService -> rwSplitService.setAutocommit(true));
-                    }
-                }
+    public static final class ClassFanOutOperationMetric extends AbstractJavaOperationMetric {
+
+        @Override
+        public boolean supports(MethodLikeNode node) {
+            return true;
+        }
+
+        @Override
+        public double computeFor(MethodLikeNode node, MetricOptions options) {
+            MutableInt cfo;
+            // look at the parent to catch annotations
+            if (node.jjtGetParent() instanceof ASTClassOrInterfaceBodyDeclaration) {
+                ASTClassOrInterfaceBodyDeclaration parent = (ASTClassOrInterfaceBodyDeclaration) node.jjtGetParent();
+                cfo = (MutableInt) parent.jjtAccept(new CfoVisitor(options, node), new MutableInt(0));
             } else {
-                throw new UnsupportedOperationException("unknown");
+                cfo = (MutableInt) node.jjtAccept(new CfoVisitor(options, node), new MutableInt(0));
             }
-        } else {
-            throw new UnsupportedOperationException("unknown");
+
+            return (double) cfo.getValue();
         }
     }
-
 }

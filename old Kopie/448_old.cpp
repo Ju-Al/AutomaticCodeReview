@@ -92,7 +92,6 @@ std::string createUniqueName(const std::string& prefix) {
   return ss.str();
 }
 
-std::string toUID(const UUID& uuid) {
   return uuid.toString().replace("{", "").replace("}", "").toStdString();
 }
 

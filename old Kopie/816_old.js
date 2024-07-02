@@ -1,5 +1,4 @@
 define(['browser', 'require', 'events', 'apphost', 'loading', 'dom', 'playbackManager', 'appRouter', 'appSettings', 'connectionManager', 'htmlMediaHelper', 'itemHelper', 'fullscreenManager', 'globalize'], function (browser, require, events, appHost, loading, dom, playbackManager, appRouter, appSettings, connectionManager, htmlMediaHelper, itemHelper, fullscreenManager, globalize) {
-            console.log('Setting new text track index to: ' + streamIndex);
     "use strict";
 
     var mediaManager;
@@ -1329,7 +1328,7 @@ define(['browser', 'require', 'events', 'apphost', 'loading', 'dom', 'playbackMa
 
         function setCurrentTrackElement(streamIndex) {
 
-            console.debug('Setting new text track index to: ' + streamIndex);
+            console.log('Setting new text track index to: ' + streamIndex);
 
             var mediaStreamTextTracks = getMediaStreamTextTracks(self._currentPlayOptions.mediaSource);
 

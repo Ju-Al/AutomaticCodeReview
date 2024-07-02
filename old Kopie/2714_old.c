@@ -419,7 +419,6 @@ int main(int argc, char **argv)
             expr += ')';
         }
         cflags.push_back(build_cc_macro_expr("H2OLOG_IS_SAMPLING_ADDRESS(family, addr)", std::string("(") + expr + ")"));
-        selective_tracing = true;
     }
 
     if (selective_tracing) {

@@ -1,5 +1,4 @@
 from collections import OrderedDict
-
 from indy_common.types import ClientSchemaOperation, SetContextMetaField, SetContextDataField, \
     ClientSetContextOperation, ContextField
 from plenum.common.messages.fields import ConstantField, VersionField, IterableField, LimitedLengthStringField

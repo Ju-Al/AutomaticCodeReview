@@ -173,7 +173,6 @@ except ImportError:
     DOCTEST_MODULES.remove("Bio.SeqIO")
     DOCTEST_MODULES.remove("Bio.SearchIO")
 
-# Skip doctest for all modules outside of 'Bio' package prior to Python 3.3
 if float(sys.version[:3]) < 3.3:
     for i, name in enumerate(DOCTEST_MODULES):
         if is_outside_bio(name):

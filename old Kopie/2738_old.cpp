@@ -165,8 +165,6 @@ const char *utils::guesspath(char *buf, int len, FILE *fp)
 #endif
   return buf;
 }
-
-// read line into buffer. if line is too long keep reading until EOL or EOF
 // but return only the first part with a newline at the end.
 
 char *utils::fgets_trunc_nl(char *buf, int size, FILE *fp)

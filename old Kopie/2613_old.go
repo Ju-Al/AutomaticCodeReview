@@ -690,8 +690,6 @@ func (k *Kad) Start(_ context.Context) error {
 	return nil
 }
 
-func (k *Kad) previouslyConnected() []swarm.Address {
-
 	ss := k.collector.Snapshot(time.Now())
 
 	var peers []swarm.Address

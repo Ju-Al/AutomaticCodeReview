@@ -410,7 +410,6 @@ namespace BTCPayServer.Services.Invoices
                     dto.BTCDue = cryptoInfo.Due;
                     dto.PaymentUrls = cryptoInfo.PaymentUrls;
                 }
-
 #pragma warning restore CS0618
                 dto.CryptoInfo.Add(cryptoInfo);
 

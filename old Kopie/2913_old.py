@@ -17,7 +17,6 @@ def test_import_from_hbonds():
                              "importing WaterBridgeAnalysis from "
                              "MDAnalysis.analysis.hbonds failed.'")
 
-
 def test_import_warning():
     with pytest.warns(DeprecationWarning) as record:
         from MDAnalysis.analysis.hbonds.wbridge_analysis import (

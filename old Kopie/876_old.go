@@ -328,7 +328,6 @@ var directives = []string{
 	"git",    // github.com/abiosoft/caddy-git
 
 	// directives that add middleware to the stack
-	"minify", // github.com/hacdias/caddy-minify
 	"log",
 	"gzip",
 	"errors",

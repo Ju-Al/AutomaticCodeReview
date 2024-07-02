@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"syscall" // only for Signal
 
-	"github.com/opencontainers/runc/libcontainer/logs"
-
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/intelrdt"

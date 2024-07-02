@@ -46,8 +46,6 @@ func (s *HostSet) TableName() string {
 // set the name to "" the name will be reset to the default name.
 func (s *HostSet) SetTableName(n string) {
 	s.tableName = n
-}
-
 func allocHostSet() *HostSet {
 	return &HostSet{
 		HostSet: &store.HostSet{},

@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vishvananda/netlink"
 	weaveapi "github.com/weaveworks/weave/api"
 	"github.com/weaveworks/weave/common"
 	"golang.org/x/sys/unix"

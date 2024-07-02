@@ -1,7 +1,5 @@
 package bevm
 
-// ContractBEvmID identifies the ByzCoin contract that handles Ethereum contracts
-// ContractBEvmValueID identifies the ByzCoin contract that handles EVM state database values
 import (
 	"fmt"
 	"math/big"
@@ -13,8 +11,9 @@ import (
 	"go.dedis.ch/cothority/v3/byzcoin"
 	"go.dedis.ch/cothority/v3/darc"
 	"go.dedis.ch/onet/v3/log"
+// ContractBEvmID identifies the ByzCoin contract that handles Ethereum contracts
+// ContractBEvmValueID identifies the ByzCoin contract that handles EVM state database values
 	"go.dedis.ch/protobuf"
-	"golang.org/x/xerrors"
 )
 
 // ContractBEvmID identifies the ByzCoin contract that handles Ethereum

@@ -1,6 +1,6 @@
 <?php
 
-                return response()->json(Helper::formatStandardApiResponse('error', null, $className . ' not found'), 200);namespace App\Exceptions;
+namespace App\Exceptions;
 
 use Exception;
 use Illuminate\Auth\AuthenticationException;
@@ -63,7 +63,7 @@ class Handler extends ExceptionHandler
 
             if ($e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
                 $className = last(explode('\\', $e->getModel()));
-                return response()->json(Helper::formatStandardApiResponse('error', null, $className . ' not found'), 404);
+                return response()->json(Helper::formatStandardApiResponse('error', null, $className . ' not found'), 200);                return response()->json(Helper::formatStandardApiResponse('error', null, $className . ' not found'), 404);
             }
 
             if ($e instanceof \Illuminate\Validation\ValidationException) {

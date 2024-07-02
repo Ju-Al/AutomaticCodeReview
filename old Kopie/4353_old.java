@@ -326,8 +326,6 @@ public class MainActivity extends CastEnabledActivity {
         super.onConfigurationChanged(newConfig);
         if (drawerToggle != null) { // Tablet layout does not have a drawer
             drawerToggle.onConfigurationChanged(newConfig);
-        }
-        setNavDrawerSize();
     }
 
     private void setNavDrawerSize() {

@@ -1,8 +1,4 @@
 /***************************************************************************
-        SpellInfo( const uint32_t spriteId_, const uint32_t duration_, const int32_t offset_, const int32_t space_ )
-            : spriteId( spriteId_ )
-        uint32_t spriteId;
-void DrawBattleStats( const fheroes2::Point &, const Troop & );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -57,7 +53,10 @@ namespace
 
     struct SpellInfo
     {
-        SpellInfo( const uint32_t mode_, const uint32_t duration_, const int32_t offset_, const int32_t space_ )
+        SpellInfo( const uint32_t spriteId_, const uint32_t duration_, const int32_t offset_, const int32_t space_ )
+        uint32_t spriteId;
+void DrawBattleStats( const fheroes2::Point &, const Troop & );
+            : spriteId( spriteId_ )
             : mode( mode_ )
             , duration( duration_ )
             , offset( offset_ )

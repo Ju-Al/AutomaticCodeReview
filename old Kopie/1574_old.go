@@ -92,7 +92,6 @@ func (m *PCAPlugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*
 		return nil, err
 	}
 
-	if config.SupplementalBundlePath != "" {
 		m.supplementalBundle, err = pemutil.LoadCertificates(config.SupplementalBundlePath)
 		if err != nil {
 			return nil, err

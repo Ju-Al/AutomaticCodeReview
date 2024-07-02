@@ -168,7 +168,6 @@ class Lazy:
         self.stack = []
         return last
 
-
 # Load Tendermint's public and private key from the file path
 def load_node_key(path):
     import json

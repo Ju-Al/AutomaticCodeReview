@@ -1,172 +1,319 @@
-# -*- coding: utf-8 -*-
-"""The path helper."""
+#
+# This source file is part of the EdgeDB open source project.
+#
+# Copyright 2016-present MagicStack Inc. and the EdgeDB authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-from __future__ import unicode_literals
 
-import re
+from __future__ import annotations
 
-from dfvfs.lib import definitions as dfvfs_definitions
+import asyncio
+import errno
+import os
+import random
+import socket
+import subprocess
+import sys
+import tempfile
+import time
 
-from plaso.lib import py2to3
+import edgedb
+
+from edb.common import devmode
+from edb.edgeql import quote
+
+from edb.server import buildmeta
+from edb.server import defines as edgedb_defines
+
+from . import pgcluster
 
 
-class PathHelper(object):
-  """Class that implements the path helper."""
+def find_available_port(port_range=(49152, 65535), max_tries=1000):
+    low, high = port_range
 
-  @classmethod
-  def ExpandWindowsPath(cls, path, environment_variables):
-    """Expands a Windows path containing environment variables.
+    port = low
+    try_no = 0
 
-    Args:
-      path (str): Windows path with environment variables.
-      environment_variables (list[EnvironmentVariableArtifact]): environment
-          variables.
+    while try_no < max_tries:
+        try_no += 1
+        port = random.randint(low, high)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('localhost', port))
+        except socket.error as e:
+            if e.errno == errno.EADDRINUSE:
+                continue
+        finally:
+            sock.close()
 
-    Returns:
-      str: expanded Windows path.
-    """
-    #TODO: Add support for items such as %%users.localappdata%%
-
-    if environment_variables is None:
-      environment_variables = []
-
-    lookup_table = {}
-    if environment_variables:
-      for environment_variable in environment_variables:
-        attribute_name = environment_variable.name.upper()
-        attribute_value = environment_variable.value
-        if not isinstance(attribute_value, py2to3.STRING_TYPES):
-          continue
-
-        lookup_table[attribute_name] = attribute_value
-
-    path_segments = path.split('\\')
-    for index, path_segment in enumerate(path_segments):
-      if (len(path_segment) <= 2 or not path_segment.startswith('%') or
-          not path_segment.endswith('%')):
-        continue
-
-      check_for_drive_letter = False
-      if path_segment.upper().startswith('%%ENVIRON_'):
-        lookup_key = path_segment.upper()[10:-2]
-        check_for_drive_letter = True
-      else:
-        lookup_key = path_segment.upper()[1:-1]
-      path_segments[index] = lookup_table.get(lookup_key, path_segment)
-
-      if check_for_drive_letter:
-        # Remove the drive letter.
-        if len(path_segments[index]) >= 2 and path_segments[index][1] == ':':
-          _, _, path_segments[index] = path_segments[index].rpartition(':')
-
-    return '\\'.join(path_segments)
-
-  @classmethod
-  def GetDisplayNameForPathSpec(
-      cls, path_spec, mount_path=None, text_prepend=None):
-    """Retrieves the display name of a path specification.
-
-    Args:
-      path_spec (dfvfs.PathSpec): path specification.
-      mount_path (Optional[str]): path where the file system that is used
-          by the path specification is mounted, such as "/mnt/image". The
-          mount path will be stripped from the absolute path defined by
-          the path specification.
-      text_prepend (Optional[str]): text to prepend.
-
-    Returns:
-      str: human readable version of the path specification or None.
-    """
-    if not path_spec:
-      return None
-
-    relative_path = cls.GetRelativePathForPathSpec(
-        path_spec, mount_path=mount_path)
-    if not relative_path:
-      return path_spec.type_indicator
-
-    if text_prepend:
-      relative_path = '{0:s}{1:s}'.format(text_prepend, relative_path)
-
-    parent_path_spec = path_spec.parent
-    if parent_path_spec and path_spec.type_indicator in [
-        dfvfs_definitions.TYPE_INDICATOR_BZIP2,
-        dfvfs_definitions.TYPE_INDICATOR_GZIP]:
-      parent_path_spec = parent_path_spec.parent
-
-    if parent_path_spec and parent_path_spec.type_indicator in [
-        dfvfs_definitions.TYPE_INDICATOR_VSHADOW]:
-      store_index = getattr(path_spec.parent, 'store_index', None)
-      if store_index is not None:
-        return 'VSS{0:d}:{1:s}:{2:s}'.format(
-            store_index + 1, path_spec.type_indicator, relative_path)
-
-    return '{0:s}:{1:s}'.format(path_spec.type_indicator, relative_path)
-
-  @classmethod
-  def GetRelativePathForPathSpec(cls, path_spec, mount_path=None):
-    """Retrieves the relative path of a path specification.
-
-    If a mount path is defined the path will be relative to the mount point,
-    otherwise the path is relative to the root of the file system that is used
-    by the path specification.
-
-    Args:
-      path_spec (dfvfs.PathSpec): path specification.
-      mount_path (Optional[str]): path where the file system that is used
-          by the path specification is mounted, such as "/mnt/image". The
-          mount path will be stripped from the absolute path defined by
-          the path specification.
-
-    Returns:
-      str: relative path or None.
-    """
-    if not path_spec:
-      return None
-
-    # TODO: Solve this differently, quite possibly inside dfVFS using mount
-    # path spec.
-    location = getattr(path_spec, 'location', None)
-    if not location and path_spec.HasParent():
-      location = getattr(path_spec.parent, 'location', None)
-
-    if not location:
-      return None
-
-    data_stream = getattr(path_spec, 'data_stream', None)
-    if data_stream:
-      location = '{0:s}:{1:s}'.format(location, data_stream)
-
-    if path_spec.type_indicator != dfvfs_definitions.TYPE_INDICATOR_OS:
-      return location
-
-    # If we are parsing a mount point we don't want to include the full
-    # path to file's location here, we are only interested in the path
-    # relative to the mount point.
-    if mount_path and location.startswith(mount_path):
-      location = location[len(mount_path):]
-
-    return location
-
-  @classmethod
-  def ExpandUserHomeDirPath(cls, path, user_accounts):
-    """Expands a Windows path to contain all user home directories.
-
-    Args:
-      path (str): Windows path with environment variables.
-      user_accounts (list[UserAccountArtifact]): user accounts.
-
-    Returns:
-      list [str]: paths returned for user accounts.
-    """
-
-    user_paths = []
-    if path.upper().startswith('%%USERS.HOMEDIR%%'):
-      regex = re.compile(re.escape('%%users.homedir%%'))
-      for user_account in user_accounts:
-        new_path = regex.sub(user_account.user_directory, path)
-        user_paths.append(new_path)
+        break
     else:
-      user_paths = [path]
+        port = None
 
-    return user_paths
+    return port
+
+
+class ClusterError(Exception):
+    pass
+
+
+class Cluster:
+    def __init__(
+            self, data_dir, *,
+            pg_superuser='postgres', port=edgedb_defines.EDGEDB_PORT,
+            runstate_dir=None, env=None, testmode=False, log_level=None):
+        self._pg_dsn = None
+        self._data_dir = data_dir
+        self._location = data_dir
+        self._edgedb_cmd = [sys.executable, '-m', 'edb.server.main',
+                            '-D', self._data_dir]
+
+        if log_level:
+            self._edgedb_cmd.extend(['--log-level', log_level])
+
+        if devmode.is_in_dev_mode():
+            self._edgedb_cmd.append('--devmode')
+
+        if testmode:
+            self._edgedb_cmd.append('--testmode')
+
+        if runstate_dir is None:
+            runstate_dir = buildmeta.get_runstate_path(self._data_dir)
+
+        self._runstate_dir = runstate_dir
+        self._edgedb_cmd.extend(['--runstate-dir', runstate_dir])
+        self._pg_cluster = pgcluster.get_local_pg_cluster(self._data_dir)
+        self._pg_superuser = pg_superuser
+        self._daemon_process = None
+        self._port = port
+        self._effective_port = None
+        self._env = env
+
+    def get_status(self):
+        pg_status = self._pg_cluster.get_status()
+        initially_stopped = pg_status == 'stopped'
+
+        if initially_stopped:
+            self._pg_cluster.start(port=find_available_port())
+        elif pg_status == 'not-initialized':
+            return 'not-initialized'
+
+        conn = None
+        loop = asyncio.new_event_loop()
+        try:
+            conn = loop.run_until_complete(
+                self._pg_cluster.connect(
+                    user=self._pg_superuser, database='template1', timeout=5))
+
+            db_exists = loop.run_until_complete(
+                self._edgedb_template_exists(conn))
+        finally:
+            if conn is not None:
+                conn.terminate()
+            loop.run_until_complete(asyncio.sleep(0))
+            loop.close()
+            if initially_stopped:
+                self._pg_cluster.stop()
+
+        if initially_stopped:
+            return 'stopped' if db_exists else 'not-initialized,stopped'
+        else:
+            return 'running' if db_exists else 'not-initialized,running'
+
+    def get_connect_args(self):
+        return {
+            'host': 'localhost',
+            'port': self._effective_port
+        }
+
+    def get_data_dir(self):
+        return self._data_dir
+
+    async def async_connect(self, **kwargs):
+        connect_args = self.get_connect_args().copy()
+        connect_args.update(kwargs)
+
+        return await edgedb.async_connect(**connect_args)
+
+    def connect(self, **kwargs):
+        connect_args = self.get_connect_args().copy()
+        connect_args.update(kwargs)
+
+        return edgedb.connect(**connect_args)
+
+    def init(self, *, server_settings=None):
+        cluster_status = self.get_status()
+
+        if not cluster_status.startswith('not-initialized'):
+            raise ClusterError(
+                'cluster in {!r} has already been initialized'.format(
+                    self._location))
+
+        self._init(self._pg_cluster)
+
+    def start(self, wait=60, **settings):
+        port = settings.pop('port', None) or self._port
+        if port == 'dynamic':
+            port = find_available_port()
+
+        self._effective_port = port
+
+        extra_args = ['--{}={}'.format(k.replace('_', '-'), v)
+                      for k, v in settings.items()]
+        extra_args.append('--port={}'.format(self._effective_port))
+
+        if self._env:
+            env = os.environ.copy()
+            env.update(self._env)
+        else:
+            env = None
+
+        self._daemon_process = subprocess.Popen(
+            self._edgedb_cmd + extra_args,
+            stdout=sys.stdout, stderr=sys.stderr,
+            env=env)
+
+        self._test_connection()
+
+    def stop(self, wait=60):
+        if (self._daemon_process is not None and
+                self._daemon_process.returncode is None):
+            self._daemon_process.terminate()
+            self._daemon_process.wait(wait)
+
+    def destroy(self):
+        self._pg_cluster.destroy()
+
+    def _init(self, pg_connector):
+        if self._env:
+            env = os.environ.copy()
+            env.update(self._env)
+        else:
+            env = None
+
+        init = subprocess.run(
+            self._edgedb_cmd + ['--bootstrap-only'],
+            stdout=sys.stdout, stderr=sys.stderr,
+            env=env)
+
+        if init.returncode != 0:
+            raise ClusterError(
+                f'edgedb-server --bootstrap-only failed with '
+                f'exit code {init.returncode}')
+
+    async def _edgedb_template_exists(self, conn):
+        st = await conn.prepare(
+            '''
+            SELECT True FROM pg_catalog.pg_database WHERE datname = $1
+        ''')
+
+        return await st.fetchval(edgedb_defines.EDGEDB_TEMPLATE_DB)
+
+    def _test_connection(self, timeout=30):
+        async def test(timeout):
+            left = timeout
+            while True:
+                started = time.monotonic()
+                try:
+                    conn = await edgedb.async_connect(
+                        host=str(self._runstate_dir),
+                        port=self._effective_port,
+                        database=edgedb_defines.EDGEDB_SUPERUSER_DB,
+                        user=edgedb_defines.EDGEDB_SUPERUSER,
+                        timeout=left,
+                    )
+                except (OSError, asyncio.TimeoutError,
+                        edgedb.ClientConnectionError):
+                    left -= (time.monotonic() - started)
+                    if left > 0.05:
+                        await asyncio.sleep(0.05)
+                        left -= 0.05
+                        continue
+                    raise ClusterError(
+                        f'could not connect to edgedb-server '
+                        f'within {timeout} seconds')
+                except edgedb.AuthenticationError:
+                    return
+                else:
+                    await conn.aclose()
+                    return
+
+        asyncio.run(test(timeout))
+
+    def _admin_query(self, query):
+        conn_args = self.get_connect_args().copy()
+        conn_args['host'] = str(self._runstate_dir)
+        conn_args['admin'] = True
+        conn_args['database'] = 'edgedb'
+        conn = self.connect(**conn_args)
+
+        try:
+            return conn.query(query)
+        finally:
+            conn.close()
+
+    def set_superuser_password(self, password):
+        self._admin_query(f'''
+            ALTER ROLE {edgedb_defines.EDGEDB_SUPERUSER}
+            SET password := {quote.quote_literal(password)}
+        ''')
+
+    def trust_local_connections(self):
+        self._admin_query('''
+            CONFIGURE SYSTEM INSERT Auth {
+                priority := 0,
+                method := (INSERT Trust),
+            }
+        ''')
+
+
+class TempCluster(Cluster):
+    def __init__(
+            self, *, data_dir_suffix=None, data_dir_prefix=None,
+            data_dir_parent=None, env=None, testmode=False, log_level=None):
+        tempdir = tempfile.mkdtemp(
+            suffix=data_dir_suffix, prefix=data_dir_prefix,
+            dir=data_dir_parent)
+        super().__init__(data_dir=tempdir, runstate_dir=tempdir, env=env,
+                         testmode=testmode, log_level=log_level)
+
+
+class RunningCluster(Cluster):
+    def __init__(self, **conn_args):
+        self.conn_args = conn_args
+
+    def is_managed(self):
+        return False
+
+    def ensure_initialized(self):
+        return False
+
+    def get_connect_args(self):
+        return dict(self.conn_args)
+
+    def get_status(self):
+        return 'running'
+
+    def init(self, **settings):
+        pass
+
+    def start(self, wait=60, **settings):
+        pass
+
+    def stop(self, wait=60):
+        pass
+
+    def destroy(self):
+        pass

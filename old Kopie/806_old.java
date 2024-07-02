@@ -1,5 +1,4 @@
 /*
-                            " Increase journal size to avoid this error.");
  * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -278,7 +277,7 @@ public final class StreamEventJournalP<E, T> extends AbstractProcessor {
                 if (lostCount > 0) {
                     getLogger().warning(lostCount +  " events lost for partition " +
                             partitionId + " due to journal overflow when reading from event journal." +
-                            " Increase journal size to avoid this error. "
+                            " Increase journal size to avoid this error.");
                             + "getNextSequenceToReadFrom=" + resultSet.getNextSequenceToReadFrom() +
                             "readCount=" + resultSet.readCount() + " prevSeq=" + prevSequence);
                 }

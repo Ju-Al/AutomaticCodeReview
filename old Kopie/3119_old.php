@@ -1,382 +1,249 @@
 <?php
-						$return['author'] = $GLOBALS['TL_LANG']['MSC']['by'] . ' <span itemprop="author">' . $objAuthor->name . '</span>';
-
-/*
- * This file is part of Contao.
- *
- * (c) Leo Feyer
- *
- * @license LGPL-3.0-or-later
- */
-
-namespace Contao;
-
-use Contao\CoreBundle\Image\Studio\Studio;
-use Contao\Model\Collection;
-
 /**
- * Parent class for news modules.
+ * Onboarding.
  *
- * @property string $news_template
- * @property mixed  $news_metaFields
- *
- * @author Leo Feyer <https://github.com/leofeyer>
+ * @package Sensei\Onboarding
+ * @since   1.3.0
  */
-abstract class ModuleNews extends Module
-{
-	/**
-	 * Sort out protected archives
-	 *
-	 * @param array $arrArchives
-	 *
-	 * @return array
-	 */
-	protected function sortOutProtected($arrArchives)
-	{
-		if (empty($arrArchives) || !\is_array($arrArchives))
-		{
-			return $arrArchives;
-		}
 
-		$objArchive = NewsArchiveModel::findMultipleByIds($arrArchives);
-		$arrArchives = array();
-
-		if ($objArchive !== null)
-		{
-			$user = null;
-
-			if (System::getContainer()->get('contao.security.token_checker')->hasFrontendUser())
-			{
-				$user = FrontendUser::getInstance();
-			}
-
-			while ($objArchive->next())
-			{
-				if ($objArchive->protected && (!$user || !$user->isMemberOf(StringUtil::deserialize($objArchive->groups))))
-				{
-					continue;
-				}
-
-				$arrArchives[] = $objArchive->id;
-			}
-		}
-
-		return $arrArchives;
-	}
-
-	/**
-	 * Parse an item and return it as string
-	 *
-	 * @param NewsModel $objArticle
-	 * @param boolean   $blnAddArchive
-	 * @param string    $strClass
-	 * @param integer   $intCount
-	 *
-	 * @return string
-	 */
-	protected function parseArticle($objArticle, $blnAddArchive=false, $strClass='', $intCount=0)
-	{
-		$objTemplate = new FrontendTemplate($this->news_template ?: 'news_latest');
-		$objTemplate->setData($objArticle->row());
-
-		if ($objArticle->cssClass)
-		{
-			$strClass = ' ' . $objArticle->cssClass . $strClass;
-		}
-
-		if ($objArticle->featured)
-		{
-			$strClass = ' featured' . $strClass;
-		}
-
-		$objTemplate->class = $strClass;
-		$objTemplate->newsHeadline = $objArticle->headline;
-		$objTemplate->subHeadline = $objArticle->subheadline;
-		$objTemplate->hasSubHeadline = $objArticle->subheadline ? true : false;
-		$objTemplate->linkHeadline = $this->generateLink($objArticle->headline, $objArticle, $blnAddArchive);
-		$objTemplate->more = $this->generateLink($GLOBALS['TL_LANG']['MSC']['more'], $objArticle, $blnAddArchive, true);
-		$objTemplate->link = News::generateNewsUrl($objArticle, $blnAddArchive);
-		$objTemplate->archive = $objArticle->getRelated('pid');
-		$objTemplate->count = $intCount; // see #5708
-		$objTemplate->text = '';
-		$objTemplate->hasText = false;
-		$objTemplate->hasTeaser = false;
-
-		// Clean the RTE output
-		if ($objArticle->teaser)
-		{
-			$objTemplate->hasTeaser = true;
-			$objTemplate->teaser = StringUtil::toHtml5($objArticle->teaser);
-			$objTemplate->teaser = StringUtil::encodeEmail($objTemplate->teaser);
-		}
-
-		// Display the "read more" button for external/article links
-		if ($objArticle->source != 'default')
-		{
-			$objTemplate->text = true;
-			$objTemplate->hasText = true;
-		}
-
-		// Compile the news text
-		else
-		{
-			$id = $objArticle->id;
-
-			$objTemplate->text = function () use ($id)
-			{
-				$strText = '';
-				$objElement = ContentModel::findPublishedByPidAndTable($id, 'tl_news');
-
-				if ($objElement !== null)
-				{
-					while ($objElement->next())
-					{
-						$strText .= $this->getContentElement($objElement->current());
-					}
-				}
-
-				return $strText;
-			};
-
-			$objTemplate->hasText = static function () use ($objArticle)
-			{
-				return ContentModel::countPublishedByPidAndTable($objArticle->id, 'tl_news') > 0;
-			};
-		}
-
-		$arrMeta = $this->getMetaFields($objArticle);
-
-		// Add the meta information
-		$objTemplate->date = $arrMeta['date'] ?? null;
-		$objTemplate->hasMetaFields = !empty($arrMeta);
-		$objTemplate->numberOfComments = $arrMeta['ccount'] ?? null;
-		$objTemplate->commentCount = $arrMeta['comments'] ?? null;
-		$objTemplate->timestamp = $objArticle->date;
-		$objTemplate->author = $arrMeta['author'] ?? null;
-		$objTemplate->datetime = date('Y-m-d\TH:i:sP', $objArticle->date);
-		$objTemplate->addImage = false;
-		$objTemplate->addBefore = false;
-
-		// Add an image
-		if ($objArticle->addImage)
-		{
-			$imgSize = $objArticle->size ?: null;
-
-			// Override the default image size
-			if ($this->imgSize)
-			{
-				$size = StringUtil::deserialize($this->imgSize);
-
-				if ($size[0] > 0 || $size[1] > 0 || is_numeric($size[2]) || ($size[2][0] ?? null) === '_')
-				{
-					$imgSize = $this->imgSize;
-				}
-			}
-
-			$figureBuilder = System::getContainer()
-				->get(Studio::class)
-				->createFigureBuilder()
-				->from($objArticle->singleSRC)
-				->setSize($imgSize)
-				->setMetadata($objArticle->getOverwriteMetadata())
-				->enableLightbox((bool) $objArticle->fullsize);
-
-			// If the external link is opened in a new window, open the image link in a new window as well (see #210)
-			if ('external' === $objTemplate->source && $objTemplate->target)
-			{
-				$figureBuilder->setLinkAttribute('target', '_blank');
-			}
-
-			if (null !== ($figure = $figureBuilder->buildIfResourceExists()))
-			{
-				// Rebuild with link to news article if none is set
-				if (!$figure->getLinkHref())
-				{
-					$linkTitle = StringUtil::specialchars(sprintf($GLOBALS['TL_LANG']['MSC']['readMore'], $objArticle->headline), true);
-
-					$figure = $figureBuilder
-						->setLinkHref($objTemplate->link)
-						->setLinkAttribute('title', $linkTitle)
-						->setOptions(array('linkTitle' => $linkTitle)) // Backwards compatibility
-						->build();
-				}
-
-				$figure->applyLegacyTemplateData($objTemplate, $objArticle->imagemargin, $objArticle->floating);
-			}
-		}
-
-		$objTemplate->enclosure = array();
-
-		// Add enclosures
-		if ($objArticle->addEnclosure)
-		{
-			$this->addEnclosuresToTemplate($objTemplate, $objArticle->row());
-		}
-
-		// HOOK: add custom logic
-		if (isset($GLOBALS['TL_HOOKS']['parseArticles']) && \is_array($GLOBALS['TL_HOOKS']['parseArticles']))
-		{
-			foreach ($GLOBALS['TL_HOOKS']['parseArticles'] as $callback)
-			{
-				$this->import($callback[0]);
-				$this->{$callback[0]}->{$callback[1]}($objTemplate, $objArticle->row(), $this);
-			}
-		}
-
-		// Tag the news (see #2137)
-		if (System::getContainer()->has('fos_http_cache.http.symfony_response_tagger'))
-		{
-			$responseTagger = System::getContainer()->get('fos_http_cache.http.symfony_response_tagger');
-			$responseTagger->addTags(array('contao.db.tl_news.' . $objArticle->id));
-		}
-
-		return $objTemplate->parse();
-	}
-
-	/**
-	 * Parse one or more items and return them as array
-	 *
-	 * @param Collection $objArticles
-	 * @param boolean    $blnAddArchive
-	 *
-	 * @return array
-	 */
-	protected function parseArticles($objArticles, $blnAddArchive=false)
-	{
-		$limit = $objArticles->count();
-
-		if ($limit < 1)
-		{
-			return array();
-		}
-
-		$count = 0;
-		$arrArticles = array();
-		$uuids = array();
-
-		foreach ($objArticles as $objArticle)
-		{
-			if ($objArticle->addImage && $objArticle->singleSRC)
-			{
-				$uuids[] = $objArticle->singleSRC;
-			}
-		}
-
-		// Preload all images in one query so they are loaded into the model registry
-		FilesModel::findMultipleByUuids($uuids);
-
-		foreach ($objArticles as $objArticle)
-		{
-			$arrArticles[] = $this->parseArticle($objArticle, $blnAddArchive, ((++$count == 1) ? ' first' : '') . (($count == $limit) ? ' last' : '') . ((($count % 2) == 0) ? ' odd' : ' even'), $count);
-		}
-
-		return $arrArticles;
-	}
-
-	/**
-	 * Return the meta fields of a news article as array
-	 *
-	 * @param NewsModel $objArticle
-	 *
-	 * @return array
-	 */
-	protected function getMetaFields($objArticle)
-	{
-		$meta = StringUtil::deserialize($this->news_metaFields);
-
-		if (!\is_array($meta))
-		{
-			return array();
-		}
-
-		/** @var PageModel $objPage */
-		global $objPage;
-
-		$return = array();
-
-		foreach ($meta as $field)
-		{
-			switch ($field)
-			{
-				case 'date':
-					$return['date'] = Date::parse($objPage->datimFormat, $objArticle->date);
-					break;
-
-				case 'author':
-					/** @var UserModel $objAuthor */
-					if (($objAuthor = $objArticle->getRelated('author')) instanceof UserModel)
-					{
-						$return['author'] = $GLOBALS['TL_LANG']['MSC']['by'] . ' <span class="author">' . $objAuthor->name . '</span>';
-						$return['authorModel'] = $objAuthor;
-					}
-					break;
-
-				case 'comments':
-					if ($objArticle->noComments || $objArticle->source != 'default')
-					{
-						break;
-					}
-
-					$bundles = System::getContainer()->getParameter('kernel.bundles');
-
-					if (!isset($bundles['ContaoCommentsBundle']))
-					{
-						break;
-					}
-
-					$intTotal = CommentsModel::countPublishedBySourceAndParent('tl_news', $objArticle->id);
-					$return['ccount'] = $intTotal;
-					$return['comments'] = sprintf($GLOBALS['TL_LANG']['MSC']['commentCount'], $intTotal);
-					break;
-			}
-		}
-
-		return $return;
-	}
-
-	/**
-	 * Generate a URL and return it as string
-	 *
-	 * @param NewsModel $objItem
-	 * @param boolean   $blnAddArchive
-	 *
-	 * @return string
-	 *
-	 * @deprecated Deprecated since Contao 4.1, to be removed in Contao 5.
-	 *             Use News::generateNewsUrl() instead.
-	 */
-	protected function generateNewsUrl($objItem, $blnAddArchive=false)
-	{
-		trigger_deprecation('contao/news-bundle', '4.1', 'Using "Contao\ModuleNews::generateNewsUrl()" has been deprecated and will no longer work in Contao 5.0. Use "Contao\News::generateNewsUrl()" instead.');
-
-		return News::generateNewsUrl($objItem, $blnAddArchive);
-	}
-
-	/**
-	 * Generate a link and return it as string
-	 *
-	 * @param string    $strLink
-	 * @param NewsModel $objArticle
-	 * @param boolean   $blnAddArchive
-	 * @param boolean   $blnIsReadMore
-	 *
-	 * @return string
-	 */
-	protected function generateLink($strLink, $objArticle, $blnAddArchive=false, $blnIsReadMore=false)
-	{
-		$blnIsInternal = $objArticle->source != 'external';
-		$strReadMore = $blnIsInternal ? $GLOBALS['TL_LANG']['MSC']['readMore'] : $GLOBALS['TL_LANG']['MSC']['open'];
-		$strArticleUrl = News::generateNewsUrl($objArticle, $blnAddArchive);
-
-		return sprintf(
-			'<a href="%s" title="%s"%s>%s%s</a>',
-			$strArticleUrl,
-			StringUtil::specialchars(sprintf($strReadMore, $blnIsInternal ? $objArticle->headline : $strArticleUrl), true),
-			($objArticle->target && !$blnIsInternal ? ' target="_blank" rel="noreferrer noopener"' : ''),
-			($blnIsReadMore ? $strLink : '<span class="headline">' . $strLink . '</span>'),
-			($blnIsReadMore && $blnIsInternal ? '<span class="invisible"> ' . $objArticle->headline . '</span>' : '')
-		);
-	}
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly.
 }
 
-class_alias(ModuleNews::class, 'ModuleNews');
+/**
+ * Sensei Onboarding Class
+ * All onboarding functionality.
+ *
+ * @package Sensei
+ * @author  Automattic
+ * @since   3.1.0
+ */
+class Sensei_Onboarding {
+
+	/**
+	 * URL Slug for Onboarding Wizard page
+	 *
+	 * @var string
+	 */
+	public $page_slug;
+
+	/**
+	 * Creation of Sensei pages.
+	 *
+	 * @var Sensei_Onboarding_Pages
+	 */
+	public $pages;
+
+	/**
+	 * Sensei_Onboarding constructor.
+	 */
+	public function __construct() {
+
+		$this->page_slug = 'sensei_onboarding';
+		$this->pages     = new Sensei_Onboarding_Pages();
+
+		add_action( 'rest_api_init', [ $this, 'register_rest_api' ] );
+		if ( is_admin() ) {
+
+			add_action( 'admin_menu', [ $this, 'admin_menu' ], 20 );
+			add_action( 'current_screen', [ $this, 'add_onboarding_help_tab' ] );
+
+			if ( $this->should_prevent_woocommerce_help_tab() ) {
+				// Prevent WooCommerce help tab.
+				add_filter( 'woocommerce_enable_admin_help_tab', '__return_false' );
+			}
+
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Arguments used for comparison.
+			if ( isset( $_GET['page'] ) && ( $_GET['page'] === $this->page_slug ) ) {
+
+				add_action(
+					'admin_print_scripts',
+					function() {
+						Sensei()->assets->enqueue( 'sensei-onboarding', 'onboarding/index.js', [], true );
+					}
+				);
+
+				add_action(
+					'admin_print_styles',
+					function() {
+						Sensei()->assets->enqueue( 'sensei-onboarding', 'onboarding/style.css', [ 'wp-components' ] );
+					}
+				);
+
+				add_filter(
+					'admin_body_class',
+					function( $classes ) {
+						$classes .= ' sensei-wp-admin-fullscreen ';
+						return $classes;
+					}
+				);
+				add_filter( 'show_admin_bar', '__return_false' );
+			}
+		}
+
+	}
+
+	/**
+	 * Check if should prevent woocommerce help tab or not.
+	 *
+	 * @return boolean
+	 */
+	private function should_prevent_woocommerce_help_tab() {
+		$post_types_to_prevent = [ 'course', 'lesson', 'sensei_message' ];
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Arguments used for comparison.
+		return isset( $_GET['post_type'] ) && (
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Arguments used for comparison.
+			in_array( $_GET['post_type'], $post_types_to_prevent, true )
+		);
+	}
+
+	/**
+	 * Register an Onboarding submenu.
+	 *
+	 * @link https://developer.wordpress.org/reference/functions/add_submenu_page/#comment-445
+	 */
+	public function admin_menu() {
+		if ( current_user_can( 'manage_sensei' ) ) {
+			add_submenu_page(
+				'options.php',
+				__( 'Setup Wizard', 'sensei-lms' ),
+				__( 'Setup Wizard', 'sensei-lms' ),
+				'manage_sensei',
+				$this->page_slug,
+				[ $this, 'setup_wizard_page' ]
+			);
+		}
+	}
+
+	/**
+	 * Render app container for setup wizard.
+	 */
+	public function setup_wizard_page() {
+
+		?>
+		<div id="sensei-onboarding-page" class="sensei-onboarding">
+
+		</div>
+		<?php
+	}
+
+	/**
+	 * Check if should show help tab or not.
+	 *
+	 * @param string $screen_id Screen ID to check if should show the help tab.
+	 *
+	 * @return boolean
+	 */
+	private function should_show_help_screen( $screen_id ) {
+		return 'edit-course' === $screen_id;
+	}
+
+	/**
+	 * Add onboarding help tab.
+	 *
+	 * @param WP_Screen $screen Current screen.
+	 *
+	 * @access private
+	 */
+	public function add_onboarding_help_tab( $screen ) {
+		$link_track_event = 'setup_wizard_click';
+
+		if ( ! $screen || ! $this->should_show_help_screen( $screen->id ) ) {
+			return;
+		}
+
+		$screen->add_help_tab(
+			[
+				'id'      => 'sensei_lms_onboarding_tab',
+				'title'   => __( 'Setup wizard', 'sensei-lms' ),
+				'content' =>
+					'<h2>' . __( 'Sensei LMS Onboarding', 'sensei-lms' ) . '</h2>' .
+					'<h3>' . __( 'Setup Wizard', 'sensei-lms' ) . '</h3>' .
+					'<p>' . __( 'If you need to access the setup wizard again, please click on the button below.', 'sensei-lms' ) . '</p>' .
+					'<p><a href="' . admin_url( 'admin.php?page=' . $this->page_slug ) . '" class="button button-primary" data-sensei-log-event="' . $link_track_event . '">' . __( 'Setup wizard', 'sensei-lms' ) . '</a></p>',
+			]
+		);
+	}
+	/**
+	 * Register REST API route.
+	 */
+	public function register_rest_api() {
+
+		register_rest_route(
+			'sensei/v1',
+			'/onboarding/(?P<page>[a-zA-Z0-9-]+)',
+			array(
+				'methods'             => [ 'GET', 'POST' ],
+				'callback'            => [ $this, 'handle_api_request' ],
+				'permission_callback' => [ $this, 'can_user_access_rest_api' ],
+			)
+		);
+	}
+
+	/**
+	 * Check user permission for REST API access.
+	 *
+	 * @return bool Whether the user can access the Onboarding REST API.
+	 */
+	public function can_user_access_rest_api() {
+		return current_user_can( 'manage_sensei' );
+	}
+
+	/**
+	 * Process onboarding API request.
+	 *
+	 * @param WP_REST_Request $request The request object.
+	 *
+	 * @return mixed Result for the called endpoint.
+	 */
+	public function handle_api_request( $request ) {
+
+		$page      = $request->get_param( 'page' );
+		$method    = $request->get_method();
+		$endpoints = [
+			'welcome' => [
+				'GET'  => [ $this, 'api_welcome_get' ],
+				'POST' => [ $this, 'api_welcome_submit' ],
+			],
+		];
+
+		if ( ! ( array_key_exists( $page, $endpoints ) && array_key_exists( $method, $endpoints[ $page ] ) ) ) {
+			return new WP_Error( 'invalid_page', __( 'Page not found', 'sensei-lms' ), [ 'status' => 404 ] );
+		}
+		$endpoint = $endpoints[ $page ][ $method ];
+
+		if ( 'POST' === $method ) {
+			$data = $request->get_json_params();
+			return call_user_func( $endpoint, $data );
+		} else {
+			return call_user_func( $endpoint );
+		}
+	}
+
+	/**
+	 * Welcome step data.
+	 *
+	 * @return array Data used on welcome page.
+	 */
+	public function api_welcome_get() {
+		return [
+			'usage_tracking' => Sensei()->usage_tracking->get_tracking_enabled(),
+		];
+	}
+
+	/**
+	 * Submit form on welcome step.
+	 *
+	 * @param array $data Form data.
+	 *
+	 * @return bool Success.
+	 */
+	public function api_welcome_submit( $data ) {
+		Sensei()->usage_tracking->set_tracking_enabled( (bool) $data['usage_tracking'] );
+		$this->pages->create_pages();
+
+		return true;
+	}
+
+}

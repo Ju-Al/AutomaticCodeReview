@@ -1,6 +1,4 @@
 // Copyright (c) Jupyter Development Team.
-        } else {
-    
 // Distributed under the terms of the Modified BSD License.
 
 define([
@@ -958,7 +956,8 @@ define([
                 // default to clear-on-done
                 cbcopy.clear_on_done = true;
             }
-        } else if (remember) {
+    
+        } else {
             this.last_msg_callbacks = {};
         }
     };

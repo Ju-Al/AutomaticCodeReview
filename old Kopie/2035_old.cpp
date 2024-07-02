@@ -148,7 +148,6 @@ void main_main()
         kloc = (hi0.z-lo0.z+1)/2 + lo0.z;
     }
 
-    if (xcoord > -1.e-36 && AMREX_SPACEDIM >= 1) {
         // we specified the x value to pass through
         iloc = hi0.x;
         for (int i = lo0.x; i <= hi0.x; ++i) {

@@ -111,7 +111,7 @@ class PokemonCatchWorker(BaseTask):
         )
 
         # simulate app
-        action_delay(self.config.catchsim_catch_wait_min, self.config.catchsim_catch_wait_max)
+        sleep(3)
 
         # check for VIP pokemon
         is_vip = self._is_vip_pokemon(pokemon)
@@ -124,7 +124,7 @@ class PokemonCatchWorker(BaseTask):
         self._do_catch(pokemon, encounter_id, catch_rate_by_ball, is_vip=is_vip)
 
         # simulate app
-        time.sleep(5)
+        action_delay(self.config.catchsim_catch_wait_min, self.config.catchsim_catch_wait_max)
 
     def create_encounter_api_call(self):
         encounter_id = self.pokemon['encounter_id']

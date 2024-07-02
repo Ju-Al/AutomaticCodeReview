@@ -243,7 +243,6 @@ class BigchainDB(Bigchain):
     def fastquery(self):
         return fastquery.FastQuery(self.connection, self.me)
 
-    def get_validators(self):
         try:
             resp = requests.get(f'{ENDPOINT}validators')
             validators = resp.json()['result']['validators']

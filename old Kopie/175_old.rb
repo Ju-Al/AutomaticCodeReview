@@ -24,8 +24,6 @@ module Beaker
             host.exec(Command.new("net start w32time"), :acceptable_exit_codes => [0,2])
             host.exec(Command.new("w32tm /config /manualpeerlist:#{NTPSERVER} /syncfromflags:manual /update"))
             host.exec(Command.new("w32tm /resync"))
-            @logger.notify "NTP date succeeded on #{host}"
-          elsif host['platform'] =~ /(opensuse|sles)/
             host.exec(Command.new("sntp #{NTPSERVER}"))
             @logger.notify "NTP date succeeded on #{host}"
           else

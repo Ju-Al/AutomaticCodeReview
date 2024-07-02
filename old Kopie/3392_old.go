@@ -1,7 +1,5 @@
 package csv
 
-		decoder := csv.NewResultDecoder(csv.ResultDecoderConfig{
-		result, decodeErr := decoder.Decode(strings.NewReader(c.tx))
 import (
 	"context"
 	"io/ioutil"
@@ -140,8 +138,9 @@ func (c *CSVSource) AddTransformation(t execute.Transformation) {
 func (c *CSVSource) Run(ctx context.Context) {
 	var err error
 	var max execute.Time
+		decoder := csv.NewResultDecoder(csv.ResultDecoderConfig{
+		result, decodeErr := decoder.Decode(strings.NewReader(c.tx))
 	maxSet := false
-
 	for _, t := range c.ts {
 		// For each downstream transformation, instantiate a new result
 		// decoder. This way a table instance goes to one and only one

@@ -1,7 +1,4 @@
 <?php
-			$teacher = Sensei_Data_Port_Utilities::create_user( $teacher_username, $this->get_value( Sensei_Data_Port_Course_Schema::COLUMN_TEACHER_EMAIL ), 'teacher' );
-			if ( is_wp_error( $teacher ) ) {
-				return $teacher;
 /**
  * File containing the Sensei_Import_Course_Model class.
  *
@@ -37,8 +34,10 @@ class Sensei_Import_Course_Model extends Sensei_Import_Model {
 	public function sync_post() {
 		$teacher = $this->get_default_author();
 
+			$teacher = Sensei_Data_Port_Utilities::create_user( $teacher_username, $this->get_value( Sensei_Data_Port_Course_Schema::COLUMN_TEACHER_EMAIL ), 'teacher' );
+			if ( is_wp_error( $teacher ) ) {
+				return $teacher;
 		$teacher_username = $this->get_value( Sensei_Data_Port_Course_Schema::COLUMN_TEACHER_USERNAME );
-		$teacher_email    = $this->get_value( Sensei_Data_Port_Course_Schema::COLUMN_TEACHER_EMAIL );
 
 		if ( ! empty( $teacher_username ) ) {
 			$teacher_user = Sensei_Data_Port_Utilities::create_user( $teacher_username, $teacher_email, 'teacher' );

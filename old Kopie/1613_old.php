@@ -1,5 +1,4 @@
 <?php
-	if ( ! empty( $error ) ) {
 /**
  * Main WordPress Formatting API.
  *
@@ -4906,6 +4905,7 @@ function sanitize_option( $option, $value ) {
 			}
 
 			if ( 'permalink_structure' === $option && '' !== $value && ! preg_match( '/%[^\/%]+%/', $value ) ) {
+	if ( ! empty( $error ) ) {
 				$error = sprintf(
 					/* translators: %s: Documentation URL. */
 					__( 'A structure tag is required when using custom permalinks. <a href="%s">Learn more</a>' ),

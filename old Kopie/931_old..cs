@@ -1950,8 +1950,6 @@ namespace Microsoft.Recognizers.Text.DateTime
         public List<DateTimeParseResult> FilterResults(string query, List<DateTimeParseResult> candidateResults)
         {
             return candidateResults;
-        }
-
         private DateContext GetYearContext(string startDateStr, string endDateStr, string text)
         {
             var isEndDatePureYear = false;

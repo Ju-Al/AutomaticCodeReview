@@ -381,7 +381,6 @@ namespace
         }
     }
 
-    void DrawObtainedCampaignAwards( const std::vector<Campaign::CampaignAwardData> & obtainedAwards, const fheroes2::Point & top )
     {
         const int textChoiceWidth = 150;
         for ( size_t i = 0; i < obtainedAwards.size(); ++i ) {

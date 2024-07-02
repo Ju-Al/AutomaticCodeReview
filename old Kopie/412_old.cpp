@@ -1,21 +1,4 @@
 /******************************************************************************
-signal_monitor_type::behavior_type
-signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
-               std::chrono::milliseconds monitoring_interval,
-               actor receiver) {
-  VAST_DEBUG(self, "sends signals to", receiver);
-    VAST_DEBUG(self, "registers signal handler for", ::strsignal(s));
-  self->send(self, run_atom::value);
-  return {
-    [=](run_atom) {
-      if (signals[0]) {
-        signals[0] = false;
-        for (int i = 1; i < 32; ++i) {
-          if (signals[i]) {
-            VAST_DEBUG(self, "caught signal", ::strsignal(i));
-            signals[i] = false;
-            self->anon_send(receiver, signal_atom::value, i);
-          }
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -63,7 +46,23 @@ extern "C" void signal_handler(int sig) {
 
 namespace vast::system {
 
-std::atomic<bool> signal_monitor::stop;
+signal_monitor_type::behavior_type
+signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
+               std::chrono::milliseconds monitoring_interval,
+               actor receiver) {
+    VAST_DEBUG(self, "registers signal handler for", ::strsignal(s));
+  self->send(self, run_atom::value);
+  return {
+    [=](run_atom) {
+      if (signals[0]) {
+        signals[0] = false;
+        for (int i = 1; i < 32; ++i) {
+          if (signals[i]) {
+            VAST_DEBUG(self, "caught signal", ::strsignal(i));
+            signals[i] = false;
+            self->anon_send(receiver, signal_atom::value, i);
+          }
+  VAST_DEBUG(self, "sends signals to", receiver);
 
 void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
                          actor receiver) {

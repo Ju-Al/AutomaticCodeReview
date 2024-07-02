@@ -1,7 +1,5 @@
 package fleet
 
-func LoadQueriesFromYaml(yml string) ([]*Query, error) {
-	queries := []*Query{}
 import (
 	"context"
 	"fmt"
@@ -120,7 +118,8 @@ type QuerySpec struct {
 	Query       string `json:"query"`
 }
 
-func LoadQueryObjectsFromYaml(yml string) ([]*QueryObject, error) {
+func LoadQueriesFromYaml(yml string) ([]*Query, error) {
+	queries := []*Query{}
 	var queryObjects []*QueryObject
 	for _, s := range strings.Split(yml, "---") {
 		s = strings.TrimSpace(s)

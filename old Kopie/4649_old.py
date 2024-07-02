@@ -242,7 +242,6 @@ class Plugin(BasePlugin):
         self.vbox.addWidget(self.ctext)
         self.ctext.setEnabled(False)
 
-        self.vbox.addSpacing(11)
         self.vbox.addWidget(
                             QLabel(''.join(["<b>" + _("WARNING") + "</b>:" + _("Each Revealer should be used only once. In possession"), '<br/>',
                             _("of multiple secrets encrypted for the same Revealer it can be attacked."), '<br/>',

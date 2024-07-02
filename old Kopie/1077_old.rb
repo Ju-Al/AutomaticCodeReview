@@ -1,25 +1,4 @@
 module Beaker
-        unless host['docker_container_name'].nil?
-          @logger.debug("Looking for an existing container called #{host['docker_container_name']}")
-          existing_container = ::Docker::Container.all.select do |container| container.info['Names'].include? "/#{host['docker_container_name']}" end
-
-          # Prepare to use the existing container or else create it
-          if existing_container.any?
-            container = existing_container[0]
-          else
-            container_opts['name'] = host['docker_container_name']
-        end
-        unless host['mount_folders'].nil?
-          container_opts['HostConfig'] ||= {}
-          container_opts['HostConfig']['Binds'] = host['mount_folders'].values.map do |mount|
-            a = [ File.expand_path(mount['host_path']), mount['container_path'] ]
-            a << mount['opts'] if mount.has_key?('opts')
-            a.join(':')
-        # If the specified container exists, then use it rather creating a new one
-        if container.nil?
-          @logger.debug("Creating container from image #{image_name}")
-          container = ::Docker::Container.create(container_opts)
-        end
   class Docker < Beaker::Hypervisor
 
     # Docker hypvervisor initializtion
@@ -88,8 +67,28 @@ module Beaker
         container_opts = {
           'Image' => image_name,
           'Hostname' => host.name,
+        unless host['docker_container_name'].nil?
+          @logger.debug("Looking for an existing container called #{host['docker_container_name']}")
+          existing_container = ::Docker::Container.all.select do |container| container.info['Names'].include? "/#{host['docker_container_name']}" end
+
+          # Prepare to use the existing container or else create it
+          if existing_container.any?
+            container = existing_container[0]
+          else
+            container_opts['name'] = host['docker_container_name']
+        end
+        unless host['mount_folders'].nil?
+          container_opts['HostConfig'] ||= {}
+          container_opts['HostConfig']['Binds'] = host['mount_folders'].values.map do |mount|
+            a = [ File.expand_path(mount['host_path']), mount['container_path'] ]
+            a << mount['opts'] if mount.has_key?('opts')
+            a.join(':')
+        # If the specified container exists, then use it rather creating a new one
+        if container.nil?
+          @logger.debug("Creating container from image #{image_name}")
+          container = ::Docker::Container.create(container_opts)
+        end
         }
-        container = find_container(host)
 
         # If the specified container exists, then use it rather creating a new one
         if container.nil?

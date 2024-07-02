@@ -1,40 +1,4 @@
 # Copyright 2009 by Cymon J. Cox.  All rights reserved.
-            # anchorspacing   Integer              32                 Minimum spacing between
-            # center          Floating point       [1]                Center parameter.
-            #                                                        Should be negative.
-            # cluster1        upgma                upgmb              Clustering method.
-            # cluster2        upgmb                                   cluster1 is used in
-            #                neighborjoining                         iteration 1 and 2,
-            #                                                        cluster2 in later
-            #                                                        iterations.
-            # diaglength      Integer              24                 Minimum length of
-            #                                                        diagonal.
-            # diagmargin      Integer              5                  Discard this many
-            #                                                        positions at ends of
-            #                                                        diagonal.
-            # distance1       kmer6_6              Kmer6_6 (amino) or Distance measure for
-            #                kmer20_3             Kmer4_6 (nucleo)   iteration 1.
-            # distance2       kmer6_6              pctid_kimura       Distance measure for
-            #                kmer20_3                                iterations 2, 3 ...
-            #                kmer20_4
-            # gapopen         Floating point       [1]                The gap open score.
-            #                                                        Must be negative.
-            # hydro           Integer              5                  Window size for
-            #                                                        determining whether a
-            #                                                        region is hydrophobic.
-            # hydrofactor     Floating point       1.2                Multiplier for gap
-            #                                                        open/close penalties in
-            #                                                        hydrophobic regions.
-            # log             File name            None.              Log file name (delete
-            #                                                        existing file).
-            # loga            File name            None.              Log file name (append
-            #                                                        to existing file).
-            # maxdiagbreak    Integer              1                  Maximum distance
-            #                                                        between two diagonals
-            #                                                        that allows them to
-            #                                                        merge into one
-            #                                                        diagonal.
-            _Option(["-maxdiagbreak", "maxdiagbreak"],
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -111,7 +75,42 @@ class MuscleCommandline(AbstractCommandline):
                     "Second input filename for a profile alignment",
                     filename=True,
                     equate=False),
-            # anchorspacing   Integer              32       Minimum spacing
+            # center          Floating point       [1]                Center parameter.
+            #                                                        Should be negative.
+            # cluster1        upgma                upgmb              Clustering method.
+            # cluster2        upgmb                                   cluster1 is used in
+            #                neighborjoining                         iteration 1 and 2,
+            #                                                        cluster2 in later
+            #                                                        iterations.
+            # diaglength      Integer              24                 Minimum length of
+            #                                                        diagonal.
+            # diagmargin      Integer              5                  Discard this many
+            #                                                        positions at ends of
+            #                                                        diagonal.
+            # distance1       kmer6_6              Kmer6_6 (amino) or Distance measure for
+            #                kmer20_3             Kmer4_6 (nucleo)   iteration 1.
+            # distance2       kmer6_6              pctid_kimura       Distance measure for
+            #                kmer20_3                                iterations 2, 3 ...
+            #                kmer20_4
+            # gapopen         Floating point       [1]                The gap open score.
+            #                                                        Must be negative.
+            # hydro           Integer              5                  Window size for
+            #                                                        determining whether a
+            #                                                        region is hydrophobic.
+            # hydrofactor     Floating point       1.2                Multiplier for gap
+            #                                                        open/close penalties in
+            #                                                        hydrophobic regions.
+            # log             File name            None.              Log file name (delete
+            #                                                        existing file).
+            # loga            File name            None.              Log file name (append
+            #                                                        to existing file).
+            # maxdiagbreak    Integer              1                  Maximum distance
+            #                                                        between two diagonals
+            #                                                        that allows them to
+            #                                                        merge into one
+            #                                                        diagonal.
+            _Option(["-maxdiagbreak", "maxdiagbreak"],
+            # anchorspacing   Integer              32                 Minimum spacing between
             #                                              between anchor cols
             _Option(["-anchorspacing", "anchorspacing"],
                     "Minimum spacing between anchor columns",

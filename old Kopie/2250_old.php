@@ -1,6 +1,4 @@
 <?php
-     * @return array
-    public function getParams()
 /**
  * Slim Framework (https://slimframework.com)
  *
@@ -1204,7 +1202,8 @@ class Request extends Message implements ServerRequestInterface
      *
      * Note: This method is not part of the PSR-7 standard.
      *
-     * @param array|null $only list the keys to retrieve.
+    public function getParams()
+     * @return array
      * @return array|null
      */
     public function getParams($only = null)

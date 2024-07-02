@@ -1,5 +1,4 @@
 # This code is part of the Biopython distribution and governed by its
-        o num_schemas -- the number of useful (positive fitness) schemas
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 #
@@ -471,7 +470,7 @@ class SchemaFinder(object):
 
         Arguments:
 
-        * num_schemas -- the number of useful (positive fitness) schemas
+        o num_schemas -- the number of useful (positive fitness) schemas
         we want to generation
         """
         self.num_schemas = num_schemas

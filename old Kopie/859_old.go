@@ -1,6 +1,5 @@
 package node
 
-			h.c.Log.Debugf("Signing SVID for %v on request by %v", spiffeID, callerID)
 import (
 	"crypto/x509"
 	"errors"
@@ -697,7 +696,7 @@ func (h *Handler) signCSRs(ctx context.Context,
 				return nil, errors.New("SVID serial number does not match")
 			}
 
-			signLog.Debug("Signing SVID for caller")
+			h.c.Log.Debugf("Signing SVID for %v on request by %v", spiffeID, callerID)
 			svid, svidCert, err := h.buildBaseSVID(ctx, csr)
 			if err != nil {
 				return nil, err

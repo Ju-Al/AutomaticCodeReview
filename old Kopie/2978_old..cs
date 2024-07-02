@@ -1,5 +1,4 @@
 #nullable enable
-                ModelState.TryAddModelError(nameof(model.Currency), $"Error: {ex.Message}");
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -881,7 +880,7 @@ namespace BTCPayServer.Controllers
             }
             catch (BitpayHttpException ex)
             {
-                Logs.PayServer.LogError(ex, $"Invoice creation failed due to invalid currency {model.Currency}");
+                ModelState.TryAddModelError(nameof(model.Currency), $"Error: {ex.Message}");
                 ModelState.TryAddModelError(nameof(model.Currency), "Please make sure you entered a valid currency symbol, rate provider is configured in store settings and your configured rate provider is online and provides rates for your selected currency.");
                 return View(model);
             }

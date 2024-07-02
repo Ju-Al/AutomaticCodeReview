@@ -1,8 +1,4 @@
 // Copyright (c) 2016 Uber Technologies, Inc.
-	// Filter and Interceptor that will be applied to all outgoing and incoming
-	// requests respectively.
-	Filter      transport.Filter
-	Interceptor transport.Interceptor
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -69,7 +65,10 @@ type Config struct {
 	Inbounds  Inbounds
 	Outbounds Outbounds
 
-	// Filters and Interceptors that will be applied to all outgoing and
+	// Filter and Interceptor that will be applied to all outgoing and incoming
+	// requests respectively.
+	Filter      transport.Filter
+	Interceptor transport.Interceptor
 	// incoming requests respectively.
 	Filters      Filters
 	Interceptors Interceptors

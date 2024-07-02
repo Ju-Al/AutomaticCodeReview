@@ -1,6 +1,4 @@
 /*
-        log.debug("Logs closed while writing, retrying attempt " + writeRetry.retriesCompleted());
-        log.warn("Failed to write to WAL, retrying attempt " + writeRetry.retriesCompleted(), t);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -340,7 +338,8 @@ public class TabletServerLogger {
           success = (currentLogSet == logSetId.get());
         }
       } catch (DfsLogger.LogClosedException ex) {
-        log.debug("Logs closed while writing, retrying attempt " + (writeRetry.retriesCompleted() + 1));
+        log.warn("Failed to write to WAL, retrying attempt " + writeRetry.retriesCompleted(), t);
+        log.debug("Logs closed while writing, retrying attempt " + writeRetry.retriesCompleted());
       } catch (Exception t) {
         if (writeRetry.retriesCompleted() != 0)
           log.warn("Failed to write to WAL, retrying attempt " + (writeRetry.retriesCompleted() + 1), t);

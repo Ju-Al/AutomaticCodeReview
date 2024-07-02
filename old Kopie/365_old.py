@@ -12,322 +12,112 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Provides the data access object (DAO)."""
+"""Provides the data access object (DAO) for Organizations."""
 
-from MySQLdb import DataError
-from MySQLdb import IntegrityError
-from MySQLdb import InternalError
-from MySQLdb import NotSupportedError
-from MySQLdb import OperationalError
-from MySQLdb import ProgrammingError
-from MySQLdb import cursors
+from collections import namedtuple
+import MySQLdb
 
-from google.cloud.security.common.data_access import _db_connector
-from google.cloud.security.common.data_access import csv_writer
-from google.cloud.security.common.data_access import load_data_sql_provider
-from google.cloud.security.common.data_access.errors import MySQLError
-from google.cloud.security.common.data_access.errors import NoResultsError
-from google.cloud.security.common.data_access.sql_queries import create_tables
-from google.cloud.security.common.data_access.sql_queries import select_data
+from google.cloud.security.common.data_access import dao
+from google.cloud.security.common.data_access import errors as db_errors
+from google.cloud.security.common.data_access import violation_map as vm
 from google.cloud.security.common.util import log_util
-
 
 LOGGER = log_util.get_logger(__name__)
 
-CREATE_TABLE_MAP = {
-    # appengine
-    'appengine': create_tables.CREATE_APPENGINE_TABLE,
 
-    # backend services
-    'backend_services': create_tables.CREATE_BACKEND_SERVICES_TABLE,
+class ViolationDao(dao.Dao):
+    """Data access object (DAO) for rule violations."""
 
-    # bigquery
-    'bigquery_datasets': create_tables.CREATE_BIGQUERY_DATASETS_TABLE,
+    violation_attribute_list = ['resource_type', 'resource_id', 'rule_name',
+                                'rule_index', 'violation_type',
+                                'violation_data']
+    frozen_violation_attribute_list = frozenset(violation_attribute_list)
+    Violation = namedtuple('Violation', frozen_violation_attribute_list)
 
-    # buckets
-    'buckets': create_tables.CREATE_BUCKETS_TABLE,
-    'raw_buckets': create_tables.CREATE_RAW_BUCKETS_TABLE,
-    'buckets_acl': create_tables.CREATE_BUCKETS_ACL_TABLE,
-
-    # cloudsql
-    'cloudsql_instances': create_tables.CREATE_CLOUDSQL_INSTANCES_TABLE,
-    'cloudsql_ipaddresses': create_tables.CREATE_CLOUDSQL_IPADDRESSES_TABLE,
-    'cloudsql_ipconfiguration_authorizednetworks':\
-        create_tables.CREATE_CLOUDSQL_IPCONFIGURATION_AUTHORIZEDNETWORKS,
-
-    # folders
-    'folders': create_tables.CREATE_FOLDERS_TABLE,
-    'folder_iam_policies': create_tables.CREATE_FOLDER_IAM_POLICIES_TABLE,
-    'raw_folder_iam_policies': (
-        create_tables.CREATE_RAW_FOLDER_IAM_POLICIES_TABLE),
-
-    # load balancer
-    'forwarding_rules': create_tables.CREATE_FORWARDING_RULES_TABLE,
-
-    # firewall_rules
-    'firewall_rules': create_tables.CREATE_FIREWALL_RULES_TABLE,
-
-    # groups
-    'groups': create_tables.CREATE_GROUPS_TABLE,
-    'group_members': create_tables.CREATE_GROUP_MEMBERS_TABLE,
-    'groups_violations': create_tables.CREATE_GROUPS_VIOLATIONS_TABLE,
-
-    # instances
-    'instances': create_tables.CREATE_INSTANCES_TABLE,
-
-    # instance groups
-    'instance_groups': create_tables.CREATE_INSTANCE_GROUPS_TABLE,
-
-    # instance templates
-    'instance_templates': create_tables.CREATE_INSTANCE_TEMPLATES_TABLE,
-
-    # instance group managers
-    'instance_group_managers': (
-        create_tables.CREATE_INSTANCE_GROUP_MANAGERS_TABLE),
-
-    # organizations
-    'organizations': create_tables.CREATE_ORGANIZATIONS_TABLE,
-    'org_iam_policies': create_tables.CREATE_ORG_IAM_POLICIES_TABLE,
-    'raw_org_iam_policies': create_tables.CREATE_RAW_ORG_IAM_POLICIES_TABLE,
-
-    # projects
-    'projects': create_tables.CREATE_PROJECT_TABLE,
-    'project_iam_policies': create_tables.CREATE_PROJECT_IAM_POLICIES_TABLE,
-    'raw_project_iam_policies':
-        create_tables.CREATE_RAW_PROJECT_IAM_POLICIES_TABLE,
-
-    # rule violations
-    'violations': create_tables.CREATE_VIOLATIONS_TABLE,
-}
-
-SNAPSHOT_STATUS_FILTER_CLAUSE = ' where status in ({})'
-
-
-class Dao(_db_connector.DbConnector):
-    """Data access object (DAO)."""
-
-    @staticmethod
-    def map_row_to_object(object_class, row):
-        """Instantiate an object from database row.
-
-        TODO: Make this go away when we start using an ORM.
+    def insert_violations(self, violations, resource_name,
+                          snapshot_timestamp=None):
+        """Import violations into database.
 
         Args:
-            object_class (object): The object class to create.
-            row (row): The database row to map.
+            violations (iterator): An iterator of RuleViolations.
+            resource_name (str): String that defines a resource.
+            snapshot_timestamp (str): The snapshot timestamp to associate
+                these violations with.
 
         Returns:
-            obj_class: A new "obj_class", created from the row.
+            tuple: A tuple of (int, list) containing the count of inserted
+                rows and a list of violations that encountered an error during
+                insert.
+
+        Raise:
+            MySQLError: If snapshot table could not be created.
         """
-        return object_class(**row)
 
-    def _create_snapshot_table(self, resource_name, timestamp):
-        """Creates a snapshot table.
-
-        Args:
-            resource_name (str): String of the resource name.
-            timestamp (str): String of timestamp, formatted as
-                YYYYMMDDTHHMMSSZ.
-
-        Returns:
-            str: String of the created snapshot table.
-        """
-        snapshot_table_name = self._create_snapshot_table_name(
-            resource_name, timestamp)
-        create_table_sql = CREATE_TABLE_MAP[resource_name]
-        create_snapshot_sql = create_table_sql.format(snapshot_table_name)
-        cursor = self.conn.cursor()
-        cursor.execute(create_snapshot_sql)
-        return snapshot_table_name
-
-    @staticmethod
-    def _create_snapshot_table_name(resource_name, timestamp):
-        """Create the snapshot table if it doesn't exist.
-
-        Args:
-            resource_name (str): String of the resource name.
-            timestamp (str): String of timestamp, formatted as
-                YYYYMMDDTHHMMSSZ.
-
-        Returns:
-            str: String of the created snapshot table name.
-        """
-        return resource_name + '_' + timestamp
-
-    def _get_snapshot_table(self, resource_name, timestamp):
-        """Returns a snapshot table name.
-
-        Args:
-            resource_name (str): String of the resource name.
-            timestamp (str): String of timestamp, formatted as YYYYMMDDTHHMMSSZ.
-
-        Returns:
-            str: String of the created snapshot table.
-        """
         try:
-            snapshot_table_name = self._create_snapshot_table(
-                resource_name, timestamp)
-        except OperationalError:
-            # TODO: find a better way to handle this. I want this method
-            # to be resilient when the table has already been created
-            # so that it can support inserting new data. This will catch
-            # a sql 'table already exist' error and alter the flow.
-            snapshot_table_name = self._create_snapshot_table_name(
-                resource_name, timestamp)
-        return snapshot_table_name
+            # Make sure to have a reasonable timestamp to use.
+            if not snapshot_timestamp:
+                snapshot_timestamp = self.get_latest_snapshot_timestamp(
+                    ('PARTIAL_SUCCESS', 'SUCCESS'))
 
-    def load_data(self, resource_name, timestamp, data):
-        """Load data into a snapshot table.
+            # Create the violations snapshot table.
+            snapshot_table = self._create_snapshot_table(
+                resource_name, snapshot_timestamp)
+        except MySQLdb.Error, e:
+            raise db_errors.MySQLError(resource_name, e)
+
+        inserted_rows = 0
+        violation_errors = []
+        for violation in violations:
+            violation = self.Violation(
+                resource_type=violation['resource_type'],
+                resource_id=violation['resource_id'],
+                rule_name=violation['rule_name'],
+                rule_index=violation['rule_index'],
+                violation_type=violation['violation_type'],
+                violation_data=violation['violation_data'])
+            for formatted_violation in _format_violation(violation,
+                                                         resource_name):
+                try:
+                    self.execute_sql_with_commit(
+                        resource_name,
+                        vm.VIOLATION_INSERT_MAP[resource_name](snapshot_table),
+                        formatted_violation)
+                    inserted_rows += 1
+                except MySQLdb.Error, e:
+                    LOGGER.error('Unable to insert violation %s due to %s',
+                                 formatted_violation, e)
+                    violation_errors.append(formatted_violation)
+
+        return (inserted_rows, violation_errors)
+
+    def get_all_violations(self, timestamp, resource_name):
+        """Get all the violations.
 
         Args:
-            resource_name: String of the resource name.
-            timestamp: String of timestamp, formatted as YYYYMMDDTHHMMSSZ.
-            data: An iterable or a list of data to be uploaded.
+            timestamp (str): The timestamp of the snapshot.
+            resource_name (str): String that defines a resource.
 
         Returns:
-            MySQLError: An error with MySQL has occurred.
-            None
-            timestamp (str): String of timestamp, formatted as
-                YYYYMMDDTHHMMSSZ.
-            data (iterable): An iterable or a list of data to be uploaded.
-
-        Raises:
-            MySQLError: If an error has occured while executing the query.
+            tuple: A tuple of the violations as dict.
         """
-        with csv_writer.write_csv(resource_name, data) as csv_file:
-            try:
-                snapshot_table_name = self._get_snapshot_table(
-                    resource_name, timestamp)
-                load_data_sql = load_data_sql_provider.provide_load_data_sql(
-                    resource_name, csv_file.name, snapshot_table_name)
-                LOGGER.debug('SQL: %s', load_data_sql)
-                cursor = self.conn.cursor()
-                cursor.execute(load_data_sql)
-                self.conn.commit()
-                # TODO: Return the snapshot table name so that it can be tracked
-                # in the main snapshot table.
-            except (DataError, IntegrityError, InternalError,
-                    NotSupportedError, OperationalError,
-                    ProgrammingError) as e:
-                raise MySQLError(resource_name, e)
+        violations_sql = vm.VIOLATION_SELECT_MAP[resource_name](timestamp)
+        rows = self.execute_sql_with_fetch(
+            resource_name, violations_sql, ())
+        return rows
 
-    def select_record_count(self, resource_name, timestamp):
-        """Select the record count from a snapshot table.
 
-        Args:
-            resource_name (str): String of the resource name, which is
-                embedded in the table name.
-            timestamp (str): String of timestamp, formatted as
-                YYYYMMDDTHHMMSSZ.
+def _format_violation(violation, resource_name):
+    """Violation formating stub that uses a map to call the formating
+    function for the resource.
 
-        Returns:
-            int: Integer of the record count in a snapshot table.
+    Args:
+        violation: An iterator of RuleViolations.
+        Formatted violations
+        resource_name: String that defines a resource
+        resource_name (str): String that defines a resource.
 
-        Raises:
-            MySQLError: If an error has occured while executing the query.
-        """
-        try:
-            record_count_sql = select_data.RECORD_COUNT.format(
-                resource_name, timestamp)
-            cursor = self.conn.cursor()
-            cursor.execute(record_count_sql)
-            return cursor.fetchone()[0]
-        except (DataError, IntegrityError, InternalError, NotSupportedError,
-                OperationalError, ProgrammingError) as e:
-            raise MySQLError(resource_name, e)
-
-    def select_group_ids(self, resource_name, timestamp):
-        """Select the group ids from a snapshot table.
-
-        Args:
-            resource_name (str): String of the resource name.
-            timestamp (str): String of timestamp, formatted as
-                YYYYMMDDTHHMMSSZ.
-
-        Returns:
-            list: A list of group ids.
-
-        Raises:
-            MySQLError: If an error has occured while executing the query.
-        """
-        try:
-            group_ids_sql = select_data.GROUP_IDS.format(timestamp)
-            cursor = self.conn.cursor(cursorclass=cursors.DictCursor)
-            cursor.execute(group_ids_sql)
-            rows = cursor.fetchall()
-            return [row['group_id'] for row in rows]
-        except (DataError, IntegrityError, InternalError, NotSupportedError,
-                OperationalError, ProgrammingError) as e:
-            raise MySQLError(resource_name, e)
-
-    def execute_sql_with_fetch(self, resource_name, sql, values):
-        """Executes a provided sql statement with fetch.
-
-        Args:
-            resource_name (str): String of the resource name.
-            sql (str): String of the sql statement.
-            values (tuple): Tuple of string for sql placeholder values.
-
-        Returns:
-            list: A list of tuples representing rows of sql query result.
-
-        Raises:
-            MySQLError: If an error has occured while executing the query.
-        """
-        try:
-            cursor = self.conn.cursor(cursorclass=cursors.DictCursor)
-            cursor.execute(sql, values)
-            return cursor.fetchall()
-        except (DataError, IntegrityError, InternalError, NotSupportedError,
-                OperationalError, ProgrammingError) as e:
-            raise MySQLError(resource_name, e)
-
-    def execute_sql_with_commit(self, resource_name, sql, values):
-        """Executes a provided sql statement with commit.
-
-        Args:
-            resource_name (str): String of the resource name.
-            sql (str): String of the sql statement.
-            values (tuple): Tuple of string for sql placeholder values.
-
-        Raises:
-            MySQLError: If an error has occured while executing the query.
-        """
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(sql, values)
-            self.conn.commit()
-        except (DataError, IntegrityError, InternalError, NotSupportedError,
-                OperationalError, ProgrammingError) as e:
-            raise MySQLError(resource_name, e)
-
-    def get_latest_snapshot_timestamp(self, statuses):
-        """Select the latest timestamp of the completed snapshot.
-
-        Args:
-            statuses (tuple): The tuple of snapshot statuses to filter on.
-
-        Returns:
-            str: The string timestamp of the latest complete snapshot.
-
-        Raises:
-            MySQLError: If no rows are found.
-        """
-        # Build a dynamic parameterized query string for filtering the
-        # snapshot statuses
-        if not isinstance(statuses, tuple):
-            statuses = ('SUCCESS',)
-
-        status_params = ','.join(['%s']*len(statuses))
-        filter_clause = SNAPSHOT_STATUS_FILTER_CLAUSE.format(status_params)
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                select_data.LATEST_SNAPSHOT_TIMESTAMP + filter_clause, statuses)
-            row = cursor.fetchone()
-            if row:
-                return row[0]
-            raise NoResultsError('No snapshot cycle found.')
-        except (DataError, IntegrityError, InternalError, NotSupportedError,
-                OperationalError, ProgrammingError, NoResultsError) as e:
-            raise MySQLError('snapshot_cycles', e)
+    Returns:
+        tuple: If successful this will return a tuple of formatted violation.
+    """
+    formatted_output = vm.VIOLATION_MAP[resource_name](violation)
+    return formatted_output

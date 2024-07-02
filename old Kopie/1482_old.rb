@@ -1,5 +1,4 @@
 module Pod
-
   module Config
 
     require 'yaml'

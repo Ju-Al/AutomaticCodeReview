@@ -1,5 +1,4 @@
 /**
-    ordering_service->onTransaction(getTx());
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -144,7 +143,7 @@ TEST_F(OrderingServiceTest, ValidWhenProposalSizeStrategy) {
   fake_transport->subscribe(ordering_service);
 
   for (size_t i = 0; i < tx_num; ++i) {
-    auto batch = framework::batch::createValidBatch(1);
+    ordering_service->onTransaction(getTx());
     ordering_service->onBatch(std::move(batch));
   }
 }

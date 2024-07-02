@@ -498,7 +498,6 @@ type tasksStopper interface {
 type serviceLinkedRoleCreator interface {
 	CreateECSServiceLinkedRole() error
 }
-
 type dockerEngineValidator interface {
 	IsDockerEngineRunning() (string, error)
 }

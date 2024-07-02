@@ -1,5 +1,4 @@
 // @flow
-  currencyIconWhite: string,
 import React, { Component } from 'react';
 import SvgInline from 'react-svg-inline';
 import { observer } from 'mobx-react';
@@ -36,7 +35,7 @@ const messages = defineMessages({
 
 type Props = {
   currencyIcon: string,
-  nodeIcon: string,
+  currencyIconWhite: string,
   isConnecting: boolean,
   hasBeenConnected: boolean,
   hasBlockSyncingStarted: boolean,

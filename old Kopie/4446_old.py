@@ -1,233 +1,437 @@
-import re
-import time
-from typing import List, Tuple, Iterable, Optional
+import copy
+import json
+import math
+import os
 
-from mitmproxy.http import Request, Headers, Response
-from mitmproxy.net.http import url
+from pokemongo_bot import inventory
+from pokemongo_bot.base_dir import _base_dir
+from pokemongo_bot.base_task import BaseTask
+from pokemongo_bot.datastore import Datastore
+from pokemongo_bot.human_behaviour import sleep, action_delay
+from pokemongo_bot.item_list import Item
+from pokemongo_bot.worker_result import WorkerResult
+
+SUCCESS = 1
+ERROR_INVALID_ITEM_TYPE = 2
+ERROR_XP_BOOST_ALREADY_ACTIVE = 3
+ERROR_NO_ITEMS_REMAINING = 4
+ERROR_LOCATION_UNSET = 5
 
 
-def get_header_tokens(headers, key):
-    """
-        Retrieve all tokens for a header key. A number of different headers
-        follow a pattern where each header line can containe comma-separated
-        tokens, and headers can be set multiple times.
-    """
-    if key not in headers:
-        return []
-    tokens = headers[key].split(",")
-    return [token.strip() for token in tokens]
+class PokemonOptimizer(Datastore, BaseTask):
+    SUPPORTED_TASK_API_VERSION = 1
 
+    def __init__(self, bot, config):
+        super(PokemonOptimizer, self).__init__(bot, config)
 
-def connection_close(http_version, headers):
-    """
-        Checks the message to see if the client connection should be closed
-        according to RFC 2616 Section 8.1.
-        If we don't have a Connection header, HTTP 1.1 connections are assumed
-        to be persistent.
-    """
-    if "connection" in headers:
-        tokens = get_header_tokens(headers, "connection")
-        if "close" in tokens:
-            return True
-        elif "keep-alive" in tokens:
+    def initialize(self):
+        self.family_by_family_id = {}
+        self.max_pokemon_storage = inventory.get_pokemon_inventory_size()
+        self.last_pokemon_count = 0
+
+        self.config_transfer = self.config.get("transfer", False)
+        self.config_evolve = self.config.get("evolve", False)
+        self.config_evolve_time = self.config.get("evolve_time", 20)
+        self.config_evolve_for_xp = self.config.get("evolve_for_xp", True)
+        self.config_evolve_only_with_lucky_egg = self.config.get("evolve_only_with_lucky_egg", False)
+        self.config_evolve_count_for_lucky_egg = self.config.get("evolve_count_for_lucky_egg", 90)
+        self.config_may_use_lucky_egg = self.config.get("may_use_lucky_egg", False)
+        self.config_may_use_lucky_egg = self.config.get("may_use_lucky_egg", True)
+        self.config_keep = self.config.get("keep", [{"top": 1, "evolve": True, "sort": ["iv"]},
+                                                    {"top": 1, "evolve": True, "sort": ["ncp"]},
+                                                    {"top": 1, "evolve": False, "sort": ["cp"]}])
+
+        self.config_transfer_wait_min = self.config.get("transfer_wait_min", 1)
+        self.config_transfer_wait_max = self.config.get("transfer_wait_max", 4)
+
+    def get_pokemon_slot_left(self):
+        pokemon_count = inventory.Pokemons.get_space_used()
+
+        if pokemon_count != self.last_pokemon_count:
+            self.last_pokemon_count = pokemon_count
+            self.logger.info("Pokemon Bag: %s/%s", pokemon_count, self.max_pokemon_storage)
+            self.save_web_inventory()
+
+        return inventory.Pokemons.get_space_left()
+
+    def work(self):
+        if (not self.enabled) or (self.get_pokemon_slot_left() > 5):
+            return WorkerResult.SUCCESS
+
+        self.open_inventory()
+
+        transfer_all = []
+        evo_all_best = []
+        evo_all_crap = []
+
+        for family_id, family in self.family_by_family_id.items():
+            if family_id == 133:  # "Eevee"
+                transfer, evo_best, evo_crap = self.get_multi_family_optimized(family_id, family, 3)
+            else:
+                transfer, evo_best, evo_crap = self.get_family_optimized(family_id, family)
+
+            transfer_all += transfer
+            evo_all_best += evo_best
+            evo_all_crap += evo_crap
+
+        evo_all = evo_all_best + evo_all_crap
+
+        self.apply_optimization(transfer_all, evo_all)
+        self.save_web_inventory()
+
+        return WorkerResult.SUCCESS
+
+    def open_inventory(self):
+        self.family_by_family_id.clear()
+
+        for pokemon in inventory.pokemons().all():
+            family_id = pokemon.first_evolution_id
+            setattr(pokemon, "ncp", pokemon.cp_percent)
+            setattr(pokemon, "dps", pokemon.moveset.dps)
+            setattr(pokemon, "dps_attack", pokemon.moveset.dps_attack)
+            setattr(pokemon, "dps_defense", pokemon.moveset.dps_defense)
+
+            self.family_by_family_id.setdefault(family_id, []).append(pokemon)
+
+    def save_web_inventory(self):
+        web_inventory = os.path.join(_base_dir, "web", "inventory-%s.json" % self.bot.config.username)
+
+        with open(web_inventory, "r") as infile:
+            ii = json.load(infile)
+
+        ii = [x for x in ii if not x.get("inventory_item_data", {}).get("pokedex_entry", None)]
+        ii = [x for x in ii if not x.get("inventory_item_data", {}).get("candy", None)]
+        ii = [x for x in ii if not x.get("inventory_item_data", {}).get("item", None)]
+        ii = [x for x in ii if not x.get("inventory_item_data", {}).get("pokemon_data", None)]
+
+        for pokedex in inventory.pokedex().all():
+            ii.append({"inventory_item_data": {"pokedex_entry": pokedex}})
+
+        for family_id, candy in inventory.candies()._data.items():
+            ii.append({"inventory_item_data": {"candy": {"family_id": family_id, "candy": candy.quantity}}})
+
+        for item_id, item in inventory.items()._data.items():
+            ii.append({"inventory_item_data": {"item": {"item_id": item_id, "count": item.count}}})
+
+        for pokemon in inventory.pokemons().all():
+            ii.append({"inventory_item_data": {"pokemon_data": pokemon._data}})
+
+        with open(web_inventory, "w") as outfile:
+            json.dump(ii, outfile)
+
+    def get_family_optimized(self, family_id, family):
+        evolve_best = []
+        keep_best = []
+        family_names = self.get_family_names(family_id)
+
+        for criteria in self.config_keep:
+            names = criteria.get("names", [])
+
+            if names and not any(n in family_names for n in names):
+                continue
+
+            if criteria.get("evolve", True):
+                evolve_best += self.get_top_rank(family, criteria)
+            else:
+                keep_best += self.get_top_rank(family, criteria)
+
+        evolve_best = self.unique_pokemon(evolve_best)
+        keep_best = self.unique_pokemon(keep_best)
+
+        return self.get_evolution_plan(family_id, family, evolve_best, keep_best)
+
+    def get_multi_family_optimized(self, family_id, family, nb_branch):
+        # Transfer each group of senior independently
+        senior_family = [p for p in family if not p.has_next_evolution()]
+        other_family = [p for p in family if p.has_next_evolution()]
+        senior_pids = set(p.pokemon_id for p in senior_family)
+        senior_grouped_family = {pid: [p for p in senior_family if p.pokemon_id == pid] for pid in senior_pids}
+
+        if not self.config_evolve:
+            transfer, evo_best, evo_crap = self.get_family_optimized(family_id, other_family)
+        elif len(senior_pids) < nb_branch:
+            # We did not get every combination yet = All other Pokemon are potentially good to keep
+            transfer, evo_best, evo_crap = self.get_evolution_plan(family_id, [], other_family, [])
+            evo_best.sort(key=lambda p: p.iv * p.ncp, reverse=True)
+        else:
+            evolve_best = []
+            keep_best = []
+            names = self.get_family_names(family_id)
+
+            for criteria in self.config_keep:
+                family_names = criteria.get("names", [])
+
+                if names and not any(n in family_names for n in names):
+                    continue
+
+                top = []
+
+                for f in senior_grouped_family.values():
+                    top += self.get_top_rank(f, criteria)
+
+                worst = self.get_sorted_family(top, criteria)[-1]
+
+                if criteria.get("evolve", True):
+                    evolve_best += self.get_better_rank(family, criteria, worst)
+                else:
+                    keep_best += self.get_better_rank(family, criteria, worst)
+
+            evolve_best = self.unique_pokemon(evolve_best)
+            keep_best = self.unique_pokemon(keep_best)
+            transfer, evo_best, evo_crap = self.get_evolution_plan(family_id, other_family, evolve_best, keep_best)
+
+        for senior_pid, senior_family in senior_grouped_family.items():
+            transfer += self.get_family_optimized(senior_pid, senior_family)[0]
+
+        return (transfer, evo_best, evo_crap)
+
+    def get_family_names(self, family_id):
+        ids = [family_id]
+        ids += inventory.Pokemons.data_for(family_id).next_evolutions_all[:]
+        datas = [inventory.Pokemons.data_for(x) for x in ids]
+        return [x.name for x in datas]
+
+    def get_top_rank(self, family, criteria):
+        sorted_family = self.get_sorted_family(family, criteria)
+        index = criteria.get("top", 1) - 1
+
+        if 0 <= index < len(sorted_family):
+            worst = sorted_family[index]
+            return [p for p in sorted_family if self.get_rank(p, criteria) >= self.get_rank(worst, criteria)]
+        else:
+            return sorted_family
+
+    def get_better_rank(self, family, criteria, worst):
+        return [p for p in self.get_sorted_family(family, criteria) if self.get_rank(p, criteria) >= self.get_rank(worst, criteria)]
+
+    def get_sorted_family(self, family, criteria):
+        return sorted(family, key=lambda p: self.get_rank(p, criteria), reverse=True)
+
+    def get_rank(self, pokemon, criteria):
+        return tuple(getattr(pokemon, a, None) for a in criteria.get("sort"))
+
+    def get_pokemon_max_cp(self, pokemon_name):
+        return int(self.pokemon_max_cp.get(pokemon_name, 0))
+
+    def unique_pokemon(self, l):
+        seen = set()
+        return [p for p in l if not (p.unique_id in seen or seen.add(p.unique_id))]
+
+    def get_evolution_plan(self, family_id, family, evolve_best, keep_best):
+        candies = inventory.candies().get(family_id).quantity
+
+        # All the rest is crap, for now
+        crap = family[:]
+        crap = [p for p in crap if p not in evolve_best]
+        crap = [p for p in crap if p not in keep_best]
+        crap = [p for p in crap if not p.in_fort and not p.is_favorite]
+        crap.sort(key=lambda p: p.iv * p.ncp, reverse=True)
+
+        # We will gain a candy whether we choose to transfer or evolve these Pokemon
+        candies += len(crap)
+
+        # Let's see if we can evolve our best Pokemon
+        can_evolve_best = []
+
+        for pokemon in evolve_best:
+            if not pokemon.has_next_evolution():
+                continue
+
+            candies -= pokemon.evolution_cost
+
+            if candies < 0:
+                break
+
+            candies += 1
+            can_evolve_best.append(pokemon)
+
+            # Not sure if the evo keep the same id
+            next_pid = pokemon.next_evolution_ids[0]
+            next_evo = copy.copy(pokemon)
+            next_evo.pokemon_id = next_pid
+            next_evo.static = inventory.pokemons().data_for(next_pid)
+            next_evo.name = inventory.pokemons().name_for(next_pid)
+            evolve_best.append(next_evo)
+
+        if self.config_evolve_for_xp:
+            # Compute how many crap we should keep if we want to batch evolve them for xp
+            junior_evolution_cost = inventory.pokemons().evolution_cost_for(family_id)
+
+            # transfer + keep_for_evo = len(crap)
+            # leftover_candies = candies - len(crap) + transfer * 1
+            # keep_for_evo = (leftover_candies - 1) / (junior_evolution_cost - 1)
+            # keep_for_evo = (candies - len(crap) + transfer - 1) / (junior_evolution_cost - 1)
+            # keep_for_evo = (candies - keep_for_evo - 1) / (junior_evolution_cost - 1)
+
+            if (candies > 0) and junior_evolution_cost:
+                keep_for_evo = int((candies - 1) / junior_evolution_cost)
+            else:
+                keep_for_evo = 0
+
+            evo_crap = [p for p in crap if p.has_next_evolution() and p.evolution_cost == junior_evolution_cost][:keep_for_evo]
+
+            # If not much to evolve, better keep the candies
+            if len(evo_crap) < math.ceil(self.max_pokemon_storage * 0.01):
+                evo_crap = []
+
+            transfer = [p for p in crap if p not in evo_crap]
+        else:
+            evo_crap = []
+            transfer = crap
+
+        return (transfer, can_evolve_best, evo_crap)
+
+    def apply_optimization(self, transfer, evo):
+        self.logger.info("Transferring %s Pokemon", len(transfer))
+
+        for pokemon in transfer:
+            self.transfer_pokemon(pokemon)
+
+        if len(evo) == 0:
+            return
+
+        if self.config_evolve and self.config_may_use_lucky_egg and (not self.bot.config.test):
+            lucky_egg = inventory.items().get(Item.ITEM_LUCKY_EGG.value)  # @UndefinedVariable
+
+            if lucky_egg.count == 0:
+                if self.config_evolve_only_with_lucky_egg:
+                    self.emit_event("skip_evolve",
+                                    formatted="Skipping evolution step. No lucky egg available")
+                    return
+            elif len(evo) < self.config_evolve_count_for_lucky_egg:
+                if self.config_evolve_only_with_lucky_egg:
+                    self.emit_event("skip_evolve",
+                                    formatted="Skipping evolution step. Not enough Pokemon to evolve with lucky egg: %s/%s" % (len(evo), self.config_evolve_count_for_lucky_egg))
+                    return
+                elif self.get_pokemon_slot_left() > 5:
+                    self.emit_event("skip_evolve",
+                                    formatted="Waiting for more Pokemon to evolve with lucky egg: %s/%s" % (len(evo), self.config_evolve_count_for_lucky_egg))
+                    return
+            else:
+                self.use_lucky_egg()
+
+        self.logger.info("Evolving %s Pokemon", len(evo))
+
+        for pokemon in evo:
+            self.evolve_pokemon(pokemon)
+
+    def transfer_pokemon(self, pokemon):
+        if self.config_transfer and (not self.bot.config.test):
+            response_dict = self.bot.api.release_pokemon(pokemon_id=pokemon.unique_id)
+        else:
+            response_dict = {"responses": {"RELEASE_POKEMON": {"candy_awarded": 0}}}
+
+        if not response_dict:
             return False
 
-    return http_version not in (
-        "HTTP/1.1", b"HTTP/1.1",
-        "HTTP/2.0", b"HTTP/2.0",
-    )
+        candy_awarded = response_dict.get("responses", {}).get("RELEASE_POKEMON", {}).get("candy_awarded", 0)
+        candy = inventory.candies().get(pokemon.pokemon_id)
 
+        if self.config_transfer and (not self.bot.config.test):
+            candy.add(candy_awarded)
 
-def expected_http_body_size(
-        request: Request,
-        response: Optional[Response] = None,
-        expect_continue_as_0: bool = True
-):
-    """
-        Args:
-            - expect_continue_as_0: If true, incorrectly predict a body size of 0 for requests which are waiting
-              for a 100 Continue response.
-        Returns:
-            The expected body length:
-            - a positive integer, if the size is known in advance
-            - None, if the size in unknown in advance (chunked encoding)
-            - -1, if all data should be read until end of stream.
+        self.emit_event("pokemon_release",
+                        formatted="Exchanged {pokemon} [IV {iv}] [CP {cp}] [{candy} candies]",
+                        data={"pokemon": pokemon.name,
+                              "iv": pokemon.iv,
+                              "cp": pokemon.cp,
+                              "candy": candy.quantity})
 
-        Raises:
-            ValueError, if the content length header is invalid
-    """
-    # Determine response size according to
-    # http://tools.ietf.org/html/rfc7230#section-3.3
-    if not response:
-        headers = request.headers
-        if request.method.upper() == "CONNECT":
-            return 0
-        if expect_continue_as_0 and headers.get("expect", "").lower() == "100-continue":
-            return 0
-    else:
-        headers = response.headers
-        if request.method.upper() == "HEAD":
-            return 0
-        if 100 <= response.status_code <= 199:
-            return 0
-        if response.status_code == 200 and request.method.upper() == "CONNECT":
-            return 0
-        if response.status_code in (204, 304):
-            return 0
+        if self.config_transfer and (not self.bot.config.test):
+            inventory.pokemons().remove(pokemon.unique_id)
 
-    if "chunked" in headers.get("transfer-encoding", "").lower():
-        return None
-    if "content-length" in headers:
-        sizes = headers.get_all("content-length")
-        different_content_length_headers = any(x != sizes[0] for x in sizes)
-        if different_content_length_headers:
-            raise ValueError("Conflicting Content Length Headers")
-        size = int(sizes[0])
-        if size < 0:
-            raise ValueError("Negative Content Length")
-        return size
-    if not response:
-        return 0
-    return -1
+            with self.bot.database as db:
+                cursor = db.cursor()
+                cursor.execute("SELECT COUNT(name) FROM sqlite_master WHERE type='table' AND name='transfer_log'")
 
+                db_result = cursor.fetchone()
 
-def raise_if_http_version_unknown(http_version: bytes) -> None:
-    if not re.match(br"^HTTP/\d\.\d$", http_version):
-        raise ValueError(f"Unknown HTTP version: {http_version!r}")
+                if db_result[0] == 1:
+                    db.execute("INSERT INTO transfer_log (pokemon, iv, cp) VALUES (?, ?, ?)", (pokemon.name, pokemon.iv, pokemon.cp))
 
+            action_delay(self.config_transfer_wait_min, self.config_transfer_wait_max)
 
-def _read_request_line(line: bytes) -> Tuple[str, int, bytes, bytes, bytes, bytes, bytes]:
-    try:
-        method, target, http_version = line.split()
-        port: Optional[int]
+        return True
 
-        if target == b"*" or target.startswith(b"/"):
-            scheme, authority, path = b"", b"", target
-            host, port = "", 0
-        elif method == b"CONNECT":
-            scheme, authority, path = b"", target, b""
-            host, port = url.parse_authority(authority, check=True)
-            if not port:
-                raise ValueError
+    def use_lucky_egg(self):
+        lucky_egg = inventory.items().get(Item.ITEM_LUCKY_EGG.value)  # @UndefinedVariable
+
+        if lucky_egg.count == 0:
+            return False
+
+        response_dict = self.bot.use_lucky_egg()
+
+        if not response_dict:
+            self.emit_event("lucky_egg_error",
+                            level='error',
+                            formatted="Failed to use lucky egg!")
+            return False
+
+        result = response_dict.get("responses", {}).get("USE_ITEM_XP_BOOST", {}).get("result", 0)
+
+        if result == SUCCESS:
+            lucky_egg.remove(1)
+
+            self.emit_event("used_lucky_egg",
+                            formatted="Used lucky egg ({amount_left} left).",
+                            data={"amount_left": lucky_egg.count})
+            return True
+        elif result == ERROR_XP_BOOST_ALREADY_ACTIVE:
+            self.emit_event("used_lucky_egg",
+                            formatted="Lucky egg already active ({amount_left} left).",
+                            data={"amount_left": lucky_egg.count})
+            return True
         else:
-            scheme, rest = target.split(b"://", maxsplit=1)
-            authority, path_ = rest.split(b"/", maxsplit=1)
-            path_ = paths_[0] if paths_ else b""
-            path = b"/" + path_
-            host, port = url.parse_authority(authority, check=True)
-            port = port or url.default_port(scheme)
-            if not port:
-                raise ValueError
-            # TODO: we can probably get rid of this check?
-            url.parse(target)
+            self.emit_event("lucky_egg_error",
+                            level='error',
+                            formatted="Failed to use lucky egg!")
+            return False
 
-        raise_if_http_version_unknown(http_version)
-    except ValueError as e:
-        raise ValueError(f"Bad HTTP request line: {line!r}") from e
-
-    return host, port, method, scheme, authority, path, http_version
-
-
-def _read_response_line(line: bytes) -> Tuple[bytes, int, bytes]:
-    try:
-        parts = line.split(None, 2)
-        if len(parts) == 2:  # handle missing message gracefully
-            parts.append(b"")
-
-        http_version, status_code_str, reason = parts
-        status_code = int(status_code_str)
-        raise_if_http_version_unknown(http_version)
-    except ValueError as e:
-        raise ValueError(f"Bad HTTP response line: {line!r}") from e
-
-    return http_version, status_code, reason
-
-
-def _read_headers(lines: Iterable[bytes]) -> Headers:
-    """
-        Read a set of headers.
-        Stop once a blank line is reached.
-
-        Returns:
-            A headers object
-
-        Raises:
-            exceptions.HttpSyntaxException
-    """
-    ret: List[Tuple[bytes, bytes]] = []
-    for line in lines:
-        if line[0] in b" \t":
-            if not ret:
-                raise ValueError("Invalid headers")
-            # continued header
-            ret[-1] = (ret[-1][0], ret[-1][1] + b'\r\n ' + line.strip())
+    def evolve_pokemon(self, pokemon):
+        if self.config_evolve and (not self.bot.config.test):
+            response_dict = self.bot.api.evolve_pokemon(pokemon_id=pokemon.unique_id)
         else:
-            try:
-                name, value = line.split(b":", 1)
-                value = value.strip()
-                if not name:
-                    raise ValueError()
-                ret.append((name, value))
-            except ValueError:
-                raise ValueError(f"Invalid header line: {line!r}")
-    return Headers(ret)
+            response_dict = {"responses": {"EVOLVE_POKEMON": {"result": 1}}}
 
+        if not response_dict:
+            return False
 
-def read_request_head(lines: List[bytes]) -> Request:
-    """
-    Parse an HTTP request head (request line + headers) from an iterable of lines
+        result = response_dict.get("responses", {}).get("EVOLVE_POKEMON", {}).get("result", 0)
 
-    Args:
-        lines: The input lines
+        if result != SUCCESS:
+            return False
 
-    Returns:
-        The HTTP request object (without body)
+        xp = response_dict.get("responses", {}).get("EVOLVE_POKEMON", {}).get("experience_awarded", 0)
+        candy_awarded = response_dict.get("responses", {}).get("EVOLVE_POKEMON", {}).get("candy_awarded", 0)
+        candy = inventory.candies().get(pokemon.pokemon_id)
+        evolution = response_dict.get("responses", {}).get("EVOLVE_POKEMON", {}).get("evolved_pokemon_data", {})
 
-    Raises:
-        ValueError: The input is malformed.
-    """
-    host, port, method, scheme, authority, path, http_version = _read_request_line(lines[0])
-    headers = _read_headers(lines[1:])
+        if self.config_evolve and (not self.bot.config.test):
+            candy.consume(pokemon.evolution_cost - candy_awarded)
 
-    return Request(
-        host=host,
-        port=port,
-        method=method,
-        scheme=scheme,
-        authority=authority,
-        path=path,
-        http_version=http_version,
-        headers=headers,
-        content=None,
-        trailers=None,
-        timestamp_start=time.time(),
-        timestamp_end=None
-    )
+        self.emit_event("pokemon_evolved",
+                        formatted="Evolved {pokemon} [IV {iv}] [CP {cp}] [{candy} candies] [+{xp} xp]",
+                        data={"pokemon": pokemon.name,
+                              "iv": pokemon.iv,
+                              "cp": pokemon.cp,
+                              "candy": candy.quantity,
+                              "xp": xp})
 
+        if self.config_evolve and (not self.bot.config.test):
+            inventory.pokemons().remove(pokemon.unique_id)
 
-def read_response_head(lines: List[bytes]) -> Response:
-    """
-    Parse an HTTP response head (response line + headers) from an iterable of lines
+            new_pokemon = inventory.Pokemon(evolution)
+            inventory.pokemons().add(new_pokemon)
 
-    Args:
-        lines: The input lines
+            with self.bot.database as db:
+                cursor = db.cursor()
+                cursor.execute("SELECT COUNT(name) FROM sqlite_master WHERE type='table' AND name='evolve_log'")
 
-    Returns:
-        The HTTP response object (without body)
+                db_result = cursor.fetchone()
 
-    Raises:
-        ValueError: The input is malformed.
-    """
-    http_version, status_code, reason = _read_response_line(lines[0])
-    headers = _read_headers(lines[1:])
+                if db_result[0] == 1:
+                    db.execute("INSERT INTO evolve_log (pokemon, iv, cp) VALUES (?, ?, ?)", (pokemon.name, pokemon.iv, pokemon.cp))
 
-    return Response(
-        http_version=http_version,
-        status_code=status_code,
-        reason=reason,
-        headers=headers,
-        content=None,
-        trailers=None,
-        timestamp_start=time.time(),
-        timestamp_end=None,
-    )
+            sleep(self.config_evolve_time)
+
+        return True

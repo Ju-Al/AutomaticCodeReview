@@ -4104,7 +4104,6 @@ void MegaClient::locallogout(bool removecaches)
     pendingcs = NULL;
     scsn.clear();
     mBlocked = false;
-    mLoggedIntoWritableFolder = false;
 
     for (putfa_list::iterator it = queuedfa.begin(); it != queuedfa.end(); it++)
     {

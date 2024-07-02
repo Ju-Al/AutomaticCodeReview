@@ -1,6 +1,4 @@
 /*
-struct rmsummary *rmonitor_measure_host() {
-	uint64_t free_mem, total_mem;
 Copyright (C) 2013- The University of Notre Dame
 This software is distributed under the GNU General Public License.
 See the file COPYING for details.
@@ -822,7 +820,8 @@ int rmonitor_measure_process_update_to_peak(struct rmsummary *tr, pid_t pid) {
 	return 1;
 }
 
-struct rmsummary *rmonitor_measure_host(char *path) {
+struct rmsummary *rmonitor_measure_host() {
+	uint64_t free_mem, total_mem;
 	uint64_t free_mem;
 	uint64_t total_mem;
 	int64_t total_disk;

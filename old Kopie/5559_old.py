@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-        theme_file = (pathlib.Path('www') / 'qute.css').resolve()
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
 # Copyright 2014-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
@@ -183,7 +182,7 @@ class AsciiDoc:
 
     def _build_website(self) -> None:
         """Prepare and build the website."""
-        theme_file = (pathlib.Path(REPO_ROOT, 'www') / 'qute.css').resolve()
+        theme_file = (pathlib.Path('www') / 'qute.css').resolve()
         assert self._themedir is not None   # for mypy
         shutil.copy(theme_file, self._themedir)
 

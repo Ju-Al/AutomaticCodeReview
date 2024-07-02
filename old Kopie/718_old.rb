@@ -1,12 +1,4 @@
 class TransfersController < ApplicationController
-    if @transfer.valid?
-      @transfer.from.move_inventory!(@transfer)
-
-      if @transfer.save
-        redirect_to transfers_path, notice: "Transfer was successfully created."
-      else
-        flash[:error] = "There was an error, try again?"
-        render :new
   def index
     @transfers = current_organization.transfers.includes(:line_items).includes(:from).includes(:to).class_filter(filter_params)
     @selected_from = filter_params[:from_location]
@@ -18,7 +10,14 @@ class TransfersController < ApplicationController
   def create
     @transfer = current_organization.transfers.new(transfer_params)
 
-    if @transfer.valid? && @transfer.save
+    if @transfer.valid?
+      @transfer.from.move_inventory!(@transfer)
+
+      if @transfer.save
+        redirect_to transfers_path, notice: "Transfer was successfully created."
+      else
+        flash[:error] = "There was an error, try again?"
+        render :new
       ActiveRecord::Base.transaction do
         @transfer.from.decrease_inventory @transfer
         @transfer.to.increase_inventory @transfer

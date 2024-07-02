@@ -529,9 +529,6 @@ class ContentProxyTest extends TestCase
         $this->assertSame('image/jpeg', $entry->getMimetype());
         $this->assertSame('200', $entry->getHttpStatus());
         $this->assertSame('1.1.1.1', $entry->getDomainName());
-    }
-
-    public function testWebsiteWithValidUTF8Title_doNothing()
     {
         // You can use https://www.online-toolz.com/tools/text-hex-convertor.php to convert UTF-8 text <=> hex
         // See http://graphemica.com for more info about the characters

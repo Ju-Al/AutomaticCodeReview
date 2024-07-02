@@ -1,5 +1,4 @@
 // Package oss provides a storagedriver.StorageDriver implementation to
-			if ossErr, ok := err.(*oss.Error); !ok || ossErr.Code != "NoSuchKey" {
 // store blobs in Aliyun OSS cloud storage.
 //
 // This package leverages the denverdino/aliyungo client library for interfacing with
@@ -431,7 +430,7 @@ func (d *driver) WriteStream(ctx context.Context, path string, offset int64, rea
 	if offset > 0 {
 		resp, err := d.Bucket.Head(d.ossPath(path), nil)
 		if err != nil {
-			if ossErr, ok := err.(*oss.Error); !ok || ossErr.StatusCode != 404 {
+			if ossErr, ok := err.(*oss.Error); !ok || ossErr.Code != "NoSuchKey" {
 				return 0, err
 			}
 		}

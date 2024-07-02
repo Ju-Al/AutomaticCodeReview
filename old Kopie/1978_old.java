@@ -363,7 +363,6 @@ public class FlinkCatalog extends AbstractCatalog {
     PartitionSpec spec = toPartitionSpec(((CatalogTable) table).getPartitionKeys(), icebergSchema);
 
     ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
-
     // Set the equality field columns.
     List<String> equalityFieldColumns = toEqualityColumns(table.getSchema());
     if (!equalityFieldColumns.isEmpty()) {

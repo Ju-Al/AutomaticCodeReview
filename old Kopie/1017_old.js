@@ -1,5 +1,4 @@
 /*
-
   This is a moog modal for the reorganize pages feature
 */
 
@@ -238,7 +237,7 @@ apos.define('apostrophe-pages-reorganize', {
         targetId: e.move_info.target_node.id,
         position: e.move_info.position
       };
-      
+
       // Refuse requests to move something before the
       // home page, or after it (as a peer). Inside it is fine
       var target = e.move_info.target_node;

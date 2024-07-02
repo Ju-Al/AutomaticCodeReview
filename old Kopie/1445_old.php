@@ -1,10 +1,5 @@
 <?php
 
-            foreach ($this->getCommandHashes($commands, 'yes, with deletes' === $answer) as $hash) {
-                $this->io->writeln(' * '.$commandsByHash[$hash]);
-                $this->installer->execCommand($hash);
-                ++$count;
-            }
 declare(strict_types=1);
 
 /*
@@ -248,7 +243,10 @@ class MigrateCommand extends Command
 
             $count = 0;
 
-            $commandHashes = $this->getCommandHashes($commands, 'yes, with deletes' === $answer);
+            foreach ($this->getCommandHashes($commands, 'yes, with deletes' === $answer) as $hash) {
+                $this->io->writeln(' * '.$commandsByHash[$hash]);
+                $this->installer->execCommand($hash);
+                ++$count;
 
             do {
                 $successCount = 0;

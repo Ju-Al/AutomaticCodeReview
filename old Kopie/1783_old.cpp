@@ -1,10 +1,5 @@
 #include "ShipDesign.h"
 
-    TraceLogger() << "Part Types:";
-    for (const auto& entry : m_parts) {
-        const PartType* p = entry.second;
-        TraceLogger() << " ... " << p->Name() << " class: " << p->Class();
-    }
 #include "../util/OptionsDB.h"
 #include "../util/Logger.h"
 #include "../util/AppInterface.h"
@@ -202,7 +197,11 @@ PartTypeManager::PartTypeManager() {
         throw;
     }
 
-    TraceLogger() << [&]() {
+    TraceLogger() << "Part Types:";
+    for (const auto& entry : m_parts) {
+        const PartType* p = entry.second;
+        TraceLogger() << " ... " << p->Name() << " class: " << p->Class();
+    }
             std::string retval("Part Types:");
             for (const auto& pair : m_parts) {
                 const auto& part = pair.second;

@@ -1,6 +1,5 @@
 <?php
 
-		$session->getFlashBag()->clear();
 /*
  * This file is part of Contao.
  *
@@ -179,7 +178,7 @@ class Message
 			return;
 		}
 
-		$flashBag = $session->getFlashBag();
+		$session->getFlashBag()->clear();
 
 		// Find all contao.BE. keys (see #3393)
 		$keys = preg_grep('(^contao\.BE\.)', $flashBag->keys());

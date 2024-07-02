@@ -1,5 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-            self._hover_url = link
 
 # Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
@@ -154,7 +153,7 @@ class UrlText(textbase.TextBase):
             _text: The text of the hovered link (string)
         """
         if link:
-            self._hover_url = QUrl(link).toString()
+            self._hover_url = link
         else:
             self._hover_url = None
         self._update_url()

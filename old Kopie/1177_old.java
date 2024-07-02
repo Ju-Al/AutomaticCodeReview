@@ -155,7 +155,6 @@ public class NewCarbsDialog extends DialogFragment implements OnClickListener, C
         notesLayout.setVisibility(SP.getBoolean(R.string.key_show_notes_entry_dialogs, false) ? View.VISIBLE : View.GONE);
         notesEdit = view.findViewById(R.id.newcarbs_notes);
 
-        BgReading bgReading = DatabaseHelper.actualBg();
         if (bgReading != null && bgReading.value < 72) {
             startHypoTTCheckbox.setOnCheckedChangeListener(null);
             startHypoTTCheckbox.setChecked(true);

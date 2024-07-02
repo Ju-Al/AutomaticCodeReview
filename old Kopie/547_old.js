@@ -31,7 +31,6 @@ var Config = function(options) {
   self.events.setCommandHandler("config:contractsFiles", (cb) => {
     cb(self.contractsFiles);
   });
-
   self.events.setCommandHandler("config:contractsFiles:add", (filename) => {
     self.contractsFiles.push(new File({filename: filename, type: File.types.custom, path: filename, resolver: function(callback) {
       callback(fs.readFileSync(filename).toString());

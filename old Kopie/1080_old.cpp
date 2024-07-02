@@ -1,5 +1,4 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-    recentRejects.reset(new CRollingBloomFilter(120000, 0.000001));
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2015-2018 The Bitcoin Unlimited developers
 // Distributed under the MIT software license, see the accompanying
@@ -4468,6 +4467,7 @@ void UnloadBlockIndex()
         warningcache[b].clear();
     }
 
+    recentRejects.reset(new CRollingBloomFilter(120000, 0.000001));
     for (BlockMap::value_type &entry : mapBlockIndex)
     {
         delete entry.second;

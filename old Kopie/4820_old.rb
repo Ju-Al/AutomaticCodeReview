@@ -1,583 +1,246 @@
 # frozen_string_literal: true
 # encoding: utf-8
 
-require "spec_helper"
+module Mongoid
 
-describe Mongoid::Traversable do
+  # Provides behavior around traversing the document graph.
+  #
+  # @since 4.0.0
+  module Traversable
+    extend ActiveSupport::Concern
 
-  describe "#_children" do
-
-    let(:person) do
-      Person.new(title: "King")
+    def _parent
+      @__parent ||= nil
     end
 
-    context "with one level of embedding" do
-
-      let(:name) do
-        Name.new(first_name: "Titus")
-      end
-
-      let(:address) do
-        Address.new(street: "Queen St")
-      end
-
-      before do
-        person.name = name
-        person.addresses << address
-      end
-
-      it "includes embeds_one documents" do
-        expect(person._children).to include(name)
-      end
-
-      it "includes embeds_many documents" do
-        expect(person._children).to include(address)
-      end
+    def _parent=(p)
+      @__parent = p
     end
 
-    context "with multiple levels of embedding" do
-
-      let(:name) do
-        Name.new(first_name: "Titus")
-      end
-
-      let(:address) do
-        Address.new(street: "Queen St")
-      end
-
-      let(:location) do
-        Location.new(name: "Work")
-      end
-
-      before do
-        person.name = name
-        address.locations << location
-        person.addresses << address
-      end
-
-      it "includes embeds_one documents" do
-        expect(person._children).to include(name)
-      end
-
-      it "includes embeds_many documents" do
-        expect(person._children).to include(address)
-      end
-
-      it "includes embedded documents multiple levels deep" do
-        expect(person._children).to include(location)
-      end
-    end
-  end
-
-  describe ".hereditary?" do
-
-    context "when the document is a subclass" do
-
-      it "returns true" do
-        expect(Circle.hereditary?).to be true
-      end
-    end
-
-    context "when the document is not a subclass" do
-
-      it "returns false" do
-        expect(Shape.hereditary?).to be false
-      end
-    end
-  end
-
-  describe "#hereditary?" do
-
-    context "when the document is a subclass" do
-
-      it "returns true" do
-        expect(Circle.new).to be_hereditary
-      end
-    end
-
-    context "when the document is not a subclass" do
-
-      it "returns false" do
-        expect(Shape.new).to_not be_hereditary
-      end
-    end
-  end
-
-  describe "#inherited" do
-
-    it "duplicates the localized fields" do
-      expect(Actress.localized_fields).to_not equal(Actor.localized_fields)
-    end
-  end
-
-  describe "#parentize" do
-
-    let(:address) do
-      Address.new
-    end
-
-    let(:person) do
-      Person.new
-    end
-
-    before do
-      address.parentize(person)
-    end
-
-    it "sets the parent document" do
-      expect(address._parent).to eq(person)
-    end
-  end
-
-  describe "#remove_child" do
-
-    let(:person) do
-      Person.new
-    end
-
-    context "when child is an embeds one" do
-
-      let!(:name) do
-        person.build_name(first_name: "James")
-      end
-
-      before do
-        person.remove_child(name)
-      end
-
-      it "removes the relation instance" do
-        expect(person.name).to be_nil
-      end
-    end
-
-    context "when child is an embeds many" do
-
-      let!(:address) do
-        person.addresses.build(street: "Upper St")
-      end
-
-      before do
-        person.remove_child(address)
-      end
-
-      it "removes the document from the relation target" do
-        expect(person.addresses).to be_empty
-      end
-    end
-  end
-
-  describe "#_root" do
-
-    let(:address) do
-      Address.new
-    end
-
-    let(:person) do
-      Person.new
-    end
-
-    before do
-      address.parentize(person)
-    end
-
-    context "when the document is not the root" do
-
-      it "returns the root" do
-        expect(address._root).to eq(person)
-      end
-    end
-
-    context "when the document is the root" do
-
-      it "returns self" do
-        expect(person._root).to eq(person)
-      end
-    end
-  end
-
-  describe "#_root?" do
-
-    context "when the document can be the root" do
-
-      context "when the document is not embedded" do
-
-        let(:band) do
-          Band.new
+    # Module used for prepending to the discriminator_key= function
+    #
+    # @api private
+    module DiscriminatorKeyAssignment
+      def discriminator_key=(value)
+        if hereditary?
+          raise Errors::InvalidDiscriminatorKeyTarget.new(self, self.superclass)
         end
 
-        it "returns true" do
-          expect(band).to be__root
-        end
-      end
-
-      context "when the document is embedded" do
-
-        let(:root_role) do
-          Role.new
-        end
-
-        context "when the document is root in a cyclic relation" do
-
-          it "returns true" do
-            expect(root_role).to be__root
-          end
-        end
-
-        context "when document is embedded in a cyclic relation" do
-
-          let(:child_role) do
-            root_role.child_roles.build
+        if value
+          super
+        else
+          # When discriminator key is set to nil, replace the class's definition
+          # of the discriminator key reader (provided by class_attribute earlier)
+          # and re-delegate to Mongoid.
+          class << self
+            delegate :discriminator_key, to: ::Mongoid
           end
 
-          it "returns false" do
-            expect(child_role).to_not be__root
-          end
+        unless fields.has_key?(self.discriminator_key) || descendants.length == 0
+          default_proc = lambda { self.class.name }
+          field(self.discriminator_key, default: default_proc, type: String)
         end
       end
     end
 
-    context "when the document is embedded and not cyclic" do
-
-      let(:person) do
-        Person.new
-      end
-
-      let(:address) do
-        person.addresses.build
-      end
-
-      it "returns false" do
-        expect(address).to_not be__root
-      end
-    end
-  end
-
-  describe "#discriminator_key" do
-
-    context "when the discriminator key is not set on a class" do
-      it "sets the global discriminator key to _type" do
-        expect(Mongoid.discriminator_key).to eq("_type")
-      end
-      
-      it "sets the parent discriminator key to _type" do
-        expect(Instrument.discriminator_key).to eq("_type")
-      end
-
-      it "sets the child discriminator key to _type: Piano" do
-        expect(Piano.discriminator_key).to eq("_type")
-      end
-
-      it "sets the child discriminator key to _type: Guitar" do
-        expect(Guitar.discriminator_key).to eq("_type")
+    included do
+      class_attribute :discriminator_key, instance_accessor: false
+      class << self
+        delegate :discriminator_key, to: ::Mongoid
+        prepend DiscriminatorKeyAssignment
       end
     end
 
-    context "when the discriminator key is changed at the global level" do
-      before do
-        Mongoid.discriminator_key = "hello"
-      end
+    # Get all child +Documents+ to this +Document+, going n levels deep if
+    # necessary. This is used when calling update persistence operations from
+    # the root document, where changes in the entire tree need to be
+    # determined. Note that persistence from the embedded documents will
+    # always be preferred, since they are optimized calls... This operation
+    # can get expensive in domains with large hierarchies.
+    #
+    # @example Get all the document's children.
+    #   person._children
+    #
+    # @return [ Array<Document> ] All child documents in the hierarchy.
+    def _children
+      @__children ||= collect_children
+    end
 
-      after do
-        Mongoid.discriminator_key = "_type"
+    # Collect all the children of this document.
+    #
+    # @example Collect all the children.
+    #   document.collect_children
+    #
+    # @return [ Array<Document> ] The children.
+    #
+    # @since 2.4.0
+    def collect_children
+      children = []
+      embedded_relations.each_pair do |name, association|
+        without_autobuild do
+          child = send(name)
+          Array.wrap(child).each do |doc|
+            children.push(doc)
+            children.concat(doc._children)
+          end if child
+        end
       end
+      children
+    end
 
-      it "sets the correct value globally" do
-        expect(Mongoid.discriminator_key).to eq("hello")
-      end
-
-      it "is changed in the parent" do
-        expect(Instrument.discriminator_key).to eq("hello")
-      end
-
-      it "is changed in the child: Piano" do
-        expect(Piano.discriminator_key).to eq("hello")
-      end
-
-      it "is changed in the child: Guitar" do
-        expect(Guitar.discriminator_key).to eq("hello")
+    # Marks all children as being persisted.
+    #
+    # @example Flag all the children.
+    #   document.flag_children_persisted
+    #
+    # @return [ Array<Document> ] The flagged children.
+    #
+    # @since 3.0.7
+    def flag_children_persisted
+      _children.each do |child|
+        child.new_record = false
       end
     end
 
-    context "when the discriminator key is changed in the parent" do
-      before do
-        Instrument.discriminator_key = "hello2"
-      end
+    # Determines if the document is a subclass of another document.
+    #
+    # @example Check if the document is a subclass
+    #   Square.new.hereditary?
+    #
+    # @return [ true, false ] True if hereditary, false if not.
+    def hereditary?
+      self.class.hereditary?
+    end
 
-      after do
-        Instrument.discriminator_key = nil
-      end
+    # Sets up a child/parent association. This is used for newly created
+    # objects so they can be properly added to the graph.
+    #
+    # @example Set the parent document.
+    #   document.parentize(parent)
+    #
+    # @param [ Document ] document The parent document.
+    #
+    # @return [ Document ] The parent document.
+    def parentize(document)
+      self._parent = document
+    end
 
-      it "doesn't change the global setting" do
-        expect(Mongoid.discriminator_key).to eq("_type")
-      end
-
-      it "changes in the parent" do
-        expect(Instrument.discriminator_key).to eq("hello2")
-      end
-
-      it "changes in the child class: Piano" do
-        expect(Piano.discriminator_key).to eq("hello2")
-      end
-
-      it "changes in the child class: Guitar" do
-        expect(Guitar.discriminator_key).to eq("hello2")
-      end
-
-      context 'when discriminator key is set to nil in parent' do
-        before do
-          Instrument.discriminator_key = nil
-        end
-
-        it "doesn't change the global setting" do
-          expect(Mongoid.discriminator_key).to eq("_type")
-        end
-
-        it 'uses global setting' do
-          expect(Instrument.discriminator_key).to eq("_type")
-        end
-
-        it "changes in the child class: Piano" do
-          expect(Piano.discriminator_key).to eq("_type")
-        end
-  
-        it "changes in the child class: Guitar" do
-          expect(Guitar.discriminator_key).to eq("_type")
-        end
-      end
-
-      context "when resetting the discriminator key after nil" do
-        before do
-          Instrument.discriminator_key = nil
-          Instrument.discriminator_key = "hello4"
-        end
-
-        it "doesn't change the global setting" do
-          expect(Mongoid.discriminator_key).to eq("_type")
-        end
-
-        it 'has the correct value' do
-          expect(Instrument.discriminator_key).to eq("hello4")
-        end
-
-        it "changes in the child class: Piano" do
-          expect(Piano.discriminator_key).to eq("hello4")
-        end
-  
-        it "changes in the child class: Guitar" do
-          expect(Guitar.discriminator_key).to eq("hello4")
-        end
+    # Remove a child document from this parent. If an embeds one then set to
+    # nil, otherwise remove from the embeds many.
+    #
+    # This is called from the +RemoveEmbedded+ persistence command.
+    #
+    # @example Remove the child.
+    #   document.remove_child(child)
+    #
+    # @param [ Document ] child The child (embedded) document to remove.
+    #
+    # @since 2.0.0.beta.1
+    def remove_child(child)
+      name = child.association_name
+      if child.embedded_one?
+        remove_ivar(name)
+      else
+        relation = send(name)
+        relation.send(:delete_one, child)
       end
     end
 
-    context "when the discriminator key is changed in the child" do
-      let(:set_discriminator_key) do 
-        Guitar.discriminator_key = "hello3"
+    # After children are persisted we can call this to move all their changes
+    # and flag them as persisted in one call.
+    #
+    # @example Reset the children.
+    #   document.reset_persisted_children
+    #
+    # @return [ Array<Document> ] The children.
+    #
+    # @since 2.1.0
+    def reset_persisted_children
+      _children.each do |child|
+        child.move_changes
+        child.new_record = false
       end
-
-      before :each do 
-        begin 
-          set_discriminator_key 
-        rescue 
-        end
-      end
-
-      it "raises an error" do
-        expect do
-          set_discriminator_key
-        end.to raise_error(Mongoid::Errors::InvalidDiscriminatorKeyTarget)
-      end
-
-      it "doesn't change in that class" do
-        expect(Guitar.discriminator_key).to eq("_type")
-      end
-
-      it "doesn't change the global setting" do
-        expect(Mongoid.discriminator_key).to eq("_type")
-      end
-
-      it "doesn't change in the sibling" do
-        expect(Piano.discriminator_key).to eq("_type")
-      end
-
-      it "doesn't change in the parent" do
-        expect(Instrument.discriminator_key).to eq("_type")
-      end
+      _reset_memoized_children!
     end
 
-    context "when discriminator key is called on an instance" do
-
-      let(:guitar) do
-        Guitar.new
-      end
-
-      it "raises an error on setter" do
-        expect do
-          guitar.discriminator_key = "hello3"
-        end.to raise_error(NoMethodError)
-      end
-
-      it "raises an error on getter" do
-        expect do
-          guitar.discriminator_key
-        end.to raise_error(NoMethodError)
-      end
+    # Resets the memoized children on the object. Called internally when an
+    # embedded array changes size.
+    #
+    # @api semiprivate
+    #
+    # @example Reset the memoized children.
+    #   document._reset_memoized_children!
+    #
+    # @return [ nil ] nil.
+    #
+    # @since 5.0.0
+    def _reset_memoized_children!
+      _parent._reset_memoized_children! if _parent
+      @__children = nil
     end
 
-    context ".fields" do 
-      context "when the discriminator key is not changed" do 
-        it "creates a _type field in the parent" do
-          expect(Instrument.fields.keys).to include("_type")
-        end
-  
-        it "creates a _type field in the child: Guitar" do
-          expect(Guitar.fields.keys).to include("_type")
-        end
+    # Return the root document in the object graph. If the current document
+    # is the root object in the graph it will return self.
+    #
+    # @example Get the root document in the hierarchy.
+    #   document._root
+    #
+    # @return [ Document ] The root document in the hierarchy.
+    def _root
+      object = self
+      while (object._parent) do object = object._parent; end
+      object
+    end
 
-        it "creates a _type field in the child: Piano" do
-          expect(Piano.fields.keys).to include("_type")
-        end
+    # Is this document the root document of the hierarchy?
+    #
+    # @example Is the document the root?
+    #   document._root?
+    #
+    # @return [ true, false ] If the document is the root.
+    #
+    # @since 3.1.0
+    def _root?
+      _parent ? false : true
+    end
+
+    module ClassMethods
+
+      # Determines if the document is a subclass of another document.
+      #
+      # @example Check if the document is a subclass.
+      #   Square.hereditary?
+      #
+      # @return [ true, false ] True if hereditary, false if not.
+      def hereditary?
+        !!(Mongoid::Document > superclass)
       end
-  
-      context "when the discriminator key is changed at the base level" do
-        context "after class creation" do
-          before do
-            class GlobalDiscriminiatorParent
-              include Mongoid::Document
-            end
-            
-            class GlobalDiscriminiatorChild < GlobalDiscriminiatorParent
-            end
-            
-            Mongoid.discriminator_key = "test"
-          end
-    
-          after do
-            Mongoid.discriminator_key = "_type"
-          end
-    
-          it "creates a field with the old global value in the parent" do 
-            expect(GlobalDiscriminiatorParent.fields.keys).to include("_type")
-          end
 
-          it "creates a field with the old global value in the child" do 
-            expect(GlobalDiscriminiatorChild.fields.keys).to include("_type")
-          end
+      # When inheriting, we want to copy the fields from the parent class and
+      # set the on the child to start, mimicking the behavior of the old
+      # class_inheritable_accessor that was deprecated in Rails edge.
+      #
+      # @example Inherit from this class.
+      #   Person.inherited(Doctor)
+      #
+      # @param [ Class ] subclass The inheriting class.
+      #
+      # @since 2.0.0.rc.6
+      def inherited(subclass)
+        super
+        @_type = nil
+        subclass.aliased_fields = aliased_fields.dup
+        subclass.localized_fields = localized_fields.dup
+        subclass.fields = fields.dup
+        subclass.pre_processed_defaults = pre_processed_defaults.dup
+        subclass.post_processed_defaults = post_processed_defaults.dup
+        subclass._declared_scopes = Hash.new { |hash,key| self._declared_scopes[key] }
 
-          it "does not have the new global value in the parent" do 
-            expect(GlobalDiscriminiatorParent.fields.keys).to_not include("test")
-          end
-
-          it "does not have the new global value in the child" do 
-            expect(GlobalDiscriminiatorChild.fields.keys).to_not include("test")
-          end
-          
-        end
-
-        context "before class creation" do
-          before do
-            Mongoid.discriminator_key = "test"
-
-            class PreGlobalDiscriminiatorParent
-              include Mongoid::Document
-            end
-            
-            class PreGlobalDiscriminiatorChild < PreGlobalDiscriminiatorParent
-            end
-            
-            Mongoid.discriminator_key = "test"
-          end
-    
-          after do
-            Mongoid.discriminator_key = "_type"
-          end
-
-          it "creates a field with new discriminator key in the parent" do 
-            expect(PreGlobalDiscriminiatorParent.fields.keys).to include("test")
-          end
-
-          it "creates a field with new discriminator key in the child" do 
-            expect(PreGlobalDiscriminiatorChild.fields.keys).to include("test")
-          end
-
-          it "does not have the original discriminator key in the parent" do 
-            expect(PreGlobalDiscriminiatorParent.fields.keys).to_not include("_type")
-          end
-
-          it "does not have the original discriminator key in the child" do 
-            expect(PreGlobalDiscriminiatorChild.fields.keys).to_not include("_type")
-          end
-        end
-      end
-  
-      context "when the discriminator key is changed in the parent" do 
-        context "after child class creation" do
-          before do
-            class LocalDiscriminiatorParent
-              include Mongoid::Document
-            end
-
-            class LocalDiscriminiatorChild < LocalDiscriminiatorParent
-            end
-
-            LocalDiscriminiatorParent.discriminator_key = "test2"
-          end
-    
-          it "creates a new field in the parent" do 
-            expect(LocalDiscriminiatorParent.fields.keys).to include("test2")
-          end
-
-          it "does not remove the original field in the parent" do
-            expect(LocalDiscriminiatorParent.fields.keys).to include("_type")
-          end
-
-          it "still has _type field in the child" do 
-            expect(LocalDiscriminiatorChild.fields.keys).to include("_type")
-          end
-
-          it "has the new field in the child" do 
-            expect(LocalDiscriminiatorChild.fields.keys).to include("test2")
-          end
-        end
-
-        context "before child class creation" do
-          before do
-            class PreLocalDiscriminiatorParent
-              include Mongoid::Document
-              self.discriminator_key = "test2"
-            end
-
-            class PreLocalDiscriminiatorChild < PreLocalDiscriminiatorParent
-            end
-          end
-    
-          it "creates a new field in the parent" do 
-            expect(PreLocalDiscriminiatorParent.fields.keys).to include("test2")
-          end
-
-          it "does not create the _type field in the parent" do 
-            expect(PreLocalDiscriminiatorParent.fields.keys).to_not include("_type")
-          end
-
-          it "creates a new field in the child" do 
-            expect(PreLocalDiscriminiatorChild.fields.keys).to include("test2")
-          end
-        end
-
-        context "when there's no child class" do
-          before do
-            class LocalDiscriminiatorNonParent
-              include Mongoid::Document
-              self.discriminator_key = "test2"
-            end
-          end
-    
-          it "does not create a _type field" do 
-            expect(LocalDiscriminiatorNonParent.fields.keys).to_not include("_type")
-          end
-
-          it "does not create a new field" do 
-            expect(LocalDiscriminiatorNonParent.fields.keys).to_not include("test2")
-          end
+        # We only need the _type field if inheritance is in play, but need to
+        # add to the root class as well for backwards compatibility.
+        unless fields.has_key?(self.discriminator_key)
+          default_proc = lambda { self.class.name }
+          field(self.discriminator_key, default: default_proc, type: String)
         end
       end
     end

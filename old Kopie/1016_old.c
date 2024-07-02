@@ -61,8 +61,6 @@ static void setup_globals(mrb_state *mrb)
     mrb_gv_set(mrb, mrb_intern_lit(mrb, "$H2O_ROOT"), mrb_str_new(mrb, root, strlen(root)));
 
     h2o_mruby_eval_expr(mrb, "$LOAD_PATH << \"#{$H2O_ROOT}/share/h2o/mruby\"");
-    h2o_mruby_assert(mrb);
-
     /* require core modules and include built-in libraries */
     h2o_mruby_eval_expr(mrb, "require \"preloads.rb\"");
     h2o_mruby_assert(mrb);

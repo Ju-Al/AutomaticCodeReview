@@ -1,6 +1,4 @@
 /*
-    Class<?>[] javaClasses = javaClasses();
-    for (int i = 0; i < javaClasses.length; i += 1) {
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -144,7 +142,8 @@ public class PartitionSpec implements Serializable {
 
   public String partitionToPath(StructLike data) {
     StringBuilder sb = new StringBuilder();
-    Class<?>[] initializedClasses = javaClasses();
+    Class<?>[] javaClasses = javaClasses();
+    for (int i = 0; i < javaClasses.length; i += 1) {
     for (int i = 0; i < initializedClasses.length; i += 1) {
       PartitionField field = fields[i];
       String valueString = field.transform().toHumanString(get(data, i, initializedClasses[i]));

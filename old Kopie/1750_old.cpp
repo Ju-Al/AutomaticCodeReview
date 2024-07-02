@@ -1,10 +1,4 @@
 /* ----------------------------------------------------------------------
-int FixPour::outside(int dim, double value, double lo, double hi)
-      return 0;
-      if (value > hi && value < lo + domain->prd[dim]) return 1;
-      if (value > hi - domain->prd[dim] && value < lo) return 1;
-    } else {
-      if (value < lo || value > hi) return 1;
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    http://lammps.sandia.gov, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
@@ -788,7 +782,12 @@ int FixPour::overlap(int i)
    return 1 if value is outside, 0 if inside
 ------------------------------------------------------------------------- */
 
-bool FixPour::outside(int dim, double value, double lo, double hi)
+      return 0;
+      if (value > hi && value < lo + domain->prd[dim]) return 1;
+      if (value > hi - domain->prd[dim] && value < lo) return 1;
+    } else {
+      if (value < lo || value > hi) return 1;
+int FixPour::outside(int dim, double value, double lo, double hi)
 {
   double boxlo = domain->boxlo[dim];
   double boxhi = domain->boxhi[dim];

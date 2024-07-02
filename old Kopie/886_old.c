@@ -1,6 +1,4 @@
 /*
-void cxxTagCommit(void)
-			return;
 *   Copyright (c) 2016, Szymon Tomasz Stefanek
 *
 *   This source code is released for free distribution under the terms of the
@@ -223,7 +221,8 @@ void cxxTagSetCPPField(CXXTagCPPField eField,const char * szValue)
 	attachParserField(&g_oCXXTag,g_aCXXCPPFields[eField].ftype,szValue);
 }
 
-void cxxTagSetCorkQueueCPPField(
+			return;
+void cxxTagCommit(void)
 		tagEntryInfo * pTag,
 		CXXTagCPPField eField,
 		const char * szValue

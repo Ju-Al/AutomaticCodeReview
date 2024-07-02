@@ -1,6 +1,5 @@
 package cmd
 
-		stateRoot, err := badgerState.NewStateRoot(fnb.RootBlock, fnb.RootResult, fnb.RootSeal, fnb.RootBlock.Header.View)
 import (
 	"encoding/json"
 	"fmt"
@@ -489,7 +488,7 @@ func (fnb *FlowNodeBuilder) initState() {
 		fnb.MustNot(err).Msg("could not load root seal")
 
 		// bootstrap the protocol state with the loaded data
-		rootSnapshot, err := inmem.SnapshotFromBootstrapState(fnb.RootBlock, fnb.RootResult, fnb.RootSeal, fnb.RootQC)
+		stateRoot, err := badgerState.NewStateRoot(fnb.RootBlock, fnb.RootResult, fnb.RootSeal, fnb.RootBlock.Header.View)
 		fnb.MustNot(err).Msg("failed to construct state root")
 
 		fnb.State, err = badgerState.Bootstrap(

@@ -595,7 +595,6 @@ int main(int argc, char *const *argv)
                     exit(1);
                 }
             }
-            if(ticket_out) {
                 if(write_array_to_file(ticket_out, session_state, session_state_length) < 0) {
                     fprintf(stderr, "Failed to write session ticket to file: %s\n", ticket_in);
                     exit(1);

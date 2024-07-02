@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2018 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2019 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -51,7 +51,6 @@ except ImportError:
         sys.stderr.flush()
         sys.exit(100)
 check_python_version()
-from qutebrowser.utils import log
 
 import argparse  # pylint: disable=wrong-import-order
 from qutebrowser.misc import earlyinit
@@ -63,7 +62,6 @@ def get_argparser():
                                      description=qutebrowser.__description__)
     parser.add_argument('-B', '--basedir', help="Base directory for all "
                         "storage.")
-    parser.add_argument('-C', '--config', help="Path to config.py")
     parser.add_argument('-V', '--version', help="Show version and quit.",
                         action='store_true')
     parser.add_argument('-s', '--set', help="Set a temporary setting for "
@@ -149,6 +147,7 @@ def logfilter_error(logfilter):
     Args:
         logfilter: A comma separated list of logger names.
     """
+    from qutebrowser.utils import log
     if set(logfilter.lstrip('!').split(',')).issubset(log.LOGGER_NAMES):
         return logfilter
     else:
@@ -166,9 +165,12 @@ def debug_flag_error(flag):
         no-sql-history: Don't store history items.
         no-scroll-filtering: Process all scrolling updates.
         log-requests: Log all network requests.
+        stack: Enable Chromium stack logging.
+        chromium: Enable Chromium logging.
     """
     valid_flags = ['debug-exit', 'pdb-postmortem', 'no-sql-history',
-                   'no-scroll-filtering', 'log-requests', 'lost-focusproxy']
+                   'no-scroll-filtering', 'log-requests', 'lost-focusproxy',
+                   'stack', 'chromium']
 
     if flag in valid_flags:
         return flag

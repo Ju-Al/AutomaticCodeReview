@@ -497,7 +497,6 @@ public class QueueFragment extends Fragment {
 
         txtvEmpty = root.findViewById(android.R.id.empty);
         txtvEmpty.setVisibility(View.GONE);
-        txtvHeadEmpty = root.findViewById(R.id.emptyQueueHeader);
         txtvHeadEmpty.setVisibility(View.GONE);
 
         progLoading = root.findViewById(R.id.progLoading);

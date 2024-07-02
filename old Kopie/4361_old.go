@@ -1,5 +1,4 @@
 package opentelemetry
-
 import (
 	"context"
 	"crypto/tls"

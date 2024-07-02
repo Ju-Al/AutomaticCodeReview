@@ -320,7 +320,7 @@ static inline int set_4byte(struct spi_nor *nor, const struct flash_info *info,
  *
  * Return:	Negative if error occured.
  */
-static int read_ear(struct spi_nor *nor, const struct flash_info *info)
+static int read_ear(struct spi_nor *nor, struct flash_info *info)
 {
 	int ret;
 	u8 val;

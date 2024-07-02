@@ -1,33 +1,4 @@
 # coding: utf-8
-class LGBMModel(LGBMModelBase):
-                 min_split_gain=0, min_child_weight=5, min_child_samples=10,
-                 subsample=1, subsample_freq=1, colsample_bytree=1,
-                 reg_alpha=0, reg_lambda=0, random_state=0,
-        """
-        Implementation of the Scikit-Learn API for LightGBM.
-        boosting_type : string
-            gbdt, traditional Gradient Boosting Decision Tree.
-            dart, Dropouts meet Multiple Additive Regression Trees.
-        num_leaves : int
-        max_depth : int
-        learning_rate : float
-        n_estimators : int
-        max_bin : int
-        subsample_for_bin : int
-        objective : string or callable
-            default: binary for LGBMClassifier, lambdarank for LGBMRanker.
-        min_split_gain : float
-        min_child_weight : int
-        min_child_samples : int
-        subsample : float
-        subsample_freq : int
-            frequence of subsample, <=0 means no enable.
-        colsample_bytree : float
-        reg_alpha : float
-        reg_lambda : float
-        random_state : int
-        n_jobs : int
-        silent : boolean
 # pylint: disable = invalid-name, W0105, C0111, C0301
 """Scikit-Learn Wrapper interface for LightGBM."""
 from __future__ import absolute_import
@@ -158,7 +129,35 @@ def _eval_function_wrapper(func):
     return inner
 
 
-class LGBMModel(_LGBMModelBase):
+                 min_split_gain=0, min_child_weight=5, min_child_samples=10,
+                 subsample=1, subsample_freq=1, colsample_bytree=1,
+                 reg_alpha=0, reg_lambda=0, random_state=0,
+        """
+        Implementation of the Scikit-Learn API for LightGBM.
+        boosting_type : string
+            gbdt, traditional Gradient Boosting Decision Tree.
+            dart, Dropouts meet Multiple Additive Regression Trees.
+        num_leaves : int
+        max_depth : int
+        learning_rate : float
+        n_estimators : int
+        max_bin : int
+        subsample_for_bin : int
+        objective : string or callable
+            default: binary for LGBMClassifier, lambdarank for LGBMRanker.
+        min_split_gain : float
+        min_child_weight : int
+        min_child_samples : int
+        subsample : float
+        subsample_freq : int
+            frequence of subsample, <=0 means no enable.
+        colsample_bytree : float
+        reg_alpha : float
+        reg_lambda : float
+        random_state : int
+        n_jobs : int
+        silent : boolean
+class LGBMModel(LGBMModelBase):
     """Implementation of the scikit-learn API for LightGBM."""
 
     def __init__(self, boosting_type="gbdt", num_leaves=31, max_depth=-1,

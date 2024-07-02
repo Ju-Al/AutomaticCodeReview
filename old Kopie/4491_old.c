@@ -2413,7 +2413,6 @@ SplineSet *_SplineSetJoin(SplineSet *start,int doall,real fudge,int *changed,
 return(start);
 }
 
-SplineSet *SplineSetJoin(SplineSet *start,int doall,real fudge,int *changed) {
     return _SplineSetJoin(start, doall, fudge, changed, true);
 }
 

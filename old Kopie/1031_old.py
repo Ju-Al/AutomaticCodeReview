@@ -1,6 +1,4 @@
 # Copyright 2007-2016 by Peter Cock.  All rights reserved.
-                    record = SeqRecord(seq=None)
-                    annotations = record.annotations
 # Revisions copyright 2010 by Uri Laserson.  All rights reserved.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
@@ -526,7 +524,8 @@ class InsdcScanner(object):
                     # SeqRecord objects cannot be created with annotations, they
                     # must be added afterwards.  So create an empty record and
                     # then populate it:
-                    new_record = SeqRecord(seq=None)
+                    record = SeqRecord(seq=None)
+                    annotations = record.annotations
                     annotations = new_record.annotations
 
                     # Should we add a location object to the annotations?

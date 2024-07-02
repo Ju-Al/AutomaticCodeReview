@@ -1,5 +1,4 @@
 <?php
-        return new Metadata($this->getName(), $this->getName().'.description', false, 'SonataMediaBundle', ['class' => 'fa fa-youtube']);
 
 declare(strict_types=1);
 
@@ -51,7 +50,7 @@ class YouTubeProvider extends BaseVideoProvider
      */
     public function getProviderMetadata()
     {
-        return new Metadata($this->getName(), $this->getName().'.description', null, 'SonataMediaBundle', ['class' => 'fa fa-youtube']);
+        return new Metadata($this->getName(), $this->getName().'.description', false, 'SonataMediaBundle', ['class' => 'fa fa-youtube']);
     }
 
     /**

@@ -1,5 +1,4 @@
 import pytest
-
 from plenum.common.exceptions import RequestNackedException
 from plenum.test.pool_transactions.helper import sdk_add_new_nym
 

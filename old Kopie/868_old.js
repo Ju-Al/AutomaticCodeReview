@@ -1,4 +1,26 @@
 /**
+* Copyright (c) Microsoft.  All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
+var crypto = require('crypto');
+var fs = require('fs');
+var util = require('util');
+
+var interaction = require('../util/interaction');
+var utils = require('../util/utils');
+var VNetUtil = require('./network/vnetUtil');
+
     .description('Commands to manage your Networks');
     .description('Export the current Azure Network configuration to a file')
     .option('-s, --subscription <id>', 'use the subscription id')
@@ -40,30 +62,7 @@
     .option('-d, --dns-server-id <dns-id>', 'The name identifier of the DNS server')
     .option('-s, --subscription <id>', 'use the subscription id')
     var progress = cli.progress('Fetching Network Configuration');
-* Copyright (c) Microsoft.  All rights reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-
-var crypto = require('crypto');
-var fs = require('fs');
-var util = require('util');
-
-var interaction = require('../util/interaction');
-var utils = require('../util/utils');
-var VNetUtil = require('./network/vnetUtil');
-
 exports.init = function(cli) {
-  var $ = cli.getLocaleString;
 
   var network = cli.category('network')
     .description($('Commands to manage your Networks'));

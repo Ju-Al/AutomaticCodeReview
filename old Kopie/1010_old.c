@@ -1,5 +1,4 @@
 /*
-*   Copyright (c) 2016, Aman Gupta
 *
 *   This source code is released for free distribution under the terms of the
 *   GNU General Public License version 2 or (at your option) any later version.

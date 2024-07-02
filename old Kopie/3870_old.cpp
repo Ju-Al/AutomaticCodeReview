@@ -1,9 +1,4 @@
 /***************************************************************************
-    if ( spells.empty() || !hero.HaveSpellBook() )
-    SpellStorage new_spells;
-    new_spells.reserve( 10 );
-    for ( SpellStorage::const_iterator it = spells.begin(); it != spells.end(); ++it ) {
-        const Spell & sp = *it;
  *   Copyright (C) 2010 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -269,7 +264,11 @@ void Battle::PickupArtifactsAction( HeroBase & hero1, HeroBase & hero2 )
 
 void Battle::EagleEyeSkillAction( HeroBase & hero, const SpellStorage & spells, bool local )
 {
-    if ( !hero.HaveSpellBook() )
+    SpellStorage new_spells;
+    new_spells.reserve( 10 );
+    for ( SpellStorage::const_iterator it = spells.begin(); it != spells.end(); ++it ) {
+        const Spell & sp = *it;
+    if ( spells.empty() || !hero.HaveSpellBook() )
         return;
 
     std::vector<Spell> new_spells;

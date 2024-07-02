@@ -1,6 +1,4 @@
 /**
-  void QueryService::FindAsync(iroha::protocol::Query const& request,
-                               iroha::protocol::QueryResponse& response) {
  * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -42,7 +40,8 @@ namespace torii {
     });
   }
 
-  void QueryService::FindAsync(iroha::protocol::Query const &request,
+  void QueryService::FindAsync(iroha::protocol::Query const& request,
+                               iroha::protocol::QueryResponse& response) {
                                iroha::protocol::QueryResponse &response) {
     // Get iroha model query
     auto query = pb_query_factory_->deserialize(request);

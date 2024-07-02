@@ -1,5 +1,4 @@
 /**
-  auto serial_addPeer = factory.deserializeAddPeer(proto_add_peer);
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -75,7 +74,7 @@ TEST(CommandTest, add_peer) {
   auto factory = iroha::model::converters::PbCommandFactory();
 
   auto proto_add_peer = factory.serializeAddPeer(orig_addPeer);
-  const auto& serial_addPeer = factory.deserializeAddPeer(proto_add_peer);
+  auto serial_addPeer = factory.deserializeAddPeer(proto_add_peer);
 
   ASSERT_EQ(orig_addPeer, serial_addPeer);
   command_converter_test(orig_addPeer);

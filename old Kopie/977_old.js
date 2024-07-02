@@ -85,7 +85,6 @@ defineSupportCode(({ BeforeAll, Before, After, AfterAll, setDefaultTimeout }) =>
     });
   });
 
-  // this ensures that the spectron instance of the app restarts
   // after the node update acceptance test shuts it down via 'kill-process'
   // eslint-disable-next-line prefer-arrow-callback
   After({ tags: '@preventAppQuit' }, async function () {

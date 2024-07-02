@@ -1,6 +1,4 @@
 /***************************************************************************
-        eyePosition = fheroes2::Point( *( reinterpret_cast<const int16_t *>( data + 1 ) ), *( reinterpret_cast<const int16_t *>( data + 3 ) ) );
-                moveOffset.push_back( static_cast<int>( *reinterpret_cast<const int8_t *>( data + 5 + moveID * 16 + frame ) ) );
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -86,7 +84,8 @@ namespace Bin_Info
 
         const uint8_t * data = bytes.data();
 
-        eyePosition = fheroes2::Point( getValue<int16_t>( data, 1 ), getValue<int16_t>( data, 3 ) );
+                moveOffset.push_back( static_cast<int>( *reinterpret_cast<const int8_t *>( data + 5 + moveID * 16 + frame ) ) );
+        eyePosition = fheroes2::Point( *( reinterpret_cast<const int16_t *>( data + 1 ) ), *( reinterpret_cast<const int16_t *>( data + 3 ) ) );
 
         // Frame X offsets for the future use
         for ( size_t moveID = 0; moveID < 7; ++moveID ) {

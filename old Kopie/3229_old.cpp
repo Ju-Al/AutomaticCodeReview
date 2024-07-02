@@ -193,7 +193,6 @@ void WndSets::actRestore()
     close();
 }
 
-void WndSets::actResetSort()
 {
     view->header()->setSortIndicator(-1, Qt::DescendingOrder);
 }

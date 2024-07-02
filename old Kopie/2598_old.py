@@ -1,5 +1,4 @@
 # Copyright 2009-2013 by Peter Cock.  All rights reserved.
-        self.assertEqual(h2.getvalue(), """@1117_10_107_F3
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -423,7 +422,7 @@ class TestQual(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", BiopythonParserWarning)
             self.assertEqual(4, SeqIO.convert(h, "qual", h2, "fastq"))
-        self.assertEqual(
+        self.assertEqual(h2.getvalue(), """@1117_10_107_F3
             h2.getvalue(),
             """@1117_10_107_F3
 ??????????????????????????????????????????????????

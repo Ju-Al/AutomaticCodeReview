@@ -1,5 +1,4 @@
 // Copyright 2014-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	iid, err := ec2.GetInstanceIdentityDocument()
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
 // not use this file except in compliance with the License. A copy of the
@@ -226,9 +225,8 @@ func EnvironmentConfig() Config {
 		UpdatesEnabled:    updatesEnabled,
 		UpdateDownloadDir: updateDownloadDir,
 	}
+	iid, err := ec2.GetInstanceIdentityDocument()
 }
-
-var ec2MetadataClient = ec2.DefaultClient
 
 func EC2MetadataConfig() Config {
 	iid, err := ec2MetadataClient.InstanceIdentityDocument()

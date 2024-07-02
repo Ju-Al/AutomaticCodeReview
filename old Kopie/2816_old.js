@@ -46,7 +46,6 @@ class EncryptionConfigScreenComponent extends BaseScreenComponent {
 	componentDidMount() {
 		this.isMounted_ = true;
 		shared.componentDidMount(this);
-
 		const masterKeys = this.props.masterKeys;
 
 		for (let i = 0; i < masterKeys.length; i++) {

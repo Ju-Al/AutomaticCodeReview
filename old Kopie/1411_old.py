@@ -197,7 +197,6 @@ def get_votes_by_block_id_and_voter(connection, block_id, node_pubkey):
 
 
 @singledispatch
-def get_votes_for_blocks_by_voter(connection, block_ids, pubkey):
     """Return votes for many block_ids
 
     Args:

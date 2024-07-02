@@ -26,7 +26,6 @@ import (
 func (p *AWSProvider) EventSend(e *structs.Event, err error) error {
 	e.Timestamp = time.Now().UTC()
 
-	if e.Data["timestamp"] != "" {
 		t, err := time.Parse(time.RFC3339, e.Data["timestamp"])
 		if err != nil {
 			e.Timestamp = t

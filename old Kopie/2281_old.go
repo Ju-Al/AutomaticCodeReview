@@ -1,6 +1,5 @@
 // +build windows
 
-	localCredSpecFilePath := fmt.Sprintf("%s/s3_%s_%s.json", cs.credentialSpecResourceLocation, cs.taskARN, resourceBase)
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -316,7 +315,6 @@ func (cs *CredentialSpecResource) Create() error {
 		if strings.HasPrefix(credSpecValue, "file://") {
 			err = cs.handleCredentialspecFile(credSpecStr)
 			if err != nil {
-				seelog.Errorf("Failed to handle the credentialspec file,Error:%v", err)
 				cs.setTerminalReason(err.Error())
 				return err
 			}

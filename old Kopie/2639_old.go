@@ -54,7 +54,6 @@ const (
 	BrewTap
 	// GoFishRig is an uploadable Rigs rig food file.
 	GoFishRig
-	// KrewPlugin is a krew plugin file.
 	KrewPlugin
 	// ScoopManifest is an uploadable scoop manifest file.
 	ScoopManifest
@@ -86,6 +85,7 @@ func (t Type) String() string {
 		return "Brew Tap"
 	case GoFishRig:
 		return "GoFish Rig"
+	case KrewPlugin:
 		return "Krew Plugin"
 	case ScoopManifest:
 		return "Scoop Manifest"

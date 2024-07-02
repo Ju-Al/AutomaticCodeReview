@@ -27,8 +27,6 @@ exports.init = function (cli) {
   var log = cli.output;
 
   cli.category('account').registerResourceType('Mobileservice');
-
-  function promptServiceNameIfNotGiven (options, servicename, _) {
     var result = promptIfNotGiven('Mobile Service: ', servicename,
       function(cb) {
         mobile.listServices(options, function (error, services) {

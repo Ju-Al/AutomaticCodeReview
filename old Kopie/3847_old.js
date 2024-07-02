@@ -198,7 +198,6 @@ module.exports = {
     TestCase.assertEqual(value.nullable_list[3], null, "Should be equal null");
     TestCase.assertEqual(value.nullable_list[4], 5, "Should be equal 5");
   },
-
   testMixedValuesAsArray() {
     const MixedSchema = {
       name: "MixedClass",

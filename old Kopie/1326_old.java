@@ -1,5 +1,4 @@
 /*
-        sslContextFactory.setEnableOCSP(enableOCSP);
  * Copyright 2016 Yahoo Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -431,7 +430,7 @@ public class AthenzJettyContainer {
             sslContextFactory.setWantClientAuth(true);
         }
 
-        if (enableOCSP) {
+        sslContextFactory.setEnableOCSP(enableOCSP);
             // https://stackoverflow.com/questions/49904935/jetty-9-enable-ocsp-stapling-for-domain-validated-certificate
             Security.setProperty("ocsp.enable", "true");
             System.setProperty("jdk.tls.server.enableStatusRequestExtension", "true");

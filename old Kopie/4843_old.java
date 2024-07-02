@@ -1,7 +1,5 @@
 package de.danoeh.antennapod.core.service.playback;
 
-    @Override
-    public void setDataSource(String s) throws IllegalArgumentException, IllegalStateException {
 import android.content.Context;
 import android.net.Uri;
 import android.util.Log;
@@ -189,7 +187,8 @@ public class ExoPlayerWrapper implements IPlayer {
         exoPlayer.setAudioAttributes(b.build());
     }
 
-    public void setDataSource(String s, String user, String password)
+    @Override
+    public void setDataSource(String s) throws IllegalArgumentException, IllegalStateException {
             throws IllegalArgumentException, IllegalStateException {
         Log.d(TAG, "setDataSource: " + s);
         DefaultHttpDataSourceFactory httpDataSourceFactory = new DefaultHttpDataSourceFactory(

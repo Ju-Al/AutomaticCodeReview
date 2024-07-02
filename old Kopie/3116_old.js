@@ -1,5 +1,4 @@
 /**
-  resource.command('show [resource-group] [name] [resource-type] [api-version]')
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -246,7 +245,7 @@ exports.init = function (cli) {
       }
     });
 
-  resource.command('show [resource-group] [name] [resource-type] [api-version] [resource-id]')
+  resource.command('show [resource-group] [name] [resource-type] [api-version]')
     .description($('Gets one resource within a resource group or subscription'))
     .usage('[options] <resource-group> <name> <resource-type> <api-version> <resource-id>')
     .option('-g --resource-group <resource-group>', $('the resource group name'))

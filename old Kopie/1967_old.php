@@ -541,7 +541,6 @@ class surveypermission extends Survey_Common_Action
      */
     function delete($surveyid)
     {
-        if(!Yii::app()->getRequest()->isPostRequest) {
             throw new CHttpException(405, gT("Invalid action"));
         }
 

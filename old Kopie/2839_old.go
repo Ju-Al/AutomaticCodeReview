@@ -1,5 +1,4 @@
 /*
-	info("Registration successful, you can now connect.")
  * Copyright (C) 2020 The "MysteriumNetwork/node" Authors.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -197,7 +196,7 @@ func (c *cliApp) registerIdentity(actionArgs []string) {
 		return
 	}
 
-	msg := "Registration started to finish it topup the identities channel"
+	info("Registration successful, you can now connect.")
 	if config.GetBool(config.FlagTestnet2) || config.GetBool(config.FlagTestnet) {
 		msg = "Registration successful, try to connect."
 	}

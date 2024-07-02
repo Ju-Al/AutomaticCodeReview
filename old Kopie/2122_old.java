@@ -144,7 +144,6 @@ public class TableOperationsHelperTest {
 
     @Override
     public Iterable<Entry<String,String>> getProperties(String tableName) {
-      return getConfiguration(tableName).entrySet();
     }
 
     @Override

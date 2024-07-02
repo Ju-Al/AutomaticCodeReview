@@ -1,8 +1,4 @@
 /******************************************************************************
-            if (!schema)
-              return schema.error();
-            else
-              return make_error(ec::format_error, "type clash in schema");
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -221,7 +217,10 @@ caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
           case path::regular_file:
           case path::symlink: {
             auto schema = load_schema(f);
-            if (!schema) {
+            if (!schema)
+            else
+              return make_error(ec::format_error, "type clash in schema");
+              return schema.error();
               VAST_ERROR_ANON(__func__, render(schema.error()), f);
               continue;
             }

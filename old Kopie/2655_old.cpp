@@ -129,7 +129,6 @@ static void usage() {
                  "by '-' to disable them"
               << std::endl;
     std::cerr << std::endl;
-    std::cerr << "list-crs-filter is a comma separated combination of: "
                  "auth_name=XXX,allow_deprecated,geodetic,geocentric,"
               << std::endl;
     std::cerr << "geographic,geographic_2d,geographic_3d,vertical,"

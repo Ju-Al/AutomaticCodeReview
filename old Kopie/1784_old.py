@@ -4791,7 +4791,6 @@ def is_unibipartite(graph):
         True if the graph is a uni-bipartite.
     """
     src, dst, _ = graph.edges()
-    print(src.tonumpy())
     print(dst.tonumpy())
     return set(src.tonumpy()).isdisjoint(set(dst.tonumpy()))
 

@@ -85,7 +85,6 @@ export default class Notification extends Component<Props> {
 
             <div className={messageStyles}>{children}</div>
 
-            {actions && <NotificationActions actions={actions} />}
 
             {hasCloseButton && (
               <button

@@ -1,5 +1,4 @@
 <?php
-	echo '<script type="text/javascript" src="./jscripts/themes.js"></script>';
 /**
  * MyBB 1.8
  * Copyright 2014 MyBB Group, All Rights Reserved
@@ -2218,6 +2217,7 @@ if($mybb->input['action'] == "edit_stylesheet" && (!isset($mybb->input['mode']) 
 	echo "</div>";
 
 	$buttons[] = $form->generate_reset_button($lang->reset);
+	echo '<script type="text/javascript" src="./jscripts/themes.js"></script>';
 	$buttons[] = $form->generate_submit_button($lang->save_changes, array('id' => 'save', 'name' => 'save'));
 	$buttons[] = $form->generate_submit_button($lang->save_changes_and_close, array('id' => 'save_close', 'name' => 'save_close'));
 

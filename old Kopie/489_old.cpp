@@ -1,5 +1,5 @@
 #include <AMReX_MLMG.H>
-    if (bottom_solver == BottomSolver::Default) {#include <AMReX_MultiFabUtil.H>
+#include <AMReX_MultiFabUtil.H>
 #include <AMReX_VisMF.H>
 #include <AMReX_MLCGSolver.H>
 #include <AMReX_BC_TYPES.H>
@@ -60,7 +60,7 @@ MLMG::solve (const Vector<MultiFab*>& a_sol, const Vector<MultiFab const*>& a_rh
         checkPoint(a_sol, a_rhs, a_tol_rel, a_tol_abs, checkpoint_file);
     }
 
-    if (bottom_solver == BottomSolver::hypre) {
+    if (bottom_solver == BottomSolver::Default) {    if (bottom_solver == BottomSolver::hypre) {
         int mo = linop.getMaxOrder();
         linop.setMaxOrder(std::min(3,mo));  // maxorder = 4 not supported
     }

@@ -1,5 +1,4 @@
 // @flow
-import React, { Component } from 'react';
 import { defineMessages, intlShape, FormattedMessage } from 'react-intl';
 import SVGInline from 'react-svg-inline';
 import { Stepper } from 'react-polymorph/lib/components/Stepper';

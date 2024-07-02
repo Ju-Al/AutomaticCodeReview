@@ -1,5 +1,4 @@
 from scipy.sparse.csgraph import shortest_path
-import numpy as np
 import torch
 import argparse
 from ogb.linkproppred import DglLinkPropPredDataset, Evaluator

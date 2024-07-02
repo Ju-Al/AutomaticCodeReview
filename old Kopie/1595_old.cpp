@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-                auto X_BF = mppo->getParentFrame().findTransformInBaseFrame();
  *                         OpenSim:  GeometryPath.cpp                         *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -351,7 +350,7 @@ void GeometryPath::addInEquivalentForces(const SimTK::State& s,
             // add in the tension point forces to body forces
             if (mppo) {// moving path point location is a function of the state
                 // transform of the frame of the point to the base mobilized body
-                auto X_BF = mppo->getBody().findTransformInBaseFrame();
+                auto X_BF = mppo->getParentFrame().findTransformInBaseFrame();
                 bo->applyForceToBodyPoint(s, X_BF*mppo->getLocation(s), force,
                     bodyForces);
             }

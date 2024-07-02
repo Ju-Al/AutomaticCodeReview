@@ -1076,7 +1076,6 @@ Blockly.WorkspaceSvg.prototype.deleteVariableById = function(id) {
  * @package
  */
 Blockly.WorkspaceSvg.prototype.createVariable = function(name, opt_type, opt_id) {
-  var variableInMap = (this.getVariable(name) != null);
   var newVar = Blockly.WorkspaceSvg.superClass_.createVariable.call(this, name,
     opt_type, opt_id);
   // For performance reaons, only refresh the the toolbox for new variables.

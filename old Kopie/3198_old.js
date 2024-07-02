@@ -1,9 +1,5 @@
 import { gql } from '@apollo/client';
-// We disable linting for local fields because there is no way to add them to
-// the fetched schema.
-// https://github.com/apollographql/eslint-plugin-graphql/issues/99
-/* eslint-disable graphql/template-strings */
-        cart(cart_id: $cartId) @client {import { PriceSummaryFragment } from '@magento/peregrine/lib/talons/CartPage/PriceSummary/priceSummaryFragments.gql';
+import { PriceSummaryFragment } from '@magento/peregrine/lib/talons/CartPage/PriceSummary/priceSummaryFragments.gql';
 
 export const AvailablePaymentMethodsFragment = gql`
     fragment AvailablePaymentMethodsFragment on Cart {
@@ -41,7 +37,10 @@ export const GET_PAYMENT_INFORMATION = gql`
     }
     ${AvailablePaymentMethodsFragment}
 `;
-
+// We disable linting for local fields because there is no way to add them to
+// the fetched schema.
+// https://github.com/apollographql/eslint-plugin-graphql/issues/99
+        cart(cart_id: $cartId) @client {/* eslint-disable graphql/template-strings */
 export const GET_PAYMENT_NONCE = gql`
     query getPaymentNonce($cartId: String!) {
         cart(cart_id: $cartId) {

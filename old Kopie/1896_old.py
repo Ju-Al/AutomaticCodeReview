@@ -1,5 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-        if not any([ip_in_range(ip_addr, ips) for ips in ips_list]):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -862,7 +861,7 @@ def ips_in_list(ips, ips_list):
     for ip_addr in ips:
         if not ips_list:
             return False
-        if not any([ip_in_range(ip_addr, addresses) for addresses in ips_list]):
+        if not any([ip_in_range(ip_addr, ips) for ips in ips_list]):
             return False
     return True
 

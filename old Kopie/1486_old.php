@@ -1,10 +1,4 @@
 <?php
-        $raw = $connector->search($params);
-        $result = json_decode($raw);
-        $ids = [];
-        $nextOffset = $result->nextCursorMark;
-        foreach ($result->response->docs ?? [] as $doc) {
-            $ids[] = $doc->$key;
 /**
  * VuFind Sitemap
  *
@@ -376,7 +370,12 @@ class Generator
                 'cursorMark' => $cursorMark
             ]
         );
-        $results = $this->searchService->search(
+        $raw = $connector->search($params);
+        $result = json_decode($raw);
+        $ids = [];
+        $nextOffset = $result->nextCursorMark;
+        foreach ($result->response->docs ?? [] as $doc) {
+            $ids[] = $doc->$key;
             $backend->getIdentifier(),
             new Query('*:*'),
             0,

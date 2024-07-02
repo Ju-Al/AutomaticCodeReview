@@ -59,7 +59,6 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool) *mockLedgerForTracker
 	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory}
 }
 
-// Fork creates another database which has the same content as the current one. Works only for non-memory databases.
 func (ml *mockLedgerForTracker) Fork(t testing.TB) *mockLedgerForTracker {
 	if ml.inMemory {
 		return nil

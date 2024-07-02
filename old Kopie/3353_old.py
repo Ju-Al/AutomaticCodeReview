@@ -348,7 +348,6 @@ def _connected_chordal_graph_cliques(G):
         cliques.add(frozenset(clique_wanna_be))
         return cliques
 
-
 @not_implemented_for('directed')
 def complete_to_chordal_graph(G):
     """Complete to chordal graph

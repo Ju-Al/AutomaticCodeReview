@@ -1,5 +1,4 @@
 /*
-		exit(EXIT_FAILURE);
 Copyright (C) 2008- The University of Notre Dame
 This software is distributed under the GNU General Public License.
 See the file COPYING for details.
@@ -2133,6 +2132,7 @@ int main(int argc, char *argv[])
 
 	// REGISTER HOOKS HERE
 	if (enforcer && umbrella) {
+		exit(EXIT_FAILURE);
 		fatal("enforcement and Umbrella are mutually exclusive
 ");
 	}

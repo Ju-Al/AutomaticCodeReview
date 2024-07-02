@@ -1,7 +1,4 @@
 package ddevapp
-		output.UserOut.Errorf("No directory could be found at %s. Please enter a valid docroot\n", fullPath)
-		app.Docroot = ""
-		return app.docrootPrompt()
 
 import (
 	"bytes"
@@ -510,7 +507,9 @@ func (app *DdevApp) docrootPrompt() error {
 	// Ensure the docroot exists. If it doesn't, prompt the user to verify they entered it correctly.
 	fullPath := filepath.Join(app.AppRoot, app.Docroot)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		util.Warning("Warning: the provided docroot at %s does not currently exist.", fullPath)
+		output.UserOut.Errorf("No directory could be found at %s. Please enter a valid docroot\n", fullPath)
+		app.Docroot = ""
+		return app.docrootPrompt()
 
 		// Ask the user for permission to create the docroot
 		for {

@@ -1,75 +1,101 @@
+import React, { Fragment, useMemo } from 'react';
+import { array, func, object, oneOf, oneOfType, string } from 'prop-types';
 
-let data;
+import iterable from '../validators/iterable';
+import Item from './item';
+import { useListState } from './useListState';
 
-function getConfig() {
-async function getConfig() {
-    if (data) return Promise.resolve(data);
-    return fetch('config.json?nocache=' + new Date().getUTCMilliseconds()).then(response => {
-        data = response.json();
-    try {
-        const response = await fetch('config.json', {
-            cache: 'no-cache'
+ * The **Item** is a container holding all the items
+ *
+ * @typedef Items
+ * @kind functional component
+ *
+ * @param {props} props
+ *
+ * @returns{React.Element} A React component container for all the items in list.
+ */
+const Items = props => {
+    const {
+        getItemKey,
+        initialSelection,
+        items,
+        onSelectionChange,
+        renderItem,
+        selectionModel
+    } = props;
+
+    const [state, api] = useListState({
+        getItemKey,
+        initialSelection,
+        onSelectionChange,
+        selectionModel
+    });
+    const { cursor, hasFocus, selectedKeys } = state;
+    const { removeFocus, setFocus, updateSelectedKeys } = api;
+
+    const children = useMemo(() => {
+        return Array.from(items, (item, index) => {
+            const key = getItemKey(item, index);
+
+            return (
+                <Item
+                    hasFocus={hasFocus && cursor === key}
+                    isSelected={selectedKeys.has(key)}
+                    item={item}
+                    itemIndex={index}
+                    key={key}
+                    onBlur={removeFocus}
+                    render={renderItem}
+                    setFocus={setFocus}
+                    uniqueId={key}
+                    updateSelectedKeys={updateSelectedKeys}
+                />
+            );
         });
+    }, [
+        cursor,
+        getItemKey,
+        hasFocus,
+        items,
+        removeFocus,
+        renderItem,
+        selectedKeys,
+        setFocus,
+        updateSelectedKeys
+    ]);
 
-        if (!response.ok) {
-            throw new Error('network response was not ok');
-        }
+    return <Fragment>{children}</Fragment>;
+};
 
-        data = await response.json();
+/**
+ * props for {@link Items}
+ *
+ * @typedef props
+ *
+ * @property {func} getItemKey item key value getter
+ * @property {array | object} initialSelection A single or list of objects that should start off selected
+ * @property {iterable} items An iterable that yields `[key, item]` pairs such as an ES2015 Map
+ * @property {func} onSelectionChange A callback that fires when the selection state changes
+ * @property {func | string} renderItem A render prop for the list item elements. A tagname string, such as `"div"`, is also valid
+ * @property {checkbox | radio} selectionModel A string corresponding to a selection model
+ */
+Items.propTypes = {
+    getItemKey: func.isRequired,
+    initialSelection: oneOfType([array, object]),
+    items: iterable.isRequired,
+    onSelectionChange: func,
+    renderItem: oneOfType([func, string]),
+    selectionModel: oneOf(['checkbox', 'radio'])
+};
 
-        return data;
-    }).catch(error => {
-        console.warn('web config file is missing so the template will be used');
-    } catch (error) {
-        console.warn('failed to fetch the web config file:', error);
-        return getDefaultConfig();
-    });
-    }
-}
+/**
+ * default props for {@link Items}
+ *
+ * @typedef @defaultProps
+ */
+Items.defaultProps = {
+    getItemKey: ({ id }) => id,
+    selectionModel: 'radio'
+};
 
-function getDefaultConfig() {
-    return fetch('config.template.json').then(function (response) {
-async function getDefaultConfig() {
-    try {
-        const response = await fetch('config.template.json', {
-            cache: 'no-cache'
-        });
-
-        if (!response.ok) {
-            throw new Error('network response was not ok');
-        }
-
-        data = response.json();
-        return data;
-    } catch (error) {
-        console.error('failed to fetch the default web config file:', error);
-    }
-}
-
-export function getMultiServer() {
-    return getConfig().then(config => {
-        return config.multiserver;
-    }).catch(error => {
-        console.log('cannot get web config:', error);
-        return false;
-    });
-}
-
-export function getThemes() {
-    return getConfig().then(config => {
-        console.warn(config.themes);
-        return config.themes;
-    }).catch(error => {
-        console.log('cannot get web config:', error);
-        return [];
-    });
-}
-
-export function getPlugins() {
-    return getConfig().then(config => {
-        return config.plugins;
-    }).catch(error => {
-        console.log('cannot get web config:', error);
-        return [];
-    });
-}
+export default Items;

@@ -647,7 +647,6 @@ class App
      */
     protected function isEmptyResponse(ResponseInterface $response)
     {
-        $request = $this->container->get('request');
         if ($request->getMethod() === 'HEAD') {
             return true;
         }

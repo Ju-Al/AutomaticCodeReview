@@ -1,7 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-            ok = self._parse_line(line)
-            if not ok:
 # Copyright 2014-2019 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -287,7 +285,8 @@ class HostBlocker:
 
         for line in f:
             line_count += 1
-            parsed_hosts = self._parse_line(line)
+            ok = self._parse_line(line)
+            if not ok:
             if 'error' in parsed_hosts:
                 error_count += 1
 

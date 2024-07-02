@@ -1,23 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////////
-/** Dump the local network matrices for debugging.
- *  Dump only the local matrices because not every rank will
- *  necessarily have bad data, and the check is purely local.
- */
-void dump_network(model *m) {
-  const auto& c = dynamic_cast<sgd_execution_context&>(m->get_execution_context());
-  for (const auto* l : m->get_layers()) {
-    const auto* dtl = dynamic_cast<const data_type_layer<DataType>*>(l);
-      "-",  l->get_name(), "-");
-    for (int i = 0; i < l->get_num_children(); ++i) {
-      El::Write(dtl->get_local_activations(i),
-    for (int i = 0; i < l->get_num_parents(); ++i) {
-      El::Write(dtl->get_local_error_signals(i),
-  for (auto* w : m->get_weights()) {
-    auto & real_w = dynamic_cast<data_type_weights<DataType>&>(*w);
-      "-", w->get_name(), "-");
-    El::Write(real_w.get_values().LockedMatrix(),
-    auto* opt = real_w.get_optimizer();
-}
 // Copyright (c) 2014-2019, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory.
 // Written by the LBANN Research Team (B. Van Essen, et al.) listed in
@@ -100,7 +81,25 @@ bool has_inf(
   return false;
 }
 
-struct DefaultErrorReporter
+/** Dump the local network matrices for debugging.
+ *  Dump only the local matrices because not every rank will
+ *  necessarily have bad data, and the check is purely local.
+ */
+void dump_network(model *m) {
+  const auto& c = dynamic_cast<sgd_execution_context&>(m->get_execution_context());
+  for (const auto* l : m->get_layers()) {
+      "-",  l->get_name(), "-");
+    for (int i = 0; i < l->get_num_children(); ++i) {
+      El::Write(dtl->get_local_activations(i),
+    for (int i = 0; i < l->get_num_parents(); ++i) {
+      El::Write(dtl->get_local_error_signals(i),
+  for (auto* w : m->get_weights()) {
+    auto & real_w = dynamic_cast<data_type_weights<DataType>&>(*w);
+      "-", w->get_name(), "-");
+    El::Write(real_w.get_values().LockedMatrix(),
+    auto* opt = real_w.get_optimizer();
+}
+    const auto* dtl = dynamic_cast<const data_type_layer<DataType>*>(l);
 {
   template <typename... Ts>
   void DispatchError(Ts&&...)

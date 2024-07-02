@@ -178,7 +178,6 @@ namespace NLog.LayoutRenderers
             private set;
         }
 
-        /// <summary>
         /// Registers a custom exception renderer type
         /// </summary>
         /// <typeparam name="T">Type of the exception</typeparam>

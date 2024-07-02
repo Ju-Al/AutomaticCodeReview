@@ -1,7 +1,4 @@
 /*
-        MethodSpec.Builder builder = MethodSpec.constructorBuilder()
-                                               .addModifiers(PUBLIC)
-                                               .addAnnotation(SdkInternalApi.class);
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -147,7 +144,9 @@ public abstract class BaseBatchManagerClassSpec implements ClassSpec {
     }
 
     private MethodSpec internalTestConstructor() {
-        MethodSpec.Builder builder = MethodSpec.constructorBuilder();
+        MethodSpec.Builder builder = MethodSpec.constructorBuilder()
+                                               .addModifiers(PUBLIC)
+                                               .addAnnotation(SdkInternalApi.class);
 
         ClassName batchManagerType = ClassName.get(BatchManager.class);
         builder.addParameter(clientClassName(), "client");

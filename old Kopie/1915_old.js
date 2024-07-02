@@ -18,7 +18,6 @@ import StakePool from '../../domains/StakePool';
 import type {
   GetNetworkInfoResponse,
   NetworkInfoResponse,
-  GetNetworkParametersResponse,
   NetworkParametersResponse,
 } from '../network/types';
 import type {

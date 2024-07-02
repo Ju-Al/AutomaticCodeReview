@@ -1,5 +1,4 @@
 // Sandstorm - Personal Cloud Sandbox
-      const filename = (token.name.replace(/["\n]/g, "") || "backup") + ".zip";
 // Copyright (c) 2014 Sandstorm Development Group, Inc. and contributors
 // All rights reserved.
 //
@@ -184,7 +183,7 @@ Router.map(function () {
       }
 
       let started = false;
-      const filename = encodeURIComponent(token.name || "backup") + ".zip";
+      const filename = (token.name.replace(/["\n]/g, "") || "backup") + ".zip";
       let sawEnd = false;
 
       const stream = {

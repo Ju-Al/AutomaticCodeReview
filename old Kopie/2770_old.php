@@ -1,5 +1,4 @@
 <?php
-function get_rocket_cache_reject_uri() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
 use WP_Rocket\Admin\Options;
 use WP_Rocket\Admin\Options_Data;
 use WP_Rocket\Logger\Logger;
@@ -196,9 +195,8 @@ function rocket_get_ignored_parameters() {
  * @since 3.3.2 Exclude embedded URLs
  * @since 2.6   Using json_get_url_prefix() to auto-exclude the WordPress REST API.
  * @since 2.4.1 Auto-exclude WordPress REST API.
+function get_rocket_cache_reject_uri() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
  * @since 2.0
- *
- * @param bool $force Force the static uris to be reverted to null.
  *
  * @return string A pipe separated list of rejected uri.
  */

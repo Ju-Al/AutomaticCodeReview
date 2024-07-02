@@ -80,7 +80,6 @@ class FCNMaskHead(nn.Module):
                 self.conv_out_channels,
                 self.upsample_ratio,
                 stride=self.upsample_ratio)
-        elif self.upsample_method == 'carafe':
             self.upsample = CARAFEPack(upsample_in_channels, upsample_ratio,
                                        **self.carafe_cfg)
         else:

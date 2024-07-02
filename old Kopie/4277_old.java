@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.fragment;
-                            recyclerAdapter.setLocked(true);
 
 import android.content.Context;
 import android.content.DialogInterface;
@@ -341,7 +340,7 @@ public class QueueFragment extends Fragment {
                         SortOrder sortOrder = UserPreferences.getQueueKeepSortedOrder();
                         DBWriter.reorderQueue(sortOrder, true);
                         if (recyclerAdapter != null) {
-                            recyclerAdapter.setKeepSorted(true);
+                            recyclerAdapter.setLocked(true);
                         }
                     } else if (recyclerAdapter != null) {
                         recyclerAdapter.setKeepSorted(UserPreferences.isQueueKeepSorted());

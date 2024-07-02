@@ -1,10 +1,5 @@
 <?php
 /**
-	 * @param string $content Block HTML.
-	 * @param string $href    Link URL.
-	private function add_button_attributes( $content, $href ) {
-			'/<a(.*)class="(.*)"(.*)>(.+)<\/a>/',
-			'<a href="' . esc_url( $href ) . '#private_message" class="sensei-collapsible__toggle $2" $1 $3>$4</a>',
  * File containing the Sensei_Block_Contact_Teacher class.
  *
  * @package sensei
@@ -108,7 +103,11 @@ class Sensei_Block_Contact_Teacher {
 	/**
 	 * Add attributes to the block's <a> tag.
 	 *
-	 * @param string $content    Block HTML.
+	 * @param string $content Block HTML.
+	private function add_button_attributes( $content, $href ) {
+			'/<a(.*)class="(.*)"(.*)>(.+)<\/a>/',
+			'<a href="' . esc_url( $href ) . '#private_message" class="sensei-collapsible__toggle $2" $1 $3>$4</a>',
+	 * @param string $href    Link URL.
 	 * @param string $href       Link URL.
 	 * @param array  $attributes Block attributes.
 	 *

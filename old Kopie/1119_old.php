@@ -1,20 +1,4 @@
 <?php
- * @return string
-	$url_components = get_rocket_parse_url( $url );
-	$site_url       = trailingslashit( set_url_scheme( site_url() ) );
-	$home_path      = ABSPATH;
-
-	if ( false !== strpos( $url_components['path'], rocket_extract_url_component( WP_CONTENT_URL, PHP_URL_PATH ) ) ) {
-		$site_url  = trailingslashit( set_url_scheme( WP_CONTENT_URL ) );
-		$home_path = trailingslashit( WP_CONTENT_DIR );
-	$site_components = get_rocket_parse_url( $site_url );
-
-	if ( '' === $url_components['host'] ) {
-		$url_components['scheme'] = $site_components['scheme'];
-		$url_components['host']   = $site_components['host'];
-		$url                      = trailingslashit( set_url_scheme( '//' . $url_components['host'], $url_components['scheme'] ) ) . ltrim( $url, '/' );
-	if ( isset( $hosts[ $url_components['host'] ] ) && 'home' !== $hosts[ $url_components['host'] ] ) {
-		$site_url = trailingslashit( set_url_scheme( '//' . $url_components['host'], $url_components['scheme'] ) );
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 
 /**
@@ -326,7 +310,22 @@ function rocket_realpath( $file ) {
  *
  * @param string $url   URL to convert.
  * @param array  $hosts An array of possible hosts for the URL.
- * @return string|bool
+	$url_components = get_rocket_parse_url( $url );
+	$site_url       = trailingslashit( set_url_scheme( site_url() ) );
+	$home_path      = ABSPATH;
+
+	if ( false !== strpos( $url_components['path'], rocket_extract_url_component( WP_CONTENT_URL, PHP_URL_PATH ) ) ) {
+		$site_url  = trailingslashit( set_url_scheme( WP_CONTENT_URL ) );
+		$home_path = trailingslashit( WP_CONTENT_DIR );
+	$site_components = get_rocket_parse_url( $site_url );
+
+	if ( '' === $url_components['host'] ) {
+		$url_components['scheme'] = $site_components['scheme'];
+		$url_components['host']   = $site_components['host'];
+		$url                      = trailingslashit( set_url_scheme( '//' . $url_components['host'], $url_components['scheme'] ) ) . ltrim( $url, '/' );
+	if ( isset( $hosts[ $url_components['host'] ] ) && 'home' !== $hosts[ $url_components['host'] ] ) {
+		$site_url = trailingslashit( set_url_scheme( '//' . $url_components['host'], $url_components['scheme'] ) );
+ * @return string
  */
 function rocket_url_to_path( $url, $hosts = '' ) {
 	$root_dir = trailingslashit( dirname( WP_CONTENT_DIR ) );

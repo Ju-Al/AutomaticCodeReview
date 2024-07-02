@@ -188,7 +188,6 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 		return exitcodes.ExitTerminal
 	}
 
-	var vpcSubnetAttributes []*ecs.Attribute
 	// Check if Task ENI is enabled
 	if agent.cfg.TaskENIEnabled {
 		if err, terminal := agent.initializeTaskENIDependencies(state, taskEngine); err != nil {

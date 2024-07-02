@@ -1,6 +1,5 @@
 package cli
 
-	reCommand    = regexp.MustCompile(`"waypoint \w+"`)
 import (
 	"bytes"
 	"regexp"
@@ -166,7 +165,7 @@ func (c *helpCommand) HelpTemplate() string {
 
 var (
 	reHelpHeader = regexp.MustCompile(`^[a-zA-Z0-9_-].*:$`)
-	reCommand    = regexp.MustCompile(`"waypoint (\w\s?)+"`)
+	reCommand    = regexp.MustCompile(`"waypoint \w+"`)
 	reFlag       = regexp.MustCompile(`(\s|^)(-[\w-]+)(\s|$)`)
 )
 

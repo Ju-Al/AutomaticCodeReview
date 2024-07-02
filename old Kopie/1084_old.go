@@ -1,6 +1,4 @@
 // Copyright 2017 Keybase Inc. All rights reserved.
-	if _, ok := c.data[key]; !ok {
-		c.cachedBytes += increase
 // Use of this source code is governed by a BSD
 // license that can be found in the LICENSE file.
 
@@ -80,7 +78,8 @@ func (c *randomEvictedCache) Add(key string, data Measurable) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if v, ok := c.data[key]; ok {
+	if _, ok := c.data[key]; !ok {
+		c.cachedBytes += increase
 		decrease := 2*len(key) + v.Size()
 		c.cachedBytes -= decrease
 	}

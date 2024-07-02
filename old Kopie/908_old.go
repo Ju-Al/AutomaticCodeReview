@@ -1,7 +1,5 @@
 package rewrite
 
-// Returns true if rewrite is successful and false otherwise.
-func To(fs http.FileSystem, r *http.Request, to string, replacer httpserver.Replacer) Result {
 import (
 	"log"
 	"net/http"
@@ -14,7 +12,8 @@ import (
 
 // To attempts rewrite. It attempts to rewrite to first valid path
 // or the last path if none of the paths are valid.
-func To(fs http.FileSystem, r *http.Request, to string, replacer httpserver.Replacer) (result Result) {
+// Returns true if rewrite is successful and false otherwise.
+func To(fs http.FileSystem, r *http.Request, to string, replacer httpserver.Replacer) Result {
 	tos := strings.Fields(to)
 
 	// try each rewrite paths

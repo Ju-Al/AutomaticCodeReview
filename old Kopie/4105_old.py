@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division
 
-            op_params = dict({k: v for k, v in self.p.items()
 from collections import Callable, Iterable
 import warnings
 
@@ -1130,8 +1129,8 @@ class rasterize(AggregationOperation):
                    (Curve, aggregate),
                    (Path, aggregate)]
 
+            op_params = dict({k: v for k, v in self.p.items()
     def _process(self, element, key=None):
-        # Potentially needs traverse to find element types first?
         all_allowed_kws = set()
         all_supplied_kws = set()
         for predicate, transform in self._transforms:

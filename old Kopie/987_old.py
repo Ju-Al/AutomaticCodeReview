@@ -1,65 +1,154 @@
-import pytest
+import listenbrainz.db.user as db_user
+import listenbrainz.db.recommendations_cf_recording as db_recommendations_cf_recording
 
-from indy_common.constants import APP_NAME
-from indy_node.utils.node_control_tool import NodeControlTool
-from plenum.test.helper import randomText
-from indy_node.utils.node_control_utils import NodeControlUtil
+from listenbrainz.webserver.errors import APIBadRequest, APINotFound, APINoContent
+from listenbrainz.webserver.views.api_tools import (DEFAULT_ITEMS_PER_GET,
+                                                    _get_non_negative_param,
+                                                    MAX_ITEMS_PER_GET)
 
+from enum import Enum
 
-EXT_PKT_VERSION = '7.88.999'
-EXT_PKT_NAME = 'SomeTopLevelPkt'
-node_package = (APP_NAME, '0.0.1')
-EXT_TOP_PKT_DEPS = [("aa", "1.1.1"), ("bb", "2.2.2")]
-PACKAGE_MNG_EXT_PTK_OUTPUT = "Package: {}\nStatus: install ok installed\nPriority: extra\nSection: default\n" \
-                             "Installed-Size: 21\nMaintainer: EXT_PKT_NAME-fond\nArchitecture: amd64\nVersion: {}\n" \
-                             "Depends: {}, {} (= {}), {} (= {})\nDescription: EXT_PKT_DEPS-desc\n" \
-                             "License: EXT_PKT_DEPS-lic\nVendor: none\n".\
-    format(EXT_PKT_NAME, EXT_PKT_VERSION, APP_NAME, *EXT_TOP_PKT_DEPS[0], *EXT_TOP_PKT_DEPS[1])
+from flask import Blueprint, jsonify, request
+from listenbrainz.webserver.decorators import crossdomain
+from listenbrainz.webserver.rate_limiter import ratelimit
+
+recommendations_cf_recording_api_bp = Blueprint('recommendations_cf_recording_v1', __name__)
 
 
-@pytest.fixture(scope="module")
-def tconf(tconf):
-    oldv = tconf.UPGRADE_ENTRY
-    tconf.UPGRADE_ENTRY = EXT_PKT_NAME
-    yield tconf
-    tconf.UPGRADE_ENTRY = oldv
+class RecommendationArtistType(Enum):
+    top = 'top'
+    similar = 'similar'
 
 
-def test_node_as_depend(monkeypatch, tconf):
-    nct = NodeControlTool(config=tconf)
-    top_level_package = (EXT_PKT_NAME, EXT_PKT_VERSION)
-    anoncreds_package = ('indy-anoncreds', '0.0.2')
-    plenum_package = ('indy-plenum', '0.0.3')
-    top_level_package_with_version = '{}={}'.format(*top_level_package)
-    top_level_package_dep1_with_version = '{}={}'.format(*EXT_TOP_PKT_DEPS[0])
-    top_level_package_dep2_with_version = '{}={}'.format(*EXT_TOP_PKT_DEPS[1])
-    node_package_with_version = '{}={}'.format(*node_package)
-    plenum_package_with_version = '{}={}'.format(*plenum_package)
-    anoncreds_package_with_version = '{}={}'.format(*anoncreds_package)
-    mock_info = {
-        top_level_package_with_version: "{}\nVersion:{}\nDepends:{} (= {}), {} (= {}), {} (= {})".format(
-            randomText(100), top_level_package[1], *node_package, *EXT_TOP_PKT_DEPS[0], *EXT_TOP_PKT_DEPS[1]),
-        node_package_with_version: '{}\nVersion:{}\nDepends:{} (= {}), {} (= {})'.format(
-            randomText(100), node_package[1], *plenum_package, *anoncreds_package),
-        plenum_package_with_version: '{}'.format(randomText(100)),
-        anoncreds_package_with_version: '{}'.format(randomText(100)),
-        top_level_package_dep1_with_version: '{}\nVersion:{}\nDepends:{} (= {})'.format(
-            randomText(100), EXT_TOP_PKT_DEPS[0][1], *plenum_package),
-        top_level_package_dep2_with_version: '{}\nVersion:{}\nDepends:{} (= {})'.format(
-            randomText(100), EXT_TOP_PKT_DEPS[1][1], *node_package)
+@recommendations_cf_recording_api_bp.route("/user/<user_name>/recording")
+@crossdomain()
+@ratelimit()
+def get_recommendations(user_name):
+    """ Get recommendations for user ``user_name``.
+
+        A sample response from the endpoint may look like::
+
+        {
+          "payload": {
+
+            "<artist_type>": {
+
+              "recording_mbid": [
+              ]
+            },
+            "last_updated": 1588494361,
+            "entity": "recording",
+
+            "mbids": [
+                "526bd613-fddd-4bd6-9137-ab709ac74cab",
+                "a6081bc1-2a76-4984-b21f-38bc3dcca3a5",
+                "a6ad0205-6e96-416d-a4e8-edd1773dac09",
+                "d8783d03-8a3b-4269-8261-00709d2cfee8"
+            ],
+
+            "user_name": "unclejohn69"
+            'count': 10,
+            'total_mbid_count': 30
+          }
+        }
+
+        <artist_type>: 'top' or 'similar'
+
+        .. note::
+            - This endpoint is experimental and probably will change in the future.
+
+        :param artist_type: Mandatory, artist type in ['top', 'similar']
+            Ex. artist_type = top will fetch recommended recording mbids that belong to top artists
+                       listened to by the user.
+                artist_type = similar will fetch recommended recording mbids that belong to artists
+                       similar to top artists listened to by the user.
+        :type artist_type: ``str``
+
+        :param count: Optional, number of recording mbids to return, Default: :data:`~webserver.views.api.DEFAULT_ITEMS_PER_GET`
+            Max: :data:`~webserver.views.api.MAX_ITEMS_PER_GET`
+        :type count: ``int``
+
+        :param offset: Optional, number of mbids to skip from the beginning, for pagination.
+            Ex. An offset of 5 means the 5 mbids will be skipped, defaults to 0
+        :type offset: ``int``
+
+        :statuscode 200: Successful query, you have data!
+        :statuscode 400: Bad request, check ``response['error']`` for more details
+        :statuscode 404: User not found.
+        :statuscode 204: Recommendations for the user haven't been generated, empty response will be returned
+    """
+    user = db_user.get_by_mb_id(user_name)
+    if user is None:
+        raise APINotFound("Cannot find user: {}".format(user_name))
+
+    artist_type = request.args.get('artist_type')
+    if not _is_valid_artist_type(artist_type):
+        raise APIBadRequest("Invalid artist type: {}".format(artist_type))
+
+    offset = _get_non_negative_param('offset', default=0)
+    count = _get_non_negative_param('count', default=DEFAULT_ITEMS_PER_GET)
+
+    recommendations = db_recommendations_cf_recording.get_user_recommendation(user['id'])
+
+    if recommendations is None:
+        err_msg = 'No recommendations due to absence of recent listening history for user {}'.format(user_name)
+        raise APINoContent(err_msg)
+
+    mbid_list, total_mbid_count = _process_recommendations(recommendations, count, artist_type, user_name, offset)
+
+    payload = {
+        'payload': {
+            'mbids': mbid_list,
+            'entity': "recording",
+            'type': artist_type,
+            'user_name': user_name,
+            'last_updated': int(recommendations['created'].timestamp()),
+            'count': len(mbid_list),
+            'total_mbid_count': total_mbid_count
+        }
     }
 
-    def mock_get_info_from_package_manager(package):
-        return mock_info.get(package, None)
+    return jsonify(payload)
 
-    monkeypatch.setattr(NodeControlUtil, 'update_package_cache', lambda *x: None)
-    monkeypatch.setattr(NodeControlUtil, '_get_info_from_package_manager',
-                        lambda x: mock_get_info_from_package_manager(x))
-                        lambda *x: [top_level_package[0], anoncreds_package[0], plenum_package[0], node_package[0],
-                                    EXT_TOP_PKT_DEPS[0][0], EXT_TOP_PKT_DEPS[1][0]])
-    monkeypatch.setattr(NodeControlUtil, '_get_curr_info', lambda *x: PACKAGE_MNG_EXT_PTK_OUTPUT)
-    ret = nct._get_deps_list(top_level_package_with_version)
-    nct.server.close()
-    assert ret.split() == [anoncreds_package_with_version, plenum_package_with_version,
-                           node_package_with_version, top_level_package_dep2_with_version,
-                           top_level_package_dep1_with_version, top_level_package_with_version]
+
+def _process_recommendations(recommendations, count, artist_type, user_name, offset):
+    """ Process recommendations based on artist type.
+
+        Args:
+            recommendations: dict containing user recommendations.
+            count (int): number of recommended recording mbids to return.
+            artist_type (str): artist type i.e 'top', 'similar'
+            user_name (str): musicbrainz id of the user.
+            offset (int): number of entities to skip from the beginning
+
+        Returns:
+            - total_mbid_count (int): Total number of recommended mbids in the db for the user.
+            - list of recommended mbids based on count and offset.
+
+        Raises:
+            APINoContent: if recommendations not found.
+    """
+    if artist_type == 'similar':
+        mbid_list = recommendations['recording_mbid']['similar_artist']
+
+    elif artist_type == 'top':
+        mbid_list = recommendations['recording_mbid']['top_artist']
+
+    total_mbid_count = len(mbid_list)
+
+    if total_mbid_count == 0:
+        err_msg = 'No recommendations for user {}, please try again later.'.format(user_name)
+        raise APINoContent(err_msg, payload={'last_updated': int(recommendations['created'].timestamp())})
+
+    count = min(count, MAX_ITEMS_PER_GET)
+
+    return mbid_list[offset:count], total_mbid_count
+
+
+def _is_valid_artist_type(artist_type):
+    """ Check if artist type is valid.
+    """
+    if artist_type is None:
+        raise APIBadRequest('Please provide artist type')
+
+    return artist_type in RecommendationArtistType.__members__

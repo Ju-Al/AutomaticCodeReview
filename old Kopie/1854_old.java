@@ -1,5 +1,4 @@
 /*
-  public long prune(final Predicate<BytesValue> inUseCheck) {
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -84,7 +83,7 @@ public class WorldStateKeyValueStorage implements WorldStateStorage {
   }
 
   @Override
-  public long removeUnless(final Predicate<BytesValue> inUseCheck) {
+  public long prune(final Predicate<BytesValue> inUseCheck) {
     return keyValueStorage.removeUnless(inUseCheck);
   }
 

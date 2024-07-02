@@ -1,5 +1,4 @@
 package target
-				return fmt.Errorf("set target host sets: unable to get ticket: %w", err)
 
 import (
 	"context"
@@ -596,7 +595,7 @@ func (r *Repository) SetTargetHostSets(ctx context.Context, targetId string, tar
 			msgs := make([]*oplog.Message, 0, 2)
 			targetTicket, err := w.GetTicket(target)
 			if err != nil {
-				return errors.Wrap(err, op)
+				return fmt.Errorf("set target host sets: unable to get ticket: %w", err)
 			}
 			updatedTarget := target.(Cloneable).Clone()
 			var targetOplogMsg oplog.Message

@@ -255,9 +255,6 @@ public final class Util {
             res[i] = j;
         }
         return res;
-    }
-
-    public static void copyStream(InputStream in, OutputStream out) throws IOException {
         byte[] buf = new byte[BUFFER_SIZE];
         for (int readCount; (readCount = in.read(buf)) > 0; ) {
             out.write(buf, 0, readCount);

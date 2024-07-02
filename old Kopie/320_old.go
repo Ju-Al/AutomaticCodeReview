@@ -85,7 +85,6 @@ func (s *server) bytesGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var toDecrypt bool
 	if len(address.Bytes()) == (swarm.HashSize + encryption.KeyLength) {
 		toDecrypt = true
 	}

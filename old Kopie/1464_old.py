@@ -1,15 +1,4 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-    def test_no_reduction(self):
-        cl_obj = contrastive.ContrastiveLoss(reduction=tf.keras.losses.Reduction.NONE)
-        y_true = tf.constant([0, 0, 1, 1, 0, 1], dtype=tf.dtypes.int64)
-        y_pred = tf.constant([0.1, 0.3, 1.3, 0.7, 1.1, 0.5], dtype=tf.dtypes.float32)
-        loss = cl_obj(y_true, y_pred)
-        # Loss = y * (y`)^2 + (1 - y) * (max(m - y`, 0))^2
-        #      = [max(1 - 0.1, 0)^2, max(1 - 0.3, 0)^2,
-        #         1.3^2, 0.7^2, max(1 - 1.1, 0)^2, 0.5^2]
-        #      = [0.9^2, 0.7^2, 1.3^2, 0.7^2, 0^2, 0.5^2]
-        #      = [0.81, 0.49, 1.69, 0.49, 0, 0.25]
-        self.assertAllClose(loss, [0.81, 0.49, 1.69, 0.49, 0.0, 0.25])
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -107,8 +96,17 @@ class ContrastiveLossTest(tf.test.TestCase):
         loss = self.evaluate(loss)
         self.assertAllClose(loss, 1.623333)
 
+    def test_no_reduction(self):
+        cl_obj = contrastive.ContrastiveLoss(reduction=tf.keras.losses.Reduction.NONE)
+        y_true = tf.constant([0, 0, 1, 1, 0, 1], dtype=tf.dtypes.int64)
+        y_pred = tf.constant([0.1, 0.3, 1.3, 0.7, 1.1, 0.5], dtype=tf.dtypes.float32)
+        loss = cl_obj(y_true, y_pred)
 
-def test_scalar_weighted():
+        # Loss = y * (y`)^2 + (1 - y) * (max(m - y`, 0))^2
+        #      = [max(1 - 0.1, 0)^2, max(1 - 0.3, 0)^2,
+        #         1.3^2, 0.7^2, max(1 - 1.1, 0)^2, 0.5^2]
+        #      = [0.9^2, 0.7^2, 1.3^2, 0.7^2, 0^2, 0.5^2]
+        self.assertAllClose(loss, [0.81, 0.49, 1.69, 0.49, 0.0, 0.25])
     cl_obj = contrastive.ContrastiveLoss()
     y_true = tf.constant([0, 0, 1, 1, 0, 1], dtype=tf.dtypes.int64)
     y_pred = tf.constant([0.1, 0.3, 1.3, 0.7, 1.1, 0.5], dtype=tf.dtypes.float32)

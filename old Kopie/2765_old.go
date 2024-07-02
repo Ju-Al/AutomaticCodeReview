@@ -922,7 +922,6 @@ func buildSvcDeployCmd() *cobra.Command {
 			if err := opts.Execute(); err != nil {
 				return err
 			}
-
 			log.Infoln("Recommended follow-up actions:")
 			for _, action := range opts.RecommendedActions() {
 				log.Infof("- %s\n", action)

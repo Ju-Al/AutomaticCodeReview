@@ -230,7 +230,6 @@ def test_sum():
     assert str(dt.sum(f[:])) == str(f[:].sum())
     DT = dt.Frame(A=range(1, 10))
     assert_equals(DT[:, f.A.sum()], DT[:, dt.sum(f.A)])
-
 def test_max():
     assert str(dt.max(f.A)) == str(f.A.max())
     assert str(dt.max(f[:])) == str(f[:].max())

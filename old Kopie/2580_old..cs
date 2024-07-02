@@ -1,6 +1,4 @@
 using System;
-        [Tooltip("Time in seconds between multi-cast messages")]
-        [Range(1, 60)]
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -34,7 +32,8 @@ namespace Mirror.Discovery
         protected int serverBroadcastListenPort = 47777;
 
         [SerializeField]
-        [Tooltip("Time in seconds between multi-cast messages. Use a negative value to disable automatic broadcasting.")]
+        [Tooltip("Time in seconds between multi-cast messages")]
+        [Range(1, 60)]
         [Range(-1, 60)]
         float ActiveDiscoveryInterval = 3;
 

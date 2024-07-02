@@ -140,7 +140,6 @@ func (h *handler) ServeHTTP(response nethttp.ResponseWriter, request *nethttp.Re
 		return
 	}
 
-	h.eventHops.UpdateRemainingHops(event, defaultEventHopsLimit)
 	if hops, ok := h.eventHops.GetRemainingHops(event); !ok || hops <= 0 {
 		h.logger.Debug("Dropping event based on remaining hops status.",
 			zap.Int32("hops", hops),

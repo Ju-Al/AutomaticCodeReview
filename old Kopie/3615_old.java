@@ -1,6 +1,5 @@
 package org.thoughtcrime.securesms.groups;
 
-    if (missingMembers.size() > 0) {
 
 import android.content.Context;
 import android.util.Log;
@@ -114,7 +113,7 @@ public class GroupMessageProcessor {
       builder.clearMembers();
     }
 
-    if (missingMembers.isEmpty()) {
+    if (missingMembers.size() > 0) {
       // TODO We should tell added and missing about each-other.
     }
 

@@ -1,5 +1,4 @@
 //-----------------------------------------------------------------------------
-
 // Copyright (c) 2012 GarageGames, LLC
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -287,7 +286,7 @@ void SimManagerNameDictionary::remove(SimObject* obj)
       }
       walk = &((*walk)->nextManagerNameObject);
    }
-#else
+
    const char* name = StringTable->insert(obj->objectName);
    if (root[name])
       root.erase(name);

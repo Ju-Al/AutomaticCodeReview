@@ -141,7 +141,6 @@ type BuildTarget struct {
 	Progress float32 `print:"false"`
 	// The results of this test target, if it is one.
 	Results TestSuite `print:"false"`
-	// A mutex to control access to Results
 	ResultsMux sync.Mutex
 	// Description displayed while the command is building.
 	// Default is just "Building" but it can be customised.

@@ -1,5 +1,4 @@
 /***************************************************************************
-    // ground
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -124,7 +123,7 @@ void Interface::GameArea::Redraw( fheroes2::Image & dst, int flag ) const
 {
     const Rect tileROI = GetVisibleTileROI();
 
-    std::vector<std::pair<Point, const Heroes *> > heroList;
+    // ground
 
     // ground and bottom layer
     for ( int16_t y = 0; y < tileROI.h; ++y ) {

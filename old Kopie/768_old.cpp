@@ -85,7 +85,6 @@ bool Caches::empty()
     return m_empty;
 }
 
-void Caches::setEmptry(bool empty)
 {
     m_empty = empty;
 }

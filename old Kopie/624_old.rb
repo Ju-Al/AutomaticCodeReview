@@ -1,5 +1,4 @@
 class ContributorsController < ApplicationController
-    @contributor_list = ContributorList.new(User.authorized_contributors)
   before_filter :find_contributor, only: [:update, :destroy]
 
   #
@@ -43,7 +42,7 @@ class ContributorsController < ApplicationController
   # Display all of the users who are authorized to contribute
   #
   def index
-    @contributors = Kaminari.paginate_array(User.authorized_contributors).page(params[:page]).per(20)
+    @contributor_list = ContributorList.new(User.authorized_contributors)
     @contributor_list = ContributorList.new(@contributors)
   end
 

@@ -517,7 +517,6 @@ safaridriver.inject.CommandRegistry.getInstance()
         CommandName.SET_WINDOW_SIZE, commands.setWindowSize,
         CommandName.SUBMIT_ELEMENT, commands.submitElement,
         CommandName.SWITCH_TO_FRAME, commands.switchToFrame,
-        CommandName.GET_CANVAS_URL,commands.getCanvasUrl,
         // The extension handles window switches. It sends the command to this
         // injected script only as a means of retrieving the window name.
         CommandName.SWITCH_TO_WINDOW, commands.getWindowName));

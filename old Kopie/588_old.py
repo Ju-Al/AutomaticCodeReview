@@ -202,7 +202,6 @@ class HoloMap(UniformNdMapping):
                     items.append((new_key, Overlay([other[other_key]])))
             return self.clone(items, kdims=dimensions, label=self._label, group=self._group)
         elif isinstance(other, self.data_type):
-            if isinstance(self, DynamicMap):
                 from .operation import DynamicOperation
                 def dynamic_mul(element):
                     return element * other

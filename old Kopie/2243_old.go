@@ -1,6 +1,4 @@
 // Copyright 2016 The prometheus-operator Authors
-			"prometheus.yaml": []byte(firstConfig),
-			"configmaps.json": []byte("{}"),
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -291,9 +289,9 @@ scrape_configs:
     static_configs:
       - targets:
         - 111.111.111.111:9090
+			"prometheus.yaml": []byte(firstConfig),
+			"configmaps.json": []byte("{}"),
 `
-
-	var buf bytes.Buffer
 	if err := gzipConfig(&buf, []byte(firstConfig)); err != nil {
 		t.Fatal(err)
 	}

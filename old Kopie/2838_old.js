@@ -167,7 +167,6 @@ function getCoreRequirements(dependencies, options, required = {}) {
         case 'linux':
             required.CORE_SERVER_FOLDER += `/linux/${flavor}`;
             required.CORE_ARCHIVE = `realm-core-${flavor}-v${dependencies.REALM_CORE_VERSION}-Linux-devel.tar.gz`;
-            required.openssl = "https://static.realm.io/downloads/openssl/1.1.1b/Linux/x86_64/openssl.tgz";
             return required;
         default:
             throw new Error(`Unsupported core platform '${options.platform}'`);

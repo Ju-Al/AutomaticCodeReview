@@ -997,7 +997,6 @@ public interface Traversable<T> extends Foldable<T>, Value<T> {
         }
         if (hasDefiniteSize()) {
             characteristics |= (Spliterator.SIZED | Spliterator.SUBSIZED);
-            return Spliterators.spliterator(iterator(), length(), characteristics);
         }
         return Spliterators.spliteratorUnknownSize(iterator(), characteristics);
 

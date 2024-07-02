@@ -1,5 +1,4 @@
 // Copyright (c) 2020 Tigera, Inc. All rights reserved.
-		return errors.Wrap(err, "failed to attach TC program")
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -165,7 +164,7 @@ func (ap AttachPoint) AttachProgram() error {
 				Stderr:   string(err.Stderr),
 			}
 		}
-		return errors.WithMessage(err, "failed to attach TC program")
+		return errors.Wrap(err, "failed to attach TC program")
 	}
 
 	// Success: clean up the old programs.

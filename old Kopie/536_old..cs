@@ -11,7 +11,6 @@ namespace Mirror
         // configuration
         [SerializeField] Animator m_Animator;
         [SerializeField] uint m_ParameterSendBits;
-        // Note: not an object[] array because otherwise initialization is real annoying
         int[] intShadowCopy;
         float[] floatShadowCopy;
         bool[] boolShadowCopy;

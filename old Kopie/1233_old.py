@@ -1,7 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        self.traj_slice = slice(start if isinstance(start, int) else None,  # internal frames are 0 based
-                                stop if isinstance(stop, int) else None,
-                                step)
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -598,7 +595,9 @@ class HydrogenBondAnalysis(object):
         self.distance = distance
         self.distance_type = distance_type  # note: everything except 'heavy' will give the default behavior
         self.angle = angle
-        slice_index = []
+        self.traj_slice = slice(start if isinstance(start, int) else None,  # internal frames are 0 based
+                                stop if isinstance(stop, int) else None,
+                                step)
         for index in [start, stop, step]:
             if isinstance(index, numbers.Integral):
                 slice_index.append(int(index))

@@ -1,5 +1,4 @@
 import logging
-
 from botocore.auth import HmacV1Auth
 
 logger = logging.getLogger(__name__)

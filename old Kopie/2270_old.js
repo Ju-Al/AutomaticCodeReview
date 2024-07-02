@@ -34,6 +34,5 @@ export {
   sectionListCommunity,
   sectionListDocs,
   navTutorial as sectionListTutorial,
-  navFooter as sectionListFooter,
   navHeader as sectionListHeader,
 };

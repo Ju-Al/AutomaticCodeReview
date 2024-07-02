@@ -1,6 +1,5 @@
 package aws
 
-	cmd := exec.Command("cfssl", "bundle", "-cert", "-")
 import (
 	"bytes"
 	"crypto/x509"
@@ -225,7 +224,7 @@ func resolveCertificateChain(body string) (string, error) {
 		return "", nil
 	}
 
-	// return if this is a cloudflare origin cert
+	cmd := exec.Command("cfssl", "bundle", "-cert", "-")
 	ou := crt.Issuer.OrganizationalUnit
 	if len(ou) == 1 && ou[0] == "CloudFlare Origin SSL Certificate Authority" {
 		return "", nil

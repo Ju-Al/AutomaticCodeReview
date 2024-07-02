@@ -1,11 +1,10 @@
 package leaderelection
 
+	"k8s.io/apimachinery/pkg/api/errors"
 import (
-	"context"
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"syscall"
 

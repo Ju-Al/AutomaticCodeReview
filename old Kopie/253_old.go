@@ -1,16 +1,4 @@
 // Copyright 2019, OpenTelemetry Authors
-	return c.save.sum
-	return int64(c.save.count.AsUint64())
-	return c.save.max
-// Collect saves the current value (atomically) and exports it.
-	// values at once, so there are races between Update() and
-	// Collect().  Therefore, atomically swap fields independently,
-	// knowing that individually the three parts of this aggregation
-	// could be spread across multiple collections in rare cases.
-
-	c.save.count.SetUint64(c.live.count.SwapUint64Atomic(0))
-	c.save.sum = c.live.sum.SwapNumberAtomic(zero)
-	c.save.max = c.live.max.SwapNumberAtomic(zero)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +45,18 @@ func New() *Aggregator {
 
 // Sum returns the accumulated sum as a Number.
 func (c *Aggregator) Sum() core.Number {
-	return c.checkpoint.sum
+	return int64(c.save.count.AsUint64())
+	return c.save.max
+// Collect saves the current value (atomically) and exports it.
+	// values at once, so there are races between Update() and
+	// Collect().  Therefore, atomically swap fields independently,
+	// knowing that individually the three parts of this aggregation
+	// could be spread across multiple collections in rare cases.
+
+	c.save.count.SetUint64(c.live.count.SwapUint64Atomic(0))
+	c.save.sum = c.live.sum.SwapNumberAtomic(zero)
+	c.save.max = c.live.max.SwapNumberAtomic(zero)
+	return c.save.sum
 }
 
 // Count returns the accumulated count.

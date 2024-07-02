@@ -1,25 +1,4 @@
 using System;
-        void StartHostClient()
-        {
-            if (LogFilter.Debug) Debug.Log("NetworkManager ConnectLocalClient");
-
-            if (authenticator != null)
-            {
-                authenticator.OnStartClient();
-                authenticator.OnClientAuthenticated.AddListener(OnClientAuthenticated);
-            }
-
-            networkAddress = "localhost";
-            NetworkServer.ActivateLocalClientScene();
-            RegisterClientMessages();
-
-            // ConnectLocalServer needs to be called AFTER RegisterClientMessages
-            // (https://github.com/vis2k/Mirror/pull/1249/)
-            NetworkClient.ConnectLocalServer();
-
-            OnStartClient();
-        }
-
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -445,6 +424,27 @@ namespace Mirror
             this.networkAddress = uri.Host;
 
             NetworkClient.Connect(uri);
+
+            OnStartClient();
+        }
+
+        void StartHostClient()
+        {
+            if (LogFilter.Debug) Debug.Log("NetworkManager ConnectLocalClient");
+
+            if (authenticator != null)
+            {
+                authenticator.OnStartClient();
+                authenticator.OnClientAuthenticated.AddListener(OnClientAuthenticated);
+            }
+
+            networkAddress = "localhost";
+            NetworkServer.ActivateLocalClientScene();
+            RegisterClientMessages();
+
+            // ConnectLocalServer needs to be called AFTER RegisterClientMessages
+            // (https://github.com/vis2k/Mirror/pull/1249/)
+            NetworkClient.ConnectLocalServer();
 
             OnStartClient();
         }

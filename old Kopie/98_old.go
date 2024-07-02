@@ -85,7 +85,6 @@ func TestCall(t *testing.T) {
 			wantErr:   "failed to serialize JSON",
 			// TODO make error message consistent with other languages
 		},
-		{
 			procedure:       "requestHeaders",
 			headers:         transport.Headers{"user-id": "42"},
 			returnHeaders:   transport.Headers{"success": "true"},

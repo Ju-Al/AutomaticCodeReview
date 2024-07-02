@@ -76,7 +76,6 @@ type Favorites struct {
 }
 
 func newFavoritesWithChan(config Config, reqChan chan *favReq) *Favorites {
-	disableVal := os.Getenv(disableFavoritesEnvVar)
 	if len(disableVal) > 0 {
 		config.MakeLogger("").CDebugf(nil,
 			"Disable favorites due to env var %s=%s",

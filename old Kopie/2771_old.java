@@ -13,140 +13,325 @@
  * permissions and limitations under the License.
  */
 
-package software.amazon.awssdk.http.crt;
+package software.amazon.awssdk.http.nio.netty;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Random;
-import java.util.stream.Stream;
-import org.junit.Test;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+import software.amazon.awssdk.annotations.SdkPublicApi;
+import software.amazon.awssdk.utils.ProxySystemSetting;
+import software.amazon.awssdk.utils.builder.CopyableBuilder;
+import software.amazon.awssdk.utils.builder.ToCopyableBuilder;
 
 /**
- * Tests for {@link ProxyConfiguration}.
+ * Proxy configuration for {@link NettyNioAsyncHttpClient}. This class is used to configure an HTTP proxy to be used by
+ * the {@link NettyNioAsyncHttpClient}.
+ *
+ * @see NettyNioAsyncHttpClient.Builder#proxyConfiguration(ProxyConfiguration)
  */
-public class ProxyConfigurationTest {
-    private static final Random RNG = new Random();
-    private static final String TEST_HOST = "foo.com";
-    private static final int TEST_PORT = 7777;
-    private static final String TEST_USER = "testuser";
-    private static final String TEST_PASSWORD = "123";
+@SdkPublicApi
+public final class ProxyConfiguration implements ToCopyableBuilder<ProxyConfiguration.Builder, ProxyConfiguration> {
+    private final Boolean useSystemPropertyValues;
+    private final String scheme;
+    private final String host;
+    private final int port;
+    private final String username;
+    private final String password;
+    private final Set<String> nonProxyHosts;
 
-    @Test
-    public void build_setsAllProperties() {
-        verifyAllPropertiesSet(allPropertiesSetConfig());
+    private ProxyConfiguration(BuilderImpl builder) {
+        this.useSystemPropertyValues = builder.useSystemPropertyValues;
+        this.scheme = builder.scheme;
+        this.host = resolveHost(builder.host);
+        this.port = resolvePort(builder.port);
+        this.username = builder.username;
+        this.password = builder.password;
+        this.nonProxyHosts = builder.nonProxyHosts;
     }
 
-    @Test
-    public void build_systemPropertyEnabled() {
-        setSystemProperty();
-        ProxyConfiguration config = ProxyConfiguration.builder().useSystemPropertyValues(true).build();
-
-        assertThat(config.host()).isEqualTo(TEST_HOST);
-        assertThat(config.port()).isEqualTo(TEST_PORT);
-        assertThat(config.username()).isEqualTo(TEST_USER);
-        assertThat(config.password()).isEqualTo(TEST_PASSWORD);
-        assertThat(config.scheme()).isNull();
+    public static Builder builder() {
+        return new BuilderImpl();
     }
 
-    @Test
-    public void build_systemPropertyDisabled() {
-        setSystemProperty();
-        ProxyConfiguration config = ProxyConfiguration.builder()
-                                                      .host("localhost")
-                                                      .port(8888)
-                                                      .username("username")
-                                                      .password("password")
-                                                      .useSystemPropertyValues(false).build();
-
-        assertThat(config.host()).isEqualTo("localhost");
-        assertThat(config.port()).isEqualTo(8888);
-        assertThat(config.username()).isEqualTo("username");
-        assertThat(config.password()).isEqualTo("password");
-        assertThat(config.scheme()).isNull();
+    /**
+     * @return The proxy scheme.
+     */
+    public String scheme() {
+        return scheme;
     }
 
-    @Test
-    public void toBuilder_roundTrip_producesExactCopy() {
-        ProxyConfiguration original = allPropertiesSetConfig();
-
-        ProxyConfiguration copy = original.toBuilder().build();
-
-        assertThat(copy).isEqualTo(original);
+    /**
+     * @return The proxy host from the configuration if set, or from the "http.proxyHost" system property if
+     * {@link Builder#useSystemPropertyValues(Boolean)} is set to true
+     */
+    public String host() {
+        return host;
     }
 
-    @Test
-    public void toBuilderModified_doesNotModifySource() {
-        ProxyConfiguration original = allPropertiesSetConfig();
-
-        ProxyConfiguration modified = setAllPropertiesToRandomValues(original.toBuilder()).build();
-
-        assertThat(original).isNotEqualTo(modified);
+    /**
+     * @return The proxy port from the configuration if set, or from the "http.proxyPort" system property if
+     * {@link Builder#useSystemPropertyValues(Boolean)} is set to true
+     */
+    public int port() {
+        return port;
     }
 
-    private ProxyConfiguration allPropertiesSetConfig() {
-        return setAllPropertiesToRandomValues(ProxyConfiguration.builder()).build();
+    /**
+     * @return The proxy username from the configuration if set, or from the "http.proxyUser" system property if
+     * {@link Builder#useSystemPropertyValues(Boolean)} is set to true
+     * */
+    public String username() {
+        return resolveValue(username, ProxySystemSetting.PROXY_USERNAME);
     }
 
-    private ProxyConfiguration.Builder setAllPropertiesToRandomValues(ProxyConfiguration.Builder builder) {
-        Stream.of(builder.getClass().getDeclaredMethods())
-                .filter(m -> m.getParameterCount() == 1 && m.getReturnType().equals(ProxyConfiguration.Builder.class))
-                .forEach(m -> {
-                    try {
-                        m.setAccessible(true);
-                        setRandomValue(builder, m);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Could not create random proxy config", e);
-                    }
-                });
-        return builder;
+    /**
+     * @return The proxy password from the configuration if set, or from the "http.proxyPassword" system property if
+     * {@link Builder#useSystemPropertyValues(Boolean)} is set to true
+     * */
+    public String password() {
+        return resolveValue(password, ProxySystemSetting.PROXY_PASSWORD);
     }
 
-    private void setRandomValue(Object o, Method setter) throws InvocationTargetException, IllegalAccessException {
-        Class<?> paramClass = setter.getParameterTypes()[0];
-
-        if (String.class.equals(paramClass)) {
-            setter.invoke(o, randomString());
-        } else if (int.class.equals(paramClass)) {
-            setter.invoke(o, RNG.nextInt());
-            setter.invoke(o, Boolean.FALSE);
-        } else {
-            throw new RuntimeException("Don't know how create random value for type " + paramClass);
-        }
+    /**
+     * @return The set of hosts that should not be proxied. If the value is not set, the value present by "http.nonProxyHost
+     * system property os returned. If system property is also not set, an unmodifiable empty set is returned.
+     */
+    public Set<String> nonProxyHosts() {
+        Set<String> hosts = nonProxyHosts == null && useSystemPropertyValues ? parseNonProxyHostsProperty()
+                                                                : nonProxyHosts;
+        return Collections.unmodifiableSet(hosts != null ? hosts : Collections.emptySet());
     }
 
-    private void verifyAllPropertiesSet(ProxyConfiguration cfg) {
-        boolean hasNullProperty = Stream.of(cfg.getClass().getDeclaredMethods())
-                .filter(m -> !m.getReturnType().equals(Void.class) && m.getParameterCount() == 0)
-                .anyMatch(m -> {
-                    m.setAccessible(true);
-                    try {
-                        return m.invoke(cfg) == null;
-                    } catch (Exception e) {
-                        return true;
-                    }
-                });
-
-        if (hasNullProperty) {
-            throw new RuntimeException("Given configuration has unset property");
-        }
-    }
-
-    private String randomString() {
-        String alpha = "abcdefghijklmnopqrstuwxyz";
-
-        StringBuilder sb = new StringBuilder(16);
-        for (int i = 0; i < 16; ++i) {
-            sb.append(alpha.charAt(RNG.nextInt(16)));
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
         }
 
-        return sb.toString();
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        ProxyConfiguration that = (ProxyConfiguration) o;
+
+        if (port != that.port) {
+            return false;
+        }
+
+        if (scheme != null ? !scheme.equals(that.scheme) : that.scheme != null) {
+            return false;
+        }
+
+        if (host != null ? !host.equals(that.host) : that.host != null) {
+            return false;
+        }
+
+        if (username != null ? !username.equals(that.username) : that.username != null) {
+            return false;
+        }
+
+        if (password != null ? !password.equals(that.password) : that.password != null) {
+            return false;
+        }
+
+        return nonProxyHosts.equals(that.nonProxyHosts);
+
     }
 
-    private void setSystemProperty() {
-        System.setProperty("http.proxyHost", TEST_HOST);
-        System.setProperty("http.proxyPort", Integer.toString(TEST_PORT));
-        System.setProperty("http.proxyUser", TEST_USER);
-        System.setProperty("http.proxyPassword", TEST_PASSWORD);
+    @Override
+    public int hashCode() {
+        int result = scheme != null ? scheme.hashCode() : 0;
+        result = 31 * result + (host != null ? host.hashCode() : 0);
+        result = 31 * result + port;
+        result = 31 * result + nonProxyHosts.hashCode();
+        result = 31 * result + (username != null ? username.hashCode() : 0);
+        result = 31 * result + (password != null ? password.hashCode() : 0);
+        return result;
+    }
+
+    @Override
+    public Builder toBuilder() {
+        return new BuilderImpl(this);
+    }
+
+    /**
+     * Builder for {@link ProxyConfiguration}.
+     */
+    public interface Builder extends CopyableBuilder<Builder, ProxyConfiguration> {
+
+        /**
+         * Set the hostname of the proxy.
+         *
+         * @param host The proxy host.
+         * @return This object for method chaining.
+         */
+        Builder host(String host);
+
+        /**
+         * Set the port that the proxy expects connections on.
+         *
+         * @param port The proxy port.
+         * @return This object for method chaining.
+         */
+        Builder port(int port);
+
+        /**
+         * The HTTP scheme to use for connecting to the proxy. Valid values are {@code http} and {@code https}.
+         * <p>
+         * The client defaults to {@code http} if none is given.
+         *
+         * @param scheme The proxy scheme.
+         * @return This object for method chaining.
+         */
+        Builder scheme(String scheme);
+
+        /**
+         * Set the set of hosts that should not be proxied. Any request whose host portion matches any of the patterns
+         * given in the set will be sent to the remote host directly instead of through the proxy.
+         *
+         * @param nonProxyHosts The set of hosts that should not be proxied.
+         * @return This object for method chaining.
+         */
+        Builder nonProxyHosts(Set<String> nonProxyHosts);
+
+        /**
+         * Set the username used to authenticate with the proxy username.
+         *
+         * @param username The proxy username.
+         * @return This object for method chaining.
+         */
+        Builder username(String username);
+
+        /**
+         * Set the password used to authenticate with the proxy password.
+         *
+         * @param password The proxy password.
+         * @return This object for method chaining.
+         */
+        private int port;
+        private Set<String> nonProxyHosts = Collections.emptySet();
+            this.nonProxyHosts = new HashSet<>(proxyConfiguration.nonProxyHosts);
+        Builder password(String password);
+        /**
+         * Set the option whether to use system property values from {@link ProxySystemSetting} if any of the config options
+         * are missing. The value is set to "true" by default which means SDK will automatically use system property values if
+         * options are not provided during building the {@link ProxyConfiguration} object. To disable this behaviour, set this
+         * value to false.
+         *
+         * @param useSystemPropertyValues The option whether to use system property values
+         * @return This object for method chaining.
+         */
+        Builder useSystemPropertyValues(Boolean useSystemPropertyValues);
+
+    }
+
+    private String resolveHost(String host) {
+        return resolveValue(host, ProxySystemSetting.PROXY_HOST);
+    }
+
+    private int resolvePort(int port) {
+        return port == 0 && Boolean.TRUE.equals(useSystemPropertyValues)  ?
+               ProxySystemSetting.PROXY_PORT.getStringValue().map(Integer::parseInt).orElse(0) : port;
+    }
+
+    /**
+     * Uses the configuration options, system setting property and returns the final value of the given member.
+     */
+    private String resolveValue(String value, ProxySystemSetting systemSetting) {
+        return value == null && Boolean.TRUE.equals(useSystemPropertyValues) ?
+               systemSetting.getStringValue().orElse(null) : value;
+    }
+
+    private Set<String> parseNonProxyHostsProperty() {
+        String nonProxyHostsSystem = ProxySystemSetting.NON_PROXY_HOSTS.getStringValue().orElse(null);
+
+        if (nonProxyHostsSystem != null && !nonProxyHostsSystem.isEmpty()) {
+            return Arrays.stream(nonProxyHostsSystem.split("\\|"))
+                         .map(String::toLowerCase)
+                         .map(s -> s.replace("*", ".*?"))
+                         .collect(Collectors.toSet());
+        }
+        return Collections.emptySet();
+    }
+
+    private static final class BuilderImpl implements Builder {
+        private String scheme;
+        private String host;
+        private int port = 0;
+        private String username;
+        private String password;
+        private Set<String> nonProxyHosts;
+        private Boolean useSystemPropertyValues = Boolean.TRUE;
+
+        private BuilderImpl() {
+        }
+
+        private BuilderImpl(ProxyConfiguration proxyConfiguration) {
+            this.useSystemPropertyValues = proxyConfiguration.useSystemPropertyValues;
+            this.scheme = proxyConfiguration.scheme;
+            this.host = proxyConfiguration.host;
+            this.port = proxyConfiguration.port;
+            this.nonProxyHosts = proxyConfiguration.nonProxyHosts;
+            this.username = proxyConfiguration.username;
+            this.password = proxyConfiguration.password;
+        }
+
+        @Override
+        public Builder scheme(String scheme) {
+            this.scheme = scheme;
+            return this;
+        }
+
+        @Override
+        public Builder host(String host) {
+            this.host = host;
+            return this;
+        }
+
+        @Override
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
+
+        @Override
+        public Builder nonProxyHosts(Set<String> nonProxyHosts) {
+            if (nonProxyHosts != null) {
+                this.nonProxyHosts = new HashSet<>(nonProxyHosts);
+            } else {
+                this.nonProxyHosts = Collections.emptySet();
+            }
+            return this;
+        }
+
+        @Override
+        public Builder username(String username) {
+            this.username = username;
+            return this;
+        }
+
+        @Override
+        public Builder password(String password) {
+            this.password = password;
+            return this;
+        }
+
+        @Override
+        public Builder useSystemPropertyValues(Boolean useSystemPropertyValues) {
+            this.useSystemPropertyValues = useSystemPropertyValues;
+            return this;
+        }
+
+        public void setUseSystemPropertyValues(Boolean useSystemPropertyValues) {
+            useSystemPropertyValues(useSystemPropertyValues);
+        }
+
+        @Override
+        public ProxyConfiguration build() {
+            return new ProxyConfiguration(this);
+        }
     }
 }

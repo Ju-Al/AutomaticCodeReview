@@ -79,7 +79,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			oldIntegration := e.ObjectOld.(*v1alpha1.Integration)
 			newIntegration := e.ObjectNew.(*v1alpha1.Integration)
-
 			if oldIntegration.Status.Phase != newIntegration.Status.Phase {
 				Log.ForIntegration(newIntegration).Info(
 					"Phase transition",

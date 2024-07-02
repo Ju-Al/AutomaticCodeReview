@@ -176,7 +176,6 @@ class SQSTest(unittest.TestCase):
             self.assertIn('RequestID', msg_attrs)
             self.assertIn('ErrorCode', msg_attrs)
             self.assertIn('ErrorMessage', msg_attrs)
-
         retry(receive_dlq, retries=8, sleep=2)
 
     def test_set_queue_attribute_at_creation(self):

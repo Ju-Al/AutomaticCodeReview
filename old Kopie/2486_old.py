@@ -1,5 +1,3 @@
-"""
-Graph Representation Learning via Hard Attention Networks in DGL using Adam optimization.
 References
 ----------
 Paper: https://arxiv.org/abs/1907.04652

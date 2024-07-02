@@ -1,5 +1,4 @@
 """Farthest Point Sampler for mxnet Geometry package"""
-#pylint: disable=no-member, invalid-name
 
 from mxnet import nd
 from mxnet.gluon import nn

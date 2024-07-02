@@ -1,19 +1,4 @@
 /*
-    @Override
-    public int getFactoryId() {
-        return CdcJsonDataSerializerHook.FACTORY_ID;
-    }
-
-    @Override
-    public int getClassId() {
-        return CdcJsonDataSerializerHook.RECORD_PART;
-    }
-
-    @Override
-    public void writeData(ObjectDataOutput out) throws IOException {
-    @Override
-    public void readData(ObjectDataInput in) throws IOException {
-        json = in.readUTF();
  * Copyright (c) 2008-2020, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,7 +79,21 @@ class RecordPartImpl implements RecordPart {
         return toJson();
     }
 
-    void writeData(ObjectDataOutput out) throws IOException {
+    @Override
+    public int getFactoryId() {
+        return CdcJsonDataSerializerHook.FACTORY_ID;
+    }
+
+    @Override
+    public int getClassId() {
+        return CdcJsonDataSerializerHook.RECORD_PART;
+    }
+
+    @Override
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+        json = in.readUTF();
+    public void writeData(ObjectDataOutput out) throws IOException {
         out.writeUTF(json);
     }
 

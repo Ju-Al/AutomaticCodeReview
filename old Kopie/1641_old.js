@@ -78,7 +78,6 @@ describe('observed fields', () => {
         }
     );
 
-    pluginTest(
         'should not add reserved words to fields when is a reserved word decorated with @api, @track or @wire',
         `
         import { api, wire, track, createElement } from 'lwc';

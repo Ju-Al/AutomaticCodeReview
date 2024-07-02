@@ -111,7 +111,6 @@ class QuickmarkCompletionModel(base.BaseCompletionModel):
                 match_field))
 
 
-class BookmarkCompletionModel(base.BaseCompletionModel):
 
     """A CompletionModel filled with all bookmarks."""
 

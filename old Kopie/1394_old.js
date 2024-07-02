@@ -1,5 +1,4 @@
 // @flow
-      <IndexRedirect to={ROUTES.STAKING.DELEGATION_CENTER} />
 import React from 'react';
 import { Route, IndexRedirect } from 'react-router';
 import { ROUTES } from './routes-config';
@@ -77,7 +76,7 @@ export const Routes = (
       component={PaperWalletCreateCertificatePage}
     />
     <Route path={ROUTES.STAKING.ROOT} component={Staking}>
-      <IndexRedirect to={ROUTES.STAKING.DELEGATION_COUNT_DOWN} />
+      <IndexRedirect to={ROUTES.STAKING.DELEGATION_CENTER} />
       <Route
         path={ROUTES.STAKING.DELEGATION_COUNT_DOWN}
         component={StakingDelegationCountDownPage}

@@ -503,9 +503,6 @@ type doltTablePartition struct {
 // Key returns the key for this partition, which must uniquely identity the partition.
 func (p doltTablePartition) Key() []byte {
 	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
-}
-
-// IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
 func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapIterator, error) {

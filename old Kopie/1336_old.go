@@ -51,7 +51,6 @@ func Mux(pattern string, mux *http.ServeMux) InboundOption {
 	}
 }
 
-// Interceptor specifies a func that takes the transport http.Handler and
 // produces an http.Handler. This can be used to create custom behavior
 // when inbound HTTP requests are recieved.
 func Interceptor(interceptor func(http.Handler) http.Handler) InboundOption {

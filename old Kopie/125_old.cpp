@@ -97,7 +97,6 @@ void Interface::ButtonsArea::Redraw(void)
 
     SetButtonStatus();
 
-	Heroes * currentHero = GetFocusHeroes();
 	if (currentHero != nullptr && !currentHero->GetPath().isValid()
 	   || currentHero != nullptr && 0 == currentHero->GetMobilityIndexSprite())
 		buttonMovement.SetDisable(true);

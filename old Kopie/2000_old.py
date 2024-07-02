@@ -1588,7 +1588,6 @@ class TestVectorizedSymbolLookup(WithAssetFinder, ZiplineTestCase):
             [af.lookup_symbol(sym, dt, fuzzy=True) for sym in syms],
         )
 
-
 class TestAssetFinderPreprocessors(WithTmpDir, ZiplineTestCase):
 
     def test_asset_finder_doesnt_silently_create_useless_empty_files(self):

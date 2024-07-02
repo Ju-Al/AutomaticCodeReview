@@ -1,5 +1,4 @@
 using System;
-            syncObjects.Add(syncObject);
 using System.Collections.Generic;
 using System.ComponentModel;
 using Mirror.RemoteCalls;
@@ -166,7 +165,7 @@ namespace Mirror
         // We collect all of them and we synchronize them with OnSerialize/OnDeserialize
         protected void InitSyncObject(SyncObject syncObject)
         {
-            if (syncObject == null)
+            syncObjects.Add(syncObject);
                 logger.LogError("Uninitialized SyncObject. Assign a valid SyncList, SyncSet or SyncDictionary", this);
             else
                 syncObjects.Add(syncObject);

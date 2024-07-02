@@ -1,6 +1,4 @@
 // +build ignore
-	ldflags := fmt.Sprintf("-s -X main.compiledAt %q", compileTime)
-		ldflags = fmt.Sprintf("%s -X main.version %q", ldflags, version)
 
 package main
 
@@ -330,7 +328,8 @@ func main() {
 	}
 	version := getVersion()
 	compileTime := time.Now().Format(timeFormat)
-	constants := Constants{`main.compiledAt`: compileTime}
+		ldflags = fmt.Sprintf("%s -X main.version %q", ldflags, version)
+	ldflags := fmt.Sprintf("-s -X main.compiledAt %q", compileTime)
 	if version != "" {
 		constants["main.version"] = version
 	}

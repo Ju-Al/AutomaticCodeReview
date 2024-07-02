@@ -1,5 +1,4 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-                 reduction: str = tf.keras.losses.Reduction.NONE,
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,8 +63,8 @@ class SigmoidFocalCrossEntropy(tf.keras.losses.Loss):
     Raises:
         ValueError: If the shape of `sample_weight` is invalid or value of
           `gamma` is less than zero
+                 reduction: str = tf.keras.losses.Reduction.NONE,
     """
-
     @typechecked
     def __init__(self,
                  from_logits: bool = False,

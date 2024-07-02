@@ -1,8 +1,4 @@
 /**
-            "INSERT INTO signatory(\n"
-            "            public_key)\n"
-            "    VALUES (" +
-            transaction_.quote(public_key) + ");");
  * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -109,7 +105,10 @@ namespace iroha {
       try {
         pqxx::binarystring public_key(signatory.data(), signatory.size());
         transaction_.exec(
-            "INSERT INTO signatory(public_key)\n"
+            "INSERT INTO signatory(\n"
+            "            public_key)\n"
+            "    VALUES (" +
+            transaction_.quote(public_key) + ");");
             "    SELECT " + transaction_.quote(public_key) + "\n" +
             "    WHERE NOT EXISTS (SELECT 1 FROM signatory WHERE public_key = " + transaction_.quote(public_key) + ");");
       } catch (const std::exception &e) {

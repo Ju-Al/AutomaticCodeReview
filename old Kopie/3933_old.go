@@ -1,6 +1,4 @@
 // Copyright 2016 The prometheus-operator Authors
-		err = k8sutil.UpdateSecret(ctx, sClient, tlsAssetsSecret)
-		level.Debug(c.logger).Log("msg", "updated tlsAssetsSecret", "secretname", tlsAssetsSecret.Name)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1593,7 +1591,7 @@ func (c *Operator) createOrUpdateTLSAssetSecret(ctx context.Context, p *monitori
 		level.Debug(c.logger).Log("msg", "created tlsAssetsSecret", "secretname", tlsAssetsSecret.Name)
 
 	} else {
-		eq := reflect.DeepEqual(secret.Data, tlsAssetsSecret.Data)
+		err = k8sutil.UpdateSecret(ctx, sClient, tlsAssetsSecret)
 		if !eq {
 			err = k8sutil.UpdateSecret(ctx, sClient, tlsAssetsSecret)
 			level.Debug(c.logger).Log("msg", "updated tlsAssetsSecret", "secretname", tlsAssetsSecret.Name)

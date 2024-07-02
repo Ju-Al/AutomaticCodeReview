@@ -1,6 +1,5 @@
 package wallet
 
-var walletKey = []byte("walletInfo")
 import (
 	"encoding/json"
 	"sync"
@@ -24,7 +23,7 @@ const (
 	logModule = "wallet"
 )
 
-var (
+var walletKey = []byte("walletInfo")
 	currentVersionStr = "1.0.1"
 
 	walletKey = []byte("walletInfo")

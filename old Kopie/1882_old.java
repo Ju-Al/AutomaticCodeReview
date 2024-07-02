@@ -1,5 +1,4 @@
 /*
-      return BytesValue.EMPTY;
  * Copyright 2019 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -51,7 +50,7 @@ public class BLAKE2BFPrecompileContract extends AbstractPrecompiledContract {
   @Override
   public BytesValue compute(final BytesValue input, final MessageFrame messageFrame) {
     if (input.size() != MESSAGE_LENGTH_BYTES) {
-      return null;
+      return BytesValue.EMPTY;
     }
     if ((input.get(212) & 0xFE) != 0) {
       return null;

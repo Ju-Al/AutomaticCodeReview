@@ -1,10 +1,5 @@
 """
-            filt = None
-                filt = flowfilter.parse(ctx.options.view_filter)
-                if not filt:
-                    raise exceptions.OptionsError(
-                        "Invalid interception filter: %s" % ctx.options.view_filter
-                    )The View:
+The View:
 
 - Keeps track of a store of flows
 - Maintains a filtered, ordered view onto that list of flows
@@ -550,8 +545,13 @@ class View(collections.abc.Sequence):
     # Event handlers
     def configure(self, updated):
         if "view_filter" in updated:
+            filt = None
             if ctx.options.view_filter:
-                ctx.options.filter_active = True
+                filt = flowfilter.parse(ctx.options.view_filter)
+                if not filt:
+                    raise exceptions.OptionsError(
+                        "Invalid interception filter: %s" % ctx.options.view_filter
+                    )                ctx.options.filter_active = True
             else:
                 ctx.options.filter_active = False
         if "view_order" in updated:

@@ -17,7 +17,6 @@ class ProductQuerySet(models.query.QuerySet):
     def browsable(self):
         """
         Excludes non-canonical products.
-
         Method is deprecated. Use BrowsableProductQuerySet instead.
         """
         return self.filter(parent=None)

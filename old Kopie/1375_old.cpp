@@ -1,28 +1,5 @@
 #define WIN32_LEAN_AND_MEAN
 
-                                        boost::asio::deadline_timer* timer,
-        if (!m_cancel_retries) {
-            if (TRACE_EXECUTION)
-                DebugLogger() << "ClientNetworking::HandleConnection : connection error ... retrying";
-            m_socket.async_connect(**it, boost::bind(&ClientNetworking::HandleConnection, this,
-                                                     it,
-                                                     timer,
-                                                     boost::asio::placeholders::error));
-        }
-        timer->cancel();
-        m_connected = true;
-void ClientNetworking::CancelRetries()
-{ m_cancel_retries = true; }
-
-    if (error.code() == boost::asio::error::eof ||
-        error.code() == boost::asio::error::connection_reset ||
-        error.code() == boost::asio::error::operation_aborted)
-    {
-        DebugLogger() << "ClientNetworking::NetworkingThread() : Networking thread will be terminated "
-                      << "due to disconnect exception \"" << error.what() << "\"";
-    } else {
-                      << "due to unhandled exception \"" << error.what() << "\"";
-void ClientNetworking::NetworkingThread() {
 #include "ClientNetworking.h"
 
 #include "Networking.h"
@@ -355,10 +332,32 @@ void ClientNetworking::SendSynchronousMessage(Message message, Message& response
 }
 
 void ClientNetworking::HandleConnection(tcp::resolver::iterator* it,
+                                        boost::asio::deadline_timer* timer,
                                         const boost::system::error_code& error)
 {
     if (error) {
-        if (TRACE_EXECUTION)
+        if (!m_cancel_retries) {
+            if (TRACE_EXECUTION)
+                DebugLogger() << "ClientNetworking::HandleConnection : connection error ... retrying";
+            m_socket.async_connect(**it, boost::bind(&ClientNetworking::HandleConnection, this,
+                                                     it,
+                                                     timer,
+                                                     boost::asio::placeholders::error));
+        timer->cancel();
+        m_connected = true;
+        }
+void ClientNetworking::CancelRetries()
+{ m_cancel_retries = true; }
+
+    if (error.code() == boost::asio::error::eof ||
+        error.code() == boost::asio::error::connection_reset ||
+        error.code() == boost::asio::error::operation_aborted)
+    {
+        DebugLogger() << "ClientNetworking::NetworkingThread() : Networking thread will be terminated "
+                      << "due to disconnect exception \"" << error.what() << "\"";
+    } else {
+                      << "due to unhandled exception \"" << error.what() << "\"";
+void ClientNetworking::NetworkingThread() {
             DebugLogger() << "ClientNetworking::HandleConnection : connection "
                           << "error #"<<error.value()<<" \"" << error.message() << "\""
                           << "... retrying";

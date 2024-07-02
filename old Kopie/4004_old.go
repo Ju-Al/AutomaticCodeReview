@@ -1,6 +1,4 @@
 // Copyright 2014 Google LLC
-		// TODO: use strings.ReplaceAll once we only support 1.11+.
-		line = strings.Replace(line, "\"", "", -1)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1217,6 +1215,8 @@ func TestIntegration_OrderedKeys_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = sub
+		// TODO: use strings.ReplaceAll once we only support 1.11+.
+		line = strings.Replace(line, "\"", "", -1)
 	exists, err = sub.Exists(ctx)
 	if err != nil {
 		t.Fatal(err)

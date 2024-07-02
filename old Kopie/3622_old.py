@@ -1,6 +1,4 @@
 import time
-    def add_job(self, job_func, schedule):
-        job = Job(job_func, schedule)
 import logging
 from crontab import CronTab
 from localstack.utils.common import FuncThread, short_uid
@@ -40,7 +38,8 @@ class JobScheduler(object):
         self.jobs = []
         self.thread = None
 
-    def add_job(self, job_func, schedule, enabled):
+    def add_job(self, job_func, schedule):
+        job = Job(job_func, schedule)
         job = Job(job_func, schedule, enabled)
         self.jobs.append(job)
         return job.job_id

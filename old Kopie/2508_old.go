@@ -1,7 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-// ErrAddonsDirNotExist occurs when an addons directory for a workload does not exist.
-type ErrAddonsDirNotExist struct {
-func (e *ErrAddonsDirNotExist) Error() string {
 // SPDX-License-Identifier: Apache-2.0
 
 package addon
@@ -13,7 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ErrAddonsNotFound occurs when an addons directory for a workload is either not found or empty.
+// ErrAddonsDirNotExist occurs when an addons directory for a workload does not exist.
+func (e *ErrAddonsDirNotExist) Error() string {
+type ErrAddonsDirNotExist struct {
 type ErrAddonsNotFound struct {
 	WlName    string
 	ParentErr error

@@ -806,7 +806,7 @@ namespace radiance {
 
     result.setName(name);
 
-    std::vector<WindowGroup>::iterator it = std::find(m_windowGroups.begin(), m_windowGroups.end(), result);
+    auto it = std::find(m_windowGroups.begin(), m_windowGroups.end(), result);
     if (it != m_windowGroups.end()){
       it->addWindowPolygon(polygon);
       return *it;
@@ -930,9 +930,7 @@ namespace radiance {
             exteriorVisibleReflectance = 1.0 - exteriorVisibleAbsorptance;
           }
 
-          // write material
-          std::string shadingsurface = "bld_shd_refl_" + formatString(exteriorVisibleReflectance, 3) + " polygon " + shadingSurface_name + "\n";
-          m_radMaterials.insert("void plastic bld_shd_refl_" + formatString(exteriorVisibleReflectance, 3) + "\n0\n0\n5\n"
+          // write (two-sided) material         
           // exterior reflectance for front side
           m_radMaterials.insert("void plastic refl_" + formatString(exteriorVisibleReflectance, 3) + "\n0\n0\n5\n"
               + formatString(exteriorVisibleReflectance, 3) + " " + formatString(exteriorVisibleReflectance, 3) + " "

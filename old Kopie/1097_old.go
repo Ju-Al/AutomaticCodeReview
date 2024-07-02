@@ -1,8 +1,5 @@
 package lib
 
-	Data        []byte // Data can hold auxiliary information.
-	Description string // Description in string format.
-	End         string // End (termination) date.
 import (
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/share/dkg/rabin"
@@ -37,7 +34,9 @@ type Election struct {
 	Key    kyber.Point           // Key is the DKG public key.
 	Stage  uint32                // Stage indicates the phase of the election.
 
-	Candidates  []uint32 // Candidates is the list of candidate scipers.
+	Data        []byte // Data can hold auxiliary information.
+	Description string // Description in string format.
+	End         string // End (termination) date.
 	MaxChoices  uint32   // MaxChoices is the max votes in allowed in a ballot.
 	Description string   // Description in string format.
 	End         string   // End (termination) date.

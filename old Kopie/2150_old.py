@@ -255,8 +255,6 @@ class MultiGraph(Graph):
     def __init__(self, data=None, **attr):
         self.edge_key_dict_factory = self.edge_key_dict_factory
         Graph.__init__(self, data, **attr)
-
-    def new_edge_key(self, u, v):
         """Return an unused key for edges between nodes `u` and `v`.
 
         The nodes `u` and `v` do not need to be already in the graph.

@@ -1,6 +1,5 @@
 package ceb
 
-	var refreshCh <-chan time.Time
 import (
 	"bytes"
 	"context"
@@ -160,7 +159,10 @@ func (ceb *CEB) watchAppConfig(
 			// New variables, track it and immediately trigger a refresh
 			log.Debug("new config variables received, scheduling refresh")
 			prevVars = newVars
-			refreshTick()
+			refreshChNow := make(chan time.Time)
+			close(refreshChNow)
+			prevVarsChanged = ceb.diffDynamicAppConfig(log, dynamicOld, dynamic)
+			refreshCh = refreshChNow
 
 			// Split the static and dynamic out here since this is something
 			// we're going to need often so we precompute it once.

@@ -1,21 +1,4 @@
 /* Copyright (C) 2000-2012 by George Williams */
-	int did_keybindings = 0;
-	if ( local_x && useCommandKey ) {
-	    /* Can we find a set of keybindings designed for the mac with cmd key? */
-	    bind_textdomain_codeset("Mac-FontForge-MenuShortCuts","UTF-8");
-	    bindtextdomain("Mac-FontForge-MenuShortCuts", getLocaleDir());
-	    if ( *dgettext("Mac-FontForge-MenuShortCuts","Flag0x10+")!='F' ) {
-		GMenuSetShortcutDomain("Mac-FontForge-MenuShortCuts");
-		did_keybindings = 1;
-	    }
-	}
-	if ( !did_keybindings ) {
-	    /* Nope. we can't. Fall back to the normal stuff */
-#endif
-	    GMenuSetShortcutDomain("FontForge-MenuShortCuts");
-	    bind_textdomain_codeset("FontForge-MenuShortCuts","UTF-8");
-	    bindtextdomain("FontForge-MenuShortCuts", getLocaleDir());
-#if defined(__Mac)
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -1064,6 +1047,23 @@ int fontforge_main( int argc, char **argv ) {
 #endif
 
 #if defined(__MINGW32__)
+	int did_keybindings = 0;
+	if ( local_x && useCommandKey ) {
+	    /* Can we find a set of keybindings designed for the mac with cmd key? */
+	    bind_textdomain_codeset("Mac-FontForge-MenuShortCuts","UTF-8");
+	    bindtextdomain("Mac-FontForge-MenuShortCuts", getLocaleDir());
+	    if ( *dgettext("Mac-FontForge-MenuShortCuts","Flag0x10+")!='F' ) {
+		GMenuSetShortcutDomain("Mac-FontForge-MenuShortCuts");
+		did_keybindings = 1;
+	    }
+	}
+	if ( !did_keybindings ) {
+	    /* Nope. we can't. Fall back to the normal stuff */
+#endif
+	    GMenuSetShortcutDomain("FontForge-MenuShortCuts");
+	    bind_textdomain_codeset("FontForge-MenuShortCuts","UTF-8");
+	    bindtextdomain("FontForge-MenuShortCuts", getLocaleDir());
+#if defined(__Mac)
     if( getenv("DISPLAY")==NULL ) {
 	putenv("DISPLAY=127.0.0.1:0.0");
     }

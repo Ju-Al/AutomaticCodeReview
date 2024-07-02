@@ -1,16 +1,4 @@
 /*
-	if err != nil && !apierrors.IsNotFound(err) {
-		logging.FromContext(ctx).Desugar().Error("Unable to get a Topic", zap.Error(err))
-		return nil, err
-	}
-	if topic != nil {
-		if topic.Status.Address != nil {
-			channel.Status.SetAddress(topic.Status.Address.URL)
-		} else {
-			channel.Status.SetAddress(nil)
-		}
-		return topic, nil
-	}
 Copyright 2019 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -312,7 +300,18 @@ func (r *Reconciler) syncSubscribersStatus(ctx context.Context, channel *v1beta1
 
 func (r *Reconciler) reconcileTopic(ctx context.Context, channel *v1beta1.Channel) (*inteventsv1beta1.Topic, error) {
 	topic, err := r.getTopic(ctx, channel)
-
+	if err != nil && !apierrors.IsNotFound(err) {
+		logging.FromContext(ctx).Desugar().Error("Unable to get a Topic", zap.Error(err))
+		return nil, err
+	}
+	if topic != nil {
+		if topic.Status.Address != nil {
+			channel.Status.SetAddress(topic.Status.Address.URL)
+		} else {
+			channel.Status.SetAddress(nil)
+		}
+		return topic, nil
+	}
 	clusterName := channel.GetAnnotations()[duckv1beta1.ClusterNameAnnotation]
 	name := resources.GeneratePublisherName(channel)
 	t := resources.MakeTopic(&resources.TopicArgs{

@@ -1,48 +1,119 @@
-package authentication
+package handlers
 
-// Level is the type representing a level of authentication.
-type Level int
+import (
+	"fmt"
+	"time"
 
-const (
-	// NotAuthenticated if the user is not authenticated yet.
-	NotAuthenticated Level = iota
-	// OneFactor if the user has passed first factor only.
-	OneFactor Level = iota
-	// TwoFactor if the user has passed two factors.
-	TwoFactor Level = iota
+	"github.com/authelia/authelia/internal/authentication"
+	"github.com/authelia/authelia/internal/middlewares"
+	"github.com/authelia/authelia/internal/regulation"
+	"github.com/authelia/authelia/internal/session"
 )
 
-const (
-	// TOTP Method using Time-Based One-Time Password applications like Google Authenticator.
-	TOTP = "totp"
-	// U2F Method using U2F devices like Yubikeys.
-	U2F = "u2f"
-	// Push Method using Duo application to receive push notifications.
-	Push = "mobile_push"
-)
+// FirstFactorPost is the handler performing the first factory.
+//nolint:gocyclo // TODO: Consider refactoring time permitting.
+func FirstFactorPost(ctx *middlewares.AutheliaCtx) {
+	bodyJSON := firstFactorRequestBody{}
+	err := ctx.ParseBody(&bodyJSON)
 
-// PossibleMethods is the set of all possible 2FA methods
-var PossibleMethods = []string{TOTP, U2F, Push}
+	if err != nil {
+		ctx.Error(err, authenticationFailedMessage)
+		return
+	}
 
-const (
-	// HashingAlgorithmArgon2id Argon2id hash identifier.
-	HashingAlgorithmArgon2id = "argon2id"
-	// HashingAlgorithmSHA512 SHA512 hash identifier.
-	HashingAlgorithmSHA512 = "6"
-)
+	bannedUntil, err := ctx.Providers.Regulator.Regulate(bodyJSON.Username)
 
-// These are the default values from the upstream crypt module we use them to for GetInt
-// and they need to be checked when updating github.com/simia-tech/crypt.
-const (
-	HashingDefaultArgon2idTime        = 1
-	HashingDefaultArgon2idMemory      = 32 * 1024
-	HashingDefaultArgon2idParallelism = 4
-	HashingDefaultArgon2idKeyLength   = 32
-	HashingDefaultSHA512Iterations    = 5000
-)
+	if err != nil {
+		if err == regulation.ErrUserIsBanned {
+			ctx.Error(fmt.Errorf("User %s is banned until %s", bodyJSON.Username, bannedUntil), userBannedMessage)
+			return
+		}
+		ctx.Error(fmt.Errorf("Unable to regulate authentication: %s", err), authenticationFailedMessage)
+		return
+	}
 
-// HashingPossibleSaltCharacters represents valid hashing runes.
-var HashingPossibleSaltCharacters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/")
+	userPasswordOk, err := ctx.Providers.UserProvider.CheckUserPassword(bodyJSON.Username, bodyJSON.Password)
 
-// UserNotFoundMessage indicates the user wasn't found in the authentication backend
-const UserNotFoundMessage = "user not found"
+	if err != nil {
+		ctx.Logger.Debugf("Mark authentication attempt made by user %s", bodyJSON.Username)
+		ctx.Providers.Regulator.Mark(bodyJSON.Username, false) //nolint:errcheck // TODO: Legacy code, consider refactoring time permitting.
+
+		ctx.Error(fmt.Errorf("Error while checking password for user %s: %s", bodyJSON.Username, err.Error()), authenticationFailedMessage)
+		return
+	}
+
+	if !userPasswordOk {
+		ctx.Logger.Debugf("Mark authentication attempt made by user %s", bodyJSON.Username)
+		ctx.Providers.Regulator.Mark(bodyJSON.Username, false) //nolint:errcheck // TODO: Legacy code, consider refactoring time permitting.
+
+		ctx.ReplyError(fmt.Errorf("Credentials are wrong for user %s", bodyJSON.Username), authenticationFailedMessage)
+		return
+	}
+
+	ctx.Logger.Debugf("Credentials validation of user %s is ok", bodyJSON.Username)
+
+	ctx.Logger.Debugf("Mark authentication attempt made by user %s", bodyJSON.Username)
+	err = ctx.Providers.Regulator.Mark(bodyJSON.Username, true)
+
+	if err != nil {
+		ctx.Error(fmt.Errorf("Unable to mark authentication: %s", err), authenticationFailedMessage)
+		return
+	}
+
+	// Reset all values from previous session before regenerating the cookie.
+	err = ctx.SaveSession(session.NewDefaultUserSession())
+
+	if err != nil {
+		ctx.Error(fmt.Errorf("Unable to reset the session for user %s: %s", bodyJSON.Username, err), authenticationFailedMessage)
+		return
+	}
+
+	err = ctx.Providers.SessionProvider.RegenerateSession(ctx.RequestCtx)
+
+	if err != nil {
+		ctx.Error(fmt.Errorf("Unable to regenerate session for user %s: %s", bodyJSON.Username, err), authenticationFailedMessage)
+		return
+	}
+
+	// Check if bodyJSON.KeepMeLoggedIn can be deref'd and derive the value based on the configuration and JSON data
+	keepMeLoggedIn := ctx.Providers.SessionProvider.RememberMe != 0 && bodyJSON.KeepMeLoggedIn != nil && *bodyJSON.KeepMeLoggedIn
+
+	// Set the cookie to expire if remember me is enabled and the user has asked us to
+	if keepMeLoggedIn {
+		err = ctx.Providers.SessionProvider.UpdateExpiration(ctx.RequestCtx, ctx.Providers.SessionProvider.RememberMe)
+		if err != nil {
+			ctx.Error(fmt.Errorf("Unable to update expiration timer for user %s: %s", bodyJSON.Username, err), authenticationFailedMessage)
+			return
+		}
+	}
+
+	// Get the details of the given user from the user provider.
+	userDetails, err := ctx.Providers.UserProvider.GetDetails(bodyJSON.Username)
+
+	if err != nil {
+		ctx.Error(fmt.Errorf("Error while retrieving details from user %s: %s", bodyJSON.Username, err.Error()), authenticationFailedMessage)
+		return
+	}
+
+	ctx.Logger.Tracef("Details for user %s => groups: %s, emails %s", bodyJSON.Username, userDetails.Groups, userDetails.Emails)
+
+	// And set those information in the new session.
+	userSession := ctx.GetSession()
+	userSession.Username = userDetails.Username
+	userSession.Groups = userDetails.Groups
+	userSession.Emails = userDetails.Emails
+	userSession.AuthenticationLevel = authentication.OneFactor
+	userSession.LastActivity = time.Now().Unix()
+	userSession.KeepMeLoggedIn = keepMeLoggedIn
+	if refresh {
+		userSession.RefreshTTL = ctx.Clock.Now().Add(refreshInterval)
+	}
+	err = ctx.SaveSession(userSession)
+
+	if err != nil {
+		ctx.Error(fmt.Errorf("Unable to save session of user %s", bodyJSON.Username), authenticationFailedMessage)
+		return
+	}
+
+	Handle1FAResponse(ctx, bodyJSON.TargetURL, userSession.Username, userSession.Groups)
+}

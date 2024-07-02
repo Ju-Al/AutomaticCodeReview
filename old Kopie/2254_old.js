@@ -1,5 +1,4 @@
 import gql from 'graphql-tag';
-import { CheckoutPageFragment } from './checkoutPageFragments.gql';
 
 const CREATE_CART_MUTATION = gql`
     # This mutation will return a masked cart id. If a bearer token is provided for

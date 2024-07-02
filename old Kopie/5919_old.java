@@ -1,12 +1,4 @@
 /*
-        if (!serviceMap.containsKey(service.getNamespaceId())) {
-            synchronized (putServiceLock) {
-                if (!serviceMap.containsKey(service.getNamespaceId())) {
-                    serviceMap.put(service.getNamespaceId(), new ConcurrentSkipListMap<>());
-                }
-            }
-        }
-        serviceMap.get(service.getNamespaceId()).putIfAbsent(service.getName(), service);
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -867,7 +859,14 @@ public class ServiceManager implements RecordListener<Service> {
      * @param service service
      */
     public void putService(Service service) {
-        serviceMap.putIfAbsent(service.getNamespaceId(), new ConcurrentSkipListMap<>())
+        if (!serviceMap.containsKey(service.getNamespaceId())) {
+            synchronized (putServiceLock) {
+                if (!serviceMap.containsKey(service.getNamespaceId())) {
+                    serviceMap.put(service.getNamespaceId(), new ConcurrentSkipListMap<>());
+                }
+            }
+        }
+        serviceMap.get(service.getNamespaceId()).putIfAbsent(service.getName(), service);
                 .putIfAbsent(service.getName(), service);
     }
     

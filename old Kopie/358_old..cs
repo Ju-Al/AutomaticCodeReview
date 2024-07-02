@@ -255,7 +255,6 @@ namespace Microsoft.Recognizers.Text.DataDrivenTests
             {
                 Debugger.Break();
             }
-        }
 
         private void GeneralMainTest(bool testUnit = false, bool testType = false)
         {

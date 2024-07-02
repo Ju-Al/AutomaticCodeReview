@@ -1,6 +1,4 @@
 <?php
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
 
 /**
  * Class MarkdownFactory
@@ -64,8 +62,9 @@ class MarkdownFactory implements FactoryInterface
      */
     public function __invoke(
         ContainerInterface $container, $requestedName, array $options = null
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
     ) {
-        $config = $container->get(\VuFind\Config\PluginManager::class)
             ->get('markdown')->Markdown;
         return new GithubFlavoredMarkdownConverter(
             [

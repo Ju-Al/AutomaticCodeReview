@@ -1,6 +1,4 @@
 # Copyright 2019 Google LLC
-    message = '%d/%d tokens remaining.' % (len(self.get_required_tokens()),
-                                           len(self.required_tokens))
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -219,7 +217,8 @@ class Testcase(object):
       return
 
     self.last_progress_report_time = time.time()
-    message = '%d/%d tokens remaining. - %d runs executed so far.' % (len(
+    message = '%d/%d tokens remaining.' % (len(self.get_required_tokens()),
+                                           len(self.required_tokens))
         self.get_required_tokens()), len(
             self.required_tokens), self.runs_executed)
     self.minimizer.progress_report_function(message)

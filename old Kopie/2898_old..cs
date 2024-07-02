@@ -1,5 +1,4 @@
 ﻿namespace Nancy.Owin
-                        var nancyRequestStream = new RequestStream(owinRequestBody, ExpectedLength(owinRequestHeaders), StaticConfiguration.DisableRequestStreamSwitching ?? false);
 {
     using System;
     using System.Collections.Generic;
@@ -81,7 +80,7 @@
 
                         var url = CreateUrl(owinRequestHost, owinRequestScheme, owinRequestPathBase, owinRequestPath, owinRequestQueryString);
 
-                        var expectedLength = ExpectedLength(owinRequestHeaders);
+                        var nancyRequestStream = new RequestStream(owinRequestBody, ExpectedLength(owinRequestHeaders), StaticConfiguration.DisableRequestStreamSwitching ?? false);
                         // If length is 0 just use empty memory stream; as there is no body
                         var nancyRequestStream = (expectedLength == 0) ? (Stream)new MemoryStream() : new RequestStream(owinRequestBody, ExpectedLength(owinRequestHeaders) ?? 0, StaticConfiguration.DisableRequestStreamSwitching ?? false);
 

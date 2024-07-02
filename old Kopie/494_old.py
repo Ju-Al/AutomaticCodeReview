@@ -1,6 +1,6 @@
 from __future__ import division
 
-        # classification lossimport numpy as np
+import numpy as np
 import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
@@ -127,7 +127,7 @@ class AnchorHead(nn.Module):
 
     def loss_single(self, cls_score, bbox_pred, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples, cfg):
-        labels = labels.reshape(-1)
+        # classification loss        labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels)

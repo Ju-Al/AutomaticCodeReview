@@ -108,7 +108,6 @@ func TestRegularResourceComponent_Listen(t *testing.T) {
 		require.True(t, hasStarted, "the stopwatch should have started when an event was received")
 		require.Equal(t, time.Duration(0), elapsed)
 	})
-	t.Run("should keep timer running if multiple in progress events are received", func(t *testing.T) {
 		// GIVEN
 		ch := make(chan stream.StackEvent)
 		done := make(chan bool)

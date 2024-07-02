@@ -1,5 +1,4 @@
 /*
-                       " \"ssl.errors\": %" PRIu64 "\n",
  * Copyright (c) 2016 Fastly
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -98,7 +97,7 @@ static h2o_iovec_t events_status_final(void *priv, h2o_globalconf_t *gconf, h2o_
                        " \"http2-errors.inadequate-security\": %" PRIu64 ", \n"
                        " \"http2.read-closed\": %" PRIu64 ", \n"
                        " \"http2.write-closed\": %" PRIu64 ", \n"
-                       " \"ssl.errors\": %" PRIu64 ", \n"
+                       " \"ssl.errors\": %" PRIu64 "\n",
                        " \"memory.mmap_errors\": %" PRIu64 "\n",
                        H1_AGG_ERR(400), H1_AGG_ERR(403), H1_AGG_ERR(404), H1_AGG_ERR(405), H1_AGG_ERR(416), H1_AGG_ERR(417),
                        H1_AGG_ERR(500), H1_AGG_ERR(502), H1_AGG_ERR(503), H2_AGG_ERR(PROTOCOL), H2_AGG_ERR(INTERNAL),

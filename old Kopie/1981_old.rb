@@ -19,9 +19,6 @@ module Pod
 
       #import "BlocksKit.h"
       EOS
-    end
-
-    it "does not duplicate the contents of the specification's prefix header when a subspec is declared" do
       @spec.prefix_header_contents = '#import "BlocksKit.h"'
       @spec.prefix_header_file = nil
       # Declaring a subspec was found in issue #1449 to generate duplicates of the prefix_header_contents

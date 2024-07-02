@@ -1,5 +1,4 @@
 <?php
-/**
  * Handles Magic Tags
  *
  * @package Neve

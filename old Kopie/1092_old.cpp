@@ -63,7 +63,6 @@ class SimulatorTest : public ::testing::Test {
   std::shared_ptr<MockOrderingGate> ordering_gate;
   std::shared_ptr<iroha::model::MockCryptoProvider> crypto_provider;
 
-  std::shared_ptr<shared_model::interface::Proposal> empty_proposal;
 
   std::shared_ptr<Simulator> simulator;
 };

@@ -1,5 +1,4 @@
 /***************************************************************************
-    return Find( hero->GetIndex(), dst, hero->isShipMaster(), limit, hero->GetLevelSkill( Skill::Secondary::PATHFINDING ) );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -125,7 +124,7 @@ uint32_t Route::Path::Calculate( const s32 & dst_index, int limit /* -1 */ )
 {
     dst = dst_index;
 
-    swap( world.getPath( hero->GetIndex(), dst, hero->GetLevelSkill( Skill::Secondary::PATHFINDING ), false ) );
+    return Find( hero->GetIndex(), dst, hero->isShipMaster(), limit, hero->GetLevelSkill( Skill::Secondary::PATHFINDING ) );
 
     return world.getDistance( hero->GetIndex(), dst, hero->GetLevelSkill( Skill::Secondary::PATHFINDING ) );
 }

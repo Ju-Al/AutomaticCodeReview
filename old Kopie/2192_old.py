@@ -1,6 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-        except OSError:
-            raise jinja2.TemplateNotFound(template)
 
 # Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
@@ -92,7 +90,8 @@ class Loader(jinja2.BaseLoader):
         path = os.path.join(self._subdir, template)
         try:
             source = utils.read_file(path)
-        except OSError as e:
+        except OSError:
+            raise jinja2.TemplateNotFound(template)
             source = html_fallback + str(e) + html_fallback2;
         # Currently we don't implement auto-reloading, so we always return True
         # for up-to-date.

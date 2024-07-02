@@ -1,6 +1,5 @@
 package contactmethod
 
-		log.Logf(logCtx, "Contact method STOP received.")
 import (
 	"context"
 	"database/sql"
@@ -154,7 +153,7 @@ func (db *DB) DisableByValue(ctx context.Context, t Type, v string) error {
 			"contactMethodID": id,
 		})
 
-		log.Logf(logCtx, "Contact method unsubscribe code received.")
+		log.Logf(logCtx, "Contact method STOP received.")
 	}
 
 	return err

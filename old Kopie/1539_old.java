@@ -1,6 +1,4 @@
 /**
-  CollectorMetrics metrics(CounterService counterService, GaugeService gaugeService) {
-    return new ActuateCollectorMetrics(counterService, gaugeService);
  * Copyright 2015-2017 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -50,7 +48,8 @@ public class ZipkinServerConfiguration {
 
   @Bean
   @ConditionalOnMissingBean(CollectorMetrics.class)
-  CollectorMetrics metrics(Optional<CounterBuffers> counterBuffers, Optional<GaugeBuffers> gaugeBuffers) {
+  CollectorMetrics metrics(CounterService counterService, GaugeService gaugeService) {
+    return new ActuateCollectorMetrics(counterService, gaugeService);
     // it is not guaranteed that BufferCounterService/CounterBuffers will be used,
     // for ex., com.datastax.cassandra:cassandra-driver-core brings com.codahale.metrics.MetricRegistry
     // and as result DropwizardMetricServices is getting instantiated instead of standard Java8 BufferCounterService

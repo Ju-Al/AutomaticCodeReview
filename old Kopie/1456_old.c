@@ -1,9 +1,4 @@
 /*
-		if((!strcmp("CORES", t->lexeme)) || (!strcmp("DISK", t->lexeme)) || (!strcmp("MEMORY", t->lexeme))){
-		} else if(!strcmp("CATEGORY", t->lexeme)){
-		lexer_preppend_token(bk, t2);
-		lexer_preppend_token(bk, t);
-		dag_parse_variable_wmode(bk, n, '=');
 Copyright (C) 2008- The University of Notre Dame
 This software is distributed under the GNU General Public License.
 See the file COPYING for details.
@@ -478,7 +473,11 @@ static int dag_parse_directive(struct lexer *bk, struct dag_node *n)
 			lexer_report_error(bk, "Expected LITERAL token, got: %s\n", lexer_print_token(t2));
 		}
 
-		int set_var = 1;
+		} else if(!strcmp("CATEGORY", t->lexeme)){
+		lexer_preppend_token(bk, t2);
+		lexer_preppend_token(bk, t);
+		dag_parse_variable_wmode(bk, n, '=');
+		if((!strcmp("CORES", t->lexeme)) || (!strcmp("DISK", t->lexeme)) || (!strcmp("MEMORY", t->lexeme))){
 
 		if((!strcmp("CORES", t->lexeme))
 				|| (!strcmp("DISK", t->lexeme))

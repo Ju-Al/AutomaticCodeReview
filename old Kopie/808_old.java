@@ -133,7 +133,6 @@ public class EthPeer {
     }
   }
 
-  public void propagateBlock(final Block block, final UInt256 totalDifficulty) {
     final NewBlockMessage newBlockMessage = NewBlockMessage.create(block, totalDifficulty);
     final Capability capability = Capability.create("eth", 63);
     try {

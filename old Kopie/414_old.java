@@ -1,81 +1,117 @@
-package com.hubspot.singularity.config;
+package com.hubspot.singularity.views;
 
-import javax.validation.constraints.Pattern;
+  public IndexView(SingularityConfiguration configuration) {
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Throwables;
+import io.dropwizard.server.SimpleServerFactory;
+import io.dropwizard.views.View;
 
-import org.hibernate.validator.constraints.NotEmpty;
+import com.hubspot.singularity.SingularityService;
+import com.hubspot.singularity.config.SingularityConfiguration;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Optional;
-import com.google.common.base.Strings;
+public class IndexView extends View {
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
+  private final String appRoot;
+  private final String staticRoot;
+  private final String apiRoot;
+  private final String navColor;
 
-public class UIConfiguration {
+  private final Integer defaultMemory;
+  private final Integer defaultCpus;
 
-  @NotEmpty
-  @JsonProperty
-  private String title = "Singularity";
+  private final Boolean hideNewDeployButton;
+  private final Boolean hideNewRequestButton;
 
-  @JsonProperty
-  @Pattern( regexp = "^|#[0-9a-fA-F]{6}$" )
-  private String navColor = "";
+  private final String title;
 
-  @JsonProperty
-  private String baseUrl;
+  private final Integer slaveHttpPort;
+  private final Integer slaveHttpsPort;
 
-  @JsonProperty
-  private List<HashMap<String, String>> customQuickLinks = new LinkedList<>();
+  private final String taskQuickLinks;
 
-  private boolean hideNewDeployButton = false;
-  private boolean hideNewRequestButton = false;
+  public IndexView(SingularityConfiguration configuration, ObjectMapper objectMapper) {
+    super("index.mustache");
 
-  public boolean isHideNewDeployButton() {
-    return hideNewDeployButton;
+    appRoot = configuration.getUiConfiguration().getBaseUrl().or(((SimpleServerFactory) configuration.getServerFactory()).getApplicationContextPath());
+    staticRoot = String.format("%s/static", appRoot);
+    apiRoot = String.format("%s%s", appRoot, SingularityService.API_BASE_PATH);
+
+    title = configuration.getUiConfiguration().getTitle();
+
+    slaveHttpPort = configuration.getMesosConfiguration().getSlaveHttpPort();
+    slaveHttpsPort = configuration.getMesosConfiguration().getSlaveHttpsPort().orNull();
+
+    defaultCpus = configuration.getMesosConfiguration().getDefaultCpus();
+    defaultMemory = configuration.getMesosConfiguration().getDefaultMemory();
+
+    hideNewDeployButton = configuration.getUiConfiguration().isHideNewDeployButton();
+    hideNewRequestButton = configuration.getUiConfiguration().isHideNewRequestButton();
+
+    navColor = configuration.getUiConfiguration().getNavColor();
+
+    try {
+      taskQuickLinks = objectMapper.writeValueAsString(configuration.getUiConfiguration().getTaskQuickLinks());
+    }
+    catch (JsonProcessingException e) {
+      throw Throwables.propagate(e);
+    }
   }
 
-  public void setHideNewDeployButton(boolean hideNewDeployButton) {
-    this.hideNewDeployButton = hideNewDeployButton;
+  public String getAppRoot() {
+    return appRoot;
   }
 
-  public boolean isHideNewRequestButton() {
-    return hideNewRequestButton;
+  public String getStaticRoot() {
+    return staticRoot;
   }
 
-  public void setHideNewRequestButton(boolean hideNewRequestButton) {
-    this.hideNewRequestButton = hideNewRequestButton;
+  public String getApiRoot() {
+    return apiRoot;
   }
 
   public String getTitle() {
     return title;
   }
 
-  public void setTitle(String title) {
-    this.title = title;
-  }
-
-  public Optional<String> getBaseUrl() {
-    return Optional.fromNullable(Strings.emptyToNull(baseUrl));
-  }
-
-  public void setBaseUrl(String baseUrl) {
-    this.baseUrl = baseUrl;
-  }
-
   public String getNavColor() {
     return navColor;
   }
 
-  public void setNavColor(String navColor) {
-    this.navColor = navColor;
+  public Integer getSlaveHttpPort() {
+    return slaveHttpPort;
   }
 
-  public List<HashMap<String, String>> getCustomQuickLinks() {
-    return customQuickLinks;
+  public Integer getSlaveHttpsPort() {
+    return slaveHttpsPort;
   }
 
-  public void setCustomQuickLinks(List<HashMap<String, String>> customQuickLinks) {
-    this.customQuickLinks = customQuickLinks;
+  public Integer getDefaultMemory() {
+    return defaultMemory;
   }
+
+  public Integer getDefaultCpus() {
+    return defaultCpus;
+  }
+
+  public Boolean getHideNewDeployButton() {
+    return hideNewDeployButton;
+  }
+
+  public Boolean getHideNewRequestButton() {
+    return hideNewRequestButton;
+  }
+
+  public String getTaskQuickLinks() {
+    return taskQuickLinks;
+  }
+
+
+  @Override
+  public String toString() {
+    return "IndexView [appRoot=" + appRoot + ", staticRoot=" + staticRoot + ", apiRoot=" + apiRoot + ", navColor=" + navColor + ", defaultMemory=" + defaultMemory + ", defaultCpus=" + defaultCpus
+        + ", hideNewDeployButton=" + hideNewDeployButton + ", hideNewRequestButton=" + hideNewRequestButton + ", title=" + title + ", slaveHttpPort=" + slaveHttpPort + ", slaveHttpsPort="
+        + slaveHttpsPort + ", taskQuickLinks=" + taskQuickLinks + "]";
+  }
+
 }

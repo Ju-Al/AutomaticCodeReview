@@ -1,436 +1,458 @@
 <?php
-		'purgeOptInTokens' => array('Contao\Automator', 'purgeOptInTokens')
+	$errors  = get_transient( 'rocket_check_key_errors' );
+defined( 'ABSPATH' ) || exit;
 
-/*
- * This file is part of Contao.
+/**
+ * This warning is displayed when the API KEY isn't already set or not valid
  *
- * (c) Leo Feyer
- *
- * @license LGPL-3.0-or-later
+ * @since 1.0
  */
+function rocket_need_api_key() {
+	$message = '';
+	$errors  = (array) get_transient( 'rocket_check_key_errors' );
 
-// Back end modules
-$GLOBALS['BE_MOD'] = array
-(
-	// Content modules
-	'content' => array
-	(
-		'article' => array
-		(
-			'tables'      => array('tl_article', 'tl_content'),
-			'table'       => array('Contao\CoreBundle\Controller\BackendCsvImportController', 'importTableWizardAction'),
-			'list'        => array('Contao\CoreBundle\Controller\BackendCsvImportController', 'importListWizardAction')
-		),
-		'form' => array
-		(
-			'tables'      => array('tl_form', 'tl_form_field'),
-			'option'      => array('Contao\CoreBundle\Controller\BackendCsvImportController', 'importOptionWizardAction')
-		)
-	),
+	if ( false !== $errors ) {
+		foreach ( $errors as $error ) {
+			$message .= '<p>' . $error . '</p>';
+		}
+	}
 
-	// Design modules
-	'design' => array
-	(
-		'themes' => array
-		(
-			'tables'      => array('tl_theme', 'tl_module', 'tl_style_sheet', 'tl_style', 'tl_layout', 'tl_image_size', 'tl_image_size_item'),
-			'importTheme' => array('Contao\Theme', 'importTheme'),
-			'exportTheme' => array('Contao\Theme', 'exportTheme'),
-			'import'      => array('Contao\StyleSheets', 'importStyleSheet'),
-			'export'      => array('Contao\StyleSheets', 'exportStyleSheet')
-		),
-		'page' => array
-		(
-			'tables'      => array('tl_page')
-		),
-		'tpl_editor' => array
-		(
-			'tables'      => array('tl_templates'),
-			'new_tpl'     => array('tl_templates', 'addNewTemplate'),
-			'compare'     => array('tl_templates', 'compareTemplate')
-		)
-	),
+	?>
+	<div class="notice notice-error">
+		<p><strong><?php echo esc_html( WP_ROCKET_PLUGIN_NAME ); ?></strong>
+		<?php
+		echo esc_html( _n( 'There seems to be an issue validating your license. Please see the error message below.', 'There seems to be an issue validating your license. You can see the error messages below.', count( $errors ), 'rocket' ) );
+		?>
+		</p>
+		<?php echo wp_kses_post( $message ); ?>
+	</div>
+	<?php
+}
 
-	// Account modules
-	'accounts' => array
-	(
-		'member' => array
-		(
-			'tables'                  => array('tl_member')
-		),
-		'mgroup' => array
-		(
-			'tables'                  => array('tl_member_group')
-		),
-		'user' => array
-		(
-			'tables'                  => array('tl_user')
-		),
-		'group' => array
-		(
-			'tables'                  => array('tl_user_group')
-		),
-		'login' => array
-		(
-			'tables'                  => array('tl_user'),
-			'hideInNavigation'        => true,
-			'disablePermissionChecks' => true
-		),
-		'security' => array
-		(
-			'callback'                => 'Contao\ModuleTwoFactor',
-			'hideInNavigation'        => true,
-			'disablePermissionChecks' => true
-		)
-	),
+/**
+ * Renew all boxes for everyone if $uid is missing
+ *
+ * @since 1.1.10
+ * @modified 2.1 :
+ *  - Better usage of delete_user_meta into delete_metadata
+ *
+ * @param (int|null)     $uid : a User id, can be null, null = all users.
+ * @param (string|array) $keep_this : which box have to be kept.
+ * @return void
+ */
+function rocket_renew_all_boxes( $uid = null, $keep_this = [] ) {
+	// Delete a user meta for 1 user or all at a time.
+	delete_metadata( 'user', $uid, 'rocket_boxes', null === $uid );
 
-	// System modules
-	'system' => array
-	(
-		'files' => array
-		(
-			'tables'                  => array('tl_files')
-		),
-		'settings' => array
-		(
-			'tables'                  => array('tl_settings')
-		),
-		'maintenance' => array
-		(
-			'callback'                => 'Contao\ModuleMaintenance'
-		),
-		'log' => array
-		(
-			'tables'                  => array('tl_log')
-		),
-		'opt_in' => array
-		(
-			'tables'                  => array('tl_opt_in'),
-			'resend'                  => array('tl_opt_in', 'resendToken'),
-		),
-		'undo' => array
-		(
-			'tables'                  => array('tl_undo'),
-			'disablePermissionChecks' => true
-		)
-	)
-);
+	// $keep_this works only for the current user.
+	if ( ! empty( $keep_this ) && null !== $uid ) {
+		if ( ! is_array( $keep_this ) ) {
+			$keep_this = (array) $keep_this;
+		}
 
-// Front end modules
-$GLOBALS['FE_MOD'] = array
-(
-	'navigationMenu' => array
-	(
-		'navigation'     => 'Contao\ModuleNavigation',
-		'customnav'      => 'Contao\ModuleCustomnav',
-		'breadcrumb'     => 'Contao\ModuleBreadcrumb',
-		'quicknav'       => 'Contao\ModuleQuicknav',
-		'quicklink'      => 'Contao\ModuleQuicklink',
-		'booknav'        => 'Contao\ModuleBooknav',
-		'articlenav'     => 'Contao\ModuleArticlenav',
-		'sitemap'        => 'Contao\ModuleSitemap'
-	),
-	'user' => array
-	(
-		'login'          => 'Contao\ModuleLogin',
-		'logout'         => 'Contao\ModuleLogout',
-		'personalData'   => 'Contao\ModulePersonalData',
-		'registration'   => 'Contao\ModuleRegistration',
-		'changePassword' => 'Contao\ModuleChangePassword',
-		'lostPassword'   => 'Contao\ModulePassword',
-		'closeAccount'   => 'Contao\ModuleCloseAccount'
-	),
-	'application' => array
-	(
-		'form'           => 'Contao\Form',
-		'search'         => 'Contao\ModuleSearch'
-	),
-	'miscellaneous' => array
-	(
-		'articlelist'    => 'Contao\ModuleArticleList',
-		'randomImage'    => 'Contao\ModuleRandomImage',
-		'html'           => 'Contao\ModuleHtml',
-		'rssReader'      => 'Contao\ModuleRssReader'
-	)
-);
+		foreach ( $keep_this as $kt ) {
+			rocket_dismiss_box( $kt );
+		}
+	}
+}
 
-// Content elements
-$GLOBALS['TL_CTE'] = array
-(
-	'texts' => array
-	(
-		'headline'        => 'Contao\ContentHeadline',
-		'text'            => 'Contao\ContentText',
-		'html'            => 'Contao\ContentHtml',
-		'list'            => 'Contao\ContentList',
-		'table'           => 'Contao\ContentTable',
-		'code'            => 'Contao\ContentCode',
-		'markdown'        => 'Contao\ContentMarkdown'
-	),
-	'accordion' => array
-	(
-		'accordionSingle' => 'Contao\ContentAccordion',
-		'accordionStart'  => 'Contao\ContentAccordionStart',
-		'accordionStop'   => 'Contao\ContentAccordionStop'
-	),
-	'slider' => array
-	(
-		'sliderStart'     => 'Contao\ContentSliderStart',
-		'sliderStop'      => 'Contao\ContentSliderStop'
-	),
-	'links' => array
-	(
-		'hyperlink'       => 'Contao\ContentHyperlink',
-		'toplink'         => 'Contao\ContentToplink'
-	),
-	'media' => array
-	(
-		'image'           => 'Contao\ContentImage',
-		'gallery'         => 'Contao\ContentGallery',
-		'player'          => 'Contao\ContentMedia',
-		'youtube'         => 'Contao\ContentYouTube',
-		'vimeo'           => 'Contao\ContentVimeo'
-	),
-	'files' => array
-	(
-		'download'        => 'Contao\ContentDownload',
-		'downloads'       => 'Contao\ContentDownloads'
-	),
-	'includes' => array
-	(
-		'article'         => 'Contao\ContentArticle',
-		'alias'           => 'Contao\ContentAlias',
-		'form'            => 'Contao\Form',
-		'module'          => 'Contao\ContentModule',
-		'teaser'          => 'Contao\ContentTeaser'
-	)
-);
+/**
+ * Renew a dismissed error box admin side
+ *
+ * @since 1.1.10
+ *
+ * @param string $function function name.
+ * @param int    $uid User ID.
+ * @return void
+ */
+function rocket_renew_box( $function, $uid = 0 ) {
+	global $current_user;
+	$uid    = 0 === $uid ? $current_user->ID : $uid;
+	$actual = get_user_meta( $uid, 'rocket_boxes', true );
 
-// Back end form fields
-$GLOBALS['BE_FFL'] = array
-(
-	'text'           => 'Contao\TextField',
-	'password'       => 'Contao\Password',
-	'textStore'      => 'Contao\TextStore',
-	'textarea'       => 'Contao\TextArea',
-	'select'         => 'Contao\SelectMenu',
-	'checkbox'       => 'Contao\CheckBox',
-	'checkboxWizard' => 'Contao\CheckBoxWizard',
-	'radio'          => 'Contao\RadioButton',
-	'radioTable'     => 'Contao\RadioTable',
-	'inputUnit'      => 'Contao\InputUnit',
-	'trbl'           => 'Contao\TrblField',
-	'chmod'          => 'Contao\ChmodTable',
-	'picker'         => 'Contao\Picker',
-	'pageTree'       => 'Contao\PageTree',
-	'pageSelector'   => 'Contao\PageSelector',
-	'fileTree'       => 'Contao\FileTree',
-	'fileSelector'   => 'Contao\FileSelector',
-	'fileUpload'     => 'Contao\Upload',
-	'tableWizard'    => 'Contao\TableWizard',
-	'listWizard'     => 'Contao\ListWizard',
-	'optionWizard'   => 'Contao\OptionWizard',
-	'moduleWizard'   => 'Contao\ModuleWizard',
-	'keyValueWizard' => 'Contao\KeyValueWizard',
-	'imageSize'      => 'Contao\ImageSize',
-	'timePeriod'     => 'Contao\TimePeriod',
-	'metaWizard'     => 'Contao\MetaWizard',
-	'sectionWizard'  => 'Contao\SectionWizard',
-	'serpPreview'    => 'Contao\SerpPreview'
-);
+	if ( $actual && false !== array_search( $function, $actual, true ) ) {
+		unset( $actual[ array_search( $function, $actual, true ) ] );
+		update_user_meta( $uid, 'rocket_boxes', $actual );
+	}
+}
 
-// Front end form fields
-$GLOBALS['TL_FFL'] = array
-(
-	'explanation'   => 'Contao\FormExplanation',
-	'html'          => 'Contao\FormHtml',
-	'fieldsetStart' => 'Contao\FormFieldsetStart',
-	'fieldsetStop'  => 'Contao\FormFieldsetStop',
-	'text'          => 'Contao\FormTextField',
-	'password'      => 'Contao\FormPassword',
-	'textarea'      => 'Contao\FormTextArea',
-	'select'        => 'Contao\FormSelectMenu',
-	'radio'         => 'Contao\FormRadioButton',
-	'checkbox'      => 'Contao\FormCheckBox',
-	'upload'        => 'Contao\FormFileUpload',
-	'range'         => 'Contao\FormRange',
-	'hidden'        => 'Contao\FormHidden',
-	'captcha'       => 'Contao\FormCaptcha',
-	'submit'        => 'Contao\FormSubmit',
-);
+/**
+ * Dismiss one box.
+ *
+ * @since 1.3.0
+ * @since 3.6 Doesn’t die anymore.
+ *
+ * @param string $function Function (box) name.
+ */
+function rocket_dismiss_box( $function ) {
+	$actual = get_user_meta( get_current_user_id(), 'rocket_boxes', true );
+	$actual = array_merge( (array) $actual, [ $function ] );
+	$actual = array_filter( $actual );
+	$actual = array_unique( $actual );
 
-// Page types
-$GLOBALS['TL_PTY'] = array
-(
-	'regular'   => 'Contao\PageRegular',
-	'forward'   => 'Contao\PageForward',
-	'redirect'  => 'Contao\PageRedirect',
-	'root'      => 'Contao\PageRoot',
-	'logout'    => 'Contao\PageLogout',
-	'error_401' => 'Contao\PageError401',
-	'error_403' => 'Contao\PageError403',
-	'error_404' => 'Contao\PageError404'
-);
+	update_user_meta( get_current_user_id(), 'rocket_boxes', $actual );
+	delete_transient( $function );
+}
 
-// Maintenance
-$GLOBALS['TL_MAINTENANCE'] = array
-(
-	'Contao\Maintenance',
-	'Contao\Crawl',
-	'Contao\PurgeData'
-);
+/**
+ * Create a unique id for some Rocket options and functions
+ *
+ * @since 2.1
+ */
+function create_rocket_uniqid() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+	return str_replace( '.', '', uniqid( '', true ) );
+}
 
-// Purge jobs
-$GLOBALS['TL_PURGE'] = array
-(
-	'tables' => array
-	(
-		'index' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeSearchTables'),
-			'affected' => array('tl_search', 'tl_search_index')
-		),
-		'undo' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeUndoTable'),
-			'affected' => array('tl_undo')
-		),
-		'versions' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeVersionTable'),
-			'affected' => array('tl_version')
-		),
-		'log' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeSystemLog'),
-			'affected' => array('tl_log')
-		),
-		'crawl_queue' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeCrawlQueue'),
-			'affected' => array('tl_crawl_queue')
-		)
-	),
-	'folders' => array
-	(
-		'images' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeImageCache'),
-			'affected' => array(Contao\StringUtil::stripRootDir(Contao\System::getContainer()->getParameter('contao.image.target_dir')))
-		),
-		'scripts' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeScriptCache'),
-			'affected' => array('assets/js', 'assets/css')
-		),
-		'search' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeSearchCache'),
-			'affected' => array('%s/contao/search')
-		),
-		'temp' => array
-		(
-			'callback' => array('Contao\Automator', 'purgeTempFolder'),
-			'affected' => array('system/tmp')
-		)
-	),
-	'custom' => array
-	(
-		'pages' => array
-		(
-			'callback' => array('Contao\Automator', 'purgePageCache'),
-		),
-		'xml' => array
-		(
-			'callback' => array('Contao\Automator', 'generateXmlFiles')
-		),
-		'symlinks' => array
-		(
-			'callback' => array('Contao\Automator', 'generateSymlinks')
-		)
-	)
-);
+/**
+ * Gets names of all active plugins.
+ *
+ * @since 2.11 Only get the name
+ * @since 2.6
+ *
+ * @return array An array of active plugins names.
+ */
+function rocket_get_active_plugins() {
+	$plugins        = [];
+	$active_plugins = array_intersect_key( get_plugins(), array_flip( array_filter( array_keys( get_plugins() ), 'is_plugin_active' ) ) );
 
-// Image crop modes
-$GLOBALS['TL_CROP'] = array
-(
-	'image_sizes' => array
-	(
-		// will be added dynamically
-	),
-	'relative' => array
-	(
-		'proportional', 'box'
-	),
-	'exact' => array
-	(
-		'crop',
-		'left_top',    'center_top',    'right_top',
-		'left_center', 'center_center', 'right_center',
-		'left_bottom', 'center_bottom', 'right_bottom'
-	)
-);
+	foreach ( $active_plugins as $plugin ) {
+		$plugins[] = $plugin['Name'];
+	}
 
-// Cron jobs
-$GLOBALS['TL_CRON'] = array
-(
-	'monthly' => array(),
-	'weekly' => array(),
-	'daily' => array
-	(
-		'purgeTempFolder' => array('Contao\Automator', 'purgeTempFolder'),
-		'purgeSearchCache' => array('Contao\Automator', 'purgeSearchCache'),
-		'generateSitemap' => array('Contao\Automator', 'generateSitemap'),
-	),
-	'hourly' => array
-	(
-		'purgeRegistrations' => array('Contao\Automator', 'purgeRegistrations'),
-		'purgeOptInTokens' => array('Contao\Automator', 'purgeOptInTokens'),
-	),
-	'minutely' => array()
-);
+	return $plugins;
+}
 
-// Hooks
-$GLOBALS['TL_HOOKS'] = array
-(
-	'getSystemMessages' => array
-	(
-		array('Contao\Messages', 'maintenanceCheck'),
-		array('Contao\Messages', 'languageFallback')
-	)
-);
+/**
+ * Check if the whole website is on the SSL protocol
+ *
+ * @since 3.3.6 Use the superglobal $_SERVER values to detect SSL.
+ * @since 2.7
+ */
+function rocket_is_ssl_website() {
+	if ( isset( $_SERVER['HTTPS'] ) ) {
+		$https = sanitize_text_field( wp_unslash( $_SERVER['HTTPS'] ) );
 
-// Register the auto_item keywords
-$GLOBALS['TL_AUTO_ITEM'] = array('items', 'events');
+		if ( 'on' === strtolower( $https ) ) {
+			return true;
+		}
 
-// Do not index a page if one of the following parameters is set
-$GLOBALS['TL_NOINDEX_KEYS'] = array('id', 'file', 'token', 'day', 'month', 'year', 'page', 'page_.*', 'keywords', 'PHPSESSID');
+		if ( '1' === (string) $https ) {
+			return true;
+		}
+	} elseif ( isset( $_SERVER['SERVER_PORT'] ) && '443' === (string) sanitize_text_field( wp_unslash( $_SERVER['SERVER_PORT'] ) ) ) {
+		return true;
+	}
 
-// Register the supported CSS units
-$GLOBALS['TL_CSS_UNITS'] = array('px', '%', 'em', 'rem', 'vw', 'vh', 'vmin', 'vmax', 'ex', 'pt', 'pc', 'in', 'cm', 'mm');
+	return false;
+}
 
-// Wrapper elements
-$GLOBALS['TL_WRAPPERS'] = array
-(
-	'start' => array
-	(
-		'accordionStart',
-		'sliderStart',
-		'fieldsetStart'
-	),
-	'stop' => array
-	(
-		'accordionStop',
-		'sliderStop',
-		'fieldsetStop'
-	),
-	'single' => array
-	(
-		'accordionSingle'
-	),
-	'separator' => array()
-);
+/**
+ * Get the WP Rocket documentation URL
+ *
+ * @since 2.7
+ */
+function get_rocket_documentation_url() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+	$langs  = [
+		'fr_FR' => 'fr.',
+	];
+	$lang   = get_locale();
+	$prefix = isset( $langs[ $lang ] ) ? $langs[ $lang ] : '';
+	$url    = "https://{$prefix}docs.wp-rocket.me/?utm_source=wp_plugin&utm_medium=wp_rocket";
 
-// Other global arrays
-$GLOBALS['TL_MODELS'] = array();
-$GLOBALS['TL_PERMISSIONS'] = array();
+	return $url;
+}
+
+/**
+ * Get WP Rocket FAQ URL
+ *
+ * @since 2.10
+ * @author Remy Perona
+ *
+ * @return string URL in the correct language
+ */
+function get_rocket_faq_url() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+	$langs  = [
+		'de' => 1,
+		'es' => 1,
+		'fr' => 1,
+		'it' => 1,
+	];
+	$locale = explode( '_', get_locale() );
+	$lang   = isset( $langs[ $locale[0] ] ) ? $locale[0] . '/' : '';
+	$url    = WP_ROCKET_WEB_MAIN . "{$lang}faq/?utm_source=wp_plugin&utm_medium=wp_rocket";
+
+	return $url;
+}
+
+/**
+ * Get the Activation Link for a given plugin
+ *
+ * @since 2.7.3
+ * @author Geoffrey Crofte
+ *
+ * @param string $plugin the given plugin folder/file.php (e.i. "imagify/imagify.php").
+ * @return string URL to activate the plugin
+ */
+function rocket_get_plugin_activation_link( $plugin ) {
+	$activation_url = wp_nonce_url( 'plugins.php?action=activate&amp;plugin=' . $plugin . '&amp;plugin_status=all&amp;paged=1&amp;s', 'activate-plugin_' . $plugin );
+
+	return $activation_url;
+}
+
+/**
+ * Check if a given plugin is installed but not necessarily activated
+ * Note: get_plugins( $folder ) from WP Core doesn't work
+ *
+ * @since 2.7.3
+ * @author Geoffrey Crofte
+ *
+ * @param string $plugin a plugin folder/file.php (e.i. "imagify/imagify.php").
+ * @return bool True if installed, false otherwise
+ */
+function rocket_is_plugin_installed( $plugin ) {
+	$installed_plugins = get_plugins();
+
+	return isset( $installed_plugins[ $plugin ] );
+}
+
+/**
+ * When Woocommerce, EDD, iThemes Exchange, Jigoshop & WP-Shop options are saved or deleted,
+ * we update .htaccess & config file to get the right checkout page to exclude to the cache.
+ *
+ * @since 2.9.3 Support for SF Move Login moved to 3rd party file
+ * @since 2.6 Add support with SF Move Login & WPS Hide Login to exclude login pages
+ * @since 2.4
+ *
+ * @param array $old_value An array of previous settings values.
+ * @param array $value An array of submitted settings values.
+ */
+function rocket_after_update_single_options( $old_value, $value ) {
+	if ( $old_value !== $value ) {
+		// Update .htaccess file rules.
+		flush_rocket_htaccess();
+
+		// Update config file.
+		rocket_generate_config_file();
+	}
+}
+
+/**
+ * We need to regenerate the config file + htaccess depending on some plugins
+ *
+ * @since 2.9.3 Support for SF Move Login moved to 3rd party file
+ * @since 2.6.5 Add support with SF Move Login & WPS Hide Login
+ *
+ * @param array $old_value An array of previous settings values.
+ * @param array $value An array of submitted settings values.
+ */
+function rocket_after_update_array_options( $old_value, $value ) {
+	$options = [
+		'purchase_page',
+		'jigoshop_cart_page_id',
+		'jigoshop_checkout_page_id',
+		'jigoshop_myaccount_page_id',
+	];
+
+	foreach ( $options as $val ) {
+		if ( ( ! isset( $old_value[ $val ] ) && isset( $value[ $val ] ) ) ||
+			( isset( $old_value[ $val ], $value[ $val ] ) && $old_value[ $val ] !== $value[ $val ] )
+		) {
+			// Update .htaccess file rules.
+			flush_rocket_htaccess();
+
+			// Update config file.
+			rocket_generate_config_file();
+			break;
+		}
+	}
+}
+
+/**
+ * Check if a mobile plugin is active
+ *
+ * @since 2.10
+ * @author Remy Perona
+ *
+ * @return true if a mobile plugin in the list is active, false otherwise.
+ **/
+function rocket_is_mobile_plugin_active() {
+	return \WP_Rocket\Subscriber\Third_Party\Plugins\Mobile_Subscriber::is_mobile_plugin_active();
+}
+
+/**
+ * Allow upload of JSON file.
+ *
+ * @since 2.10.7
+ * @author Remy Perona
+ *
+ * @param array $wp_get_mime_types Array of allowed mime types.
+ * @return array Updated array of allowed mime types
+ */
+function rocket_allow_json_mime_type( $wp_get_mime_types ) {
+	$wp_get_mime_types['json'] = 'application/json';
+
+	return $wp_get_mime_types;
+}
+
+/**
+ * Forces the correct file type for JSON file if the WP checks is incorrect
+ *
+ * @since 3.2.3.1
+ * @author Gregory Viguier
+ *
+ * @param array  $wp_check_filetype_and_ext File data array containing 'ext', 'type', and
+ *                                         'proper_filename' keys.
+ * @param string $file                     Full path to the file.
+ * @param string $filename                 The name of the file (may differ from $file due to
+ *                                         $file being in a tmp directory).
+ * @param array  $mimes                     Key is the file extension with value as the mime type.
+ * @return array
+ */
+function rocket_check_json_filetype( $wp_check_filetype_and_ext, $file, $filename, $mimes ) {
+	if ( ! empty( $wp_check_filetype_and_ext['ext'] ) && ! empty( $wp_check_filetype_and_ext['type'] ) ) {
+		return $wp_check_filetype_and_ext;
+	}
+
+	$wp_filetype = wp_check_filetype( $filename, $mimes );
+
+	if ( 'json' !== $wp_filetype['ext'] ) {
+		return $wp_check_filetype_and_ext;
+	}
+
+	if ( empty( $wp_filetype['type'] ) ) {
+		// In case some other filter messed it up.
+		$wp_filetype['type'] = 'application/json';
+	}
+
+	if ( ! extension_loaded( 'fileinfo' ) ) {
+		return $wp_check_filetype_and_ext;
+	}
+
+	$finfo     = finfo_open( FILEINFO_MIME_TYPE );
+	$real_mime = finfo_file( $finfo, $file );
+	finfo_close( $finfo );
+
+	if ( 'text/plain' !== $real_mime ) {
+		return $wp_check_filetype_and_ext;
+	}
+
+	$wp_check_filetype_and_ext = array_merge( $wp_check_filetype_and_ext, $wp_filetype );
+
+	return $wp_check_filetype_and_ext;
+}
+
+/**
+ * Lists Data collected for analytics
+ *
+ * @since  2.11
+ * @author Caspar Hübinger
+ *
+ * @return string HTML list table
+ */
+function rocket_data_collection_preview_table() {
+	$data = rocket_analytics_data();
+
+	if ( ! $data ) {
+		return;
+	}
+
+	$html  = '<table class="wp-rocket-data-table widefat striped">';
+	$html .= '<tbody>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'Server type:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['web_server'] );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'PHP version number:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['php_version'] );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'WordPress version number:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['wordpress_version'] );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'WordPress multisite:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['multisite'] ? 'true' : 'false' );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'Current theme:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['current_theme'] );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'Current site language:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<code>%s</code>', $data['locale'] );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'Active plugins:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<em>%s</em>', __( 'Plugin names of all active plugins', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '<tr>';
+	$html .= '<td class="column-primary">';
+	$html .= sprintf( '<strong>%s</strong>', __( 'Anonymized WP Rocket settings:', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '<td>';
+	$html .= sprintf( '<em>%s</em>', __( 'Which WP Rocket settings are active', 'rocket' ) );
+	$html .= '</td>';
+	$html .= '</tr>';
+
+	$html .= '</tbody>';
+	$html .= '</table>';
+
+	return $html;
+}
+
+/**
+ * Adds error message after settings import and redirects.
+ *
+ * @since 3.0
+ * @author Remy Perona
+ *
+ * @param string $message Message to display in the error notice.
+ * @param string $status  Status of the error.
+ * @return void
+ */
+function rocket_settings_import_redirect( $message, $status ) {
+	add_settings_error( 'general', 'settings_updated', $message, $status );
+
+	set_transient( 'settings_errors', get_settings_errors(), 30 );
+
+	$goback = add_query_arg( 'settings-updated', 'true', wp_get_referer() );
+	wp_safe_redirect( esc_url_raw( $goback ) );
+	die();
+}

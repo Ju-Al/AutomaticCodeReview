@@ -277,7 +277,6 @@ func (r *RpmRepoCloner) Clone(cloneDeps bool, packagesToClone ...*pkgjson.Packag
 			"--destdir",
 			chrootDownloadDir,
 			pkgName,
-			"--rpmverbosity=yes",
 		}
 
 		if cloneDeps {

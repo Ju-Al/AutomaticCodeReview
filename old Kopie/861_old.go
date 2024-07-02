@@ -1,5 +1,4 @@
 // Copyright The OpenTelemetry Authors
-		WithTracer(global.Tracer("go.opentelemetry.io/otel/instrumentation/othttp")),
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,9 +59,8 @@ func NewHandler(handler http.Handler, operation string, opts ...Option) http.Han
 	h := Handler{
 		handler:   handler,
 		operation: operation,
+		WithTracer(global.Tracer("go.opentelemetry.io/otel/instrumentation/othttp")),
 	}
-
-	const domain = "go.opentelemetry.io/otel/instrumentation/othttp"
 
 	defaultOpts := []Option{
 		WithTracer(global.Tracer(domain)),

@@ -1,5 +1,4 @@
 /**
-        const shared_model::interface::Query &query) {
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -286,7 +285,7 @@ namespace iroha {
           log_(logger::log("PostgresQueryExecutor")) {}
 
     QueryExecutorResult PostgresQueryExecutor::validateAndExecute(
-        const shared_model::interface::Query &query,
+        const shared_model::interface::Query &query) {
         const bool validate_signatories = true) {
       visitor_.setCreatorId(query.creatorAccountId());
       visitor_.setQueryHash(query.hash());

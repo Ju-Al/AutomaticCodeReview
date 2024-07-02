@@ -1,13 +1,4 @@
 # This file is overwritten during software install.
-#noblacklist ${HOME}/.config/mpv
-#noblacklist ${HOME}/.config/youtube-dl
-#noblacklist ${HOME}/.netrc
-#include allow-python3.inc
-#mkdir ${HOME}/.config/mpv
-#mkdir ${HOME}/.config/youtube-dl
-#whitelist ${HOME}/.config/mpv
-#whitelist ${HOME}/.config/youtube-dl
-#whitelist ${HOME}/.netrc
 # Persistent customizations should go in a .local file.
 include firefox-common-addons.local
 
@@ -92,7 +83,16 @@ include allow-python3.inc
 
 # ff2mpv
 #ignore noexec ${HOME}
+#noblacklist ${HOME}/.config/mpv
+#noblacklist ${HOME}/.config/youtube-dl
+#noblacklist ${HOME}/.netrc
 #include allow-lua.inc
+#include allow-python3.inc
+#mkdir ${HOME}/.config/mpv
+#mkdir ${HOME}/.config/youtube-dl
+#whitelist ${HOME}/.config/mpv
+#whitelist ${HOME}/.config/youtube-dl
+#whitelist ${HOME}/.netrc
 #whitelist /usr/share/lua
 #whitelist /usr/share/lua*
 #whitelist /usr/share/vulkan

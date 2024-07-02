@@ -951,7 +951,6 @@ trait MarcAdvancedTrait
         }
         return false;
     }
-
     /**
      * Get the full title of the record in alternative scripts.
      *

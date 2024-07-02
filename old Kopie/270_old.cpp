@@ -1,5 +1,4 @@
 /******************************************************************************
-    delete impl;
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2017 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -57,7 +56,7 @@ SofaPhysicsAPI::SofaPhysicsAPI(bool useGUI, int GUIFramerate)
 
 SofaPhysicsAPI::~SofaPhysicsAPI()
 {
-    std::cout << "SofaPhysicsAPI::~SofaPhysicsAPI()" << std::endl;
+    delete impl;
     if (impl != NULL)
     {
         delete impl;

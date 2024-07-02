@@ -1,5 +1,4 @@
 /**
-    .option('-w, --https-port [https-port]', $('The port https traffic used on the origin server'))
  * Copyright (c) Microsoft.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -537,7 +536,7 @@ exports.init = function(cli) {
     .option('-a, --is-https-allowed [is-https-allowed]', $('Is the https traffic allowed for the Cdn. Valid input: -a [true|false]'))
     .option('-q, --query-string-caching-behavior [query-string-caching-behavior]', $('The way Cdn handles requests with query string'))
     .option('-u, --http-port [http-port]', $('The port http traffic used on the origin server'))
-    .option('-s, --https-port [https-port]', $('The port https traffic used on the origin server'))
+    .option('-w, --https-port [https-port]', $('The port https traffic used on the origin server'))
     .option('-t, --tags [tags]', $('The tags to associate with the Azure Cdn Endpoint'))
     .option('--subscription <subscription>', $('the subscription identifier'))
     .execute(function(name, profileName, resourceGroup, location, originName, originHostName, options, _) {

@@ -1,5 +1,4 @@
 # coding=utf-8
-            (data.index + len(result)) * 2 >= self.settings.buffer_size
 #
 # This file is part of Hypothesis, which may be found at
 # https://github.com/HypothesisWorks/hypothesis-python
@@ -270,7 +269,6 @@ class ConjectureRunner(object):
 
         self.record_for_health_check(data)
 
-    def generate_novel_prefix(self):
         prefix = bytearray()
         node = 0
         while True:

@@ -770,7 +770,6 @@ var microgenGapicConfigs = []*microgenConfig{
 		apiServiceConfigPath:  "google/cloud/functions/v1/functions_gapic.yaml",
 		releaseLevel:          "ga",
 	},
-	{
 		inputDirectoryPath:    "google/cloud/networkconnectivity/v1alpha1",
 		pkg:                   "networkconnectivity",
 		importPath:            "cloud.google.com/go/networkconnectivity/v1alpha1",

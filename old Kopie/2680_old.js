@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { useFieldApi, useFieldState } from 'informed';
 
 /**
  * The usePostcode talon handles logic for resetting the postcode field value when the country changes.

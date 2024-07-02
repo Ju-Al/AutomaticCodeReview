@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2021 Algorand, Inc.
-		_, _, err := ledger.ParseCatchpointLabel(arg)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -133,7 +132,7 @@ var catchupCmd = &cobra.Command{
 func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
 	catchpointsCount := 0
 	for _, arg := range args {
-		_, _, err := common.ParseCatchpointLabel(arg)
+		_, _, err := ledger.ParseCatchpointLabel(arg)
 		switch err {
 		case nil:
 			if catchpointsCount > 0 {

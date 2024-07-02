@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-        sWorkingCopy.setZ(s.getZ());
  *                      OpenSim:  StaticOptimization.cpp                      *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -563,7 +562,7 @@ int StaticOptimization::begin(const SimTK::State& s )
         sWorkingCopy.setTime(s.getTime());
         sWorkingCopy.setQ(s.getQ());
         sWorkingCopy.setU(s.getU());
-        // No need to copy Z as Actuators could be disabled/removed from _modelWorkingCopy
+        sWorkingCopy.setZ(s.getZ());
         _modelWorkingCopy->getMultibodySystem().realize(s,SimTK::Stage::Velocity);
         _modelWorkingCopy->equilibrateMuscles(sWorkingCopy);
         // Gather indices into speed set corresponding to the unconstrained degrees of freedom 

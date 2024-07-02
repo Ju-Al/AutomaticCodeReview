@@ -131,7 +131,6 @@ class GrpcNotifier(notifier_pb2_grpc.NotifierServicer):
             LOGGER.exception(e)
             progress_queue.put('Error occurred during the '
                                'notification process.')
-            progress_queue.put(traceback.format_exc())
             progress_queue.put(None)
 
 

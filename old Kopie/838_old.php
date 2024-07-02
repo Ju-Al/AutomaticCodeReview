@@ -604,7 +604,6 @@ class KohaILSDI extends \VuFind\ILS\Driver\AbstractBase implements
         $this->debug("Needed before date: " . $needed_before_date);
         $this->debug("Level: " . $level);
 
-        // The following check is mainly required for certain old buggy Koha versions
         // that allowed multiple holds from the same user to the same item
         $sql = "select count(*) as RCOUNT from reserves where borrowernumber = :rid "
             . "and biblionumber = :bid";

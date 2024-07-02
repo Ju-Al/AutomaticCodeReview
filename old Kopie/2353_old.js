@@ -1,6 +1,4 @@
 /**
-  role.command('list')
-    .usage(
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +30,8 @@ exports.init = function (cli) {
   var role = cli.category('role')
     .description($('Commands to manage role definitions'));
 
-  role.command('list [scope]')
+    .usage(
+  role.command('list')
     .description($('Lists Azure RBAC roles available for assignment. Use this command to determine what actions on what resource types an Azure RBAC role allows.'))
     .usage('[scope]' +
       '\n' +

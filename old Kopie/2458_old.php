@@ -1,5 +1,4 @@
 <?php
-		$this->getContainer()->share( 'hummingbird_subscriber', 'WP_Rocket\Subscriber\Third_Party\Plugins\Optimization\Hummingbird_Subscriber' )
 namespace WP_Rocket\ServiceProvider;
 
 use League\Container\ServiceProvider\AbstractServiceProvider;
@@ -48,7 +47,7 @@ class Admin_Subscribers extends AbstractServiceProvider {
 			->withArgument( $this->getContainer()->get( 'options' ) );
 		$this->getContainer()->share( 'beacon_subscriber', 'WP_Rocket\Subscriber\Admin\Settings\Beacon_Subscriber' )
 			->withArgument( $this->getContainer()->get( 'beacon' ) );
-		$this->getContainer()->share( 'hummingbird_subscriber', \WP_Rocket\ThirdParty\Plugins\Optimization\Hummingbird::class )
+		$this->getContainer()->share( 'hummingbird_subscriber', 'WP_Rocket\Subscriber\Third_Party\Plugins\Optimization\Hummingbird_Subscriber' )
 			->withArgument( $this->getContainer()->get( 'options' ) );
 	}
 }

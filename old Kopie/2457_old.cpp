@@ -1,40 +1,4 @@
 /***************************************************************************
-Maps::IndexesDistance::IndexesDistance( s32 from, s32 center, u32 dist, int sort )
-{
-    Assign( from, GetAroundIndexes( center, dist, sort ), sort );
-}
-
-Maps::IndexesDistance::IndexesDistance( s32 from, const Indexes & indexes, int sort )
-{
-    Assign( from, indexes, sort );
-}
-
-void Maps::IndexesDistance::Assign( s32 from, const Indexes & indexes, int sort )
-{
-    reserve( indexes.size() );
-
-    for ( Indexes::const_iterator it = indexes.begin(); it != indexes.end(); ++it )
-        push_back( IndexDistance( *it, Maps::GetApproximateDistance( from, *it ) ) );
-
-    if ( 1 == sort )
-        std::sort( begin(), end(), IndexDistance::Shortest );
-    else if ( 2 == sort )
-        std::sort( begin(), end(), IndexDistance::Longest );
-}
-
-Maps::Indexes MapsIndexesFilteredObjects( const Maps::Indexes & indexes, const u8 * objs, bool ignoreHeroes = true )
-    if ( !objs )
-        return result;
-
-        const int objectID = world.GetTiles( indexes[idx] ).GetObject( ignoreHeroes );
-        while ( objs && *objs ) {
-            if ( *objs == objectID )
-                result.push_back( indexes[idx] );
-            ++objs;
-Maps::Indexes MapsIndexesFilteredObject( const Maps::Indexes & indexes, int obj, bool ignoreHeroes = true )
-    for ( size_t idx = 0; idx < indexes.size(); ++idx ) {
-        if ( world.GetTiles( indexes[idx] ).GetObject( ignoreHeroes ) == obj ) {
-            result.push_back( indexes[idx] );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -84,7 +48,42 @@ struct ComparsionDistance
     int32_t center;
 };
 
+Maps::IndexesDistance::IndexesDistance( s32 from, s32 center, u32 dist, int sort )
+{
+    Assign( from, GetAroundIndexes( center, dist, sort ), sort );
+}
+
+Maps::IndexesDistance::IndexesDistance( s32 from, const Indexes & indexes, int sort )
+{
+    Assign( from, indexes, sort );
+}
+
+void Maps::IndexesDistance::Assign( s32 from, const Indexes & indexes, int sort )
+{
+    reserve( indexes.size() );
+
+    for ( Indexes::const_iterator it = indexes.begin(); it != indexes.end(); ++it )
+        push_back( IndexDistance( *it, Maps::GetApproximateDistance( from, *it ) ) );
+
+    if ( 1 == sort )
+        std::sort( begin(), end(), IndexDistance::Shortest );
+    else if ( 2 == sort )
+        std::sort( begin(), end(), IndexDistance::Longest );
+}
+
+    if ( !objs )
+        return result;
+
+        const int objectID = world.GetTiles( indexes[idx] ).GetObject( ignoreHeroes );
+        while ( objs && *objs ) {
+            if ( *objs == objectID )
+                result.push_back( indexes[idx] );
+            ++objs;
 Maps::Indexes MapsIndexesFilteredObject( const Maps::Indexes & indexes, int obj, bool ignoreHeroes = true )
+    for ( size_t idx = 0; idx < indexes.size(); ++idx ) {
+        if ( world.GetTiles( indexes[idx] ).GetObject( ignoreHeroes ) == obj ) {
+            result.push_back( indexes[idx] );
+Maps::Indexes MapsIndexesFilteredObjects( const Maps::Indexes & indexes, const u8 * objs, bool ignoreHeroes = true )
 {
     Maps::Indexes result;
     for ( size_t idx = 0; idx < indexes.size(); ++idx ) {

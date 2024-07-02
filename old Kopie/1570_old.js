@@ -187,7 +187,6 @@ export default (api: AdaApi) => {
   api.setNetworkBlockHeight = async (height: number) => {
     NETWORK_BLOCK_HEIGHT = height;
   };
-
   api.setFakeNewsFeedJsonForTesting = (json: ?GetNewsResponse) => {
     FAKE_NEWSFEED_JSON = json;
   };

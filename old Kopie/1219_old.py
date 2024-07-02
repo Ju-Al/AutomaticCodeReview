@@ -63,7 +63,6 @@ def make_root_cgroups():
 def i_am_root():
     return os.geteuid() == 0
 
-def is_wsl():
     return '-Microsoft-' in platform.platform()
 
 @skip_if_predicate_true(is_wsl, "CGroups not supported under WSL")

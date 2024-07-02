@@ -1,5 +1,4 @@
 class Crop < ActiveRecord::Base
-    popular_plant_parts
   extend FriendlyId
   friendly_id :name, use: [:slugged, :finders]
 
@@ -168,7 +167,7 @@ class Crop < ActiveRecord::Base
     harvests.each do |h|
       popular_plant_parts[h.plant_part] += 1 if h.plant_part
     end
-    popular_plant_parts.sort_by { |_s, freq| freq }.reverse
+    popular_plant_parts
   end
 
   def interesting?

@@ -164,7 +164,6 @@ type NackHandler func(*pubsub.Message) error
 // error and terminate.
 type ReceiveMessageTransformerFunc func(*pb.SequencedMessage, *pubsub.Message) error
 
-// ReassignmentHandlerFunc is called any time a new partition assignment is
 // received from the server. It will be called with both the previous and new
 // partition numbers as decided by the server.
 //

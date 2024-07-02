@@ -1,526 +1,381 @@
-/*
-		csr.Status.MarkGCSNotReady("GCSNotReady", "Failed to create Storage notification: %s", err)
-Copyright 2017 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package storage
+package cmd
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
+	"encoding/hex"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
-	"go.uber.org/zap"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/runtime"
-	batchv1listers "k8s.io/client-go/listers/batch/v1"
-	"k8s.io/client-go/tools/cache"
+	"github.com/spf13/cobra"
 
-	"knative.dev/pkg/apis"
-	"knative.dev/pkg/controller"
-	"knative.dev/pkg/kmeta"
-	"knative.dev/pkg/logging"
+	"github.com/onflow/cadence"
 
-	"github.com/google/knative-gcp/pkg/apis/events/v1alpha1"
-	pubsubsourcev1alpha1 "github.com/google/knative-gcp/pkg/apis/pubsub/v1alpha1"
-	pubsubsourceclientset "github.com/google/knative-gcp/pkg/client/clientset/versioned"
-	listers "github.com/google/knative-gcp/pkg/client/listers/events/v1alpha1"
-	ops "github.com/google/knative-gcp/pkg/operations"
-	operations "github.com/google/knative-gcp/pkg/operations/storage"
-	"github.com/google/knative-gcp/pkg/reconciler"
-	"github.com/google/knative-gcp/pkg/reconciler/storage/resources"
-	"k8s.io/apimachinery/pkg/api/equality"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"github.com/onflow/flow-go/cmd/bootstrap/run"
+	model "github.com/onflow/flow-go/model/bootstrap"
+	"github.com/onflow/flow-go/model/encodable"
+	"github.com/onflow/flow-go/model/flow"
 )
 
-const (
-	// ReconcilerName is the name of the reconciler
-	ReconcilerName = "Storage"
-
-	finalizerName = controllerAgentName
+var (
+	flagConfig                      string
+	flagInternalNodePrivInfoDir     string
+	flagCollectionClusters          uint
+	flagPartnerNodeInfoDir          string
+	flagPartnerStakes               string
+	flagFastKG                      bool
+	flagRootChain                   string
+	flagRootParent                  string
+	flagRootHeight                  uint64
+	flagRootTimestamp               string
+	flagRootCommit                  string
+	flagEpochCounter                uint64
+	flagServiceAccountPublicKeyJSON string
+	flagGenesisTokenSupply          string
 )
 
-// Reconciler is the controller implementation for Google Cloud Storage (GCS) event
-// notifications.
-type Reconciler struct {
-	*reconciler.Base
+// PartnerStakes ...
+type PartnerStakes map[flow.Identifier]uint64
 
-	// Image to use for launching jobs that operate on notifications
-	NotificationOpsImage string
-
-	// gcssourceclientset is a clientset for our own API group
-	storageLister listers.StorageLister
-
-	// For dealing with Topics and Pullsubscriptions
-	pubsubClient pubsubsourceclientset.Interface
-
-	// For readling with jobs
-	jobLister batchv1listers.JobLister
+// finalizeCmd represents the finalize command
+var finalizeCmd = &cobra.Command{
+	Use:   "finalize",
+	Short: "Finalize the bootstrapping process",
+	Long: `Finalize the bootstrapping process, which includes running the DKG for the generation of the random beacon 
+	keys and generating the root block, QC, execution result and block seal.`,
+	Run: finalize,
 }
 
-// Check that we implement the controller.Reconciler interface.
-var _ controller.Reconciler = (*Reconciler)(nil)
-
-// Reconcile implements controller.Reconciler
-func (c *Reconciler) Reconcile(ctx context.Context, key string) error {
-	// Convert the namespace/name string into a distinct namespace and name
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
-	}
-
-	// Get the Storage resource with this namespace/name
-	original, err := c.storageLister.Storages(namespace).Get(name)
-	if apierrs.IsNotFound(err) {
-		// The Storage resource may no longer exist, in which case we stop processing.
-		runtime.HandleError(fmt.Errorf("storage '%s' in work queue no longer exists", key))
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	// Don't modify the informers copy
-	csr := original.DeepCopy()
-
-	reconcileErr := c.reconcile(ctx, csr)
-
-	if equality.Semantic.DeepEqual(original.Status, csr.Status) &&
-		equality.Semantic.DeepEqual(original.ObjectMeta, csr.ObjectMeta) {
-		// If we didn't change anything then don't call updateStatus.
-		// This is important because the copy we loaded from the informer's
-		// cache may be stale and we don't want to overwrite a prior update
-		// to status with this stale state.
-	} else if _, err := c.updateStatus(ctx, csr); err != nil {
-		// TODO: record the event (c.Recorder.Eventf(...
-		c.Logger.Warn("Failed to update Storage Source status", zap.Error(err))
-		return err
-	}
-
-	if reconcileErr != nil {
-		// TODO: record the event (c.Recorder.Eventf(...
-		return reconcileErr
-	}
-
-	return nil
+func init() {
+	rootCmd.AddCommand(finalizeCmd)
+	addFinalizeCmdFlags()
 }
 
-func (c *Reconciler) reconcile(ctx context.Context, csr *v1alpha1.Storage) error {
-	// If notification / topic has been already configured, stash them here
-	// since right below we remove them.
-	notificationID := csr.Status.NotificationID
-	topic := csr.Status.TopicID
+func addFinalizeCmdFlags() {
+	// required parameters for network configuration and generation of root node identities
+	finalizeCmd.Flags().StringVar(&flagConfig, "config", "",
+		"path to a JSON file containing multiple node configurations (fields Role, Address, Stake)")
+	finalizeCmd.Flags().StringVar(&flagInternalNodePrivInfoDir, "internal-priv-dir", "", "path to directory "+
+		"containing the output from the `keygen` command for internal nodes")
+	finalizeCmd.Flags().StringVar(&flagPartnerNodeInfoDir, "partner-dir", "", "path to directory "+
+		"containing one JSON file starting with node-info.pub.<NODE_ID>.json for every partner node (fields "+
+		" in the JSON file: Role, Address, NodeID, NetworkPubKey, StakingPubKey)")
+	finalizeCmd.Flags().StringVar(&flagPartnerStakes, "partner-stakes", "", "path to a JSON file containing "+
+		"a map from partner node's NodeID to their stake")
 
-	csr.Status.InitializeConditions()
-	// And restore them.
-	csr.Status.NotificationID = notificationID
+	_ = finalizeCmd.MarkFlagRequired("config")
+	_ = finalizeCmd.MarkFlagRequired("internal-priv-dir")
+	_ = finalizeCmd.MarkFlagRequired("partner-dir")
+	_ = finalizeCmd.MarkFlagRequired("partner-stakes")
 
-	if topic == "" {
-		topic = fmt.Sprintf("storage-%s", string(csr.UID))
-	}
+	// required parameters for generation of root block, root execution result and root block seal
+	finalizeCmd.Flags().StringVar(&flagRootChain, "root-chain", "emulator", "chain ID for the root block (can be \"main\", \"test\" or \"emulator\"")
+	finalizeCmd.Flags().StringVar(&flagRootParent, "root-parent", "0000000000000000000000000000000000000000000000000000000000000000", "ID for the parent of the root block")
+	finalizeCmd.Flags().Uint64Var(&flagRootHeight, "root-height", 0, "height of the root block")
+	finalizeCmd.Flags().StringVar(&flagRootTimestamp, "root-timestamp", time.Now().UTC().Format(time.RFC3339), "timestamp of the root block (RFC3339)")
+	finalizeCmd.Flags().StringVar(&flagRootCommit, "root-commit", "0000000000000000000000000000000000000000000000000000000000000000", "state commitment of root execution state")
+	finalizeCmd.Flags().Uint64Var(&flagEpochCounter, "epoch-counter", 0, "epoch counter for the epoch beginning with the root block")
 
-	// See if the source has been deleted.
-	deletionTimestamp := csr.DeletionTimestamp
+	_ = finalizeCmd.MarkFlagRequired("root-chain")
+	_ = finalizeCmd.MarkFlagRequired("root-parent")
+	_ = finalizeCmd.MarkFlagRequired("root-height")
+	_ = finalizeCmd.MarkFlagRequired("root-commit")
+	_ = finalizeCmd.MarkFlagRequired("epoch-counter")
 
-	if deletionTimestamp != nil {
-		err := c.deleteNotification(ctx, csr)
+	// optional parameters to influence various aspects of identity generation
+	finalizeCmd.Flags().UintVar(&flagCollectionClusters, "collection-clusters", 2,
+		"number of collection clusters")
+	finalizeCmd.Flags().BoolVar(&flagFastKG, "fast-kg", false, "use fast (centralized) random beacon key generation "+
+		"instead of DKG")
+
+	// these two flags are only used when setup a network from genesis
+	finalizeCmd.Flags().StringVar(&flagServiceAccountPublicKeyJSON, "service-account-public-key-json",
+		"{\"PublicKey\":\"ABCDEFGHIJK\",\"SignAlgo\":2,\"HashAlgo\":1,\"SeqNumber\":0,\"Weight\":1000}",
+		"encoded json of public key for the service account")
+	finalizeCmd.Flags().StringVar(&flagGenesisTokenSupply, "genesis-token-supply", "10000000.00000000",
+		"genesis flow token supply")
+}
+
+func finalize(cmd *cobra.Command, args []string) {
+
+	log.Info().Msg("collecting partner network and staking keys")
+	partnerNodes := assemblePartnerNodes()
+	log.Info().Msg("")
+
+	log.Info().Msg("generating internal private networking and staking keys")
+	internalNodes := assembleInternalNodes()
+	log.Info().Msg("")
+
+	log.Info().Msg("checking constraints on consensus/cluster nodes")
+	checkConstraints(partnerNodes, internalNodes)
+	log.Info().Msg("")
+
+	log.Info().Msg("assembling network and staking keys")
+	stakingNodes := mergeNodeInfos(internalNodes, partnerNodes)
+	writeJSON(model.PathNodeInfosPub, model.ToPublicNodeInfoList(stakingNodes))
+	log.Info().Msg("")
+
+	log.Info().Msg("running DKG for consensus nodes")
+	dkgData := runDKG(model.FilterByRole(stakingNodes, flow.RoleConsensus))
+	log.Info().Msg("")
+
+	var commit []byte
+	if flagRootCommit == "0000000000000000000000000000000000000000000000000000000000000000" {
+		log.Info().Msg("generating empty execution state")
+
+		var err error
+		serviceAccountPublicKey := flow.AccountPublicKey{}
+		err = serviceAccountPublicKey.UnmarshalJSON([]byte(flagServiceAccountPublicKeyJSON))
 		if err != nil {
-			c.Logger.Infof("Unable to delete the Notification: %s", err)
-			return err
+			log.Fatal().Err(err).Msg("unable to parse the service account public key json")
 		}
-		err = c.deleteTopic(ctx, csr.Namespace, csr.Name)
+		value, err := cadence.NewUFix64(flagGenesisTokenSupply)
 		if err != nil {
-			c.Logger.Infof("Unable to delete the Topic: %s", err)
-			return err
+			log.Fatal().Err(err).Msg("invalid genesis token supply")
 		}
-		csr.Status.TopicID = ""
-		err = c.deletePullSubscription(ctx, csr)
+		commit, err = run.GenerateExecutionState(filepath.Join(flagOutdir, model.DirnameExecutionState), serviceAccountPublicKey, value, parseChainID(flagRootChain).Chain())
 		if err != nil {
-			c.Logger.Infof("Unable to delete the PullSubscription: %s", err)
-			return err
+			log.Fatal().Err(err).Msg("unable to generate execution state")
 		}
-		c.removeFinalizer(csr)
-		return nil
+		flagRootCommit = hex.EncodeToString(commit)
+		log.Info().Msg("")
 	}
 
-	// Ensure that there's finalizer there, since we're about to attempt to
-	// change external state with the topic, so we need to clean it up.
-	err := c.ensureFinalizer(csr)
+	log.Info().Msg("constructing root block")
+	block := constructRootBlock(flagRootChain, flagRootParent, flagRootHeight, flagRootTimestamp)
+	log.Info().Msg("")
+
+	log.Info().Msg("constructing root QC")
+	constructRootQC(
+		block,
+		model.FilterByRole(stakingNodes, flow.RoleConsensus),
+		model.FilterByRole(internalNodes, flow.RoleConsensus),
+		dkgData,
+	)
+	log.Info().Msg("")
+
+	log.Info().Msg("computing collection node clusters")
+	assignments, clusters := constructClusterAssignment(partnerNodes, internalNodes)
+	log.Info().Msg("")
+
+	log.Info().Msg("constructing root blocks for collection node clusters")
+	clusterBlocks := run.GenerateRootClusterBlocks(flagEpochCounter, clusters)
+	log.Info().Msg("")
+
+	log.Info().Msg("constructing root QCs for collection node clusters")
+	clusterQCs := constructRootQCsForClusters(clusters, internalNodes, clusterBlocks)
+	log.Info().Msg("")
+
+	log.Info().Msg("constructing root execution result and block seal")
+	constructRootResultAndSeal(flagRootCommit, block, stakingNodes, assignments, clusterQCs, dkgData)
+	log.Info().Msg("")
+
+	log.Info().Msg("copying internal private keys to output folder")
+	err := copyDir(flagInternalNodePrivInfoDir, filepath.Join(flagOutdir, model.DirPrivateRoot))
 	if err != nil {
-		return err
-	}
-
-	// Make sure Topic is in the state we expect it to be in. There's no point
-	// in continuing if it's not Ready.
-	t, err := c.reconcileTopic(ctx, csr, topic)
-	if err != nil {
-		c.Logger.Infof("Failed to reconcile topic %s", err)
-		csr.Status.MarkTopicNotReady("TopicNotReady", "Failed to reconcile Topic: %s", err.Error())
-		return err
-	}
-
-	if !t.Status.IsReady() {
-		csr.Status.MarkTopicNotReady("TopicNotReady", "Topic %s/%s not ready", t.Namespace, t.Name)
-		return errors.New("topic not ready")
-	}
-
-	if t.Status.ProjectID == "" {
-		csr.Status.MarkTopicNotReady("TopicNotReady", "Topic %s/%s did not expose projectid", t.Namespace, t.Name)
-		return errors.New("topic did not expose projectid")
-	}
-	if t.Status.TopicID == "" {
-		csr.Status.MarkTopicNotReady("TopicNotReady", "Topic %s/%s did not expose topicid", t.Namespace, t.Name)
-		return errors.New("topic did not expose topicid")
-	}
-	if t.Status.TopicID != topic {
-		csr.Status.MarkTopicNotReady("TopicNotReady", "Topic %s/%s topic mismatch expected %q got %q", t.Namespace, t.Name, topic, t.Status.TopicID)
-		return errors.New(fmt.Sprintf("topic did not match expected: %q got: %q", topic, t.Status.TopicID))
-	}
-
-	csr.Status.TopicID = t.Status.TopicID
-	csr.Status.ProjectID = t.Status.ProjectID
-	csr.Status.MarkTopicReady()
-
-	// Make sure PullSubscription is in the state we expect it to be in.
-	ps, err := c.reconcilePullSubscription(ctx, csr, topic)
-	if err != nil {
-		// TODO: Update status appropriately
-		c.Logger.Infof("Failed to reconcile PullSubscription Source: %s", err)
-		csr.Status.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "Failed to reconcile PullSubscription Source: %s", err)
-		return err
-	}
-
-	c.Logger.Infof("Reconciled pullsubscription source: %+v", ps)
-
-	// Check to see if Pullsubscription source is ready
-	if !ps.Status.IsReady() {
-		c.Logger.Infof("PullSubscription is not ready yet")
-		csr.Status.MarkPullSubscriptionNotReady("PullSubscriptionNotReady", "PullSubscription %s/%s not ready", t.Namespace, t.Name)
-		return errors.New("PullSubscription not ready")
+		log.Error().Err(err).Msg("could not copy private key files")
+	if flagInternalNodePrivInfoDir != flagOutdir {
+		log.Info().Msg("copying internal private keys to output folder")
+		err := copyDir(flagInternalNodePrivInfoDir, filepath.Join(flagOutdir, model.DirPrivateRoot))
+		if err != nil {
+			log.Error().Err(err).Msg("could not copy private key files")
+		}
 	} else {
-		csr.Status.MarkPullSubscriptionReady()
+		log.Info().Msg("skipping copy of private keys to output dir")
 	}
-	c.Logger.Infof("Using %q as a cluster internal sink", ps.Status.SinkURI)
-	uri, err := apis.ParseURL(ps.Status.SinkURI)
+	log.Info().Msg("")
+
+	// print count of all nodes
+	roleCounts := nodeCountByRole(stakingNodes)
+	for role, count := range roleCounts {
+		log.Info().Msg(fmt.Sprintf("created keys for %d %s nodes", count, role.String()))
+	}
+
+	log.Info().Msg("🌊 🏄 🤙 Done – ready to flow!")
+}
+
+// assemblePartnerNodes returns a list of partner nodes after gathering stake
+// and public key information from configuration files
+func assemblePartnerNodes() []model.NodeInfo {
+	partners := readPartnerNodes()
+	log.Info().Msgf("read %v partner node configuration files", len(partners))
+
+	var stakes PartnerStakes
+	readJSON(flagPartnerStakes, &stakes)
+	log.Info().Msgf("read %v stakes for partner nodes", len(stakes))
+
+	var nodes []model.NodeInfo
+	for _, partner := range partners {
+		// validate every single partner node
+		nodeID := validateNodeID(partner.NodeID)
+		networkPubKey := validateNetworkPubKey(partner.NetworkPubKey)
+		stakingPubKey := validateStakingPubKey(partner.StakingPubKey)
+		stake := validateStake(stakes[partner.NodeID])
+
+		node := model.NewPublicNodeInfo(
+			nodeID,
+			partner.Role,
+			partner.Address,
+			stake,
+			networkPubKey,
+			stakingPubKey,
+		)
+		nodes = append(nodes, node)
+	}
+
+	return nodes
+}
+
+// readParnterNodes reads the partner node information
+func readPartnerNodes() []model.NodeInfoPub {
+	var partners []model.NodeInfoPub
+	files, err := filesInDir(flagPartnerNodeInfoDir)
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed to parse url %q : %q", ps.Status.SinkURI, err))
+		log.Fatal().Err(err).Msg("could not read partner node infos")
 	}
-	csr.Status.SinkURI = uri
+	for _, f := range files {
+		// skip files that do not include node-infos
+		if !strings.Contains(f, model.PathPartnerNodeInfoPrefix) {
+			continue
+		}
 
-	notification, err := c.reconcileNotification(ctx, csr)
+		// read file and append to partners
+		var p model.NodeInfoPub
+		readJSON(f, &p)
+		partners = append(partners, p)
+	}
+	return partners
+}
+
+// assembleInternalNodes returns a list of internal nodes after collecting stakes
+// from configuration files
+func assembleInternalNodes() []model.NodeInfo {
+	privInternals := readInternalNodes()
+	log.Info().Msgf("read %v internal private node-info files", len(privInternals))
+
+	stakes := internalStakesByAddress()
+	log.Info().Msgf("read %v stakes for internal nodes", len(stakes))
+
+	var nodes []model.NodeInfo
+	for _, internal := range privInternals {
+		// check if address is valid format
+		validateAddressFormat(internal.Address)
+
+		// validate every single internal node
+		nodeID := validateNodeID(internal.NodeID)
+		stake := validateStake(stakes[internal.Address])
+
+		node := model.NewPrivateNodeInfo(
+			nodeID,
+			internal.Role,
+			internal.Address,
+			stake,
+			internal.NetworkPrivKey,
+			internal.StakingPrivKey,
+		)
+
+		nodes = append(nodes, node)
+	}
+
+	return nodes
+}
+
+// readInternalNodes reads our internal node private infos generated by
+// `keygen` command and returns it
+func readInternalNodes() []model.NodeInfoPriv {
+	var internalPrivInfos []model.NodeInfoPriv
+
+	// get files in internal priv node infos directory
+	files, err := filesInDir(flagInternalNodePrivInfoDir)
 	if err != nil {
-		// TODO: Update status with this...
-		c.Logger.Infof("Failed to reconcile Storage Notification: %s", err)
-		csr.Status.MarkNotificationNotReady("GCSNotReady", "Failed to create Storage notification: %s", err)
-		return err
+		log.Fatal().Err(err).Msg("could not read partner node infos")
 	}
 
-	csr.Status.MarkNotificationReady()
+	// for each of the files
+	for _, f := range files {
+		// skip files that do not include node-infos
+		if !strings.Contains(f, model.PathPrivNodeInfoPrefix) {
+			continue
+		}
 
-	c.Logger.Infof("Reconciled Storage notification: %+v", notification)
-	csr.Status.NotificationID = notification
-	return nil
+		// read file and append to partners
+		var p model.NodeInfoPriv
+		readJSON(f, &p)
+		internalPrivInfos = append(internalPrivInfos, p)
+	}
+
+	return internalPrivInfos
 }
 
-func (c *Reconciler) reconcilePullSubscription(ctx context.Context, csr *v1alpha1.Storage, topic string) (*pubsubsourcev1alpha1.PullSubscription, error) {
-	pubsubClient := c.pubsubClient.PubsubV1alpha1().PullSubscriptions(csr.Namespace)
-	existing, err := pubsubClient.Get(csr.Name, v1.GetOptions{})
-	if err == nil {
-		// TODO: Handle any updates...
-		c.Logger.Infof("Found existing PullSubscription: %+v", existing)
-		return existing, nil
-	}
-	if apierrs.IsNotFound(err) {
-		pubsub := resources.MakePullSubscription(csr, topic)
-		c.Logger.Infof("Creating pullsubscription %+v", pubsub)
-		return pubsubClient.Create(pubsub)
-	}
-	return nil, err
-}
+// internalStakesByAddress returns a mapping of node address by stake for internal nodes
+func internalStakesByAddress() map[string]uint64 {
+	// read json
+	var configs []model.NodeConfig
+	readJSON(flagConfig, &configs)
+	log.Info().Msgf("read internal %v node configurations", configs)
 
-func (c *Reconciler) deletePullSubscription(ctx context.Context, csr *v1alpha1.Storage) error {
-	pubsubClient := c.pubsubClient.PubsubV1alpha1().PullSubscriptions(csr.Namespace)
-	err := pubsubClient.Delete(csr.Name, nil)
-	if err == nil {
-		// TODO: Handle any updates...
-		c.Logger.Infof("Deleted PullSubscription: %+v", csr.Name)
-		return nil
-	}
-	if apierrs.IsNotFound(err) {
-		return nil
-	}
-	return err
-}
-
-func (c *Reconciler) EnsureNotification(ctx context.Context, UID string, owner kmeta.OwnerRefable, secret corev1.SecretKeySelector, project, bucket, topic string) (ops.OpsJobStatus, error) {
-	return c.ensureNotificationJob(ctx, operations.NotificationArgs{
-		UID:       UID,
-		Image:     c.NotificationOpsImage,
-		Action:    ops.ActionCreate,
-		ProjectID: project,
-		Bucket:    bucket,
-		TopicID:   topic,
-		Secret:    secret,
-		Owner:     owner,
-	})
-}
-
-func (c *Reconciler) reconcileNotification(ctx context.Context, storage *v1alpha1.Storage) (string, error) {
-	state, err := c.EnsureNotification(ctx, string(storage.UID), storage, *storage.Spec.Secret, storage.Status.ProjectID, storage.Spec.Bucket, storage.Status.TopicID)
-
-	if state == ops.OpsJobCreateFailed || state == ops.OpsJobCompleteFailed {
-		return "", fmt.Errorf("Job %q failed to create or job failed", storage.Name)
-	}
-
-	if state != ops.OpsJobCompleteSuccessful {
-		return "", fmt.Errorf("Job %q has not completed yet", storage.Name)
-	}
-
-	// See if the pod exists or not...
-	pod, err := ops.GetJobPod(ctx, c.KubeClientSet, storage.Namespace, string(storage.UID), "create")
-	if err != nil {
-		return "", err
-	}
-
-	terminationMessage := ops.GetFirstTerminationMessage(pod)
-	if terminationMessage == "" {
-		return "", fmt.Errorf("did not find termination message for pod %q", pod.Name)
-	}
-	var nar operations.NotificationActionResult
-	err = json.Unmarshal([]byte(terminationMessage), &nar)
-	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal terminationmessage: %q", err)
-	}
-	if nar.Result == false {
-		return "", errors.New(nar.Error)
-	}
-	return nar.NotificationId, nil
-}
-
-func (c *Reconciler) reconcileTopic(ctx context.Context, csr *v1alpha1.Storage, topic string) (*pubsubsourcev1alpha1.Topic, error) {
-	pubsubClient := c.pubsubClient.PubsubV1alpha1().Topics(csr.Namespace)
-	existing, err := pubsubClient.Get(csr.Name, v1.GetOptions{})
-	if err == nil {
-		// TODO: Handle any updates...
-		c.Logger.Infof("Found existing Topic: %+v", existing)
-		return existing, nil
-	}
-	if apierrs.IsNotFound(err) {
-		topic := resources.MakeTopic(csr, topic)
-		c.Logger.Infof("Creating topic %+v", topic)
-		return pubsubClient.Create(topic)
-	}
-	return nil, err
-}
-
-func (c *Reconciler) deleteTopic(ctx context.Context, namespace, name string) error {
-	pubsubClient := c.pubsubClient.PubsubV1alpha1().Topics(namespace)
-	err := pubsubClient.Delete(name, nil)
-	if err == nil {
-		// TODO: Handle any updates...
-		c.Logger.Infof("Deleted PullSubscription: %s/%s", namespace, name)
-		return nil
-	}
-	if apierrs.IsNotFound(err) {
-		return nil
-	}
-	return err
-}
-
-func (c *Reconciler) EnsureNotificationDeleted(ctx context.Context, UID string, owner kmeta.OwnerRefable, secret corev1.SecretKeySelector, project, bucket, notificationId string) (ops.OpsJobStatus, error) {
-	return c.ensureNotificationJob(ctx, operations.NotificationArgs{
-		UID:            UID,
-		Image:          c.NotificationOpsImage,
-		Action:         ops.ActionDelete,
-		ProjectID:      project,
-		Bucket:         bucket,
-		NotificationId: notificationId,
-		Secret:         secret,
-		Owner:          owner,
-	})
-}
-
-// deleteNotification looks at the status.NotificationID and if non-empty
-// hence indicating that we have created a notification successfully
-// in the Storage, remove it.
-func (c *Reconciler) deleteNotification(ctx context.Context, storage *v1alpha1.Storage) error {
-	if storage.Status.NotificationID == "" {
-		return nil
-	}
-
-	state, err := c.EnsureNotificationDeleted(ctx, string(storage.UID), storage, *storage.Spec.Secret, storage.Spec.Project, storage.Spec.Bucket, storage.Status.NotificationID)
-
-	if state != ops.OpsJobCompleteSuccessful {
-		return fmt.Errorf("Job %q has not completed yet", storage.Name)
-	}
-
-	// See if the pod exists or not...
-	pod, err := ops.GetJobPod(ctx, c.KubeClientSet, storage.Namespace, string(storage.UID), "delete")
-	if err != nil {
-		return err
-	}
-
-	terminationMessage := ops.GetFirstTerminationMessage(pod)
-	if terminationMessage == "" {
-		return fmt.Errorf("did not find termination message for pod %q", pod.Name)
-	}
-	var nar operations.NotificationActionResult
-	err = json.Unmarshal([]byte(terminationMessage), &nar)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal terminationmessage: %q", err)
-	}
-
-	if nar.Result == false {
-		return errors.New(nar.Error)
-	}
-	c.Logger.Infof("Deleted Notification: %q", storage.Status.NotificationID)
-	storage.Status.NotificationID = ""
-	return nil
-}
-
-func (c *Reconciler) ensureFinalizer(csr *v1alpha1.Storage) error {
-	finalizers := sets.NewString(csr.Finalizers...)
-	if finalizers.Has(finalizerName) {
-		return nil
-	}
-	mergePatch := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"finalizers":      append(csr.Finalizers, finalizerName),
-			"resourceVersion": csr.ResourceVersion,
-		},
-	}
-	patch, err := json.Marshal(mergePatch)
-	if err != nil {
-		return err
-	}
-	_, err = c.RunClientSet.EventsV1alpha1().Storages(csr.Namespace).Patch(csr.Name, types.MergePatchType, patch)
-	return err
-
-}
-
-func (c *Reconciler) removeFinalizer(csr *v1alpha1.Storage) error {
-	// Only remove our finalizer if it's the first one.
-	if len(csr.Finalizers) == 0 || csr.Finalizers[0] != finalizerName {
-		return nil
-	}
-
-	// For parity with merge patch for adding, also use patch for removing
-	mergePatch := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"finalizers":      csr.Finalizers[1:],
-			"resourceVersion": csr.ResourceVersion,
-		},
-	}
-	patch, err := json.Marshal(mergePatch)
-	if err != nil {
-		return err
-	}
-	_, err = c.RunClientSet.EventsV1alpha1().Storages(csr.Namespace).Patch(csr.Name, types.MergePatchType, patch)
-	return err
-}
-
-func (c *Reconciler) updateStatus(ctx context.Context, desired *v1alpha1.Storage) (*v1alpha1.Storage, error) {
-	source, err := c.storageLister.Storages(desired.Namespace).Get(desired.Name)
-	if err != nil {
-		return nil, err
-	}
-	// Check if there is anything to update.
-	if equality.Semantic.DeepEqual(source.Status, desired.Status) {
-		return source, nil
-	}
-	becomesReady := desired.Status.IsReady() && !source.Status.IsReady()
-
-	// Don't modify the informers copy.
-	existing := source.DeepCopy()
-	existing.Status = desired.Status
-	src, err := c.RunClientSet.EventsV1alpha1().Storages(desired.Namespace).UpdateStatus(existing)
-
-	if err == nil && becomesReady {
-		duration := time.Since(src.ObjectMeta.CreationTimestamp.Time)
-		c.Logger.Infof("Storage %q became ready after %v", source.Name, duration)
-
-		if err := c.StatsReporter.ReportReady("Storage", source.Namespace, source.Name, duration); err != nil {
-			logging.FromContext(ctx).Infof("failed to record ready for Storage, %v", err)
+	stakes := make(map[string]uint64)
+	for _, config := range configs {
+		if _, ok := stakes[config.Address]; !ok {
+			stakes[config.Address] = config.Stake
+		} else {
+			log.Error().Msgf("duplicate internal node address %s", config.Address)
 		}
 	}
 
-	return src, err
+	return stakes
 }
 
-func (c *Reconciler) ensureNotificationJob(ctx context.Context, args operations.NotificationArgs) (ops.OpsJobStatus, error) {
-	jobName := operations.NotificationJobName(args.Owner, args.Action)
-	job, err := c.jobLister.Jobs(args.Owner.GetObjectMeta().GetNamespace()).Get(jobName)
+// mergeNodeInfos merges the inernal and partner nodes and checks if there is no
+// duplicate addresses or node Ids
+func mergeNodeInfos(internalNodes, partnerNodes []model.NodeInfo) []model.NodeInfo {
+	nodes := append(internalNodes, partnerNodes...)
 
-	// If the resource doesn't exist, we'll create it
-	if apierrs.IsNotFound(err) {
-		c.Logger.Debugw("Job not found, creating with:", zap.Any("args", args))
-
-		args.Image = c.NotificationOpsImage
-
-		job = operations.NewNotificationOps(args)
-
-		job, err := c.KubeClientSet.BatchV1().Jobs(args.Owner.GetObjectMeta().GetNamespace()).Create(job)
-		if err != nil || job == nil {
-			c.Logger.Debugw("Failed to create Job.", zap.Error(err))
-			return ops.OpsJobCreateFailed, nil
-		}
-
-		c.Logger.Debugw("Created Job.")
-		return ops.OpsJobCreated, nil
-	} else if err != nil {
-		c.Logger.Debugw("Failed to get Job.", zap.Error(err))
-		return ops.OpsJobGetFailed, err
-		// TODO: Handle this case
-		//	} else if !metav1.IsControlledBy(job, args.Owner) {
-		//		return ops.OpsJobCreateFailed, fmt.Errorf("storage does not own job %q", jobName)
-	}
-
-	if ops.IsJobComplete(job) {
-		c.Logger.Debugw("Job is complete.")
-		if ops.IsJobSucceeded(job) {
-			return ops.OpsJobCompleteSuccessful, nil
-		} else if ops.IsJobFailed(job) {
-			return ops.OpsJobCompleteFailed, errors.New(ops.JobFailedMessage(job))
+	// test for duplicate Addresses
+	addressLookup := make(map[string]struct{})
+	for _, node := range nodes {
+		if _, ok := addressLookup[node.Address]; ok {
+			log.Fatal().Str("address", node.Address).Msg("duplicate node address")
 		}
 	}
-	c.Logger.Debug("Job still active.", zap.Any("job", job))
-	return ops.OpsJobOngoing, nil
+
+	// test for duplicate node IDs
+	idLookup := make(map[flow.Identifier]struct{})
+	for _, node := range nodes {
+		if _, ok := idLookup[node.NodeID]; ok {
+			log.Fatal().Str("NodeID", node.NodeID.String()).Msg("duplicate node ID")
+		}
+	}
+
+	return nodes
 }
 
-func (c *Reconciler) getJob(ctx context.Context, owner metav1.Object, ls labels.Selector) (*batchv1.Job, error) {
-	list, err := c.KubeClientSet.BatchV1().Jobs(owner.GetNamespace()).List(metav1.ListOptions{
-		LabelSelector: ls.String(),
-	})
-	if err != nil {
-		return nil, err
-	}
+// Validation utility methods ------------------------------------------------
 
-	for _, i := range list.Items {
-		if metav1.IsControlledBy(&i, owner) {
-			return &i, nil
-		}
+func validateNodeID(nodeID flow.Identifier) flow.Identifier {
+	if nodeID == flow.ZeroID {
+		log.Fatal().Msg("NodeID must not be zero")
 	}
+	return nodeID
+}
 
-	return nil, apierrs.NewNotFound(schema.GroupResource{}, "")
+func validateNetworkPubKey(key encodable.NetworkPubKey) encodable.NetworkPubKey {
+	if key.PublicKey == nil {
+		log.Fatal().Msg("NetworkPubKey must not be nil")
+	}
+	return key
+}
+
+func validateStakingPubKey(key encodable.StakingPubKey) encodable.StakingPubKey {
+	if key.PublicKey == nil {
+		log.Fatal().Msg("StakingPubKey must not be nil")
+	}
+	return key
+}
+
+func validateStake(stake uint64) uint64 {
+	if stake == 0 {
+		log.Fatal().Msg("Stake must be bigger than 0")
+	}
+	return stake
 }

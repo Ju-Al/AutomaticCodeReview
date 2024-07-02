@@ -1,5 +1,4 @@
 /*
-            for (String server : nameServerConfigs.keySet()) {
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -70,7 +69,7 @@ public class GetNamesrvConfigCommand implements SubCommand {
 
             Map<String, Properties> nameServerConfigs = defaultMQAdminExt.getNameServerConfig(serverList);
 
-            for (Entry<String, Properties> serverEntry : nameServerConfigs.entrySet()) {
+            for (String server : nameServerConfigs.keySet()) {
                 System.out.printf("============%s============\n",
                         serverEntry.getKey());
                 for (Entry<Object, Object> entry : serverEntry.getValue().entrySet()) {

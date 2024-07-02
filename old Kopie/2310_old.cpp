@@ -1,8 +1,4 @@
 /* -------------------------------------------------------------------------- *
-                // (model, muscle, geometry path), and Bodies are necessarily
-                // 1 level deep: prepend "../../../" to get the correct
-                // relative path.
-                if (!bodyName.empty()) bodyName = "../../../" + bodyName;
  *                      OpenSim:  AbstractPathPoint.cpp                       *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -79,7 +75,10 @@ void AbstractPathPoint::updateFromXMLNode(SimTK::Xml::Element& aNode,
             if (bodyElement != aNode.element_end()) {
                 bodyElement->getValueAs<std::string>(bodyName);
                 // PathPoints in pre-4.0 models are necessarily 3 levels deep
-                // (model, muscle, geometry path), and Bodies are
+                // (model, muscle, geometry path), and Bodies are necessarily
+                // 1 level deep: prepend "../../../" to get the correct
+                // relative path.
+                if (!bodyName.empty()) bodyName = "../../../" + bodyName;
                 // necessarily 1 levels deep; here we create the correct
                 // relative path (accounting for sets being components).
                 if (bodyName == "ground") {

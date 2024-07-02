@@ -1,7 +1,4 @@
 package manage
-		for _, c := range p.Children() {
-			dbg.Lvl3(p.Myself(), "sending to", c.Entity.Addresses, c.Id, p.timeout)
-			p.SendTo(c, &PrepareCount{Timeout: p.timeout})
 
 import (
 	"time"
@@ -109,7 +106,9 @@ func (p *ProtocolCount) FuncPC() {
 		p.SendTo(p.Parent(), &NodeIsUp{})
 	}
 	if !p.IsLeaf() {
-		for _, child := range p.Children() {
+		for _, c := range p.Children() {
+			dbg.Lvl3(p.Myself(), "sending to", c.Entity.Addresses, c.Id, p.timeout)
+			p.SendTo(c, &PrepareCount{Timeout: p.timeout})
 			go func(c *sda.TreeNode) {
 				dbg.Lvl3(p.Myself(), "sending to", c.Entity.Addresses, c.Id, p.timeout)
 				p.SendTo(c, &PrepareCount{Timeout: p.timeout})

@@ -1,5 +1,4 @@
 # Copyright 2021 Google LLC
-    result = undercoat.run_and_wait(stderr=undercoat_log)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,8 +53,8 @@ class UndercoatError(Exception):
 
 
 def undercoat_api_command(*args):
+    result = undercoat.run_and_wait(stderr=undercoat_log)
   """Make an API call to the undercoat binary."""
-  logs.log('Running undercoat command %s' % (args,))
   bundle_dir = environment.get_value('FUCHSIA_RESOURCES_DIR')
   undercoat_path = os.path.join(bundle_dir, 'undercoat', 'undercoat')
   undercoat = new_process.ProcessRunner(undercoat_path, args)

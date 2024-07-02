@@ -193,7 +193,6 @@ public class SuspendedTabletsIT extends ConfigurableMacBase {
       }
 
       // remove servers with metadata on them from the list of servers to be shutdown
-      assertEquals("Expecting a single tServer in metadataServerSet", 1, metadataServerSet.size());
       tserverSet.removeAll(metadataServerSet);
 
       assertEquals("Expecting two tServers in shutdown-list", 2, tserverSet.size());

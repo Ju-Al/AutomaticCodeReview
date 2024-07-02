@@ -283,7 +283,6 @@ func BuildInitCmd() *cobra.Command {
 			return nil
 		}),
 	}
-	cmd.Flags().StringVar(&vars.profile, profileFlag, "", profileFlagDescription)
 	cmd.Flags().StringVarP(&vars.projectName, projectFlag, projectFlagShort, "", projectFlagDescription)
 	cmd.Flags().StringVarP(&vars.appName, appFlag, appFlagShort, "", appFlagDescription)
 	cmd.Flags().StringVarP(&vars.appType, appTypeFlag, appTypeFlagShort, "", appTypeFlagDescription)

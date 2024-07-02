@@ -2390,8 +2390,6 @@ class PodsField_Pick extends PodsField {
 
 		return $autocomplete;
 	}
-
-	/**
 	 * Check if a field supports AJAX mode
 	 *
 	 * @param array $options Field options.

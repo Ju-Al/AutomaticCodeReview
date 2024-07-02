@@ -1,4258 +1,2409 @@
-/* ----------------------------------------------------------------------
-LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-https://lammps.sandia.gov/, Sandia National Laboratories
-Steve Plimpton, sjplimp@sandia.gov
+/*!
+ * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Licensed under the MIT License. See LICENSE file in the project root for license information.
+ */
+#include <LightGBM/c_api.h>
 
-Copyright (2003) Sandia Corporation.  Under the terms of Contract
-DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-certain rights in this software.  This software is distributed under
-the GNU General Public License.
+#include <LightGBM/boosting.h>
+#include <LightGBM/config.h>
+#include <LightGBM/dataset.h>
+#include <LightGBM/dataset_loader.h>
+#include <LightGBM/metric.h>
+#include <LightGBM/network.h>
+#include <LightGBM/objective_function.h>
+#include <LightGBM/prediction_early_stop.h>
+#include <LightGBM/utils/common.h>
+#include <LightGBM/utils/log.h>
+#include <LightGBM/utils/openmp_wrapper.h>
+#include <LightGBM/utils/random.h>
+#include <LightGBM/utils/threading.h>
 
-See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
+#include <string>
+#include <cstdio>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <vector>
 
-/* ----------------------------------------------------------------------
-Contributing Author: Jacob Gissinger (jacob.r.gissinger@gmail.com)
-------------------------------------------------------------------------- */
+#include "application/predictor.hpp"
+#include <LightGBM/utils/yamc/alternate_shared_mutex.hpp>
+#include <LightGBM/utils/yamc/yamc_shared_lock.hpp>
+#include <LightGBM/utils/yamc/yamc_scoped_lock.hpp>
 
-#include "fix_bond_react.h"
+namespace LightGBM {
 
-#include "atom.h"
-#include "atom_vec.h"
-#include "citeme.h"
-#include "comm.h"
-#include "domain.h"
-#include "error.h"
-#include "force.h"
-#include "group.h"
-#include "input.h"
-#include "math_const.h"
-#include "math_extra.h"
-#include "memory.h"
-#include "modify.h"
-#include "molecule.h"
-#include "neigh_list.h"
-#include "neigh_request.h"
-#include "neighbor.h"
-#include "pair.h"
-#include "random_mars.h"
-#include "reset_mol_ids.h"
-#include "respa.h"
-#include "update.h"
-#include "variable.h"
+inline int LGBM_APIHandleException(const std::exception& ex) {
+  LGBM_SetLastError(ex.what());
+  return -1;
+}
+inline int LGBM_APIHandleException(const std::string& ex) {
+  LGBM_SetLastError(ex.c_str());
+  return -1;
+}
 
-#include "superpose3d.h"
+#define API_BEGIN() try {
+#define API_END() } \
+catch(std::exception& ex) { return LGBM_APIHandleException(ex); } \
+catch(std::string& ex) { return LGBM_APIHandleException(ex); } \
+catch(...) { return LGBM_APIHandleException("unknown exception"); } \
+return 0;
 
-#include <cctype>
-#include <cmath>
-#include <cstring>
+yamc::scoped_lock<yamc::alternate::shared_mutex> lock(mtx);
 
-#include <algorithm>
+#define SHARED_LOCK(mtx) \
+yamc::shared_lock<yamc::alternate::shared_mutex> lock(&mtx);
 
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
+const int PREDICTOR_TYPES = 4;
 
-static const char cite_fix_bond_react[] =
-  "fix bond/react: reacter.org\n\n"
-  "@Article{Gissinger17,\n"
-  " author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},\n"
-  " title = {Modeling chemical reactions in classical molecular dynamics simulations},\n"
-  " journal = {Polymer},\n"
-  " year =    2017,\n"
-  " volume =  128,\n"
-  " pages =   {211--217}\n"
-  "}\n\n"
-  "@Article{Gissinger20,\n"
-  " author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},\n"
-  " title = {REACTER: A Heuristic Method for Reactive Molecular Dynamics},\n"
-  " journal = {Macromolecules},\n"
-  " year =    2020,\n"
-  " volume =  53,\n"
-  " pages =   {9953--9961}\n"
-  "}\n\n";
+// Single row predictor to abstract away caching logic
+class SingleRowPredictor {
+ public:
+  PredictFunction predict_function;
+  int64_t num_pred_in_one_row;
 
-#define BIG 1.0e20
-#define DELTA 16
-#define MAXGUESS 20 // max # of guesses allowed by superimpose algorithm
-#define MAXCONARGS 14 // max # of arguments for any type of constraint + rxnID
-#define NUMVARVALS 4 // max # of keyword values that have variables as input
+  SingleRowPredictor(int predict_type, Boosting* boosting, const Config& config, int iter) {
+    bool is_predict_leaf = false;
+    bool is_raw_score = false;
+    bool predict_contrib = false;
+    if (predict_type == C_API_PREDICT_LEAF_INDEX) {
+      is_predict_leaf = true;
+    } else if (predict_type == C_API_PREDICT_RAW_SCORE) {
+      is_raw_score = true;
+    } else if (predict_type == C_API_PREDICT_CONTRIB) {
+      predict_contrib = true;
+    } else {
+      is_raw_score = false;
+    }
+    early_stop_ = config.pred_early_stop;
+    early_stop_freq_ = config.pred_early_stop_freq;
+    early_stop_margin_ = config.pred_early_stop_margin;
+    iter_ = iter;
+    predictor_.reset(new Predictor(boosting, iter_, is_raw_score, is_predict_leaf, predict_contrib,
+                                   early_stop_, early_stop_freq_, early_stop_margin_));
+    num_pred_in_one_row = boosting->NumPredictOneRow(iter_, is_predict_leaf, predict_contrib);
+    predict_function = predictor_->GetPredictFunction();
+    num_total_model_ = boosting->NumberOfTotalModel();
+  }
 
-// various statuses of superimpose algorithm:
-// ACCEPT: site successfully matched to pre-reacted template
-// REJECT: site does not match pre-reacted template
-// PROCEED: normal execution (non-guessing mode)
-// CONTINUE: a neighbor has been assigned, skip to next neighbor
-// GUESSFAIL: a guess has failed (if no more restore points, status = 'REJECT')
-// RESTORE: restore mode, load most recent restore point
-enum{ACCEPT,REJECT,PROCEED,CONTINUE,GUESSFAIL,RESTORE};
+  ~SingleRowPredictor() {}
 
-// types of available reaction constraints
-enum{DISTANCE,ANGLE,DIHEDRAL,ARRHENIUS,RMSD,CUSTOM};
+  bool IsPredictorEqual(const Config& config, int iter, Boosting* boosting) {
+    return early_stop_ == config.pred_early_stop &&
+      early_stop_freq_ == config.pred_early_stop_freq &&
+      early_stop_margin_ == config.pred_early_stop_margin &&
+      iter_ == iter &&
+      num_total_model_ == boosting->NumberOfTotalModel();
+  }
 
-// ID type used by constraint
-enum{ATOM,FRAG};
+ private:
+  std::unique_ptr<Predictor> predictor_;
+  bool early_stop_;
+  int early_stop_freq_;
+  double early_stop_margin_;
+  int iter_;
+  int num_total_model_;
+};
 
-// keyword values that accept variables as input
-enum{NEVERY,RMIN,RMAX,PROB};
+class Booster {
+ public:
+  explicit Booster(const char* filename) {
+    boosting_.reset(Boosting::CreateBoosting("gbdt", filename));
+  }
 
-// flag for one-proc vs shared reaction sites
-enum{LOCAL,GLOBAL};
+  Booster(const Dataset* train_data,
+          const char* parameters) {
+    auto param = Config::Str2Map(parameters);
+    config_.Set(param);
+    if (config_.num_threads > 0) {
+      omp_set_num_threads(config_.num_threads);
+    }
+    // create boosting
+    if (config_.input_model.size() > 0) {
+      Log::Warning("Continued train from model is not supported for c_api,\n"
+                   "please use continued train with input score");
+    }
 
-// values for molecule_keyword
-enum{OFF,INTER,INTRA};
+    boosting_.reset(Boosting::CreateBoosting(config_.boosting, nullptr));
 
-/* ---------------------------------------------------------------------- */
+    train_data_ = train_data;
+    CreateObjectiveAndMetrics();
+    // initialize the boosting
+    if (config_.tree_learner == std::string("feature")) {
+      Log::Fatal("Do not support feature parallel in c api");
+    }
+    if (Network::num_machines() == 1 && config_.tree_learner != std::string("serial")) {
+      Log::Warning("Only find one worker, will switch to serial tree learner");
+      config_.tree_learner = "serial";
+    }
+    boosting_->Init(&config_, train_data_, objective_fun_.get(),
+                    Common::ConstPtrInVectorWrapper<Metric>(train_metric_));
+  }
 
-FixBondReact::FixBondReact(LAMMPS *lmp, int narg, char **arg) :
-  Fix(lmp, narg, arg)
-{
-  if (lmp->citeme) lmp->citeme->add(cite_fix_bond_react);
+  void MergeFrom(const Booster* other) {
+    UNIQUE_LOCK(mutex_)
+    boosting_->MergeFrom(other->boosting_.get());
+  }
 
-  fix1 = nullptr;
-  fix2 = nullptr;
-  fix3 = nullptr;
-  reset_mol_ids = nullptr;
+  ~Booster() {
+  }
 
-  if (narg < 8) error->all(FLERR,"Illegal fix bond/react command: "
-                           "too few arguments");
+  void CreateObjectiveAndMetrics() {
+    // create objective function
+    objective_fun_.reset(ObjectiveFunction::CreateObjectiveFunction(config_.objective,
+                                                                    config_));
+    if (objective_fun_ == nullptr) {
+      Log::Warning("Using self-defined objective function");
+    }
+    // initialize the objective function
+    if (objective_fun_ != nullptr) {
+      objective_fun_->Init(train_data_->metadata(), train_data_->num_data());
+    }
 
-  MPI_Comm_rank(world,&me);
-  MPI_Comm_size(world,&nprocs);
-  newton_bond = force->newton_bond;
+    // create training metric
+    train_metric_.clear();
+    for (auto metric_type : config_.metric) {
+      auto metric = std::unique_ptr<Metric>(
+        Metric::CreateMetric(metric_type, config_));
+      if (metric == nullptr) { continue; }
+      metric->Init(train_data_->metadata(), train_data_->num_data());
+      train_metric_.push_back(std::move(metric));
+    }
+    train_metric_.shrink_to_fit();
+  }
 
-  restart_global = 1;
-  attempted_rxn = 0;
-  force_reneighbor = 1;
-  next_reneighbor = -1;
-  vector_flag = 1;
-  global_freq = 1;
-  extvector = 0;
-  rxnID = 0;
-  maxnconstraints = 0;
-  narrhenius = 0;
-  status = PROCEED;
-
-  // reaction functions used by 'custom' constraint
-  nrxnfunction = 2;
-  rxnfunclist.resize(nrxnfunction);
-  rxnfunclist[0] = "rxnsum";
-  rxnfunclist[1] = "rxnave";
-  nvvec = 0;
-  vvec = nullptr;
-
-  nxspecial = nullptr;
-  onemol_nxspecial = nullptr;
-  twomol_nxspecial = nullptr;
-  xspecial = nullptr;
-  onemol_xspecial = nullptr;
-  twomol_xspecial = nullptr;
-
-  // these group names are reserved for use exclusively by bond/react
-  master_group = (char *) "bond_react_MASTER_group";
-
-  // by using fixed group names, only one instance of fix bond/react is allowed.
-  if (modify->find_fix_by_style("^bond/react") != -1)
-    error->all(FLERR,"Only one instance of fix bond/react allowed at a time");
-
-  // let's find number of reactions specified
-  nreacts = 0;
-  for (int i = 3; i < narg; i++) {
-    if (strcmp(arg[i],"react") == 0) {
-      nreacts++;
-      i = i + 6; // skip past mandatory arguments
-      if (i > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                               "'react' has too few arguments");
+  void ResetTrainingData(const Dataset* train_data) {
+    if (train_data != train_data_) {
+      UNIQUE_LOCK(mutex_)
+      train_data_ = train_data;
+      CreateObjectiveAndMetrics();
+      // reset the boosting
+      boosting_->ResetTrainingData(train_data_,
+                                   objective_fun_.get(), Common::ConstPtrInVectorWrapper<Metric>(train_metric_));
     }
   }
 
-  if (nreacts == 0) error->all(FLERR,"Illegal fix bond/react command: "
-                               "missing mandatory 'react' argument");
+  static void CheckDatasetResetConfig(
+      const Config& old_config,
+      const std::unordered_map<std::string, std::string>& new_param) {
+    Config new_config;
+    new_config.Set(new_param);
+    if (new_param.count("data_random_seed") &&
+        new_config.data_random_seed != old_config.data_random_seed) {
+      Log::Fatal("Cannot change data_random_seed after constructed Dataset handle.");
+    }
+    if (new_param.count("max_bin") &&
+        new_config.max_bin != old_config.max_bin) {
+      Log::Fatal("Cannot change max_bin after constructed Dataset handle.");
+    }
+    if (new_param.count("max_bin_by_feature") &&
+        new_config.max_bin_by_feature != old_config.max_bin_by_feature) {
+      Log::Fatal(
+          "Cannot change max_bin_by_feature after constructed Dataset handle.");
+    }
+    if (new_param.count("bin_construct_sample_cnt") &&
+        new_config.bin_construct_sample_cnt !=
+            old_config.bin_construct_sample_cnt) {
+      Log::Fatal(
+          "Cannot change bin_construct_sample_cnt after constructed Dataset "
+          "handle.");
+    }
+    if (new_param.count("min_data_in_bin") &&
+        new_config.min_data_in_bin != old_config.min_data_in_bin) {
+      Log::Fatal(
+          "Cannot change min_data_in_bin after constructed Dataset handle.");
+    }
+    if (new_param.count("use_missing") &&
+        new_config.use_missing != old_config.use_missing) {
+      Log::Fatal("Cannot change use_missing after constructed Dataset handle.");
+    }
+    if (new_param.count("zero_as_missing") &&
+        new_config.zero_as_missing != old_config.zero_as_missing) {
+      Log::Fatal(
+          "Cannot change zero_as_missing after constructed Dataset handle.");
+    }
+    if (new_param.count("categorical_feature") &&
+        new_config.categorical_feature != old_config.categorical_feature) {
+      Log::Fatal(
+          "Cannot change categorical_feature after constructed Dataset "
+          "handle.");
+    }
+    if (new_param.count("feature_pre_filter") &&
+        new_config.feature_pre_filter != old_config.feature_pre_filter) {
+      Log::Fatal(
+          "Cannot change feature_pre_filter after constructed Dataset handle.");
+    }
+    if (new_param.count("is_enable_sparse") &&
+        new_config.is_enable_sparse != old_config.is_enable_sparse) {
+      Log::Fatal(
+          "Cannot change is_enable_sparse after constructed Dataset handle.");
+    }
+    if (new_param.count("pre_partition") &&
+        new_config.pre_partition != old_config.pre_partition) {
+      Log::Fatal(
+          "Cannot change pre_partition after constructed Dataset handle.");
+    }
+    if (new_param.count("enable_bundle") &&
+        new_config.enable_bundle != old_config.enable_bundle) {
+      Log::Fatal(
+          "Cannot change enable_bundle after constructed Dataset handle.");
+    }
+    if (new_param.count("header") && new_config.header != old_config.header) {
+      Log::Fatal("Cannot change header after constructed Dataset handle.");
+    }
+    if (new_param.count("two_round") &&
+        new_config.two_round != old_config.two_round) {
+      Log::Fatal("Cannot change two_round after constructed Dataset handle.");
+    }
+    if (new_param.count("label_column") &&
+        new_config.label_column != old_config.label_column) {
+      Log::Fatal(
+          "Cannot change label_column after constructed Dataset handle.");
+    }
+    if (new_param.count("weight_column") &&
+        new_config.weight_column != old_config.weight_column) {
+      Log::Fatal(
+          "Cannot change weight_column after constructed Dataset handle.");
+    }
+    if (new_param.count("group_column") &&
+        new_config.group_column != old_config.group_column) {
+      Log::Fatal(
+          "Cannot change group_column after constructed Dataset handle.");
+    }
+    if (new_param.count("ignore_column") &&
+        new_config.ignore_column != old_config.ignore_column) {
+      Log::Fatal(
+          "Cannot change ignore_column after constructed Dataset handle.");
+    }
+    if (new_param.count("forcedbins_filename")) {
+      Log::Fatal("Cannot change forced bins after constructed Dataset handle.");
+    }
+    if (new_param.count("min_data_in_leaf") &&
+        new_config.min_data_in_leaf < old_config.min_data_in_leaf &&
+        old_config.feature_pre_filter) {
+      Log::Fatal(
+          "Reducing `min_data_in_leaf` with `feature_pre_filter=true` may "
+          "cause unexpected behaviour "
+          "for features that were pre-filtered by the larger "
+          "`min_data_in_leaf`.\n"
+          "You need to set `feature_pre_filter=false` to dynamically change "
+          "the `min_data_in_leaf`.");
+    }
+  }
 
-  size_vector = nreacts;
+  void ResetConfig(const char* parameters) {
+    UNIQUE_LOCK(mutex_)
+    auto param = Config::Str2Map(parameters);
+    if (param.count("num_class")) {
+      Log::Fatal("Cannot change num_class during training");
+    }
+    if (param.count("boosting")) {
+      Log::Fatal("Cannot change boosting during training");
+    }
+    if (param.count("metric")) {
+      Log::Fatal("Cannot change metric during training");
+    }
+    CheckDatasetResetConfig(config_, param);
 
-  int iarg = 3;
-  stabilization_flag = 0;
-  reset_mol_ids_flag = 1;
-  int num_common_keywords = 2;
-  for (int m = 0; m < num_common_keywords; m++) {
-    if (strcmp(arg[iarg],"stabilization") == 0) {
-      if (strcmp(arg[iarg+1],"no") == 0) {
-        if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'stabilization' keyword has too few arguments");
-        iarg += 2;
+    config_.Set(param);
+
+    if (config_.num_threads > 0) {
+      omp_set_num_threads(config_.num_threads);
+    }
+
+    if (param.count("objective")) {
+      // create objective function
+      objective_fun_.reset(ObjectiveFunction::CreateObjectiveFunction(config_.objective,
+                                                                      config_));
+      if (objective_fun_ == nullptr) {
+        Log::Warning("Using self-defined objective function");
       }
-      if (strcmp(arg[iarg+1],"yes") == 0) {
-        if (iarg+4 > narg) error->all(FLERR,"Illegal fix bond/react command:"
-                                      "'stabilization' keyword has too few arguments");
-        exclude_group = utils::strdup(arg[iarg+2]);
-        stabilization_flag = 1;
-        nve_limit_xmax = arg[iarg+3];
-        iarg += 4;
+      // initialize the objective function
+      if (objective_fun_ != nullptr) {
+        objective_fun_->Init(train_data_->metadata(), train_data_->num_data());
       }
-    } else if (strcmp(arg[iarg],"reset_mol_ids") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                    "'reset_mol_ids' keyword has too few arguments");
-      if (strcmp(arg[iarg+1],"yes") == 0) reset_mol_ids_flag = 1; // default
-      if (strcmp(arg[iarg+1],"no") == 0) reset_mol_ids_flag = 0;
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"react") == 0) {
-      break;
-    } else error->all(FLERR,"Illegal fix bond/react command: unknown keyword");
+      boosting_->ResetTrainingData(train_data_,
+                                   objective_fun_.get(), Common::ConstPtrInVectorWrapper<Metric>(train_metric_));
+    }
+
+    boosting_->ResetConfig(&config_);
   }
 
-  if (reset_mol_ids_flag) {
-    delete reset_mol_ids;
-    reset_mol_ids = new ResetMolIDs(lmp);
-    reset_mol_ids->create_computes(id,group->names[igroup]);
+  void AddValidData(const Dataset* valid_data) {
+    UNIQUE_LOCK(mutex_)
+    valid_metrics_.emplace_back();
+    for (auto metric_type : config_.metric) {
+      auto metric = std::unique_ptr<Metric>(Metric::CreateMetric(metric_type, config_));
+      if (metric == nullptr) { continue; }
+      metric->Init(valid_data->metadata(), valid_data->num_data());
+      valid_metrics_.back().push_back(std::move(metric));
+    }
+    valid_metrics_.back().shrink_to_fit();
+    boosting_->AddValidDataset(valid_data,
+                               Common::ConstPtrInVectorWrapper<Metric>(valid_metrics_.back()));
   }
 
-  // set up common variables as vectors of length 'nreacts'
-  // nevery, cutoff, onemol, twomol, superimpose file
-
-  // this looks excessive
-  // the price of vectorization (all reactions in one command)?
-  memory->create(rxn_name,nreacts,MAXLINE,"bond/react:rxn_name");
-  memory->create(nevery,nreacts,"bond/react:nevery");
-  memory->create(cutsq,nreacts,2,"bond/react:cutsq");
-  memory->create(unreacted_mol,nreacts,"bond/react:unreacted_mol");
-  memory->create(reacted_mol,nreacts,"bond/react:reacted_mol");
-  memory->create(fraction,nreacts,"bond/react:fraction");
-  memory->create(max_rxn,nreacts,"bond/react:max_rxn");
-  memory->create(nlocalskips,nreacts,"bond/react:nlocalskips");
-  memory->create(nghostlyskips,nreacts,"bond/react:nghostlyskips");
-  memory->create(seed,nreacts,"bond/react:seed");
-  memory->create(limit_duration,nreacts,"bond/react:limit_duration");
-  memory->create(stabilize_steps_flag,nreacts,"bond/react:stabilize_steps_flag");
-  memory->create(custom_charges_fragid,nreacts,"bond/react:custom_charges_fragid");
-  memory->create(create_atoms_flag,nreacts,"bond/react:create_atoms_flag");
-  memory->create(modify_create_fragid,nreacts,"bond/react:modify_create_fragid");
-  memory->create(overlapsq,nreacts,"bond/react:overlapsq");
-  memory->create(molecule_keyword,nreacts,"bond/react:molecule_keyword");
-  memory->create(nconstraints,nreacts,"bond/react:nconstraints");
-  memory->create(constraintstr,nreacts,MAXLINE,"bond/react:constraintstr");
-  memory->create(constraints,0,nreacts,"bond/react:constraints");
-  memory->create(var_flag,NUMVARVALS,nreacts,"bond/react:var_flag");
-  memory->create(var_id,NUMVARVALS,nreacts,"bond/react:var_id");
-  memory->create(iatomtype,nreacts,"bond/react:iatomtype");
-  memory->create(jatomtype,nreacts,"bond/react:jatomtype");
-  memory->create(ibonding,nreacts,"bond/react:ibonding");
-  memory->create(jbonding,nreacts,"bond/react:jbonding");
-  memory->create(closeneigh,nreacts,"bond/react:closeneigh");
-  memory->create(groupbits,nreacts,"bond/react:groupbits");
-  memory->create(reaction_count,nreacts,"bond/react:reaction_count");
-  memory->create(local_rxn_count,nreacts,"bond/react:local_rxn_count");
-  memory->create(ghostly_rxn_count,nreacts,"bond/react:ghostly_rxn_count");
-  memory->create(reaction_count_total,nreacts,"bond/react:reaction_count_total");
-
-  for (int i = 0; i < nreacts; i++) {
-    fraction[i] = 1;
-    seed[i] = 12345;
-    max_rxn[i] = INT_MAX;
-    stabilize_steps_flag[i] = 0;
-    custom_charges_fragid[i] = -1;
-    create_atoms_flag[i] = 0;
-    modify_create_fragid[i] = -1;
-    overlapsq[i] = 0;
-    molecule_keyword[i] = OFF;
-    nconstraints[i] = 0;
-    // set default limit duration to 60 timesteps
-    limit_duration[i] = 60;
-    reaction_count[i] = 0;
-    local_rxn_count[i] = 0;
-    ghostly_rxn_count[i] = 0;
-    reaction_count_total[i] = 0;
-    for (int j = 0; j < NUMVARVALS; j++) {
-      var_flag[j][i] = 0;
-      var_id[j][i] = 0;
-    }
+  bool TrainOneIter() {
+    UNIQUE_LOCK(mutex_)
+    return boosting_->TrainOneIter(nullptr, nullptr);
   }
 
-  char **files;
-  files = new char*[nreacts];
-
-  for (int rxn = 0; rxn < nreacts; rxn++) {
-
-    if (strcmp(arg[iarg],"react") != 0) error->all(FLERR,"Illegal fix bond/react command: "
-                                                   "'react' or 'stabilization' has incorrect arguments");
-
-    iarg++;
-
-    int n = strlen(arg[iarg]) + 1;
-    if (n > MAXLINE) error->all(FLERR,"Reaction name (react-ID) is too long (limit: 256 characters)");
-    strcpy(rxn_name[rxn],arg[iarg++]);
-
-    int groupid = group->find(arg[iarg++]);
-    if (groupid == -1) error->all(FLERR,"Could not find fix group ID");
-    groupbits[rxn] = group->bitmask[groupid];
-
-    if (strncmp(arg[iarg],"v_",2) == 0) {
-      char *str = utils::strdup(&arg[iarg][2]);
-      var_id[NEVERY][rxn] = input->variable->find(str);
-      if (var_id[NEVERY][rxn] < 0)
-        error->all(FLERR,"Bond/react: Variable name does not exist");
-      if (!input->variable->equalstyle(var_id[NEVERY][rxn]))
-        error->all(FLERR,"Bond/react: Variable is not equal-style");
-      var_flag[NEVERY][rxn] = 1;
-      delete [] str;
-    } else {
-      nevery[rxn] = utils::inumeric(FLERR,arg[iarg],false,lmp);
-      if (nevery[rxn] <= 0) error->all(FLERR,"Illegal fix bond/react command: "
-                                       "'Nevery' must be a positive integer");
+  void Refit(const int32_t* leaf_preds, int32_t nrow, int32_t ncol) {
+    UNIQUE_LOCK(mutex_)
+    std::vector<std::vector<int32_t>> v_leaf_preds(nrow, std::vector<int32_t>(ncol, 0));
+    for (int i = 0; i < nrow; ++i) {
+      for (int j = 0; j < ncol; ++j) {
+        v_leaf_preds[i][j] = leaf_preds[i * ncol + j];
+      }
     }
-    iarg++;
+    boosting_->RefitTree(v_leaf_preds);
+  }
 
-    if (strncmp(arg[iarg],"v_",2) == 0) {
-      char *str = utils::strdup(&arg[iarg][2]);
-      var_id[RMIN][rxn] = input->variable->find(str);
-      if (var_id[RMIN][rxn] < 0)
-        error->all(FLERR,"Bond/react: Variable name does not exist");
-      if (!input->variable->equalstyle(var_id[RMIN][rxn]))
-        error->all(FLERR,"Bond/react: Variable is not equal-style");
-      double cutoff = input->variable->compute_equal(var_id[RMIN][rxn]);
-      cutsq[rxn][0] = cutoff*cutoff;
-      var_flag[RMIN][rxn] = 1;
-      delete [] str;
-    } else {
-      double cutoff = utils::numeric(FLERR,arg[iarg],false,lmp);
-      if (cutoff < 0.0) error->all(FLERR,"Illegal fix bond/react command: "
-                                   "'Rmin' cannot be negative");
-      cutsq[rxn][0] = cutoff*cutoff;
+  bool TrainOneIter(const score_t* gradients, const score_t* hessians) {
+    UNIQUE_LOCK(mutex_)
+    return boosting_->TrainOneIter(gradients, hessians);
+  }
+
+  void RollbackOneIter() {
+    UNIQUE_LOCK(mutex_)
+    boosting_->RollbackOneIter();
+  }
+
+  void SetSingleRowPredictor(int num_iteration, int predict_type, const Config& config) {
+      UNIQUE_LOCK(mutex_)
+      if (single_row_predictor_[predict_type].get() == nullptr ||
+          !single_row_predictor_[predict_type]->IsPredictorEqual(config, num_iteration, boosting_.get())) {
+        single_row_predictor_[predict_type].reset(new SingleRowPredictor(predict_type, boosting_.get(),
+                                                                         config, num_iteration));
+      }
+  }
+
+  void PredictSingleRow(int predict_type, int ncol,
+               std::function<std::vector<std::pair<int, double>>(int row_idx)> get_row_fun,
+               const Config& config,
+               double* out_result, int64_t* out_len) const {
+    if (!config.predict_disable_shape_check && ncol != boosting_->MaxFeatureIdx() + 1) {
+      Log::Fatal("The number of features in data (%d) is not the same as it was in training data (%d).\n"\
+                 "You can set ``predict_disable_shape_check=true`` to discard this error, but please be aware what you are doing.", ncol, boosting_->MaxFeatureIdx() + 1);
     }
-    iarg++;
+    SHARED_LOCK(mutex_)
+    const auto& single_row_predictor = single_row_predictor_[predict_type];
+    auto one_row = get_row_fun(0);
+    auto pred_wrt_ptr = out_result;
+    single_row_predictor->predict_function(one_row, pred_wrt_ptr);
 
-    if (strncmp(arg[iarg],"v_",2) == 0) {
-      char *str = utils::strdup(&arg[iarg][2]);
-      var_id[RMAX][rxn] = input->variable->find(str);
-      if (var_id[RMAX][rxn] < 0)
-        error->all(FLERR,"Bond/react: Variable name does not exist");
-      if (!input->variable->equalstyle(var_id[RMAX][rxn]))
-        error->all(FLERR,"Bond/react: Variable is not equal-style");
-      double cutoff = input->variable->compute_equal(var_id[RMAX][rxn]);
-      cutsq[rxn][1] = cutoff*cutoff;
-      var_flag[RMAX][rxn] = 1;
-      delete [] str;
-    } else {
-      double cutoff = utils::numeric(FLERR,arg[iarg],false,lmp);
-      if (cutoff < 0.0) error->all(FLERR,"Illegal fix bond/react command:"
-                                   "'Rmax' cannot be negative");
-      cutsq[rxn][1] = cutoff*cutoff;
+    *out_len = single_row_predictor->num_pred_in_one_row;
+  }
+
+  Predictor CreatePredictor(int num_iteration, int predict_type, int ncol, const Config& config) const {
+    if (!config.predict_disable_shape_check && ncol != boosting_->MaxFeatureIdx() + 1) {
+      Log::Fatal("The number of features in data (%d) is not the same as it was in training data (%d).\n" \
+                 "You can set ``predict_disable_shape_check=true`` to discard this error, but please be aware what you are doing.", ncol, boosting_->MaxFeatureIdx() + 1);
     }
-    iarg++;
+    bool is_predict_leaf = false;
+    bool is_raw_score = false;
+    bool predict_contrib = false;
+    if (predict_type == C_API_PREDICT_LEAF_INDEX) {
+      is_predict_leaf = true;
+    } else if (predict_type == C_API_PREDICT_RAW_SCORE) {
+      is_raw_score = true;
+    } else if (predict_type == C_API_PREDICT_CONTRIB) {
+      predict_contrib = true;
+    } else {
+      is_raw_score = false;
+    }
 
-    unreacted_mol[rxn] = atom->find_molecule(arg[iarg++]);
-    if (unreacted_mol[rxn] == -1) error->all(FLERR,"Unreacted molecule template ID for "
-                                             "fix bond/react does not exist");
-    reacted_mol[rxn] = atom->find_molecule(arg[iarg++]);
-    if (reacted_mol[rxn] == -1) error->all(FLERR,"Reacted molecule template ID for "
-                                           "fix bond/react does not exist");
+    Predictor predictor(boosting_.get(), num_iteration, is_raw_score, is_predict_leaf, predict_contrib,
+                        config.pred_early_stop, config.pred_early_stop_freq, config.pred_early_stop_margin);
+    return predictor;
+  }
 
-    //read superimpose file
-    files[rxn] = utils::strdup(arg[iarg]);
-    iarg++;
+  void Predict(int num_iteration, int predict_type, int nrow, int ncol,
+               std::function<std::vector<std::pair<int, double>>(int row_idx)> get_row_fun,
+               const Config& config,
+               double* out_result, int64_t* out_len) const {
+    SHARED_LOCK(mutex_);
+    auto predictor = CreatePredictor(num_iteration, predict_type, ncol, config);
+    bool is_predict_leaf = false;
+    bool predict_contrib = false;
+    if (predict_type == C_API_PREDICT_LEAF_INDEX) {
+      is_predict_leaf = true;
+    } else if (predict_type == C_API_PREDICT_CONTRIB) {
+      predict_contrib = true;
+    }
+    int64_t num_pred_in_one_row = boosting_->NumPredictOneRow(num_iteration, is_predict_leaf, predict_contrib);
+    auto pred_fun = predictor.GetPredictFunction();
+    OMP_INIT_EX();
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < nrow; ++i) {
+      OMP_LOOP_EX_BEGIN();
+      auto one_row = get_row_fun(i);
+      auto pred_wrt_ptr = out_result + static_cast<size_t>(num_pred_in_one_row) * i;
+      pred_fun(one_row, pred_wrt_ptr);
+      OMP_LOOP_EX_END();
+    }
+    OMP_THROW_EX();
+    *out_len = num_pred_in_one_row * nrow;
+  }
 
-    while (iarg < narg && strcmp(arg[iarg],"react") != 0) {
-      if (strcmp(arg[iarg],"prob") == 0) {
-        if (iarg+3 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'prob' keyword has too few arguments");
-        // check if probability is a variable
-        if (strncmp(arg[iarg+1],"v_",2) == 0) {
-          char *str = utils::strdup(&arg[iarg+1][2]);
-          var_id[PROB][rxn] = input->variable->find(str);
-          if (var_id[PROB][rxn] < 0)
-            error->all(FLERR,"Bond/react: Variable name does not exist");
-          if (!input->variable->equalstyle(var_id[PROB][rxn]))
-            error->all(FLERR,"Bond/react: Variable is not equal-style");
-          fraction[rxn] = input->variable->compute_equal(var_id[PROB][rxn]);
-          var_flag[PROB][rxn] = 1;
-          delete [] str;
+  void PredictSparse(int num_iteration, int predict_type, int64_t nrow, int ncol,
+                     std::function<std::vector<std::pair<int, double>>(int64_t row_idx)> get_row_fun,
+                     const Config& config, int64_t* out_elements_size,
+                     std::vector<std::vector<std::unordered_map<int, double>>>* agg_ptr,
+                     int32_t** out_indices, void** out_data, int data_type,
+                     bool* is_data_float32_ptr, int num_matrices) const {
+    auto predictor = CreatePredictor(num_iteration, predict_type, ncol, config);
+    auto pred_sparse_fun = predictor.GetPredictSparseFunction();
+    std::vector<std::vector<std::unordered_map<int, double>>>& agg = *agg_ptr;
+    OMP_INIT_EX();
+    #pragma omp parallel for schedule(static)
+    for (int64_t i = 0; i < nrow; ++i) {
+      OMP_LOOP_EX_BEGIN();
+      auto one_row = get_row_fun(i);
+      agg[i] = std::vector<std::unordered_map<int, double>>(num_matrices);
+      pred_sparse_fun(one_row, &agg[i]);
+      OMP_LOOP_EX_END();
+    }
+    OMP_THROW_EX();
+    // calculate the nonzero data and indices size
+    int64_t elements_size = 0;
+    for (int64_t i = 0; i < static_cast<int64_t>(agg.size()); ++i) {
+      auto row_vector = agg[i];
+      for (int j = 0; j < static_cast<int>(row_vector.size()); ++j) {
+        elements_size += static_cast<int64_t>(row_vector[j].size());
+      }
+    }
+    *out_elements_size = elements_size;
+    *is_data_float32_ptr = false;
+    // allocate data and indices arrays
+    if (data_type == C_API_DTYPE_FLOAT32) {
+      *out_data = new float[elements_size];
+      *is_data_float32_ptr = true;
+    } else if (data_type == C_API_DTYPE_FLOAT64) {
+      *out_data = new double[elements_size];
+    } else {
+      Log::Fatal("Unknown data type in PredictSparse");
+      return;
+    }
+    *out_indices = new int32_t[elements_size];
+  }
+
+  void PredictSparseCSR(int num_iteration, int predict_type, int64_t nrow, int ncol,
+                        std::function<std::vector<std::pair<int, double>>(int64_t row_idx)> get_row_fun,
+                        const Config& config,
+                        int64_t* out_len, void** out_indptr, int indptr_type,
+                        int32_t** out_indices, void** out_data, int data_type) const {
+    SHARED_LOCK(mutex_);
+    // Get the number of trees per iteration (for multiclass scenario we output multiple sparse matrices)
+    int num_matrices = boosting_->NumModelPerIteration();
+    bool is_indptr_int32 = false;
+    bool is_data_float32 = false;
+    int64_t indptr_size = (nrow + 1) * num_matrices;
+    if (indptr_type == C_API_DTYPE_INT32) {
+      *out_indptr = new int32_t[indptr_size];
+      is_indptr_int32 = true;
+    } else if (indptr_type == C_API_DTYPE_INT64) {
+      *out_indptr = new int64_t[indptr_size];
+    } else {
+      Log::Fatal("Unknown indptr type in PredictSparseCSR");
+      return;
+    }
+    // aggregated per row feature contribution results
+    std::vector<std::vector<std::unordered_map<int, double>>> agg(nrow);
+    int64_t elements_size = 0;
+    PredictSparse(num_iteration, predict_type, nrow, ncol, get_row_fun, config, &elements_size, &agg,
+                  out_indices, out_data, data_type, &is_data_float32, num_matrices);
+    std::vector<int> row_sizes(num_matrices * nrow);
+    std::vector<int64_t> row_matrix_offsets(num_matrices * nrow);
+    int64_t row_vector_cnt = 0;
+    for (int m = 0; m < num_matrices; ++m) {
+      for (int64_t i = 0; i < static_cast<int64_t>(agg.size()); ++i) {
+        auto row_vector = agg[i];
+        auto row_vector_size = row_vector[m].size();
+        // keep track of the row_vector sizes for parallelization
+        row_sizes[row_vector_cnt] = static_cast<int>(row_vector_size);
+        if (i == 0) {
+          row_matrix_offsets[row_vector_cnt] = 0;
         } else {
-          // otherwise probability should be a number
-          fraction[rxn] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+          row_matrix_offsets[row_vector_cnt] = static_cast<int64_t>(row_sizes[row_vector_cnt - 1] + row_matrix_offsets[row_vector_cnt - 1]);
         }
-        seed[rxn] = utils::inumeric(FLERR,arg[iarg+2],false,lmp);
-        if (fraction[rxn] < 0.0 || fraction[rxn] > 1.0)
-          error->all(FLERR,"Illegal fix bond/react command: "
-                     "probability fraction must between 0 and 1, inclusive");
-        if (seed[rxn] <= 0) error->all(FLERR,"Illegal fix bond/react command: "
-                                       "probability seed must be positive");
-        iarg += 3;
-      } else if (strcmp(arg[iarg],"max_rxn") == 0) {
-        if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'max_rxn' has too few arguments");
-        max_rxn[rxn] = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-        if (max_rxn[rxn] < 0) error->all(FLERR,"Illegal fix bond/react command: "
-                                         "'max_rxn' cannot be negative");
-        iarg += 2;
-      } else if (strcmp(arg[iarg],"stabilize_steps") == 0) {
-        if (stabilization_flag == 0) error->all(FLERR,"Stabilize_steps keyword "
-                                                "used without stabilization keyword");
-        if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'stabilize_steps' has too few arguments");
-        limit_duration[rxn] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-        stabilize_steps_flag[rxn] = 1;
-        iarg += 2;
-      } else if (strcmp(arg[iarg],"custom_charges") == 0) {
-        if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'custom_charges' has too few arguments");
-        if (strcmp(arg[iarg+1],"no") == 0) custom_charges_fragid[rxn] = -1; //default
-        else {
-          custom_charges_fragid[rxn] = atom->molecules[unreacted_mol[rxn]]->findfragment(arg[iarg+1]);
-          if (custom_charges_fragid[rxn] < 0) error->one(FLERR,"Bond/react: Molecule fragment for "
-                                                         "'custom_charges' keyword does not exist");
-        }
-        iarg += 2;
-      } else if (strcmp(arg[iarg],"molecule") == 0) {
-        if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'molecule' has too few arguments");
-        if (strcmp(arg[iarg+1],"off") == 0) molecule_keyword[rxn] = OFF; //default
-        else if (strcmp(arg[iarg+1],"inter") == 0) molecule_keyword[rxn] = INTER;
-        else if (strcmp(arg[iarg+1],"intra") == 0) molecule_keyword[rxn] = INTRA;
-        else error->one(FLERR,"Bond/react: Illegal option for 'molecule' keyword");
-        iarg += 2;
-      } else if (strcmp(arg[iarg],"modify_create") == 0) {
-        if (iarg++ > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                      "'modify_create' has too few arguments");
-        while (iarg < narg && strcmp(arg[iarg],"react") != 0 ) {
-          if (strcmp(arg[iarg],"fit") == 0) {
-            if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                          "'modify_create' has too few arguments");
-            if (strcmp(arg[iarg+1],"all") == 0) modify_create_fragid[rxn] = -1; //default
-            else {
-              modify_create_fragid[rxn] = atom->molecules[reacted_mol[rxn]]->findfragment(arg[iarg+1]);
-              if (modify_create_fragid[rxn] < 0) error->one(FLERR,"Bond/react: Molecule fragment for "
-                                                             "'modify_create' keyword does not exist");
-            }
-            iarg += 2;
-          } else if (strcmp(arg[iarg],"overlap") == 0) {
-            if (iarg+2 > narg) error->all(FLERR,"Illegal fix bond/react command: "
-                                          "'modify_create' has too few arguments");
-            overlapsq[rxn] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-            overlapsq[rxn] *= overlapsq[rxn];
-            iarg += 2;
-          } else break;
-        }
-      } else error->all(FLERR,"Illegal fix bond/react command: unknown keyword");
-    }
-  }
-
-  max_natoms = 0; // the number of atoms in largest molecule template
-  for (int myrxn = 0; myrxn < nreacts; myrxn++) {
-    twomol = atom->molecules[reacted_mol[myrxn]];
-    max_natoms = MAX(max_natoms,twomol->natoms);
-  }
-
-  memory->create(equivalences,max_natoms,2,nreacts,"bond/react:equivalences");
-  memory->create(reverse_equiv,max_natoms,2,nreacts,"bond/react:reverse_equiv");
-  memory->create(edge,max_natoms,nreacts,"bond/react:edge");
-  memory->create(landlocked_atoms,max_natoms,nreacts,"bond/react:landlocked_atoms");
-  memory->create(custom_charges,max_natoms,nreacts,"bond/react:custom_charges");
-  memory->create(delete_atoms,max_natoms,nreacts,"bond/react:delete_atoms");
-  memory->create(create_atoms,max_natoms,nreacts,"bond/react:create_atoms");
-  memory->create(chiral_atoms,max_natoms,6,nreacts,"bond/react:chiral_atoms");
-
-  for (int j = 0; j < nreacts; j++)
-    for (int i = 0; i < max_natoms; i++) {
-      edge[i][j] = 0;
-      custom_charges[i][j] = 1; // update all partial charges by default
-      delete_atoms[i][j] = 0;
-      create_atoms[i][j] = 0;
-      for (int k = 0; k < 6; k++) {
-        chiral_atoms[i][k][j] = 0;
-      }
-      // default equivalences to their own mol index
-      // all but created atoms will be updated
-      for (int m = 0; m < 2; m++) {
-        equivalences[i][m][j] = i+1;
+        row_vector_cnt++;
       }
     }
-
-  // read all map files afterward
-  for (int i = 0; i < nreacts; i++) {
-    open(files[i]);
-    onemol = atom->molecules[unreacted_mol[i]];
-    twomol = atom->molecules[reacted_mol[i]];
-    onemol->check_attributes(0);
-    twomol->check_attributes(0);
-    get_molxspecials();
-    read(i);
-    fclose(fp);
-    if (ncreate == 0 && onemol->natoms != twomol->natoms)
-      error->all(FLERR,"Bond/react: Reaction templates must contain the same number of atoms");
-    else if (ncreate > 0 && onemol->natoms + ncreate != twomol->natoms)
-      error->all(FLERR,"Bond/react: Incorrect number of created atoms");
-    iatomtype[i] = onemol->type[ibonding[i]-1];
-    jatomtype[i] = onemol->type[jbonding[i]-1];
-    find_landlocked_atoms(i);
-    if (custom_charges_fragid[i] >= 0) CustomCharges(custom_charges_fragid[i],i);
-  }
-
-  // initialize Marsaglia RNG with processor-unique seed (Arrhenius prob)
-
-  rrhandom = new RanMars*[narrhenius];
-  int tmp = 0;
-  for (int i = 0; i < nreacts; i++) {
-    for (int j = 0; j < nconstraints[i]; j++) {
-      if (constraints[j][i].type == ARRHENIUS) {
-        rrhandom[tmp++] = new RanMars(lmp,(int) constraints[j][i].par[4] + me);
-      }
-    }
-  }
-
-  for (int i = 0; i < nreacts; i++) {
-    delete [] files[i];
-  }
-  delete [] files;
-
-  if (atom->molecular != Atom::MOLECULAR)
-    error->all(FLERR,"Bond/react: Cannot use fix bond/react with non-molecular systems");
-
-  // check if bonding atoms are 1-2, 1-3, or 1-4 bonded neighbors
-  // if so, we don't need non-bonded neighbor list
-  for (int myrxn = 0; myrxn < nreacts; myrxn++) {
-    closeneigh[myrxn] = -1; // indicates will search non-bonded neighbors
-    onemol = atom->molecules[unreacted_mol[myrxn]];
-    get_molxspecials();
-    for (int k = 0; k < onemol_nxspecial[ibonding[myrxn]-1][2]; k++) {
-      if (onemol_xspecial[ibonding[myrxn]-1][k] == jbonding[myrxn]) {
-        closeneigh[myrxn] = 2; // index for 1-4 neighbor
-        if (k < onemol_nxspecial[ibonding[myrxn]-1][1])
-          closeneigh[myrxn] = 1; // index for 1-3 neighbor
-        if (k < onemol_nxspecial[ibonding[myrxn]-1][0])
-          closeneigh[myrxn] = 0; // index for 1-2 neighbor
-        break;
-      }
-    }
-  }
-
-  // initialize Marsaglia RNG with processor-unique seed ('prob' keyword)
-
-  random = new RanMars*[nreacts];
-  for (int i = 0; i < nreacts; i++) {
-    random[i] = new RanMars(lmp,seed[i] + me);
-  }
-
-  // set comm sizes needed by this fix
-  // forward is big due to comm of broken bonds and 1-2 neighbors
-
-  comm_forward = MAX(2,2+atom->maxspecial);
-  comm_reverse = 2;
-
-  // allocate arrays local to this fix
-  nmax = 0;
-  partner = finalpartner = nullptr;
-  distsq = nullptr;
-  maxattempt = 0;
-  attempt = nullptr;
-  nattempt = nullptr;
-  allnattempt = 0;
-  local_num_mega = 0;
-  ghostly_num_mega = 0;
-  restore =  nullptr;
-
-  // zero out stats
-  global_megasize = 0;
-  avail_guesses = 0;
-  glove_counter = 0;
-  guess_branch = new int[MAXGUESS]();
-  pioneer_count = new int[max_natoms];
-  local_mega_glove = nullptr;
-  ghostly_mega_glove = nullptr;
-  global_mega_glove = nullptr;
-
-  // these are merely loop indices that became important
-  pion = neigh = trace = 0;
-
-  id_fix1 = nullptr;
-  id_fix2 = nullptr;
-  id_fix3 = nullptr;
-  statted_id = nullptr;
-  custom_exclude_flag = 0;
-
-  // used to store restart info
-  set = new Set[nreacts];
-  memset(set,0,nreacts*sizeof(Set));
-}
-
-/* ---------------------------------------------------------------------- */
-
-FixBondReact::~FixBondReact()
-{
-  for (int i = 0; i < nreacts; i++) {
-    delete random[i];
-  }
-  delete [] random;
-
-  delete reset_mol_ids;
-
-  memory->destroy(partner);
-  memory->destroy(finalpartner);
-  memory->destroy(nattempt);
-  memory->destroy(distsq);
-  memory->destroy(attempt);
-  memory->destroy(edge);
-  memory->destroy(equivalences);
-  memory->destroy(reverse_equiv);
-  memory->destroy(landlocked_atoms);
-  memory->destroy(custom_charges);
-  memory->destroy(delete_atoms);
-  memory->destroy(create_atoms);
-  memory->destroy(chiral_atoms);
-  if (vvec != nullptr) memory->destroy(vvec);
-
-  memory->destroy(rxn_name);
-  memory->destroy(nevery);
-  memory->destroy(cutsq);
-  memory->destroy(unreacted_mol);
-  memory->destroy(reacted_mol);
-  memory->destroy(fraction);
-  memory->destroy(seed);
-  memory->destroy(max_rxn);
-  memory->destroy(nlocalskips);
-  memory->destroy(nghostlyskips);
-  memory->destroy(limit_duration);
-  memory->destroy(var_flag);
-  memory->destroy(var_id);
-  memory->destroy(stabilize_steps_flag);
-  memory->destroy(custom_charges_fragid);
-  memory->destroy(molecule_keyword);
-  memory->destroy(constraints);
-  memory->destroy(nconstraints);
-  memory->destroy(constraintstr);
-  memory->destroy(create_atoms_flag);
-  memory->destroy(modify_create_fragid);
-  memory->destroy(overlapsq);
-
-  memory->destroy(iatomtype);
-  memory->destroy(jatomtype);
-  memory->destroy(ibonding);
-  memory->destroy(jbonding);
-  memory->destroy(closeneigh);
-  memory->destroy(groupbits);
-  memory->destroy(reaction_count);
-  memory->destroy(local_rxn_count);
-  memory->destroy(ghostly_rxn_count);
-  memory->destroy(reaction_count_total);
-
-  if (newton_bond == 0) {
-    memory->destroy(xspecial);
-    memory->destroy(nxspecial);
-    memory->destroy(onemol_xspecial);
-    memory->destroy(onemol_nxspecial);
-    memory->destroy(twomol_xspecial);
-    memory->destroy(twomol_nxspecial);
-  }
-
-  if (attempted_rxn == 1) {
-    memory->destroy(restore_pt);
-    memory->destroy(restore);
-    memory->destroy(glove);
-    memory->destroy(pioneers);
-    memory->destroy(local_mega_glove);
-    memory->destroy(ghostly_mega_glove);
-  }
-
-  memory->destroy(global_mega_glove);
-
-  if (stabilization_flag == 1) {
-    // check nfix in case all fixes have already been deleted
-    if (id_fix1 && modify->nfix) modify->delete_fix(id_fix1);
-    delete [] id_fix1;
-
-    if (id_fix3 && modify->nfix) modify->delete_fix(id_fix3);
-    delete [] id_fix3;
-  }
-
-  if (id_fix2 && modify->nfix) modify->delete_fix(id_fix2);
-  delete [] id_fix2;
-
-  delete [] statted_id;
-  delete [] guess_branch;
-  delete [] pioneer_count;
-  delete [] set;
-
-  if (group) {
-    group->assign(std::string(master_group) + " delete");
-    if (stabilization_flag == 1) {
-      group->assign(std::string(exclude_group) + " delete");
-      delete [] exclude_group;
-    }
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-int FixBondReact::setmask()
-{
-  int mask = 0;
-  mask |= POST_INTEGRATE;
-  mask |= POST_INTEGRATE_RESPA;
-  return mask;
-}
-
-/* ----------------------------------------------------------------------
-let's add an internal nve/limit fix for relaxation of reaction sites
-also let's add our per-atom property fix here!
-this per-atom property will state the timestep an atom was 'limited'
-it will have the name 'i_limit_tags' and will be intitialized to 0 (not in group)
-------------------------------------------------------------------------- */
-
-void FixBondReact::post_constructor()
-{
-  // let's add the limit_tags per-atom property fix
-  std::string cmd = std::string("bond_react_props_internal");
-  id_fix2 = new char[cmd.size()+1];
-  strcpy(id_fix2,cmd.c_str());
-
-  int ifix = modify->find_fix(id_fix2);
-  if (ifix == -1) {
-    cmd += std::string(" all property/atom i_limit_tags i_react_tags ghost yes");
-    modify->add_fix(cmd);
-  }
-
-  // create master_group if not already existing
-  // NOTE: limit_tags and react_tags automaticaly intitialized to zero (unless read from restart)
-  group->find_or_create(master_group);
-  cmd = fmt::format("{} dynamic all property limit_tags",master_group);
-  group->assign(cmd);
-
-  if (stabilization_flag == 1) {
-    int groupid = group->find(exclude_group);
-    // create exclude_group if not already existing, or use as parent group if static
-    if (groupid == -1 || group->dynamic[groupid] == 0) {
-      // create stabilization per-atom property
-      cmd = std::string("bond_react_stabilization_internal");
-      id_fix3 = new char[cmd.size()+1];
-      strcpy(id_fix3,cmd.c_str());
-
-      ifix = modify->find_fix(id_fix3);
-      if (ifix == -1) {
-        cmd += std::string(" all property/atom i_statted_tags ghost yes");
-        modify->add_fix(cmd);
-        fix3 = modify->fix[modify->nfix-1];
-      }
-
-      statted_id = utils::strdup("statted_tags");
-
-      // if static group exists, use as parent group
-      // also, rename dynamic exclude_group by appending '_REACT'
-      char *exclude_PARENT_group;
-      exclude_PARENT_group = utils::strdup(exclude_group);
-      delete [] exclude_group;
-      exclude_group = utils::strdup(std::string(exclude_PARENT_group)+"_REACT");
-
-      group->find_or_create(exclude_group);
-      if (groupid == -1)
-        cmd = fmt::format("{} dynamic all property statted_tags",exclude_group);
-      else
-        cmd = fmt::format("{} dynamic {} property statted_tags",exclude_group,exclude_PARENT_group);
-      group->assign(cmd);
-      delete [] exclude_PARENT_group;
-
-      // on to statted_tags (system-wide thermostat)
-      // initialize per-atom statted_flags to 1
-      // (only if not already initialized by restart)
-      if (fix3->restart_reset != 1) {
-        int flag;
-        int index = atom->find_custom("statted_tags",flag);
-        int *i_statted_tags = atom->ivector[index];
-
-        for (int i = 0; i < atom->nlocal; i++)
-          i_statted_tags[i] = 1;
-      }
-    } else {
-      // sleeping code, for future capabilities
-      custom_exclude_flag = 1;
-      // first we have to find correct fix group reference
-      int ifix = modify->find_fix(std::string("GROUP_")+exclude_group);
-      Fix *fix = modify->fix[ifix];
-
-      // this returns names of corresponding property
-      int unused;
-      char * idprop;
-      idprop = (char *) fix->extract("property",unused);
-      if (idprop == nullptr)
-        error->all(FLERR,"Exclude group must be a per-atom property group");
-      statted_id = utils::strdup(idprop);
-
-      // initialize per-atom statted_tags to 1
-      // need to correct for smooth restarts
-      //int flag;
-      //int index = atom->find_custom(statted_id,flag);
-      //int *i_statted_tags = atom->ivector[index];
-      //for (int i = 0; i < atom->nlocal; i++)
-      //  i_statted_tags[i] = 1;
-    }
-
-
-    // let's create a new nve/limit fix to limit newly reacted atoms
-    cmd = std::string("bond_react_MASTER_nve_limit");
-    id_fix1 = new char[cmd.size()+1];
-    strcpy(id_fix1,cmd.c_str());
-
-    ifix = modify->find_fix(id_fix1);
-
-    if (ifix == -1) {
-      cmd += fmt::format(" {} nve/limit  {}",master_group,nve_limit_xmax);
-      modify->add_fix(cmd);
-      fix1 = modify->fix[modify->nfix-1];
-    }
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::init()
-{
-
-  if (utils::strmatch(update->integrate_style,"^respa"))
-    nlevels_respa = ((Respa *) update->integrate)->nlevels;
-
-  // check cutoff for iatomtype,jatomtype
-  for (int i = 0; i < nreacts; i++) {
-    if (!utils::strmatch(force->pair_style,"^hybrid"))
-      if (force->pair == nullptr || cutsq[i][1] > force->pair->cutsq[iatomtype[i]][jatomtype[i]])
-        error->all(FLERR,"Bond/react: Fix bond/react cutoff is longer than pairwise cutoff");
-  }
-
-  // need a half neighbor list, built every Nevery steps
-  int irequest = neighbor->request(this,instance_me);
-  neighbor->requests[irequest]->pair = 0;
-  neighbor->requests[irequest]->fix = 1;
-  neighbor->requests[irequest]->occasional = 1;
-
-  lastcheck = -1;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::init_list(int /*id*/, NeighList *ptr)
-{
-  list = ptr;
-}
-
-/* ----------------------------------------------------------------------
-  Identify all pairs of potentially reactive atoms for this time step.
-  This function is modified from LAMMPS’ fix bond/create.
----------------------------------------------------------------------- */
-
-void FixBondReact::post_integrate()
-{
-  // check if any reactions could occur on this timestep
-  int nevery_check = 1;
-  for (int i = 0; i < nreacts; i++) {
-    if (var_flag[NEVERY][i])
-      nevery[i] = ceil(input->variable->compute_equal(var_id[NEVERY][i]));
-    if (nevery[i] <= 0)
-      error->all(FLERR,"Illegal fix bond/react command: "
-                 "'Nevery' must be a positive integer");
-    if (!(update->ntimestep % nevery[i])) {
-      nevery_check = 0;
-      break;
-    }
-  }
-
-  for (int i = 0; i < nreacts; i++) {
-    reaction_count[i] = 0;
-    local_rxn_count[i] = 0;
-    ghostly_rxn_count[i] = 0;
-    nlocalskips[i] = 0;
-    nghostlyskips[i] = 0;
-    // update reaction probability
-    if (var_flag[PROB][i])
-      fraction[i] = input->variable->compute_equal(var_id[PROB][i]);
-  }
-
-  if (nevery_check) {
-    unlimit_bond();
-    return;
-  }
-
-  // acquire updated ghost atom positions
-  // necessary b/c are calling this after integrate, but before Verlet comm
-
-  comm->forward_comm();
-
-  // resize bond partner list and initialize it
-  // needs to be atom->nmax in length
-
-  if (atom->nmax > nmax) {
-    memory->destroy(partner);
-    memory->destroy(finalpartner);
-    memory->destroy(distsq);
-    memory->destroy(nattempt);
-    nmax = atom->nmax;
-    memory->create(partner,nmax,"bond/react:partner");
-    memory->create(finalpartner,nmax,"bond/react:finalpartner");
-    memory->create(distsq,nmax,2,"bond/react:distsq");
-    memory->create(nattempt,nreacts,"bond/react:nattempt");
-  }
-
-  // reset 'attempt' counts
-  for (int i = 0; i < nreacts; i++) {
-    nattempt[i] = 0;
-  }
-
-  int nlocal = atom->nlocal;
-  int nall = atom->nlocal + atom->nghost;
-
-  // loop over neighbors of my atoms
-  // each atom sets one closest eligible partner atom ID to bond with
-
-  tagint *tag = atom->tag;
-  int *type = atom->type;
-
-  neighbor->build_one(list,1);
-
-  // here we define a full special list, independent of Newton setting
-  if (newton_bond == 1) {
-    nxspecial = atom->nspecial;
-    xspecial = atom->special;
-  } else {
-    int nall = atom->nlocal + atom->nghost;
-    memory->destroy(nxspecial);
-    memory->destroy(xspecial);
-    memory->create(nxspecial,nall,3,"bond/react:nxspecial");
-    memory->create(xspecial,nall,atom->maxspecial,"bond/react:xspecial");
-    for (int i = 0; i < atom->nlocal; i++) {
-      nxspecial[i][0] = atom->num_bond[i];
-      for (int j = 0; j < nxspecial[i][0]; j++) {
-        xspecial[i][j] = atom->bond_atom[i][j];
-      }
-      nxspecial[i][1] = atom->nspecial[i][1];
-      nxspecial[i][2] = atom->nspecial[i][2];
-      int joffset = nxspecial[i][0] - atom->nspecial[i][0];
-      for (int j = nxspecial[i][0]; j < nxspecial[i][2]; j++) {
-        xspecial[i][j+joffset] = atom->special[i][j];
-      }
-    }
-  }
-
-  int j;
-  for (rxnID = 0; rxnID < nreacts; rxnID++) {
-    if (max_rxn[rxnID] <= reaction_count_total[rxnID]) continue;
-    for (int ii = 0; ii < nall; ii++) {
-      partner[ii] = 0;
-      finalpartner[ii] = 0;
-      distsq[ii][0] = 0.0;
-      distsq[ii][1] = BIG;
-    }
-
-    // fork between far and close_partner here
-    if (closeneigh[rxnID] < 0) {
-      far_partner();
-      // reverse comm of distsq and partner
-      // not needed if newton_pair off since I,J pair was seen by both procs
-      commflag = 2;
-      if (force->newton_pair) comm->reverse_comm_fix(this);
-    } else {
-      close_partner();
-      commflag = 2;
-      comm->reverse_comm_fix(this);
-    }
-
-    // each atom now knows its winning partner
-    // forward comm of partner, so ghosts have it
-
-    commflag = 2;
-    comm->forward_comm_fix(this,1);
-
-    // consider for reaction:
-    // only if both atoms list each other as winning bond partner
-    // if other atom is owned by another proc, it should do same thing
-
-    int temp_nattempt = 0;
-    for (int i = 0; i < nlocal; i++) {
-      if (partner[i] == 0) {
-        continue;
-      }
-
-      j = atom->map(partner[i]);
-      if (partner[j] != tag[i]) {
-        continue;
-      }
-
-      // store final bond partners and count the rxn possibility once
-
-      finalpartner[i] = tag[j];
-      finalpartner[j] = tag[i];
-
-      if (tag[i] < tag[j]) temp_nattempt++;
-    }
-
-    // cycle loop if no even eligible bonding atoms were found (on any proc)
-    int some_chance;
-    MPI_Allreduce(&temp_nattempt,&some_chance,1,MPI_INT,MPI_SUM,world);
-    if (!some_chance) continue;
-
-    // communicate final partner
-
-    commflag = 3;
-    comm->forward_comm_fix(this);
-
-    // add instance to 'attempt' only if this processor
-    // owns the atoms with smaller global ID
-    // NOTE: we no longer care about ghost-ghost instances as bond/create did
-    // this is because we take care of updating topology later (and differently)
-    for (int i = 0; i < nlocal; i++) {
-
-      if (finalpartner[i] == 0) continue;
-
-      j = atom->map(finalpartner[i]);
-      if (tag[i] < tag[j]) {
-        if (nattempt[rxnID] > maxattempt-2) {
-          maxattempt += DELTA;
-          // third dim of 'attempt': bond/react integer ID
-          memory->grow(attempt,maxattempt,2,nreacts,"bond/react:attempt");
-        }
-        // to ensure types remain in same order
-        if (iatomtype[rxnID] == type[i]) {
-          attempt[nattempt[rxnID]][0][rxnID] = tag[i];
-          attempt[nattempt[rxnID]][1][rxnID] = finalpartner[i];
-          nattempt[rxnID]++;
-          // add another attempt if initiator atoms are same type
-          if (iatomtype[rxnID] == jatomtype[rxnID]) {
-            attempt[nattempt[rxnID]][0][rxnID] = finalpartner[i];
-            attempt[nattempt[rxnID]][1][rxnID] = tag[i];
-            nattempt[rxnID]++;
-          }
-        } else {
-          attempt[nattempt[rxnID]][0][rxnID] = finalpartner[i];
-          attempt[nattempt[rxnID]][1][rxnID] = tag[i];
-          nattempt[rxnID]++;
-        }
-      }
-    }
-  }
-
-  // break loop if no even eligible bonding atoms were found (on any proc)
-  int some_chance;
-
-  allnattempt = 0;
-  for (int i = 0; i < nreacts; i++)
-    allnattempt += nattempt[i];
-
-  MPI_Allreduce(&allnattempt,&some_chance,1,MPI_INT,MPI_SUM,world);
-  if (!some_chance) {
-    unlimit_bond();
-    return;
-  }
-
-  // run through the superimpose algorithm
-  // this checks if simulation topology matches unreacted mol template
-  superimpose_algorithm();
-  // free atoms that have been limited after reacting
-  unlimit_bond();
-}
-
-/* ----------------------------------------------------------------------
-  Search non-bonded neighbor lists if bonding atoms are not in special list
-------------------------------------------------------------------------- */
-
-void FixBondReact::far_partner()
-{
-  int inum,jnum,itype,jtype,possible;
-  double xtmp,ytmp,ztmp,delx,dely,delz,rsq;
-  int *ilist,*jlist,*numneigh,**firstneigh;
-
-  // loop over neighbors of my atoms
-  // each atom sets one closest eligible partner atom ID to bond with
-
-  double **x = atom->x;
-  tagint *tag = atom->tag;
-  int *mask = atom->mask;
-  int *type = atom->type;
-
-  inum = list->inum;
-  ilist = list->ilist;
-  numneigh = list->numneigh;
-  firstneigh = list->firstneigh;
-
-  // per-atom property indicating if in bond/react master group
-  int flag;
-  int index1 = atom->find_custom("limit_tags",flag);
-  int *i_limit_tags = atom->ivector[index1];
-
-  int i,j;
-
-  for (int ii = 0; ii < inum; ii++) {
-    i = ilist[ii];
-    if (!(mask[i] & groupbits[rxnID])) continue;
-    if (i_limit_tags[i] != 0) continue;
-    itype = type[i];
-    xtmp = x[i][0];
-    ytmp = x[i][1];
-    ztmp = x[i][2];
-    jlist = firstneigh[i];
-    jnum = numneigh[i];
-
-    for (int jj = 0; jj < jnum; jj++) {
-      j = jlist[jj];
-      j &= NEIGHMASK;
-      if (!(mask[j] & groupbits[rxnID])) {
-        continue;
-      }
-
-      if (i_limit_tags[j] != 0) {
-        continue;
-      }
-
-      if (molecule_keyword[rxnID] == INTER) {
-        if (atom->molecule[i] == atom->molecule[j]) continue;
-      } else if (molecule_keyword[rxnID] == INTRA) {
-        if (atom->molecule[i] != atom->molecule[j]) continue;
-      }
-
-      jtype = type[j];
-      possible = 0;
-      if (itype == iatomtype[rxnID] && jtype == jatomtype[rxnID]) {
-        possible = 1;
-      } else if (itype == jatomtype[rxnID] && jtype == iatomtype[rxnID]) {
-        possible = 1;
-      }
-
-      if (possible == 0) continue;
-
-      // do not allow bonding atoms within special list
-      for (int k = 0; k < nxspecial[i][2]; k++)
-        if (xspecial[i][k] == tag[j]) possible = 0;
-      if (!possible) continue;
-
-      delx = xtmp - x[j][0];
-      dely = ytmp - x[j][1];
-      delz = ztmp - x[j][2];
-      domain->minimum_image(delx,dely,delz); // ghost location fix
-      rsq = delx*delx + dely*dely + delz*delz;
-
-      if (var_flag[RMIN][rxnID]) {
-        double cutoff = input->variable->compute_equal(var_id[RMIN][rxnID]);
-        cutsq[rxnID][0] = cutoff*cutoff;
-      }
-      if (var_flag[RMAX][rxnID]) {
-        double cutoff = input->variable->compute_equal(var_id[RMAX][rxnID]);
-        cutsq[rxnID][1] = cutoff*cutoff;
-      }
-      if (rsq >= cutsq[rxnID][1] || rsq <= cutsq[rxnID][0]) {
-        continue;
-      }
-      if (rsq < distsq[i][1]) {
-        partner[i] = tag[j];
-        distsq[i][1] = rsq;
-      }
-      if (rsq < distsq[j][1]) {
-        partner[j] = tag[i];
-        distsq[j][1] = rsq;
-      }
-    }
-  }
-}
-
-/* ----------------------------------------------------------------------
-  Slightly simpler to find bonding partner when a close neighbor
-------------------------------------------------------------------------- */
-
-void FixBondReact::close_partner()
-{
-  int n,i1,i2,itype,jtype;
-  double delx,dely,delz,rsq;
-
-  double **x = atom->x;
-  tagint *tag = atom->tag;
-  int *type = atom->type;
-  int *mask = atom->mask;
-
-  // per-atom property indicating if in bond/react master group
-  int flag;
-  int index1 = atom->find_custom("limit_tags",flag);
-  int *i_limit_tags = atom->ivector[index1];
-
-  // loop over special list
-  for (int ii = 0; ii < atom->nlocal; ii++) {
-    itype = type[ii];
-    n = 0;
-    if (closeneigh[rxnID] != 0)
-      n = nxspecial[ii][closeneigh[rxnID]-1];
-    for (; n < nxspecial[ii][closeneigh[rxnID]]; n++) {
-      i1 = ii;
-      i2 = atom->map(xspecial[ii][n]);
-      jtype = type[i2];
-      if (!(mask[i1] & groupbits[rxnID])) continue;
-      if (!(mask[i2] & groupbits[rxnID])) continue;
-      if (i_limit_tags[i1] != 0) continue;
-      if (i_limit_tags[i2] != 0) continue;
-      if (itype != iatomtype[rxnID] || jtype != jatomtype[rxnID]) continue;
-
-      if (molecule_keyword[rxnID] == INTER) {
-        if (atom->molecule[i1] == atom->molecule[i2]) continue;
-      } else if (molecule_keyword[rxnID] == INTRA) {
-        if (atom->molecule[i1] != atom->molecule[i2]) continue;
-      }
-
-      delx = x[i1][0] - x[i2][0];
-      dely = x[i1][1] - x[i2][1];
-      delz = x[i1][2] - x[i2][2];
-      domain->minimum_image(delx,dely,delz); // ghost location fix
-      rsq = delx*delx + dely*dely + delz*delz;
-
-      if (var_flag[RMIN][rxnID]) {
-        double cutoff = input->variable->compute_equal(var_id[RMIN][rxnID]);
-        cutsq[rxnID][0] = cutoff*cutoff;
-      }
-      if (var_flag[RMAX][rxnID]) {
-        double cutoff = input->variable->compute_equal(var_id[RMAX][rxnID]);
-        cutsq[rxnID][1] = cutoff*cutoff;
-      }
-      if (rsq >= cutsq[rxnID][1] || rsq <= cutsq[rxnID][0]) continue;
-
-      if (closeneigh[rxnID] == 0) {
-        if (rsq > distsq[i1][0]) {
-          partner[i1] = tag[i2];
-          distsq[i1][0] = rsq;
-        }
-        if (rsq > distsq[i2][0]) {
-          partner[i2] = tag[i1];
-          distsq[i2][0] = rsq;
-        }
+    // copy vector results to output for each row
+    int64_t indptr_index = 0;
+    for (int m = 0; m < num_matrices; ++m) {
+      if (is_indptr_int32) {
+        (reinterpret_cast<int32_t*>(*out_indptr))[indptr_index] = 0;
       } else {
-        if (rsq < distsq[i1][1]) {
-          partner[i1] = tag[i2];
-          distsq[i1][1] = rsq;
-        }
-        if (rsq < distsq[i2][1]) {
-          partner[i2] = tag[i1];
-          distsq[i2][1] = rsq;
-        }
+        (reinterpret_cast<int64_t*>(*out_indptr))[indptr_index] = 0;
       }
-    }
-  }
-}
-
-/* ----------------------------------------------------------------------
-  Set up global variables. Loop through all pairs; loop through Pioneers
-  until Superimpose Algorithm is completed for each pair.
-------------------------------------------------------------------------- */
-
-void FixBondReact::superimpose_algorithm()
-{
-  local_num_mega = 0;
-  ghostly_num_mega = 0;
-
-  // indicates local ghosts of other procs
-  int tmp;
-  localsendlist = (int *) comm->extract("localsendlist",tmp);
-
-  // quick description of important global indices you'll see floating about:
-  // 'pion' is the pioneer loop index
-  // 'neigh' in the first neighbor index
-  // 'trace' retraces the first nieghbors
-  // trace: once you choose a first neighbor, you then check for other nieghbors of same type
-
-  if (attempted_rxn == 1) {
-    memory->destroy(restore_pt);
-    memory->destroy(restore);
-    memory->destroy(glove);
-    memory->destroy(pioneers);
-    memory->destroy(local_mega_glove);
-    memory->destroy(ghostly_mega_glove);
-  }
-
-  memory->create(glove,max_natoms,2,"bond/react:glove");
-  memory->create(restore_pt,MAXGUESS,4,"bond/react:restore_pt");
-  memory->create(pioneers,max_natoms,"bond/react:pioneers");
-  memory->create(restore,max_natoms,MAXGUESS*4,"bond/react:restore");
-  memory->create(local_mega_glove,max_natoms+1,allnattempt,"bond/react:local_mega_glove");
-  memory->create(ghostly_mega_glove,max_natoms+1,allnattempt,"bond/react:ghostly_mega_glove");
-
-  attempted_rxn = 1;
-
-  for (int i = 0; i < max_natoms+1; i++) {
-    for (int j = 0; j < allnattempt; j++) {
-      local_mega_glove[i][j] = 0;
-      ghostly_mega_glove[i][j] = 0;
-    }
-  }
-
-  // let's finally begin the superimpose loop
-  for (rxnID = 0; rxnID < nreacts; rxnID++) {
-    for (lcl_inst = 0; lcl_inst < nattempt[rxnID]; lcl_inst++) {
-
-      onemol = atom->molecules[unreacted_mol[rxnID]];
-      twomol = atom->molecules[reacted_mol[rxnID]];
-      get_molxspecials();
-
-      status = PROCEED;
-
-      glove_counter = 0;
-      for (int i = 0; i < max_natoms; i++) {
-        for (int j = 0; j < 2; j++) {
-          glove[i][j] = 0;
-        }
-      }
-
-      for (int i = 0; i < MAXGUESS; i++) {
-        guess_branch[i] = 0;
-      }
-
-      int myibonding = ibonding[rxnID];
-      int myjbonding = jbonding[rxnID];
-
-      glove[myibonding-1][0] = myibonding;
-      glove[myibonding-1][1] = attempt[lcl_inst][0][rxnID];
-      glove_counter++;
-      glove[myjbonding-1][0] = myjbonding;
-      glove[myjbonding-1][1] = attempt[lcl_inst][1][rxnID];
-      glove_counter++;
-
-      // special case, only two atoms in reaction templates
-      // then: bonding onemol_nxspecials guaranteed to be equal, and either 0 or 1
-      if (glove_counter == onemol->natoms) {
-        tagint local_atom1 = atom->map(glove[myibonding-1][1]);
-        tagint local_atom2 = atom->map(glove[myjbonding-1][1]);
-        if ( (nxspecial[local_atom1][0] == onemol_nxspecial[myibonding-1][0] &&
-              nxspecial[local_atom2][0] == nxspecial[local_atom1][0]) &&
-             (nxspecial[local_atom1][0] == 0 ||
-              xspecial[local_atom1][0] == atom->tag[local_atom2]) &&
-             check_constraints()) {
-          if (fraction[rxnID] < 1.0 &&
-              random[rxnID]->uniform() >= fraction[rxnID]) {
-            status = REJECT;
+      indptr_index++;
+      int64_t matrix_start_index = m * static_cast<int64_t>(agg.size());
+      OMP_INIT_EX();
+      #pragma omp parallel for schedule(static)
+      for (int64_t i = 0; i < static_cast<int64_t>(agg.size()); ++i) {
+        OMP_LOOP_EX_BEGIN();
+        auto row_vector = agg[i];
+        int64_t row_start_index = matrix_start_index + i;
+        int64_t element_index = row_matrix_offsets[row_start_index];
+        int64_t indptr_loop_index = indptr_index + i;
+        for (auto it = row_vector[m].begin(); it != row_vector[m].end(); ++it) {
+          (*out_indices)[element_index] = it->first;
+          if (is_data_float32) {
+            (reinterpret_cast<float*>(*out_data))[element_index] = static_cast<float>(it->second);
           } else {
-            status = ACCEPT;
-            glove_ghostcheck();
+            (reinterpret_cast<double*>(*out_data))[element_index] = it->second;
           }
-        } else status = REJECT;
-      }
-
-      avail_guesses = 0;
-
-      for (int i = 0; i < max_natoms; i++)
-        pioneer_count[i] = 0;
-
-      for (int i = 0; i < onemol_nxspecial[myibonding-1][0]; i++)
-        pioneer_count[onemol_xspecial[myibonding-1][i]-1]++;
-
-      for (int i = 0; i < onemol_nxspecial[myjbonding-1][0]; i++)
-        pioneer_count[onemol_xspecial[myjbonding-1][i]-1]++;
-
-
-      int hang_catch = 0;
-      while (!(status == ACCEPT || status == REJECT)) {
-
-        for (int i = 0; i < max_natoms; i++) {
-          pioneers[i] = 0;
+          element_index++;
         }
-
-        for (int i = 0; i < onemol->natoms; i++) {
-          if (glove[i][0] !=0 && pioneer_count[i] < onemol_nxspecial[i][0] && edge[i][rxnID] == 0) {
-            pioneers[i] = 1;
-          }
-        }
-
-        // run through the pioneers
-        // due to use of restore points, 'pion' index can change in loop
-        for (pion = 0; pion < onemol->natoms; pion++) {
-          if (pioneers[pion] || status == GUESSFAIL) {
-            make_a_guess();
-            if (status == ACCEPT || status == REJECT) break;
-          }
-        }
-
-        // reaction site found successfully!
-        if (status == ACCEPT) {
-          if (fraction[rxnID] < 1.0 &&
-              random[rxnID]->uniform() >= fraction[rxnID]) status = REJECT;
-          else glove_ghostcheck();
-        }
-        hang_catch++;
-        // let's go ahead and catch the simplest of hangs
-        //if (hang_catch > onemol->natoms*4)
-        if (hang_catch > atom->nlocal*30) {
-          error->one(FLERR,"Bond/react: Excessive iteration of superimpose algorithm. "
-              "Please check that all pre-reaction template atoms are linked to an initiator atom, "
-              "via at least one path that does not involve edge atoms.");
-        }
-      }
-    }
-  }
-
-  global_megasize = 0;
-
-  ghost_glovecast(); // consolidate all mega_gloves to all processors
-  dedup_mega_gloves(LOCAL); // make sure atoms aren't added to more than one reaction
-
-  MPI_Allreduce(&local_rxn_count[0],&reaction_count[0],nreacts,MPI_INT,MPI_SUM,world);
-
-  int rxnflag = 0;
-  if (me == 0)
-    for (int i = 0; i < nreacts; i++) {
-      reaction_count_total[i] += reaction_count[i] + ghostly_rxn_count[i];
-      rxnflag += reaction_count[i] + ghostly_rxn_count[i];
-    }
-
-  MPI_Bcast(&reaction_count_total[0], nreacts, MPI_INT, 0, world);
-  MPI_Bcast(&rxnflag, 1, MPI_INT, 0, world);
-
-  if (!rxnflag) return;
-
-  // check if we overstepped our reaction limit
-  for (int i = 0; i < nreacts; i++) {
-    if (reaction_count_total[i] > max_rxn[i]) {
-      // let's randomly choose rxns to skip, unbiasedly from local and ghostly
-      int *local_rxncounts;
-      int *all_localskips;
-      memory->create(local_rxncounts,nprocs,"bond/react:local_rxncounts");
-      memory->create(all_localskips,nprocs,"bond/react:all_localskips");
-      MPI_Gather(&local_rxn_count[i],1,MPI_INT,local_rxncounts,1,MPI_INT,0,world);
-      if (me == 0) {
-        int overstep = reaction_count_total[i] - max_rxn[i];
-        int delta_rxn = reaction_count[i] + ghostly_rxn_count[i];
-        int *rxn_by_proc;
-        memory->create(rxn_by_proc,delta_rxn,"bond/react:rxn_by_proc");
-        for (int j = 0; j < delta_rxn; j++)
-          rxn_by_proc[j] = -1; // corresponds to ghostly
-        int itemp = 0;
-        for (int j = 0; j < nprocs; j++)
-          for (int k = 0; k < local_rxncounts[j]; k++)
-            rxn_by_proc[itemp++] = j;
-        std::random_shuffle(&rxn_by_proc[0],&rxn_by_proc[delta_rxn]);
-        for (int j = 0; j < nprocs; j++)
-          all_localskips[j] = 0;
-        nghostlyskips[i] = 0;
-        for (int j = 0; j < overstep; j++) {
-          if (rxn_by_proc[j] == -1) nghostlyskips[i]++;
-          else all_localskips[rxn_by_proc[j]]++;
-        }
-        memory->destroy(rxn_by_proc);
-      }
-      reaction_count_total[i] = max_rxn[i];
-      MPI_Scatter(&all_localskips[0],1,MPI_INT,&nlocalskips[i],1,MPI_INT,0,world);
-      MPI_Bcast(&nghostlyskips[i],1,MPI_INT,0,world);
-      memory->destroy(local_rxncounts);
-      memory->destroy(all_localskips);
-    }
-  }
-
-  // this updates topology next step
-  next_reneighbor = update->ntimestep;
-
-  // call limit_bond in 'global_mega_glove mode.' oh, and local mode
-  limit_bond(LOCAL); // add reacting atoms to nve/limit
-  limit_bond(GLOBAL);
-  update_everything(); // change topology
-}
-
-/* ----------------------------------------------------------------------
-  Screen for obvious algorithm fails. This is the return point when a guess
-  has failed: check for available restore points.
-------------------------------------------------------------------------- */
-
-void FixBondReact::make_a_guess()
-{
-  int *type = atom->type;
-  int nfirst_neighs = onemol_nxspecial[pion][0];
-
-  // per-atom property indicating if in bond/react master group
-  int flag;
-  int index1 = atom->find_custom("limit_tags",flag);
-  int *i_limit_tags = atom->ivector[index1];
-
-  if (status == GUESSFAIL && avail_guesses == 0) {
-    status = REJECT;
-    return;
-  }
-
-  if (status == GUESSFAIL && avail_guesses > 0) {
-    // load restore point
-    for (int i = 0; i < onemol->natoms; i++) {
-      glove[i][0] = restore[i][(avail_guesses*4)-4];
-      glove[i][1] = restore[i][(avail_guesses*4)-3];
-      pioneer_count[i] = restore[i][(avail_guesses*4)-2];
-      pioneers[i] = restore[i][(avail_guesses*4)-1];
-    }
-    pion = restore_pt[avail_guesses-1][0];
-    neigh = restore_pt[avail_guesses-1][1];
-    trace = restore_pt[avail_guesses-1][2];
-    glove_counter = restore_pt[avail_guesses-1][3];
-    status = RESTORE;
-    neighbor_loop();
-    if (status != PROCEED) return;
-  }
-
-  nfirst_neighs = onemol_nxspecial[pion][0];
-
-  //  check if any of first neighbors are in bond_react_MASTER_group
-  //  if so, this constitutes a fail
-  //  because still undergoing a previous reaction!
-  //  could technically fail unnecessarily during a wrong guess if near edge atoms
-  //  we accept this temporary and infrequent decrease in reaction occurrences
-
-  for (int i = 0; i < nxspecial[atom->map(glove[pion][1])][0]; i++) {
-    if (atom->map(xspecial[atom->map(glove[pion][1])][i]) < 0) {
-      error->one(FLERR,"Bond/react: Fix bond/react needs ghost atoms from further away"); // parallel issues.
-    }
-    if (i_limit_tags[(int)atom->map(xspecial[atom->map(glove[pion][1])][i])] != 0) {
-      status = GUESSFAIL;
-      return;
-    }
-  }
-
-  // check for same number of neighbors between unreacted mol and simulation
-  if (nfirst_neighs != nxspecial[atom->map(glove[pion][1])][0]) {
-    status = GUESSFAIL;
-    return;
-  }
-
-  // make sure all neighbors aren't already assigned
-  // an issue discovered for coarse-grained example
-  int assigned_count = 0;
-  for (int i = 0; i < nfirst_neighs; i++)
-    for (int j = 0; j < onemol->natoms; j++)
-      if (xspecial[atom->map(glove[pion][1])][i] == glove[j][1]) {
-        assigned_count++;
-        break;
-      }
-
-  if (assigned_count == nfirst_neighs) status = GUESSFAIL;
-
-  // check if all neigh atom types are the same between simulation and unreacted mol
-  int *mol_ntypes = new int[atom->ntypes];
-  int *lcl_ntypes = new int[atom->ntypes];
-
-  for (int i = 0; i < atom->ntypes; i++) {
-    mol_ntypes[i] = 0;
-    lcl_ntypes[i] = 0;
-  }
-
-  for (int i = 0; i < nfirst_neighs; i++) {
-    mol_ntypes[(int)onemol->type[(int)onemol_xspecial[pion][i]-1]-1]++;
-    lcl_ntypes[(int)type[(int)atom->map(xspecial[atom->map(glove[pion][1])][i])]-1]++; //added -1
-  }
-
-  for (int i = 0; i < atom->ntypes; i++) {
-    if (mol_ntypes[i] != lcl_ntypes[i]) {
-      status = GUESSFAIL;
-      delete [] mol_ntypes;
-      delete [] lcl_ntypes;
-      return;
-    }
-  }
-
-  delete [] mol_ntypes;
-  delete [] lcl_ntypes;
-
-  // okay everything seems to be in order. let's assign some ID pairs!!!
-  neighbor_loop();
-}
-
-/* ----------------------------------------------------------------------
-  Loop through all First Bonded Neighbors of the current Pioneer.
-  Prepare appropriately if we are in Restore Mode.
-------------------------------------------------------------------------- */
-
-void FixBondReact::neighbor_loop()
-{
-  int nfirst_neighs = onemol_nxspecial[pion][0];
-
-  if (status == RESTORE) {
-    check_a_neighbor();
-    return;
-  }
-
-  for (neigh = 0; neigh < nfirst_neighs; neigh++) {
-    if (glove[(int)onemol_xspecial[pion][neigh]-1][0] == 0) {
-      check_a_neighbor();
-    }
-  }
-  // status should still = PROCEED
-}
-
-/* ----------------------------------------------------------------------
-  Check if we can assign this First Neighbor to pre-reacted template
-  without guessing. If so, do it! If not, call crosscheck_the_nieghbor().
-------------------------------------------------------------------------- */
-
-void FixBondReact::check_a_neighbor()
-{
-  int *type = atom->type;
-  int nfirst_neighs = onemol_nxspecial[pion][0];
-
-  if (status != RESTORE) {
-    // special consideration for hydrogen atoms (and all first neighbors bonded to no other atoms) (and aren't edge atoms)
-    if (onemol_nxspecial[(int)onemol_xspecial[pion][neigh]-1][0] == 1 && edge[(int)onemol_xspecial[pion][neigh]-1][rxnID] == 0) {
-
-      for (int i = 0; i < nfirst_neighs; i++) {
-
-        if (type[(int)atom->map(xspecial[(int)atom->map(glove[pion][1])][i])] == onemol->type[(int)onemol_xspecial[pion][neigh]-1] &&
-            nxspecial[(int)atom->map(xspecial[(int)atom->map(glove[pion][1])][i])][0] == 1) {
-
-          int already_assigned = 0;
-          for (int j = 0; j < onemol->natoms; j++) {
-            if (glove[j][1] == xspecial[atom->map(glove[pion][1])][i]) {
-              already_assigned = 1;
-              break;
-            }
-          }
-
-          if (already_assigned == 0) {
-            glove[(int)onemol_xspecial[pion][neigh]-1][0] = onemol_xspecial[pion][neigh];
-            glove[(int)onemol_xspecial[pion][neigh]-1][1] = xspecial[(int)atom->map(glove[pion][1])][i];
-
-            //another check for ghost atoms. perhaps remove the one in make_a_guess
-            if (atom->map(glove[(int)onemol_xspecial[pion][neigh]-1][1]) < 0) {
-              error->one(FLERR,"Bond/react: Fix bond/react needs ghost atoms from further away");
-            }
-
-            for (int j = 0; j < onemol_nxspecial[onemol_xspecial[pion][neigh]-1][0]; j++) {
-              pioneer_count[onemol_xspecial[onemol_xspecial[pion][neigh]-1][j]-1]++;
-            }
-
-            glove_counter++;
-            if (glove_counter == onemol->natoms) {
-              if (ring_check() && check_constraints()) status = ACCEPT;
-              else status = GUESSFAIL;
-              return;
-            }
-            // status should still == PROCEED
-            return;
-          }
-        }
-      }
-      // we are here if no matching atom found
-      status = GUESSFAIL;
-      return;
-    }
-  }
-
-  crosscheck_the_neighbor();
-  if (status != PROCEED) {
-    if (status == CONTINUE)
-      status = PROCEED;
-    return;
-  }
-
-  // finally ready to match non-duplicate, non-edge atom IDs!!
-
-  for (int i = 0; i < nfirst_neighs; i++) {
-
-    if (type[atom->map((int)xspecial[(int)atom->map(glove[pion][1])][i])] == onemol->type[(int)onemol_xspecial[pion][neigh]-1]) {
-      int already_assigned = 0;
-
-      //check if a first neighbor of the pioneer is already assigned to pre-reacted template
-      for (int j = 0; j < onemol->natoms; j++) {
-        if (glove[j][1] == xspecial[atom->map(glove[pion][1])][i]) {
-          already_assigned = 1;
-          break;
-        }
-      }
-
-      if (already_assigned == 0) {
-        glove[(int)onemol_xspecial[pion][neigh]-1][0] = onemol_xspecial[pion][neigh];
-        glove[(int)onemol_xspecial[pion][neigh]-1][1] = xspecial[(int)atom->map(glove[pion][1])][i];
-
-        //another check for ghost atoms. perhaps remove the one in make_a_guess
-        if (atom->map(glove[(int)onemol_xspecial[pion][neigh]-1][1]) < 0) {
-          error->one(FLERR,"Bond/react: Fix bond/react needs ghost atoms from further away");
-        }
-
-        for (int ii = 0; ii < onemol_nxspecial[onemol_xspecial[pion][neigh]-1][0]; ii++) {
-          pioneer_count[onemol_xspecial[onemol_xspecial[pion][neigh]-1][ii]-1]++;
-        }
-
-        glove_counter++;
-        if (glove_counter == onemol->natoms) {
-          if (ring_check() && check_constraints()) status = ACCEPT;
-          else status = GUESSFAIL;
-          return;
-          // will never complete here when there are edge atoms
-          // ...actually that could be wrong if people get creative...shouldn't affect anything
-        }
-        // status should still = PROCEED
-        return;
-      }
-    }
-  }
-  // status is still 'PROCEED' if we are here!
-}
-
-/* ----------------------------------------------------------------------
-  Check if there a viable guess to be made. If so, prepare to make a
-  guess by recording a restore point.
-------------------------------------------------------------------------- */
-
-void FixBondReact::crosscheck_the_neighbor()
-{
-  int nfirst_neighs = onemol_nxspecial[pion][0];
-
-  if (status == RESTORE) {
-    inner_crosscheck_loop();
-    return;
-  }
-
-  for (trace = 0; trace < nfirst_neighs; trace++) {
-    if (neigh!=trace && onemol->type[(int)onemol_xspecial[pion][neigh]-1] == onemol->type[(int)onemol_xspecial[pion][trace]-1] &&
-        glove[onemol_xspecial[pion][trace]-1][0] == 0) {
-
-      if (avail_guesses == MAXGUESS) {
-        error->warning(FLERR,"Bond/react: Fix bond/react failed because MAXGUESS set too small. ask developer for info");
-        status = GUESSFAIL;
-        return;
-      }
-      avail_guesses++;
-      for (int i = 0; i < onemol->natoms; i++) {
-        restore[i][(avail_guesses*4)-4] = glove[i][0];
-        restore[i][(avail_guesses*4)-3] = glove[i][1];
-        restore[i][(avail_guesses*4)-2] = pioneer_count[i];
-        restore[i][(avail_guesses*4)-1] = pioneers[i];
-        restore_pt[avail_guesses-1][0] = pion;
-        restore_pt[avail_guesses-1][1] = neigh;
-        restore_pt[avail_guesses-1][2] = trace;
-        restore_pt[avail_guesses-1][3] = glove_counter;
-      }
-
-      inner_crosscheck_loop();
-      return;
-    }
-  }
-  // status is still 'PROCEED' if we are here!
-}
-
-/* ----------------------------------------------------------------------
-  We are ready to make a guess. If there are multiple possible choices
-  for this guess, keep track of these.
-------------------------------------------------------------------------- */
-
-void FixBondReact::inner_crosscheck_loop()
-{
-  int *type = atom->type;
-  // arbitrarily limited to 5 identical first neighbors
-  tagint tag_choices[5];
-  int nfirst_neighs = onemol_nxspecial[pion][0];
-
-  int num_choices = 0;
-  for (int i = 0; i < nfirst_neighs; i++) {
-
-    int already_assigned = 0;
-    for (int j = 0; j < onemol->natoms; j++) {
-      if (glove[j][1] == xspecial[atom->map(glove[pion][1])][i]) {
-        already_assigned = 1;
-        break;
-      }
-    }
-
-    if (already_assigned == 0 &&
-        type[(int)atom->map(xspecial[atom->map(glove[pion][1])][i])] == onemol->type[(int)onemol_xspecial[pion][neigh]-1]) {
-      if (num_choices > 5) { // here failed because too many identical first neighbors. but really no limit if situation arises
-        status = GUESSFAIL;
-        return;
-      }
-      tag_choices[num_choices++] = xspecial[atom->map(glove[pion][1])][i];
-    }
-  }
-
-  // guess branch is for when multiple identical neighbors. then we guess each one in turn
-  // guess_branch must work even when avail_guesses = 0. so index accordingly!
-  // ...actually, avail_guesses should never be zero here anyway
-  if (guess_branch[avail_guesses-1] == 0) guess_branch[avail_guesses-1] = num_choices;
-
-  //std::size_t size = sizeof(tag_choices) / sizeof(tag_choices[0]);
-  std::sort(tag_choices, tag_choices + num_choices); //, std::greater<int>());
-  glove[onemol_xspecial[pion][neigh]-1][0] = onemol_xspecial[pion][neigh];
-  glove[onemol_xspecial[pion][neigh]-1][1] = tag_choices[guess_branch[avail_guesses-1]-1];
-  guess_branch[avail_guesses-1]--;
-
-  //another check for ghost atoms. perhaps remove the one in make_a_guess
-  if (atom->map(glove[(int)onemol_xspecial[pion][neigh]-1][1]) < 0) {
-    error->one(FLERR,"Bond/react: Fix bond/react needs ghost atoms from further away");
-  }
-
-  if (guess_branch[avail_guesses-1] == 0) avail_guesses--;
-
-  for (int i = 0; i < onemol_nxspecial[onemol_xspecial[pion][neigh]-1][0]; i++) {
-    pioneer_count[onemol_xspecial[onemol_xspecial[pion][neigh]-1][i]-1]++;
-  }
-  glove_counter++;
-  if (glove_counter == onemol->natoms) {
-    if (ring_check() && check_constraints()) status = ACCEPT;
-    else status = GUESSFAIL;
-    return;
-  }
-  status = CONTINUE;
-}
-
-/* ----------------------------------------------------------------------
-  Check that newly assigned atoms have correct bonds
-  Necessary for certain ringed structures
-------------------------------------------------------------------------- */
-
-int FixBondReact::ring_check()
-{
-  // ring_check can be made more efficient by re-introducing 'frozen' atoms
-  // 'frozen' atoms have been assigned and also are no longer pioneers
-
-  // double check the number of neighbors match for all non-edge atoms
-  // otherwise, atoms at 'end' of symmetric ring can behave like edge atoms
-  for (int i = 0; i < onemol->natoms; i++)
-    if (edge[i][rxnID] == 0 &&
-        onemol_nxspecial[i][0] != nxspecial[atom->map(glove[i][1])][0])
-      return 0;
-
-  for (int i = 0; i < onemol->natoms; i++) {
-    for (int j = 0; j < onemol_nxspecial[i][0]; j++) {
-      int ring_fail = 1;
-      int ispecial = onemol_xspecial[i][j];
-      for (int k = 0; k < nxspecial[atom->map(glove[i][1])][0]; k++) {
-        if (xspecial[atom->map(glove[i][1])][k] == glove[ispecial-1][1]) {
-          ring_fail = 0;
-          break;
-        }
-      }
-      if (ring_fail == 1) return 0;
-    }
-  }
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
-evaluate constraints: return 0 if any aren't satisfied
-------------------------------------------------------------------------- */
-
-int FixBondReact::check_constraints()
-{
-  double x1[3],x2[3],x3[3],x4[3];
-  double delx,dely,delz,rsq;
-  double delx1,dely1,delz1,delx2,dely2,delz2;
-  double rsq1,rsq2,r1,r2,c,t,prrhob;
-  // for computation of dihedrals
-  double vb1x,vb1y,vb1z,vb2x,vb2y,vb2z,vb3x,vb3y,vb3z,vb2xm,vb2ym,vb2zm;
-  double ax,ay,az,bx,by,bz,rasq,rbsq,rgsq,rg,ra2inv,rb2inv,rabinv;
-  double s,phi;
-  int ANDgate;
-
-  tagint atom1,atom2;
-  double **x = atom->x;
-
-  int *satisfied;
-  memory->create(satisfied,nconstraints[rxnID],"bond/react:satisfied");
-  for (int i = 0; i < nconstraints[rxnID]; i++)
-    satisfied[i] = 1;
-
-  for (int i = 0; i < nconstraints[rxnID]; i++) {
-    if (constraints[i][rxnID].type == DISTANCE) {
-      get_IDcoords(constraints[i][rxnID].idtype[0], constraints[i][rxnID].id[0], x1);
-      get_IDcoords(constraints[i][rxnID].idtype[1], constraints[i][rxnID].id[1], x2);
-      delx = x1[0] - x2[0];
-      dely = x1[1] - x2[1];
-      delz = x1[2] - x2[2];
-      domain->minimum_image(delx,dely,delz); // ghost location fix
-      rsq = delx*delx + dely*dely + delz*delz;
-      if (rsq < constraints[i][rxnID].par[0] || rsq > constraints[i][rxnID].par[1]) satisfied[i] = 0;
-    } else if (constraints[i][rxnID].type == ANGLE) {
-      get_IDcoords(constraints[i][rxnID].idtype[0], constraints[i][rxnID].id[0], x1);
-      get_IDcoords(constraints[i][rxnID].idtype[1], constraints[i][rxnID].id[1], x2);
-      get_IDcoords(constraints[i][rxnID].idtype[2], constraints[i][rxnID].id[2], x3);
-
-      // 1st bond
-      delx1 = x1[0] - x2[0];
-      dely1 = x1[1] - x2[1];
-      delz1 = x1[2] - x2[2];
-      domain->minimum_image(delx1,dely1,delz1); // ghost location fix
-      rsq1 = delx1*delx1 + dely1*dely1 + delz1*delz1;
-      r1 = sqrt(rsq1);
-
-      // 2nd bond
-      delx2 = x3[0] - x2[0];
-      dely2 = x3[1] - x2[1];
-      delz2 = x3[2] - x2[2];
-      domain->minimum_image(delx2,dely2,delz2); // ghost location fix
-      rsq2 = delx2*delx2 + dely2*dely2 + delz2*delz2;
-      r2 = sqrt(rsq2);
-
-      // angle (cos and sin)
-      c = delx1*delx2 + dely1*dely2 + delz1*delz2;
-      c /= r1*r2;
-      if (c > 1.0) c = 1.0;
-      if (c < -1.0) c = -1.0;
-      if (acos(c) < constraints[i][rxnID].par[0] || acos(c) > constraints[i][rxnID].par[1]) satisfied[i] = 0;
-    } else if (constraints[i][rxnID].type == DIHEDRAL) {
-      // phi calculation from dihedral style harmonic
-      get_IDcoords(constraints[i][rxnID].idtype[0], constraints[i][rxnID].id[0], x1);
-      get_IDcoords(constraints[i][rxnID].idtype[1], constraints[i][rxnID].id[1], x2);
-      get_IDcoords(constraints[i][rxnID].idtype[2], constraints[i][rxnID].id[2], x3);
-      get_IDcoords(constraints[i][rxnID].idtype[3], constraints[i][rxnID].id[3], x4);
-
-      vb1x = x1[0] - x2[0];
-      vb1y = x1[1] - x2[1];
-      vb1z = x1[2] - x2[2];
-      domain->minimum_image(vb1x,vb1y,vb1z);
-
-      vb2x = x3[0] - x2[0];
-      vb2y = x3[1] - x2[1];
-      vb2z = x3[2] - x2[2];
-      domain->minimum_image(vb2x,vb2y,vb2z);
-
-      vb2xm = -vb2x;
-      vb2ym = -vb2y;
-      vb2zm = -vb2z;
-      domain->minimum_image(vb2xm,vb2ym,vb2zm);
-
-      vb3x = x4[0] - x3[0];
-      vb3y = x4[1] - x3[1];
-      vb3z = x4[2] - x3[2];
-      domain->minimum_image(vb3x,vb3y,vb3z);
-
-      ax = vb1y*vb2zm - vb1z*vb2ym;
-      ay = vb1z*vb2xm - vb1x*vb2zm;
-      az = vb1x*vb2ym - vb1y*vb2xm;
-      bx = vb3y*vb2zm - vb3z*vb2ym;
-      by = vb3z*vb2xm - vb3x*vb2zm;
-      bz = vb3x*vb2ym - vb3y*vb2xm;
-
-      rasq = ax*ax + ay*ay + az*az;
-      rbsq = bx*bx + by*by + bz*bz;
-      rgsq = vb2xm*vb2xm + vb2ym*vb2ym + vb2zm*vb2zm;
-      rg = sqrt(rgsq);
-
-      ra2inv = rb2inv = 0.0;
-      if (rasq > 0) ra2inv = 1.0/rasq;
-      if (rbsq > 0) rb2inv = 1.0/rbsq;
-      rabinv = sqrt(ra2inv*rb2inv);
-
-      c = (ax*bx + ay*by + az*bz)*rabinv;
-      s = rg*rabinv*(ax*vb3x + ay*vb3y + az*vb3z);
-
-      if (c > 1.0) c = 1.0;
-      if (c < -1.0) c = -1.0;
-      phi = atan2(s,c);
-
-      ANDgate = 0;
-      if (constraints[i][rxnID].par[0] < constraints[i][rxnID].par[1]) {
-        if (phi > constraints[i][rxnID].par[0] && phi < constraints[i][rxnID].par[1]) ANDgate = 1;
-      } else {
-        if (phi > constraints[i][rxnID].par[0] || phi < constraints[i][rxnID].par[1]) ANDgate = 1;
-      }
-      if (constraints[i][rxnID].par[2] < constraints[i][rxnID].par[3]) {
-        if (phi > constraints[i][rxnID].par[2] && phi < constraints[i][rxnID].par[3]) ANDgate = 1;
-      } else {
-        if (phi > constraints[i][rxnID].par[2] || phi < constraints[i][rxnID].par[3]) ANDgate = 1;
-      }
-      if (ANDgate != 1) satisfied[i] = 0;
-    } else if (constraints[i][rxnID].type == ARRHENIUS) {
-      t = get_temperature(glove,0,1);
-      prrhob = constraints[i][rxnID].par[1]*pow(t,constraints[i][rxnID].par[2])*
-        exp(-constraints[i][rxnID].par[3]/(force->boltz*t));
-      if (prrhob < rrhandom[(int) constraints[i][rxnID].par[0]]->uniform()) satisfied[i] = 0;
-    } else if (constraints[i][rxnID].type == RMSD) {
-      // call superpose
-      int iatom;
-      int iref = -1; // choose first atom as reference
-      int n2superpose = 0;
-      double **xfrozen; // coordinates for the "frozen" target molecule
-      double **xmobile; // coordinates for the "mobile" molecule
-      int ifragment = constraints[i][rxnID].id[0];
-      if (ifragment >= 0) {
-        for (int j = 0; j < onemol->natoms; j++)
-          if (onemol->fragmentmask[ifragment][j]) n2superpose++;
-        memory->create(xfrozen,n2superpose,3,"bond/react:xfrozen");
-        memory->create(xmobile,n2superpose,3,"bond/react:xmobile");
-        int myincr = 0;
-        for (int j = 0; j < onemol->natoms; j++) {
-          if (onemol->fragmentmask[ifragment][j]) {
-            iatom = atom->map(glove[j][1]);
-            if (iref == -1) iref = iatom;
-            iatom = domain->closest_image(iref,iatom);
-            for (int k = 0; k < 3; k++) {
-              xfrozen[myincr][k] = x[iatom][k];
-              xmobile[myincr][k] = onemol->x[j][k];
-            }
-            myincr++;
-          }
-        }
-      } else {
-        int iatom;
-        int iref = -1; // choose first atom as reference
-        n2superpose = onemol->natoms;
-        memory->create(xfrozen,n2superpose,3,"bond/react:xfrozen");
-        memory->create(xmobile,n2superpose,3,"bond/react:xmobile");
-        for (int j = 0; j < n2superpose; j++) {
-          iatom = atom->map(glove[j][1]);
-          if (iref == -1) iref = iatom;
-          iatom = domain->closest_image(iref,iatom);
-          for (int k = 0; k < 3; k++) {
-            xfrozen[j][k] = x[iatom][k];
-            xmobile[j][k] = onemol->x[j][k];
-          }
-        }
-      }
-      Superpose3D<double, double **> superposer(n2superpose);
-      double rmsd = superposer.Superpose(xfrozen, xmobile);
-      memory->destroy(xfrozen);
-      memory->destroy(xmobile);
-      if (rmsd > constraints[i][rxnID].par[0]) satisfied[i] = 0;
-    } else if (constraints[i][rxnID].type == CUSTOM) {
-      satisfied[i] = custom_constraint(constraints[i][rxnID].str);
-    }
-  }
-
-  if (nconstraints[rxnID] > 0) {
-    char evalstr[MAXLINE],*ptr;
-    strcpy(evalstr,constraintstr[rxnID]);
-    for (int i = 0; i < nconstraints[rxnID]; i++) {
-      ptr = strchr(evalstr,'C');
-      *ptr = satisfied[i] ? '1' : '0';
-    }
-    double verdict = input->variable->evaluate_boolean(evalstr);
-    if (verdict == 0.0) return 0;
-  }
-
-  // let's also check chirality within 'check_constraint'
-  for (int i = 0; i < onemol->natoms; i++) {
-    if (chiral_atoms[i][0][rxnID] == 1) {
-      double my4coords[12];
-      // already ensured, by transitive property, that chiral simulation atom has four neighs
-      for (int j = 0; j < 4; j++) {
-        atom1 = atom->map(glove[i][1]);
-        // loop over known types involved in chiral center
-        for (int jj = 0; jj < 4; jj++) {
-          if (atom->type[atom->map(xspecial[atom1][j])] == chiral_atoms[i][jj+2][rxnID]) {
-            atom2 = atom->map(xspecial[atom1][j]);
-            atom2 = domain->closest_image(atom1,atom2);
-            for (int k = 0; k < 3; k++) {
-              my4coords[3*jj+k] = x[atom2][k];
-            }
-            break;
-          }
-        }
-      }
-      if (get_chirality(my4coords) != chiral_atoms[i][1][rxnID]) return 0;
-    }
-  }
-
-  memory->destroy(satisfied);
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
-return pre-reaction atom or fragment location
-fragment: given pre-reacted molID (onemol) and fragID,
-          return geometric center (of mapped simulation atoms)
-------------------------------------------------------------------------- */
-
-void FixBondReact::get_IDcoords(int mode, int myID, double *center)
-{
-  double **x = atom->x;
-  if (mode == ATOM) {
-    int iatom = atom->map(glove[myID-1][1]);
-    for (int i = 0; i < 3; i++)
-      center[i] = x[iatom][i];
-  } else {
-    int iref = -1; // choose first atom as reference
-    int iatom;
-    int nfragatoms = 0;
-    for (int i = 0; i < 3; i++)
-      center[i] = 0;
-
-    for (int i = 0; i < onemol->natoms; i++) {
-      if (onemol->fragmentmask[myID][i]) {
-        if (iref == -1)
-          iref = atom->map(glove[i][1]);
-        iatom = atom->map(glove[i][1]);
-        iatom = domain->closest_image(iref,iatom);
-        for (int j = 0; j < 3; j++)
-          center[j] += x[iatom][j];
-        nfragatoms++;
-      }
-    }
-    for (int i = 0; i < 3; i++)
-      center[i] /= nfragatoms;
-  }
-}
-
-/* ----------------------------------------------------------------------
-compute local temperature: average over all atoms in reaction template
-------------------------------------------------------------------------- */
-
-double FixBondReact::get_temperature(tagint **myglove, int row_offset, int col)
-{
-  int i,ilocal;
-  double adof = domain->dimension;
-
-  double **v = atom->v;
-  double *mass = atom->mass;
-  double *rmass = atom->rmass;
-  int *type = atom->type;
-
-  double t = 0.0;
-
-  if (rmass) {
-    for (i = 0; i < onemol->natoms; i++) {
-      ilocal = atom->map(myglove[i+row_offset][col]);
-      t += (v[ilocal][0]*v[ilocal][0] + v[ilocal][1]*v[ilocal][1] +
-            v[ilocal][2]*v[ilocal][2]) * rmass[ilocal];
-    }
-  } else {
-    for (i = 0; i < onemol->natoms; i++) {
-      ilocal = atom->map(myglove[i+row_offset][col]);
-      t += (v[ilocal][0]*v[ilocal][0] + v[ilocal][1]*v[ilocal][1] +
-            v[ilocal][2]*v[ilocal][2]) * mass[type[ilocal]];
-    }
-  }
-
-  // final temperature
-  double dof = adof*onemol->natoms;
-  double tfactor = force->mvv2e / (dof * force->boltz);
-  t *= tfactor;
-  return t;
-}
-
-/* ----------------------------------------------------------------------
-evaulate expression for variable constraint
-------------------------------------------------------------------------- */
-
-double FixBondReact::custom_constraint(std::string varstr)
-{
-  int pos,pos1,pos2,pos3,irxnfunc;
-  int prev3 = -1;
-  double val;
-  std::string argstr,varid,fragid,evlcat;
-  std::vector<std::string> evlstr;
-
-  // search varstr for special 'rxn' functions
-  while (true) {
-    // find next reaction special function occurrence
-    pos1 = INT_MAX;
-    for (int i = 0; i < nrxnfunction; i++) {
-      pos = varstr.find(rxnfunclist[i],prev3+1);
-      if (pos == std::string::npos) continue;
-      if (pos < pos1) {
-        pos1 = pos;
-        irxnfunc = i;
-      }
-    }
-    if (pos1 == INT_MAX) break;
-
-    fragid = "all"; // operate over entire reaction site by default
-    pos2 = varstr.find("(",pos1);
-    pos3 = varstr.find(")",pos2);
-    if (pos2 == std::string::npos || pos3 == std::string::npos)
-      error->one(FLERR,"Bond/react: Illegal rxn function syntax\n");
-    evlstr.push_back(varstr.substr(prev3+1,pos1-(prev3+1)));
-    prev3 = pos3;
-    argstr = varstr.substr(pos2+1,pos3-pos2-1);
-    pos2 = argstr.find(",");
-    if (pos2 != std::string::npos) {
-      varid = argstr.substr(0,pos2);
-      fragid = argstr.substr(pos2+1);
-    } else varid = argstr;
-    evlstr.push_back(std::to_string(rxnfunction(rxnfunclist[irxnfunc], varid, fragid)));
-  }
-  evlstr.push_back(varstr.substr(prev3+1));
-
-  for (int i = 0; i < evlstr.size(); i++)
-    evlcat += evlstr[i];
-
-  char *cstr = new char[evlcat.length() + 1];
-  strcpy(cstr, evlcat.c_str());
-
-  val = input->variable->compute_equal(cstr);
-  delete [] cstr;
-  return val;
-}
-
-/* ----------------------------------------------------------------------
-current two 'rxn' functions: rxnsum and rxnave
-------------------------------------------------------------------------- */
-
-double FixBondReact::rxnfunction(std::string rxnfunc, std::string varid,
-                                 std::string fragid)
-{
-  if (varid.substr(0,2) != "v_") error->one(FLERR,"Bond/react: Reaction special function variable "
-                                   "name should begin with 'v_'");
-  varid = varid.substr(2);
-  int ivar = input->variable->find(varid.c_str());
-  if (ivar < 0)
-    error->one(FLERR,"Bond/react: Reaction special function variable "
-                                 "name does not exist");
-  if (!input->variable->atomstyle(ivar))
-    error->one(FLERR,"Bond/react: Reaction special function must "
-                                 "reference an atom-style variable");
-  if (vvec == nullptr) {
-    memory->create(vvec,atom->nlocal,"bond/react:vvec");
-    nvvec = atom->nlocal;
-  }
-  if (nvvec < atom->nlocal) {
-    memory->grow(vvec,atom->nlocal,"bond/react:vvec");
-    nvvec = atom->nlocal;
-  }
-  input->variable->compute_atom(ivar,igroup,vvec,1,0);
-  int ifrag = -1;
-  if (fragid != "all") {
-    ifrag = onemol->findfragment(fragid.c_str());
-    if (ifrag < 0) error->one(FLERR,"Bond/react: Molecule fragment "
-                              "in reaction special function does not exist");
-  }
-
-  int iatom;
-  int nsum = 0;
-  double sumvvec = 0;
-  if (rxnfunc == "rxnsum" || rxnfunc == "rxnave") {
-    if (fragid == "all") {
-      for (int i = 0; i < onemol->natoms; i++) {
-        iatom = atom->map(glove[i][1]);
-        sumvvec += vvec[iatom];
-      }
-      nsum = onemol->natoms;
-    } else {
-      for (int i = 0; i < onemol->natoms; i++) {
-        if (onemol->fragmentmask[ifrag][i]) {
-          iatom = atom->map(glove[i][1]);
-          sumvvec += vvec[iatom];
-          nsum++;
-        }
-      }
-    }
-  }
-
-  if (rxnfunc == "rxnsum") return sumvvec;
-  if (rxnfunc == "rxnave") return sumvvec/nsum;
-}
-
-/* ----------------------------------------------------------------------
-return handedness (1 or -1) of a chiral center, given ordered set of coordinates
-------------------------------------------------------------------------- */
-
-int FixBondReact::get_chirality(double four_coords[12])
-{
-  // define oriented plane with first three coordinates
-  double vec1[3],vec2[3],vec3[3],vec4[3],mean3[3],dot;
-
-  for (int i = 0; i < 3; i++) {
-    vec1[i] = four_coords[i]-four_coords[i+3];
-    vec2[i] = four_coords[i+3]-four_coords[i+6];
-  }
-
-  MathExtra::cross3(vec1,vec2,vec3);
-
-  for (int i = 0; i < 3; i++) {
-    mean3[i] = (four_coords[i] + four_coords[i+3] +
-                four_coords[i+6])/3;
-    vec4[i] = four_coords[i+9] - mean3[i];
-  }
-
-  dot = MathExtra::dot3(vec3,vec4);
-  dot = dot/fabs(dot);
-  return (int) dot;
-}
-
-/* ----------------------------------------------------------------------
-  Get xspecials for current molecule templates
-------------------------------------------------------------------------- */
-
-void FixBondReact::get_molxspecials()
-{
-  if (newton_bond == 1) {
-    onemol_nxspecial = onemol->nspecial;
-    onemol_xspecial = onemol->special;
-    twomol_nxspecial = twomol->nspecial;
-    twomol_xspecial = twomol->special;
-  } else {
-    memory->destroy(onemol_nxspecial);
-    memory->destroy(onemol_xspecial);
-    memory->create(onemol_nxspecial,onemol->natoms,3,"bond/react:onemol_nxspecial");
-    memory->create(onemol_xspecial,onemol->natoms,atom->maxspecial,"bond/react:onemol_xspecial");
-    for (int i = 0; i < onemol->natoms; i++) {
-      onemol_nxspecial[i][0] = onemol->num_bond[i];
-      for (int j = 0; j < onemol_nxspecial[i][0]; j++) {
-        onemol_xspecial[i][j] = onemol->bond_atom[i][j];
-      }
-      onemol_nxspecial[i][1] = onemol->nspecial[i][1];
-      onemol_nxspecial[i][2] = onemol->nspecial[i][2];
-      int joffset = onemol_nxspecial[i][0] - onemol->nspecial[i][0];
-      for (int j = onemol_nxspecial[i][0]; j < onemol_nxspecial[i][2]; j++) {
-        onemol_xspecial[i][j+joffset] = onemol->special[i][j];
-      }
-    }
-    memory->destroy(twomol_nxspecial);
-    memory->destroy(twomol_xspecial);
-    memory->create(twomol_nxspecial,twomol->natoms,3,"bond/react:twomol_nxspecial");
-    memory->create(twomol_xspecial,twomol->natoms,atom->maxspecial,"bond/react:twomol_xspecial");
-    for (int i = 0; i < twomol->natoms; i++) {
-      twomol_nxspecial[i][0] = twomol->num_bond[i];
-      for (int j = 0; j < twomol_nxspecial[i][0]; j++) {
-        twomol_xspecial[i][j] = twomol->bond_atom[i][j];
-      }
-      twomol_nxspecial[i][1] = twomol->nspecial[i][1];
-      twomol_nxspecial[i][2] = twomol->nspecial[i][2];
-      int joffset = twomol_nxspecial[i][0] - twomol->nspecial[i][0];
-      for (int j = twomol_nxspecial[i][0]; j < twomol_nxspecial[i][2]; j++) {
-        twomol_xspecial[i][j+joffset] = twomol->special[i][j];
-      }
-    }
-  }
-}
-
-/* ----------------------------------------------------------------------
-  Determine which pre-reacted template atoms are at least three bonds
-  away from edge atoms.
-------------------------------------------------------------------------- */
-
-void FixBondReact::find_landlocked_atoms(int myrxn)
-{
-  // landlocked_atoms are atoms for which all topology is contained in reacted template
-  // if dihedrals/impropers exist: this means that edge atoms are not in their 1-3 neighbor list
-  //   note: due to various usage/definitions of impropers, treated same as dihedrals
-  // if angles exist: this means edge atoms not in their 1-2 neighbors list
-  // if just bonds: this just means that edge atoms are not landlocked
-  // Note: landlocked defined in terms of reacted template
-  // if no edge atoms (small reacting molecule), all atoms are landlocked
-  // we can delete all current topology of landlocked atoms and replace
-
-  // always remove edge atoms from landlocked list
-  for (int i = 0; i < twomol->natoms; i++) {
-    if (create_atoms[i][myrxn] == 0 && edge[equivalences[i][1][myrxn]-1][myrxn] == 1)
-      landlocked_atoms[i][myrxn] = 0;
-    else landlocked_atoms[i][myrxn] = 1;
-  }
-  int nspecial_limit = -1;
-  if (force->angle && twomol->angleflag) nspecial_limit = 0;
-
-  if ((force->dihedral && twomol->dihedralflag) ||
-      (force->improper && twomol->improperflag)) nspecial_limit = 1;
-
-  if (nspecial_limit != -1) {
-    for (int i = 0; i < twomol->natoms; i++) {
-      for (int j = 0; j < twomol_nxspecial[i][nspecial_limit]; j++) {
-        for (int k = 0; k < onemol->natoms; k++) {
-          if (equivalences[twomol_xspecial[i][j]-1][1][myrxn] == k+1 && edge[k][myrxn] == 1) {
-            landlocked_atoms[i][myrxn] = 0;
-          }
-        }
-      }
-    }
-  }
-
-  // bad molecule templates check
-  // if atoms change types, but aren't landlocked, that's bad
-  for (int i = 0; i < twomol->natoms; i++) {
-    if (create_atoms[i][myrxn] == 0) {
-      if (twomol->type[i] != onemol->type[equivalences[i][1][myrxn]-1] && landlocked_atoms[i][myrxn] == 0) {
-        char str[128];
-        snprintf(str,128,"Bond/react: Atom type affected by reaction %s too close to template edge",rxn_name[myrxn]);
-        error->all(FLERR,str);
-      }
-    }
-  }
-
-  // additionally, if a bond changes type, but neither involved atom is landlocked, bad
-  // would someone want to change an angle type but not bond or atom types? (etc.) ...hopefully not yet
-  for (int i = 0; i < twomol->natoms; i++) {
-    if (create_atoms[i][myrxn] == 0) {
-      if (landlocked_atoms[i][myrxn] == 0) {
-        for (int j = 0; j < twomol->num_bond[i]; j++) {
-          int twomol_atomj = twomol->bond_atom[i][j];
-          if (landlocked_atoms[twomol_atomj-1][myrxn] == 0) {
-            int onemol_atomi = equivalences[i][1][myrxn];
-            int onemol_batom;
-            for (int m = 0; m < onemol->num_bond[onemol_atomi-1]; m++) {
-              onemol_batom = onemol->bond_atom[onemol_atomi-1][m];
-              if (onemol_batom == equivalences[twomol_atomj-1][1][myrxn]) {
-                if (twomol->bond_type[i][j] != onemol->bond_type[onemol_atomi-1][m]) {
-                  char str[128];
-                  snprintf(str,128,"Bond/react: Bond type affected by reaction %s too close to template edge",rxn_name[myrxn]);
-                  error->all(FLERR,str);
-                }
-              }
-            }
-            if (newton_bond) {
-              int onemol_atomj = equivalences[twomol_atomj-1][1][myrxn];
-              for (int m = 0; m < onemol->num_bond[onemol_atomj-1]; m++) {
-                onemol_batom = onemol->bond_atom[onemol_atomj-1][m];
-                if (onemol_batom == equivalences[i][1][myrxn]) {
-                  if (twomol->bond_type[i][j] != onemol->bond_type[onemol_atomj-1][m]) {
-                    char str[128];
-                    snprintf(str,128,"Bond/react: Bond type affected by reaction %s too close to template edge",rxn_name[myrxn]);
-                    error->all(FLERR,str);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // additionally, if a deleted atom is bonded to an atom that is not deleted, bad
-  for (int i = 0; i < onemol->natoms; i++) {
-    if (delete_atoms[i][myrxn] == 1) {
-      int ii = reverse_equiv[i][1][myrxn] - 1;
-      for (int j = 0; j < twomol_nxspecial[ii][0]; j++) {
-        if (delete_atoms[equivalences[twomol_xspecial[ii][j]-1][1][myrxn]-1][myrxn] == 0) {
-          error->all(FLERR,"Bond/react: A deleted atom cannot remain bonded to an atom that is not deleted");
-        }
-      }
-    }
-  }
-
-  // also, if atoms change number of bonds, but aren't landlocked, that could be bad
-  if (me == 0)
-    for (int i = 0; i < twomol->natoms; i++) {
-      if (create_atoms[i][myrxn] == 0) {
-        if (twomol_nxspecial[i][0] != onemol_nxspecial[equivalences[i][1][myrxn]-1][0] && landlocked_atoms[i][myrxn] == 0) {
-          char str[128];
-          snprintf(str,128,"Bond/react: Atom affected by reaction %s too close to template edge",rxn_name[myrxn]);
-          error->warning(FLERR,str);
-          break;
-        }
-      }
-    }
-
-  // finally, if a created atom is not landlocked, bad!
-  for (int i = 0; i < twomol->natoms; i++) {
-    if (create_atoms[i][myrxn] == 1 && landlocked_atoms[i][myrxn] == 0) {
-      error->one(FLERR,"Bond/react: Created atom too close to template edge");
-    }
-  }
-}
-
-/* ----------------------------------------------------------------------
-let's dedup global_mega_glove
-allows for same site undergoing different pathways, in parallel
-------------------------------------------------------------------------- */
-
-void FixBondReact::dedup_mega_gloves(int dedup_mode)
-{
-  // dedup_mode == LOCAL for local_dedup
-  // dedup_mode == GLOBAL for global_mega_glove
-  for (int i = 0; i < nreacts; i++) {
-    if (dedup_mode == LOCAL) local_rxn_count[i] = 0;
-    if (dedup_mode == GLOBAL) ghostly_rxn_count[i] = 0;
-  }
-
-  int dedup_size = 0;
-  if (dedup_mode == LOCAL) {
-    dedup_size = local_num_mega;
-  } else if (dedup_mode == GLOBAL) {
-    dedup_size = global_megasize;
-  }
-
-  tagint **dedup_glove;
-  memory->create(dedup_glove,max_natoms+1,dedup_size,"bond/react:dedup_glove");
-
-  if (dedup_mode == LOCAL) {
-    for (int i = 0; i < dedup_size; i++) {
-      for (int j = 0; j < max_natoms+1; j++) {
-        dedup_glove[j][i] = local_mega_glove[j][i];
-      }
-    }
-  } else if (dedup_mode == GLOBAL) {
-    for (int i = 0; i < dedup_size; i++) {
-      for (int j = 0; j < max_natoms+1; j++) {
-        dedup_glove[j][i] = global_mega_glove[j][i];
-      }
-    }
-  }
-
-  // dedup_mask is size dedup_size and filters reactions that have been deleted
-  // a value of 1 means this reaction instance has been deleted
-  int *dedup_mask = new int[dedup_size];
-  int *dup_list = new int[dedup_size];
-
-  for (int i = 0; i < dedup_size; i++) {
-    dedup_mask[i] = 0;
-    dup_list[i] = 0;
-  }
-
-  // let's randomly mix up our reaction instances first
-  // then we can feel okay about ignoring ones we've already deleted (or accepted)
-  // based off std::shuffle
-  int *temp_rxn = new int[max_natoms+1];
-  for (int i = dedup_size-1; i > 0; --i) { //dedup_size
-    // choose random entry to swap current one with
-    int k = floor(random[0]->uniform()*(i+1));
-
-    // swap entries
-    for (int j = 0; j < max_natoms+1; j++)
-      temp_rxn[j] = dedup_glove[j][i];
-
-    for (int j = 0; j < max_natoms+1; j++) {
-      dedup_glove[j][i] = dedup_glove[j][k];
-      dedup_glove[j][k] = temp_rxn[j];
-    }
-  }
-  delete [] temp_rxn;
-
-  for (int i = 0; i < dedup_size; i++) {
-    if (dedup_mask[i] == 0) {
-      int num_dups = 0;
-      int myrxnid1 = dedup_glove[0][i];
-      onemol = atom->molecules[unreacted_mol[myrxnid1]];
-      for (int j = 0; j < onemol->natoms; j++) {
-        int check1 = dedup_glove[j+1][i];
-        for (int ii = i + 1; ii < dedup_size; ii++) {
-          int already_listed = 0;
-          for (int jj = 0; jj < num_dups; jj++) {
-            if (dup_list[jj] == ii) {
-              already_listed = 1;
-              break;
-            }
-          }
-          if (dedup_mask[ii] == 0 && already_listed == 0) {
-            int myrxnid2 = dedup_glove[0][ii];
-            twomol = atom->molecules[unreacted_mol[myrxnid2]];
-            for (int jj = 0; jj < twomol->natoms; jj++) {
-              int check2 = dedup_glove[jj+1][ii];
-              if (check2 == check1) {
-                // add this rxn instance as well
-                if (num_dups == 0) dup_list[num_dups++] = i;
-                dup_list[num_dups++] = ii;
-                break;
-              }
-            }
-          }
-        }
-      }
-      // here we choose random number and therefore reaction instance
-      int myrand = 1;
-      if (num_dups > 0) {
-        myrand = floor(random[0]->uniform()*num_dups);
-        for (int iii = 0; iii < num_dups; iii++) {
-          if (iii != myrand) dedup_mask[dup_list[iii]] = 1;
-        }
-      }
-    }
-  }
-
-  // we must update local_mega_glove and local_megasize
-  // we can simply overwrite local_mega_glove column by column
-  if (dedup_mode == LOCAL) {
-    int new_local_megasize = 0;
-    for (int i = 0; i < local_num_mega; i++) {
-      if (dedup_mask[i] == 0) {
-        local_rxn_count[(int) dedup_glove[0][i]]++;
-        for (int j = 0; j < max_natoms+1; j++) {
-          local_mega_glove[j][new_local_megasize] = dedup_glove[j][i];
-        }
-        new_local_megasize++;
-      }
-    }
-
-    local_num_mega = new_local_megasize;
-  }
-
-  // we must update global_mega_glove and global_megasize
-  // we can simply overwrite global_mega_glove column by column
-  if (dedup_mode == GLOBAL) {
-    int new_global_megasize = 0;
-    for (int i = 0; i < global_megasize; i++) {
-      if (dedup_mask[i] == 0) {
-        ghostly_rxn_count[dedup_glove[0][i]]++;
-        for (int j = 0; j < max_natoms + 1; j++) {
-          global_mega_glove[j][new_global_megasize] = dedup_glove[j][i];
-        }
-        new_global_megasize++;
-      }
-    }
-    global_megasize = new_global_megasize;
-  }
-
-  memory->destroy(dedup_glove);
-  delete [] dedup_mask;
-  delete [] dup_list;
-}
-
-/* ----------------------------------------------------------------------
-let's limit movement of newly bonded atoms
-and exclude them from other thermostats via exclude_group
-------------------------------------------------------------------------- */
-
-void FixBondReact::limit_bond(int limit_bond_mode)
-{
-  //two types of passes: 1) while superimpose algorithm is iterating (only local atoms)
-  //                     2) once more for global_mega_glove [after de-duplicating rxn instances]
-  //in second case, only add local atoms to group
-  //as with update_everything, we can pre-prepare these arrays, then run generic limit_bond code
-
-  //create local, generic variables for onemol->natoms and glove
-  //to be filled differently on respective passes
-
-  int nlocal = atom->nlocal;
-  int temp_limit_num = 0;
-  tagint *temp_limit_glove;
-  if (limit_bond_mode == LOCAL) {
-    int max_temp = local_num_mega * (max_natoms + 1);
-    temp_limit_glove = new tagint[max_temp];
-    for (int j = 0; j < local_num_mega; j++) {
-      rxnID = local_mega_glove[0][j];
-      onemol = atom->molecules[unreacted_mol[rxnID]];
-      for (int i = 0; i < onemol->natoms; i++) {
-        temp_limit_glove[temp_limit_num++] = local_mega_glove[i+1][j];
-      }
-    }
-
-  } else if (limit_bond_mode == GLOBAL) {
-    int max_temp = global_megasize * (max_natoms + 1);
-    temp_limit_glove = new tagint[max_temp];
-    for (int j = 0; j < global_megasize; j++) {
-      rxnID = global_mega_glove[0][j];
-      onemol = atom->molecules[unreacted_mol[rxnID]];
-      for (int i = 0; i < onemol->natoms; i++) {
-        if (atom->map(global_mega_glove[i+1][j]) >= 0 &&
-            atom->map(global_mega_glove[i+1][j]) < nlocal)
-          temp_limit_glove[temp_limit_num++] = global_mega_glove[i+1][j];
-      }
-    }
-  }
-
-  if (temp_limit_num == 0) {
-    delete [] temp_limit_glove;
-    return;
-  }
-
-  // we must keep our own list of limited atoms
-  // this will be a new per-atom property!
-
-  int flag;
-  int index1 = atom->find_custom("limit_tags",flag);
-  int *i_limit_tags = atom->ivector[index1];
-
-  int *i_statted_tags;
-  if (stabilization_flag == 1) {
-    int index2 = atom->find_custom(statted_id,flag);
-    i_statted_tags = atom->ivector[index2];
-  }
-
-  int index3 = atom->find_custom("react_tags",flag);
-  int *i_react_tags = atom->ivector[index3];
-
-  for (int i = 0; i < temp_limit_num; i++) {
-    // update->ntimestep could be 0. so add 1 throughout
-    i_limit_tags[atom->map(temp_limit_glove[i])] = update->ntimestep + 1;
-    if (stabilization_flag == 1) i_statted_tags[atom->map(temp_limit_glove[i])] = 0;
-    i_react_tags[atom->map(temp_limit_glove[i])] = rxnID;
-  }
-
-  delete [] temp_limit_glove;
-}
-
-/* ----------------------------------------------------------------------
-let's unlimit movement of newly bonded atoms after n timesteps.
-we give them back to the system thermostat
-------------------------------------------------------------------------- */
-
-void FixBondReact::unlimit_bond()
-{
-  // let's now unlimit in terms of i_limit_tags
-  // we just run through all nlocal, looking for > limit_duration
-  // then we return i_limit_tag to 0 (which removes from dynamic group)
-  int flag;
-  int index1 = atom->find_custom("limit_tags",flag);
-  int *i_limit_tags = atom->ivector[index1];
-
-  int *i_statted_tags;
-  if (stabilization_flag == 1) {
-    int index2 = atom->find_custom(statted_id,flag);
-    i_statted_tags = atom->ivector[index2];
-  }
-
-  int index3 = atom->find_custom("react_tags",flag);
-  int *i_react_tags = atom->ivector[index3];
-
-  int unlimitflag = 0;
-  for (int i = 0; i < atom->nlocal; i++) {
-    // unlimit atoms for next step! this resolves # of procs disparity, mostly
-    // first '1': indexing offset, second '1': for next step
-    if (i_limit_tags[i] != 0 && (update->ntimestep + 1 - i_limit_tags[i]) > limit_duration[i_react_tags[i]]) {
-      unlimitflag = 1;
-      i_limit_tags[i] = 0;
-      if (stabilization_flag == 1) i_statted_tags[i] = 1;
-      i_react_tags[i] = 0;
-    }
-  }
-
-  // really should only communicate this per-atom property, not entire reneighboring
-  MPI_Allreduce(MPI_IN_PLACE,&unlimitflag,1,MPI_INT,MPI_MAX,world);
-  if (unlimitflag) next_reneighbor = update->ntimestep;
-}
-
-/* ----------------------------------------------------------------------
-check mega_glove for ghosts
-if so, flag for broadcasting for perusal by all processors
-------------------------------------------------------------------------- */
-
-void FixBondReact::glove_ghostcheck()
-{
-  // here we add glove to either local_mega_glove or ghostly_mega_glove
-  // ghostly_mega_glove includes atoms that are ghosts, either of this proc or another
-  // 'ghosts of another' indication taken from comm->sendlist
-
-  int ghostly = 0;
-#if !defined(MPI_STUBS)
-  if (comm->style == 0) {
-    if (create_atoms_flag[rxnID] == 1) {
-      ghostly = 1;
-    } else {
-      for (int i = 0; i < onemol->natoms; i++) {
-        int ilocal = atom->map(glove[i][1]);
-        if (ilocal >= atom->nlocal || localsendlist[ilocal] == 1) {
-          ghostly = 1;
-          break;
-        }
-      }
-    }
-  } else {
-    ghostly = 1;
-  }
-#endif
-
-  if (ghostly == 1) {
-    ghostly_mega_glove[0][ghostly_num_mega] = rxnID;
-    ghostly_rxn_count[rxnID]++; //for debuginng
-    for (int i = 0; i < onemol->natoms; i++) {
-      ghostly_mega_glove[i+1][ghostly_num_mega] = glove[i][1];
-    }
-    ghostly_num_mega++;
-  } else {
-    local_mega_glove[0][local_num_mega] = rxnID;
-    local_rxn_count[rxnID]++; //for debuginng
-    for (int i = 0; i < onemol->natoms; i++) {
-      local_mega_glove[i+1][local_num_mega] = glove[i][1];
-    }
-    local_num_mega++;
-  }
-}
-
-/* ----------------------------------------------------------------------
-broadcast entries of mega_glove which contain nonlocal atoms for perusal by all processors
-------------------------------------------------------------------------- */
-
-void FixBondReact::ghost_glovecast()
-{
-#if !defined(MPI_STUBS)
-
-  global_megasize = 0;
-
-  int *allncols = new int[nprocs];
-  for (int i = 0; i < nprocs; i++)
-    allncols[i] = 0;
-  MPI_Allgather(&ghostly_num_mega, 1, MPI_INT, allncols, 1, MPI_INT, world);
-  for (int i = 0; i < nprocs; i++)
-    global_megasize = global_megasize + allncols[i];
-
-  if (global_megasize == 0) {
-    delete [] allncols;
-    return;
-  }
-
-  int *allstarts = new int[nprocs];
-
-  int start = 0;
-  for (int i = 0; i < me; i++) {
-    start += allncols[i];
-  }
-  MPI_Allgather(&start, 1, MPI_INT, allstarts, 1, MPI_INT, world);
-  MPI_Datatype columnunsized, column;
-  int sizes[2]    = {max_natoms+1, global_megasize};
-  int subsizes[2] = {max_natoms+1, 1};
-  int starts[2]   = {0,0};
-  MPI_Type_create_subarray (2, sizes, subsizes, starts, MPI_ORDER_C,
-                            MPI_LMP_TAGINT, &columnunsized);
-  MPI_Type_create_resized (columnunsized, 0, sizeof(tagint), &column);
-  MPI_Type_commit(&column);
-
-  memory->destroy(global_mega_glove);
-  memory->create(global_mega_glove,max_natoms+1,global_megasize,"bond/react:global_mega_glove");
-
-  for (int i = 0; i < max_natoms+1; i++)
-    for (int j = 0; j < global_megasize; j++)
-      global_mega_glove[i][j] = 0;
-
-  if (ghostly_num_mega > 0) {
-    for (int i = 0; i < max_natoms+1; i++) {
-      for (int j = 0; j < ghostly_num_mega; j++) {
-        global_mega_glove[i][j+start] = ghostly_mega_glove[i][j];
-      }
-    }
-  }
-  // let's send to root, dedup, then broadcast
-  if (me == 0) {
-    MPI_Gatherv(MPI_IN_PLACE, ghostly_num_mega, column, // Note: some values ignored for MPI_IN_PLACE
-                &(global_mega_glove[0][0]), allncols, allstarts,
-                column, 0, world);
-  } else {
-    MPI_Gatherv(&(global_mega_glove[0][start]), ghostly_num_mega, column,
-                &(global_mega_glove[0][0]), allncols, allstarts,
-                column, 0, world);
-  }
-
-  if (me == 0) dedup_mega_gloves(GLOBAL); // global_mega_glove mode
-  MPI_Bcast(&global_megasize,1,MPI_INT,0,world);
-  MPI_Bcast(&(global_mega_glove[0][0]), global_megasize, column, 0, world);
-
-  delete [] allstarts;
-  delete [] allncols;
-
-  MPI_Type_free(&column);
-  MPI_Type_free(&columnunsized);
-#endif
-}
-
-/* ----------------------------------------------------------------------
-update molecule IDs, charges, types, special lists and all topology
-------------------------------------------------------------------------- */
-
-void FixBondReact::update_everything()
-{
-  int nlocal = atom->nlocal; // must be redefined after create atoms
-  int *type = atom->type;
-  int **nspecial = atom->nspecial;
-  tagint **special = atom->special;
-
-  int **bond_type = atom->bond_type;
-  tagint **bond_atom = atom->bond_atom;
-  int *num_bond = atom->num_bond;
-
-  // used when deleting atoms
-  int ndel,ndelone;
-  int *mark;
-  int nmark = nlocal;
-  memory->create(mark,nmark,"bond/react:mark");
-  for (int i = 0; i < nmark; i++) mark[i] = 0;
-  tagint *tag = atom->tag;
-  AtomVec *avec = atom->avec;
-
-  // used when creating atoms
-  int inserted_atoms_flag = 0;
-
-  // update atom->nbonds, etc.
-  // TODO: correctly tally with 'newton off'
-  int delta_bonds = 0;
-  int delta_angle = 0;
-  int delta_dihed = 0;
-  int delta_imprp = 0;
-
-  // pass through twice
-  // redefining 'update_num_mega' and 'update_mega_glove' each time
-  //  first pass: when glove is all local atoms
-  //  second pass: search for local atoms in global_mega_glove
-  // add check for local atoms as well
-
-  int update_num_mega;
-  tagint **update_mega_glove;
-  memory->create(update_mega_glove,max_natoms+1,MAX(local_num_mega,global_megasize),"bond/react:update_mega_glove");
-
-  for (int pass = 0; pass < 2; pass++) {
-    update_num_mega = 0;
-    int *iskip = new int[nreacts];
-    for (int i = 0; i < nreacts; i++) iskip[i] = 0;
-    if (pass == 0) {
-      for (int i = 0; i < local_num_mega; i++) {
-        rxnID = local_mega_glove[0][i];
-        // reactions already shuffled from dedup procedure, so can skip first N
-        if (iskip[rxnID]++ < nlocalskips[rxnID]) continue;
-        for (int j = 0; j < max_natoms+1; j++)
-          update_mega_glove[j][update_num_mega] = local_mega_glove[j][i];
-        update_num_mega++;
-      }
-    } else if (pass == 1) {
-      for (int i = 0; i < global_megasize; i++) {
-        rxnID = global_mega_glove[0][i];
-        // reactions already shuffled from dedup procedure, so can skip first N
-        if (iskip[rxnID]++ < nghostlyskips[rxnID]) continue;
-
-        // we can insert atoms here, now that reactions are finalized
-        // can't do it any earlier, due to skipped reactions (max_rxn)
-        // reactions that create atoms are always treated as 'global'
-        if (create_atoms_flag[rxnID] == 1) {
-          onemol = atom->molecules[unreacted_mol[rxnID]];
-          twomol = atom->molecules[reacted_mol[rxnID]];
-          if (insert_atoms(global_mega_glove,i)) {
-            inserted_atoms_flag = 1;
-          } else { // create aborted
-            reaction_count_total[rxnID]--;
-            continue;
-          }
-        }
-
-        for (int j = 0; j < max_natoms+1; j++)
-          update_mega_glove[j][update_num_mega] = global_mega_glove[j][i];
-        update_num_mega++;
-      }
-      // if inserted atoms and global map exists, reset map now instead
-      //   of waiting for comm since other pre-exchange fixes may use it
-      // invoke map_init() b/c atom count has grown
-      // do this once after all atom insertions
-      if (inserted_atoms_flag == 1 && atom->map_style != Atom::MAP_NONE) {
-        atom->map_init();
-        atom->map_set();
-      }
-    }
-    delete [] iskip;
-
-    // mark to-delete atoms
-    nlocal = atom->nlocal;
-    if (nlocal > nmark) {
-      memory->grow(mark,nlocal,"bond/react:mark");
-      for (int i = nmark; i < nlocal; i++) mark[i] = 0;
-      nmark = nlocal;
-    }
-    for (int i = 0; i < update_num_mega; i++) {
-      rxnID = update_mega_glove[0][i];
-      onemol = atom->molecules[unreacted_mol[rxnID]];
-      for (int j = 0; j < onemol->natoms; j++) {
-        int iatom = atom->map(update_mega_glove[j+1][i]);
-        if (delete_atoms[j][rxnID] == 1 && iatom >= 0 && iatom < nlocal) {
-          mark[iatom] = 1;
-        }
-      }
-    }
-
-    // update charges and types of landlocked atoms
-    for (int i = 0; i < update_num_mega; i++) {
-      rxnID = update_mega_glove[0][i];
-      twomol = atom->molecules[reacted_mol[rxnID]];
-      for (int j = 0; j < twomol->natoms; j++) {
-        int jj = equivalences[j][1][rxnID]-1;
-        if (atom->map(update_mega_glove[jj+1][i]) >= 0 &&
-            atom->map(update_mega_glove[jj+1][i]) < nlocal) {
-          if (landlocked_atoms[j][rxnID] == 1)
-            type[atom->map(update_mega_glove[jj+1][i])] = twomol->type[j];
-          if (twomol->qflag && atom->q_flag && custom_charges[jj][rxnID] == 1) {
-            double *q = atom->q;
-            q[atom->map(update_mega_glove[jj+1][i])] = twomol->q[j];
-          }
-        }
-      }
-    }
-
-    int insert_num;
-    // very nice and easy to completely overwrite special bond info for landlocked atoms
-    for (int i = 0; i < update_num_mega; i++) {
-      rxnID = update_mega_glove[0][i];
-      twomol = atom->molecules[reacted_mol[rxnID]];
-      for (int j = 0; j < twomol->natoms; j++) {
-        int jj = equivalences[j][1][rxnID]-1;
-        if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-          if (landlocked_atoms[j][rxnID] == 1) {
-            for (int k = 0; k < 3; k++) {
-              nspecial[atom->map(update_mega_glove[jj+1][i])][k] = twomol->nspecial[j][k];
-            }
-            for (int p = 0; p < twomol->nspecial[j][2]; p++) {
-              special[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->special[j][p]-1][1][rxnID]][i];
-            }
-          }
-          // now delete and replace landlocked atoms from non-landlocked atoms' special info
-          if (landlocked_atoms[j][rxnID] == 0) {
-            for (int k = nspecial[atom->map(update_mega_glove[jj+1][i])][2]-1; k > -1; k--) {
-              for (int p = 0; p < twomol->natoms; p++) {
-                int pp = equivalences[p][1][rxnID]-1;
-                if (p!=j && special[atom->map(update_mega_glove[jj+1][i])][k] == update_mega_glove[pp+1][i]
-                    && landlocked_atoms[p][rxnID] == 1) {
-                  for (int n = k; n < nspecial[atom->map(update_mega_glove[jj+1][i])][2]-1; n++) {
-                    special[atom->map(update_mega_glove[jj+1][i])][n] = special[atom->map(update_mega_glove[jj+1][i])][n+1];
-                  }
-                  if (k+1 > nspecial[atom->map(update_mega_glove[jj+1][i])][1]) {
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][2]--;
-                  } else if (k+1 > nspecial[atom->map(update_mega_glove[jj+1][i])][0]) {
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][1]--;
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][2]--;
-                  } else {
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][0]--;
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][1]--;
-                    nspecial[atom->map(update_mega_glove[jj+1][i])][2]--;
-                  }
-                  break;
-                }
-              }
-            }
-            // now reassign from reacted template
-            for (int k = 0; k < twomol->nspecial[j][2]; k++) {
-              if (landlocked_atoms[twomol->special[j][k]-1][rxnID] == 1) {
-                if (k > twomol->nspecial[j][1] - 1) {
-                  insert_num = nspecial[atom->map(update_mega_glove[jj+1][i])][2]++;
-                } else if (k > twomol->nspecial[j][0] - 1) {
-                  insert_num = nspecial[atom->map(update_mega_glove[jj+1][i])][1]++;
-                  nspecial[atom->map(update_mega_glove[jj+1][i])][2]++;
-                } else {
-                  insert_num = nspecial[atom->map(update_mega_glove[jj+1][i])][0]++;
-                  nspecial[atom->map(update_mega_glove[jj+1][i])][1]++;
-                  nspecial[atom->map(update_mega_glove[jj+1][i])][2]++;
-                }
-                if (nspecial[atom->map(update_mega_glove[jj+1][i])][2] > atom->maxspecial)
-                  error->one(FLERR,"Bond/react special bond generation overflow");
-                for (int n = nspecial[atom->map(update_mega_glove[jj+1][i])][2]-1; n > insert_num; n--) {
-                  special[atom->map(update_mega_glove[jj+1][i])][n] = special[atom->map(update_mega_glove[jj+1][i])][n-1];
-                }
-                special[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->special[j][k]-1][1][rxnID]][i];
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // next let's update bond info
-    // cool thing is, newton_bond issues are already taken care of in templates
-    // same with class2 improper issues, which is why this fix started in the first place
-    for (int i = 0; i < update_num_mega; i++) {
-      rxnID = update_mega_glove[0][i];
-      twomol = atom->molecules[reacted_mol[rxnID]];
-      // let's first delete all bond info about landlocked atoms
-      for (int j = 0; j < twomol->natoms; j++) {
-        int jj = equivalences[j][1][rxnID]-1;
-        if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-          if (landlocked_atoms[j][rxnID] == 1) {
-            delta_bonds -= num_bond[atom->map(update_mega_glove[jj+1][i])];
-            num_bond[atom->map(update_mega_glove[jj+1][i])] = 0;
-          }
-          if (landlocked_atoms[j][rxnID] == 0) {
-            for (int p = num_bond[atom->map(update_mega_glove[jj+1][i])]-1; p > -1 ; p--) {
-              for (int n = 0; n < twomol->natoms; n++) {
-                int nn = equivalences[n][1][rxnID]-1;
-                if (n!=j && bond_atom[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] && landlocked_atoms[n][rxnID] == 1) {
-                  for (int m = p; m < num_bond[atom->map(update_mega_glove[jj+1][i])]-1; m++) {
-                    bond_type[atom->map(update_mega_glove[jj+1][i])][m] = bond_type[atom->map(update_mega_glove[jj+1][i])][m+1];
-                    bond_atom[atom->map(update_mega_glove[jj+1][i])][m] = bond_atom[atom->map(update_mega_glove[jj+1][i])][m+1];
-                  }
-                  num_bond[atom->map(update_mega_glove[jj+1][i])]--;
-                  delta_bonds--;
-                }
-              }
-            }
-          }
-        }
-      }
-      // now let's add the new bond info.
-      for (int j = 0; j < twomol->natoms; j++) {
-        int jj = equivalences[j][1][rxnID]-1;
-        if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-          if (landlocked_atoms[j][rxnID] == 1)  {
-            num_bond[atom->map(update_mega_glove[jj+1][i])] = twomol->num_bond[j];
-            delta_bonds += twomol->num_bond[j];
-            for (int p = 0; p < twomol->num_bond[j]; p++) {
-              bond_type[atom->map(update_mega_glove[jj+1][i])][p] = twomol->bond_type[j][p];
-              bond_atom[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->bond_atom[j][p]-1][1][rxnID]][i];
-            }
-          }
-          if (landlocked_atoms[j][rxnID] == 0) {
-            for (int p = 0; p < twomol->num_bond[j]; p++) {
-              if (landlocked_atoms[twomol->bond_atom[j][p]-1][rxnID] == 1) {
-                insert_num = num_bond[atom->map(update_mega_glove[jj+1][i])];
-                bond_type[atom->map(update_mega_glove[jj+1][i])][insert_num] = twomol->bond_type[j][p];
-                bond_atom[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->bond_atom[j][p]-1][1][rxnID]][i];
-                num_bond[atom->map(update_mega_glove[jj+1][i])]++;
-                if (num_bond[atom->map(update_mega_glove[jj+1][i])] > atom->bond_per_atom)
-                  error->one(FLERR,"Bond/react topology/atom exceed system topology/atom");
-                delta_bonds++;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Angles! First let's delete all angle info:
-    if (force->angle && twomol->angleflag) {
-      int *num_angle = atom->num_angle;
-      int **angle_type = atom->angle_type;
-      tagint **angle_atom1 = atom->angle_atom1;
-      tagint **angle_atom2 = atom->angle_atom2;
-      tagint **angle_atom3 = atom->angle_atom3;
-
-      for (int i = 0; i < update_num_mega; i++) {
-        rxnID = update_mega_glove[0][i];
-        twomol = atom->molecules[reacted_mol[rxnID]];
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              delta_angle -= num_angle[atom->map(update_mega_glove[jj+1][i])];
-              num_angle[atom->map(update_mega_glove[jj+1][i])] = 0;
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = num_angle[atom->map(update_mega_glove[jj+1][i])]-1; p > -1; p--) {
-                for (int n = 0; n < twomol->natoms; n++) {
-                  int nn = equivalences[n][1][rxnID]-1;
-                  if (n!=j && landlocked_atoms[n][rxnID] == 1 &&
-                      (angle_atom1[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       angle_atom2[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       angle_atom3[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i])) {
-                    for (int m = p; m < num_angle[atom->map(update_mega_glove[jj+1][i])]-1; m++) {
-                      angle_type[atom->map(update_mega_glove[jj+1][i])][m] = angle_type[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      angle_atom1[atom->map(update_mega_glove[jj+1][i])][m] = angle_atom1[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      angle_atom2[atom->map(update_mega_glove[jj+1][i])][m] = angle_atom2[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      angle_atom3[atom->map(update_mega_glove[jj+1][i])][m] = angle_atom3[atom->map(update_mega_glove[jj+1][i])][m+1];
-                    }
-                    num_angle[atom->map(update_mega_glove[jj+1][i])]--;
-                    delta_angle--;
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-        // now let's add the new angle info.
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              num_angle[atom->map(update_mega_glove[jj+1][i])] = twomol->num_angle[j];
-              delta_angle += twomol->num_angle[j];
-              for (int p = 0; p < twomol->num_angle[j]; p++) {
-                angle_type[atom->map(update_mega_glove[jj+1][i])][p] = twomol->angle_type[j][p];
-                angle_atom1[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->angle_atom1[j][p]-1][1][rxnID]][i];
-                angle_atom2[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->angle_atom2[j][p]-1][1][rxnID]][i];
-                angle_atom3[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->angle_atom3[j][p]-1][1][rxnID]][i];
-              }
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = 0; p < twomol->num_angle[j]; p++) {
-                if (landlocked_atoms[twomol->angle_atom1[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->angle_atom2[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->angle_atom3[j][p]-1][rxnID] == 1) {
-                  insert_num = num_angle[atom->map(update_mega_glove[jj+1][i])];
-                  angle_type[atom->map(update_mega_glove[jj+1][i])][insert_num] = twomol->angle_type[j][p];
-                  angle_atom1[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->angle_atom1[j][p]-1][1][rxnID]][i];
-                  angle_atom2[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->angle_atom2[j][p]-1][1][rxnID]][i];
-                  angle_atom3[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->angle_atom3[j][p]-1][1][rxnID]][i];
-                  num_angle[atom->map(update_mega_glove[jj+1][i])]++;
-                  if (num_angle[atom->map(update_mega_glove[jj+1][i])] > atom->angle_per_atom)
-                    error->one(FLERR,"Bond/react topology/atom exceed system topology/atom");
-                  delta_angle++;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Dihedrals! first let's delete all dihedral info for landlocked atoms
-    if (force->dihedral && twomol->dihedralflag) {
-      int *num_dihedral = atom->num_dihedral;
-      int **dihedral_type = atom->dihedral_type;
-      tagint **dihedral_atom1 = atom->dihedral_atom1;
-      tagint **dihedral_atom2 = atom->dihedral_atom2;
-      tagint **dihedral_atom3 = atom->dihedral_atom3;
-      tagint **dihedral_atom4 = atom->dihedral_atom4;
-
-      for (int i = 0; i < update_num_mega; i++) {
-        rxnID = update_mega_glove[0][i];
-        twomol = atom->molecules[reacted_mol[rxnID]];
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              delta_dihed -= num_dihedral[atom->map(update_mega_glove[jj+1][i])];
-              num_dihedral[atom->map(update_mega_glove[jj+1][i])] = 0;
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = num_dihedral[atom->map(update_mega_glove[jj+1][i])]-1; p > -1; p--) {
-                for (int n = 0; n < twomol->natoms; n++) {
-                  int nn = equivalences[n][1][rxnID]-1;
-                  if (n!=j && landlocked_atoms[n][rxnID] == 1 &&
-                      (dihedral_atom1[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       dihedral_atom2[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       dihedral_atom3[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       dihedral_atom4[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i])) {
-                    for (int m = p; m < num_dihedral[atom->map(update_mega_glove[jj+1][i])]-1; m++) {
-                      dihedral_type[atom->map(update_mega_glove[jj+1][i])][m] = dihedral_type[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      dihedral_atom1[atom->map(update_mega_glove[jj+1][i])][m] = dihedral_atom1[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      dihedral_atom2[atom->map(update_mega_glove[jj+1][i])][m] = dihedral_atom2[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      dihedral_atom3[atom->map(update_mega_glove[jj+1][i])][m] = dihedral_atom3[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      dihedral_atom4[atom->map(update_mega_glove[jj+1][i])][m] = dihedral_atom4[atom->map(update_mega_glove[jj+1][i])][m+1];
-                    }
-                    num_dihedral[atom->map(update_mega_glove[jj+1][i])]--;
-                    delta_dihed--;
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-        // now let's add new dihedral info
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              num_dihedral[atom->map(update_mega_glove[jj+1][i])] = twomol->num_dihedral[j];
-              delta_dihed += twomol->num_dihedral[j];
-              for (int p = 0; p < twomol->num_dihedral[j]; p++) {
-                dihedral_type[atom->map(update_mega_glove[jj+1][i])][p] = twomol->dihedral_type[j][p];
-                dihedral_atom1[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->dihedral_atom1[j][p]-1][1][rxnID]][i];
-                dihedral_atom2[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->dihedral_atom2[j][p]-1][1][rxnID]][i];
-                dihedral_atom3[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->dihedral_atom3[j][p]-1][1][rxnID]][i];
-                dihedral_atom4[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->dihedral_atom4[j][p]-1][1][rxnID]][i];
-              }
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = 0; p < twomol->num_dihedral[j]; p++) {
-                if (landlocked_atoms[twomol->dihedral_atom1[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->dihedral_atom2[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->dihedral_atom3[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->dihedral_atom4[j][p]-1][rxnID] == 1) {
-                  insert_num = num_dihedral[atom->map(update_mega_glove[jj+1][i])];
-                  dihedral_type[atom->map(update_mega_glove[jj+1][i])][insert_num] = twomol->dihedral_type[j][p];
-                  dihedral_atom1[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->dihedral_atom1[j][p]-1][1][rxnID]][i];
-                  dihedral_atom2[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->dihedral_atom2[j][p]-1][1][rxnID]][i];
-                  dihedral_atom3[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->dihedral_atom3[j][p]-1][1][rxnID]][i];
-                  dihedral_atom4[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->dihedral_atom4[j][p]-1][1][rxnID]][i];
-                  num_dihedral[atom->map(update_mega_glove[jj+1][i])]++;
-                  if (num_dihedral[atom->map(update_mega_glove[jj+1][i])] > atom->dihedral_per_atom)
-                    error->one(FLERR,"Bond/react topology/atom exceed system topology/atom");
-                  delta_dihed++;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // finally IMPROPERS!!!! first let's delete all improper info for landlocked atoms
-    if (force->improper && twomol->improperflag) {
-      int *num_improper = atom->num_improper;
-      int **improper_type = atom->improper_type;
-      tagint **improper_atom1 = atom->improper_atom1;
-      tagint **improper_atom2 = atom->improper_atom2;
-      tagint **improper_atom3 = atom->improper_atom3;
-      tagint **improper_atom4 = atom->improper_atom4;
-
-      for (int i = 0; i < update_num_mega; i++) {
-        rxnID = update_mega_glove[0][i];
-        twomol = atom->molecules[reacted_mol[rxnID]];
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              delta_imprp -= num_improper[atom->map(update_mega_glove[jj+1][i])];
-              num_improper[atom->map(update_mega_glove[jj+1][i])] = 0;
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = num_improper[atom->map(update_mega_glove[jj+1][i])]-1; p > -1; p--) {
-                for (int n = 0; n < twomol->natoms; n++) {
-                  int nn = equivalences[n][1][rxnID]-1;
-                  if (n!=j && landlocked_atoms[n][rxnID] == 1 &&
-                      (improper_atom1[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       improper_atom2[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       improper_atom3[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i] ||
-                       improper_atom4[atom->map(update_mega_glove[jj+1][i])][p] == update_mega_glove[nn+1][i])) {
-                    for (int m = p; m < num_improper[atom->map(update_mega_glove[jj+1][i])]-1; m++) {
-                      improper_type[atom->map(update_mega_glove[jj+1][i])][m] = improper_type[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      improper_atom1[atom->map(update_mega_glove[jj+1][i])][m] = improper_atom1[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      improper_atom2[atom->map(update_mega_glove[jj+1][i])][m] = improper_atom2[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      improper_atom3[atom->map(update_mega_glove[jj+1][i])][m] = improper_atom3[atom->map(update_mega_glove[jj+1][i])][m+1];
-                      improper_atom4[atom->map(update_mega_glove[jj+1][i])][m] = improper_atom4[atom->map(update_mega_glove[jj+1][i])][m+1];
-                    }
-                    num_improper[atom->map(update_mega_glove[jj+1][i])]--;
-                    delta_imprp--;
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-        // now let's add new improper info
-        for (int j = 0; j < twomol->natoms; j++) {
-          int jj = equivalences[j][1][rxnID]-1;
-          if (atom->map(update_mega_glove[jj+1][i]) < nlocal && atom->map(update_mega_glove[jj+1][i]) >= 0) {
-            if (landlocked_atoms[j][rxnID] == 1) {
-              num_improper[atom->map(update_mega_glove[jj+1][i])] = twomol->num_improper[j];
-              delta_imprp += twomol->num_improper[j];
-              for (int p = 0; p < twomol->num_improper[j]; p++) {
-                improper_type[atom->map(update_mega_glove[jj+1][i])][p] = twomol->improper_type[j][p];
-                improper_atom1[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->improper_atom1[j][p]-1][1][rxnID]][i];
-                improper_atom2[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->improper_atom2[j][p]-1][1][rxnID]][i];
-                improper_atom3[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->improper_atom3[j][p]-1][1][rxnID]][i];
-                improper_atom4[atom->map(update_mega_glove[jj+1][i])][p] = update_mega_glove[equivalences[twomol->improper_atom4[j][p]-1][1][rxnID]][i];
-              }
-            }
-            if (landlocked_atoms[j][rxnID] == 0) {
-              for (int p = 0; p < twomol->num_improper[j]; p++) {
-                if (landlocked_atoms[twomol->improper_atom1[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->improper_atom2[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->improper_atom3[j][p]-1][rxnID] == 1 ||
-                    landlocked_atoms[twomol->improper_atom4[j][p]-1][rxnID] == 1) {
-                  insert_num = num_improper[atom->map(update_mega_glove[jj+1][i])];
-                  improper_type[atom->map(update_mega_glove[jj+1][i])][insert_num] = twomol->improper_type[j][p];
-                  improper_atom1[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->improper_atom1[j][p]-1][1][rxnID]][i];
-                  improper_atom2[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->improper_atom2[j][p]-1][1][rxnID]][i];
-                  improper_atom3[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->improper_atom3[j][p]-1][1][rxnID]][i];
-                  improper_atom4[atom->map(update_mega_glove[jj+1][i])][insert_num] = update_mega_glove[equivalences[twomol->improper_atom4[j][p]-1][1][rxnID]][i];
-                  num_improper[atom->map(update_mega_glove[jj+1][i])]++;
-                  if (num_improper[atom->map(update_mega_glove[jj+1][i])] > atom->improper_per_atom)
-                    error->one(FLERR,"Bond/react topology/atom exceed system topology/atom");
-                  delta_imprp++;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-  }
-
-  memory->destroy(update_mega_glove);
-
-  // delete atoms. taken from fix_evaporate. but don't think it needs to be in pre_exchange
-  // loop in reverse order to avoid copying marked atoms
-  ndel = ndelone = 0;
-  for (int i = atom->nlocal-1; i >= 0; i--) {
-    if (mark[i] == 1) {
-      avec->copy(atom->nlocal-1,i,1);
-      atom->nlocal--;
-      ndelone++;
-
-      if (atom->avec->bonds_allow) {
-        if (force->newton_bond) delta_bonds += atom->num_bond[i];
-        else {
-          for (int j = 0; j < atom->num_bond[i]; j++) {
-            if (tag[i] < atom->bond_atom[i][j]) delta_bonds++;
-          }
-        }
-      }
-      if (atom->avec->angles_allow) {
-        if (force->newton_bond) delta_angle += atom->num_angle[i];
-        else {
-          for (int j = 0; j < atom->num_angle[i]; j++) {
-            int m = atom->map(atom->angle_atom2[i][j]);
-            if (m >= 0 && m < nlocal) delta_angle++;
-          }
-        }
-      }
-      if (atom->avec->dihedrals_allow) {
-        if (force->newton_bond) delta_dihed += atom->num_dihedral[i];
-        else {
-          for (int j = 0; j < atom->num_dihedral[i]; j++) {
-            int m = atom->map(atom->dihedral_atom2[i][j]);
-            if (m >= 0 && m < nlocal) delta_dihed++;
-          }
-        }
-      }
-      if (atom->avec->impropers_allow) {
-        if (force->newton_bond) delta_imprp += atom->num_improper[i];
-        else {
-          for (int j = 0; j < atom->num_improper[i]; j++) {
-            int m = atom->map(atom->improper_atom2[i][j]);
-            if (m >= 0 && m < nlocal) delta_imprp++;
-          }
-        }
-      }
-    }
-  }
-  memory->destroy(mark);
-
-  MPI_Allreduce(&ndelone,&ndel,1,MPI_INT,MPI_SUM,world);
-
-  atom->natoms -= ndel;
-  // done deleting atoms
-
-  // reset mol ids
-  if (reset_mol_ids_flag) reset_mol_ids->reset();
-
-  // something to think about: this could done much more concisely if
-  // all atom-level info (bond,angles, etc...) were kinda inherited from a common data struct --JG
-
-  int Tdelta_bonds;
-  MPI_Allreduce(&delta_bonds,&Tdelta_bonds,1,MPI_INT,MPI_SUM,world);
-  atom->nbonds += Tdelta_bonds;
-
-  int Tdelta_angle;
-  MPI_Allreduce(&delta_angle,&Tdelta_angle,1,MPI_INT,MPI_SUM,world);
-  atom->nangles += Tdelta_angle;
-
-  int Tdelta_dihed;
-  MPI_Allreduce(&delta_dihed,&Tdelta_dihed,1,MPI_INT,MPI_SUM,world);
-  atom->ndihedrals += Tdelta_dihed;
-
-  int Tdelta_imprp;
-  MPI_Allreduce(&delta_imprp,&Tdelta_imprp,1,MPI_INT,MPI_SUM,world);
-  atom->nimpropers += Tdelta_imprp;
-
-  if (ndel && (atom->map_style != Atom::MAP_NONE)) {
-    atom->nghost = 0;
-    atom->map_init();
-    atom->map_set();
-  }
-}
-
-/* ----------------------------------------------------------------------
-insert created atoms
-------------------------------------------------------------------------- */
-
-int FixBondReact::insert_atoms(tagint **my_mega_glove, int iupdate)
-{
-  // inserting atoms based off fix_deposit->pre_exchange
-  int flag;
-  imageint *imageflags;
-  double **coords,lamda[3],rotmat[3][3];
-  double *newcoord;
-  double **v = atom->v;
-  double t,delx,dely,delz,rsq;
-
-  memory->create(coords,twomol->natoms,3,"bond/react:coords");
-  memory->create(imageflags,twomol->natoms,"bond/react:imageflags");
-
-  double *sublo,*subhi;
-  if (domain->triclinic == 0) {
-    sublo = domain->sublo;
-    subhi = domain->subhi;
-  } else {
-    sublo = domain->sublo_lamda;
-    subhi = domain->subhi_lamda;
-  }
-
-  // find current max atom and molecule IDs
-  tagint *tag = atom->tag;
-  double **x = atom->x;
-  tagint *molecule = atom->molecule;
-  int nlocal = atom->nlocal;
-
-  tagint maxtag_all,maxmol_all;
-  tagint max = 0;
-  for (int i = 0; i < nlocal; i++) max = MAX(max,tag[i]);
-  MPI_Allreduce(&max,&maxtag_all,1,MPI_LMP_TAGINT,MPI_MAX,world);
-
-  max = 0;
-  for (int i = 0; i < nlocal; i++) max = MAX(max,molecule[i]);
-  MPI_Allreduce(&max,&maxmol_all,1,MPI_LMP_TAGINT,MPI_MAX,world);
-
-  int dimension = domain->dimension;
-
-  // only proc that owns reacting atom (use ibonding),
-  // fits post-reaction template to reaction site, for creating atoms
-  int n2superpose = 0;
-  for (int j = 0; j < twomol->natoms; j++) {
-    if (modify_create_fragid[rxnID] >= 0)
-      if (!twomol->fragmentmask[modify_create_fragid[rxnID]][j]) continue;
-    if (!create_atoms[j][rxnID] && !delete_atoms[equivalences[j][1][rxnID]][rxnID])
-      n2superpose++;
-  }
-
-  int ifit = atom->map(my_mega_glove[ibonding[rxnID]+1][iupdate]); // use this local ID to find fitting proc
-  Superpose3D<double, double **> superposer(n2superpose);
-  int fitroot = 0;
-  if (ifit >= 0 && ifit < atom->nlocal) {
-    fitroot = me;
-
-    // get 'temperatere' averaged over site, used for created atoms' vels
-    t = get_temperature(my_mega_glove,1,iupdate);
-
-    double **xfrozen; // coordinates for the "frozen" target molecule
-    double **xmobile; // coordinates for the "mobile" molecule
-    memory->create(xfrozen,n2superpose,3,"bond/react:xfrozen");
-    memory->create(xmobile,n2superpose,3,"bond/react:xmobile");
-    tagint iatom;
-    tagint iref = -1; // choose first atom as reference
-    int fit_incr = 0;
-    for (int j = 0; j < twomol->natoms; j++) {
-      if (modify_create_fragid[rxnID] >= 0)
-        if (!twomol->fragmentmask[modify_create_fragid[rxnID]][j]) continue;
-      int ipre = equivalences[j][1][rxnID]-1; // equiv pre-reaction template index
-      if (!create_atoms[j][rxnID] && !delete_atoms[ipre][rxnID]) {
-        if (atom->map(my_mega_glove[ipre+1][iupdate]) < 0) {
-          printf("WARNING: eligible atoms skipped for created-atoms fit on %d\n",me);
-          continue;
-        }
-        iatom = atom->map(my_mega_glove[ipre+1][iupdate]);
-        if (iref == -1) iref = iatom;
-        iatom = domain->closest_image(iref,iatom);
-        for (int k = 0; k < 3; k++) {
-          xfrozen[fit_incr][k] = x[iatom][k];
-          xmobile[fit_incr][k] = twomol->x[j][k];
-        }
-        fit_incr++;
-      }
-    }
-    superposer.Superpose(xfrozen, xmobile);
-    for (int i = 0; i < 3; i++)
-      for (int j = 0; j < 3; j++)
-        rotmat[i][j] = superposer.R[i][j];
-    memory->destroy(xfrozen);
-    memory->destroy(xmobile);
-  }
-  MPI_Allreduce(MPI_IN_PLACE,&fitroot,1,MPI_INT,MPI_SUM,world);
-  MPI_Bcast(&t,1,MPI_DOUBLE,fitroot,world);
-
-  // get coordinates and image flags
-  for (int m = 0; m < twomol->natoms; m++) {
-    if (create_atoms[m][rxnID] == 1) {
-      // apply optimal rotation/translation for created atom coords
-      // also map coords back into simulation box
-      if (fitroot == me) {
-        MathExtra::matvec(rotmat,twomol->x[m],coords[m]);
-        for (int i = 0; i < 3; i++) coords[m][i] += superposer.T[i];
-        imageflags[m] = atom->image[ifit];
-        domain->remap(coords[m],imageflags[m]);
-      }
-      MPI_Bcast(&imageflags[m],1,MPI_LMP_IMAGEINT,fitroot,world);
-      MPI_Bcast(coords[m],3,MPI_DOUBLE,fitroot,world);
-    }
-  }
-
-  // check distance between any existing atom and inserted atom
-  // if less than near, abort
-  if (overlapsq[rxnID] > 0) {
-    int abortflag = 0;
-    for (int m = 0; m < twomol->natoms; m++) {
-      if (create_atoms[m][rxnID] == 1) {
-        for (int i = 0; i < nlocal; i++) {
-          delx = coords[m][0] - x[i][0];
-          dely = coords[m][1] - x[i][1];
-          delz = coords[m][2] - x[i][2];
-          domain->minimum_image(delx,dely,delz);
-          rsq = delx*delx + dely*dely + delz*delz;
-          if (rsq < overlapsq[rxnID]) {
-            abortflag = 1;
-            break;
-          }
-        }
-        if (abortflag) break;
-      }
-    }
-    MPI_Allreduce(MPI_IN_PLACE,&abortflag,1,MPI_INT,MPI_MAX,world);
-    if (abortflag) {
-      memory->destroy(coords);
-      memory->destroy(imageflags);
-      return 0;
-    }
-  }
-
-  // clear ghost count and any ghost bonus data internal to AtomVec
-  // same logic as beginning of Comm::exchange()
-  // do it now b/c inserting atoms will overwrite ghost atoms
-  atom->nghost = 0;
-  atom->avec->clear_bonus();
-
-  // check if new atoms are in my sub-box or above it if I am highest proc
-  // if so, add atom to my list via create_atom()
-  // initialize additional info about the atoms
-  // set group mask to "all" plus fix group
-  int preID; // new equivalences index
-  int add_count = 0;
-  for (int m = 0; m < twomol->natoms; m++) {
-    if (create_atoms[m][rxnID] == 1) {
-      // increase atom count
-      add_count++;
-      preID = onemol->natoms+add_count;
-
-      if (domain->triclinic) {
-        domain->x2lamda(coords[m],lamda);
-        newcoord = lamda;
-      } else newcoord = coords[m];
-
-      flag = 0;
-      if (newcoord[0] >= sublo[0] && newcoord[0] < subhi[0] &&
-          newcoord[1] >= sublo[1] && newcoord[1] < subhi[1] &&
-          newcoord[2] >= sublo[2] && newcoord[2] < subhi[2]) flag = 1;
-      else if (dimension == 3 && newcoord[2] >= domain->boxhi[2]) {
-        if (comm->layout != Comm::LAYOUT_TILED) {
-          if (comm->myloc[2] == comm->procgrid[2]-1 &&
-              newcoord[0] >= sublo[0] && newcoord[0] < subhi[0] &&
-              newcoord[1] >= sublo[1] && newcoord[1] < subhi[1]) flag = 1;
+        int64_t indptr_value = row_matrix_offsets[row_start_index] + row_sizes[row_start_index];
+        if (is_indptr_int32) {
+          (reinterpret_cast<int32_t*>(*out_indptr))[indptr_loop_index] = static_cast<int32_t>(indptr_value);
         } else {
-          if (comm->mysplit[2][1] == 1.0 &&
-              newcoord[0] >= sublo[0] && newcoord[0] < subhi[0] &&
-              newcoord[1] >= sublo[1] && newcoord[1] < subhi[1]) flag = 1;
+          (reinterpret_cast<int64_t*>(*out_indptr))[indptr_loop_index] = indptr_value;
         }
-      } else if (dimension == 2 && newcoord[1] >= domain->boxhi[1]) {
-        if (comm->layout != Comm::LAYOUT_TILED) {
-          if (comm->myloc[1] == comm->procgrid[1]-1 &&
-              newcoord[0] >= sublo[0] && newcoord[0] < subhi[0]) flag = 1;
-        } else {
-          if (comm->mysplit[1][1] == 1.0 &&
-              newcoord[0] >= sublo[0] && newcoord[0] < subhi[0]) flag = 1;
+        OMP_LOOP_EX_END();
+      }
+      OMP_THROW_EX();
+      indptr_index += static_cast<int64_t>(agg.size());
+    }
+    out_len[0] = elements_size;
+    out_len[1] = indptr_size;
+  }
+
+  void PredictSparseCSC(int num_iteration, int predict_type, int64_t nrow, int ncol,
+                        std::function<std::vector<std::pair<int, double>>(int64_t row_idx)> get_row_fun,
+                        const Config& config,
+                        int64_t* out_len, void** out_col_ptr, int col_ptr_type,
+                        int32_t** out_indices, void** out_data, int data_type) const {
+    SHARED_LOCK(mutex_);
+    // Get the number of trees per iteration (for multiclass scenario we output multiple sparse matrices)
+    int num_matrices = boosting_->NumModelPerIteration();
+    auto predictor = CreatePredictor(num_iteration, predict_type, ncol, config);
+    auto pred_sparse_fun = predictor.GetPredictSparseFunction();
+    bool is_col_ptr_int32 = false;
+    bool is_data_float32 = false;
+    int num_output_cols = ncol + 1;
+    int col_ptr_size = (num_output_cols + 1) * num_matrices;
+    if (col_ptr_type == C_API_DTYPE_INT32) {
+      *out_col_ptr = new int32_t[col_ptr_size];
+      is_col_ptr_int32 = true;
+    } else if (col_ptr_type == C_API_DTYPE_INT64) {
+      *out_col_ptr = new int64_t[col_ptr_size];
+    } else {
+      Log::Fatal("Unknown col_ptr type in PredictSparseCSC");
+      return;
+    }
+    // aggregated per row feature contribution results
+    std::vector<std::vector<std::unordered_map<int, double>>> agg(nrow);
+    int64_t elements_size = 0;
+    PredictSparse(num_iteration, predict_type, nrow, ncol, get_row_fun, config, &elements_size, &agg,
+                  out_indices, out_data, data_type, &is_data_float32, num_matrices);
+    // calculate number of elements per column to construct
+    // the CSC matrix with random access
+    std::vector<std::vector<int64_t>> column_sizes(num_matrices);
+    for (int m = 0; m < num_matrices; ++m) {
+      column_sizes[m] = std::vector<int64_t>(num_output_cols, 0);
+      for (int64_t i = 0; i < static_cast<int64_t>(agg.size()); ++i) {
+        auto row_vector = agg[i];
+        for (auto it = row_vector[m].begin(); it != row_vector[m].end(); ++it) {
+          column_sizes[m][it->first] += 1;
         }
       }
-
-      int root = 0;
-      if (flag) {
-        root = me;
-
-        atom->avec->create_atom(twomol->type[m],coords[m]);
-        int n = atom->nlocal - 1;
-        atom->tag[n] = maxtag_all + add_count;
-
-        // locally update mega_glove
-        my_mega_glove[preID][iupdate] = atom->tag[n];
-
-        if (atom->molecule_flag) {
-          if (twomol->moleculeflag) {
-            atom->molecule[n] = maxmol_all + twomol->molecule[m];
+    }
+    // keep track of column counts
+    std::vector<std::vector<int64_t>> column_counts(num_matrices);
+    // keep track of beginning index for each column
+    std::vector<std::vector<int64_t>> column_start_indices(num_matrices);
+    // keep track of beginning index for each matrix
+    std::vector<int64_t> matrix_start_indices(num_matrices, 0);
+    int col_ptr_index = 0;
+    for (int m = 0; m < num_matrices; ++m) {
+      int64_t col_ptr_value = 0;
+      column_start_indices[m] = std::vector<int64_t>(num_output_cols, 0);
+      column_counts[m] = std::vector<int64_t>(num_output_cols, 0);
+      if (is_col_ptr_int32) {
+        (reinterpret_cast<int32_t*>(*out_col_ptr))[col_ptr_index] = static_cast<int32_t>(col_ptr_value);
+      } else {
+        (reinterpret_cast<int64_t*>(*out_col_ptr))[col_ptr_index] = col_ptr_value;
+      }
+      col_ptr_index++;
+      for (int64_t i = 1; i < static_cast<int64_t>(column_sizes[m].size()); ++i) {
+        column_start_indices[m][i] = column_sizes[m][i - 1] + column_start_indices[m][i - 1];
+        if (is_col_ptr_int32) {
+          (reinterpret_cast<int32_t*>(*out_col_ptr))[col_ptr_index] = static_cast<int32_t>(column_start_indices[m][i]);
+        } else {
+          (reinterpret_cast<int64_t*>(*out_col_ptr))[col_ptr_index] = column_start_indices[m][i];
+        }
+        col_ptr_index++;
+      }
+      int64_t last_elem_index = static_cast<int64_t>(column_sizes[m].size()) - 1;
+      int64_t last_column_start_index = column_start_indices[m][last_elem_index];
+      int64_t last_column_size = column_sizes[m][last_elem_index];
+      if (is_col_ptr_int32) {
+        (reinterpret_cast<int32_t*>(*out_col_ptr))[col_ptr_index] = static_cast<int32_t>(last_column_start_index + last_column_size);
+      } else {
+        (reinterpret_cast<int64_t*>(*out_col_ptr))[col_ptr_index] = last_column_start_index + last_column_size;
+      }
+      if (m != 0) {
+        matrix_start_indices[m] = matrix_start_indices[m - 1] +
+          last_column_start_index +
+          last_column_size;
+      }
+    }
+    for (int m = 0; m < num_matrices; ++m) {
+      for (int64_t i = 0; i < static_cast<int64_t>(agg.size()); ++i) {
+        auto row_vector = agg[i];
+        for (auto it = row_vector[m].begin(); it != row_vector[m].end(); ++it) {
+          int64_t col_idx = it->first;
+          int64_t element_index = column_start_indices[m][col_idx] +
+            matrix_start_indices[m] +
+            column_counts[m][col_idx];
+          // store the row index
+          (*out_indices)[element_index] = static_cast<int32_t>(i);
+          // update column count
+          column_counts[m][col_idx]++;
+          if (is_data_float32) {
+            (reinterpret_cast<float*>(*out_data))[element_index] = static_cast<float>(it->second);
           } else {
-            atom->molecule[n] = maxmol_all + 1;
+            (reinterpret_cast<double*>(*out_data))[element_index] = it->second;
           }
         }
-
-        atom->mask[n] = 1 | groupbit;
-        atom->image[n] = imageflags[m];
-
-        // guess a somewhat reasonable initial velocity based on reaction site
-        // further control is possible using bond_react_MASTER_group
-        // compute |velocity| corresponding to a given temperature t, using specific atom's mass
-        double vtnorm = sqrt(t / (force->mvv2e / (dimension * force->boltz)) / atom->mass[twomol->type[m]]);
-        v[n][0] = random[rxnID]->uniform();
-        v[n][1] = random[rxnID]->uniform();
-        v[n][2] = random[rxnID]->uniform();
-        double vnorm = sqrt(v[n][0]*v[n][0] + v[n][1]*v[n][1] + v[n][2]*v[n][2]);
-        v[n][0] = v[n][0]/vnorm*vtnorm;
-        v[n][1] = v[n][1]/vnorm*vtnorm;
-        v[n][2] = v[n][2]/vnorm*vtnorm;
-        modify->create_attribute(n);
-
-        // initialize group statuses
-        // why aren't these more global...
-        int flag;
-        int index1 = atom->find_custom("limit_tags",flag);
-        int *i_limit_tags = atom->ivector[index1];
-
-        int *i_statted_tags;
-        if (stabilization_flag == 1) {
-          int index2 = atom->find_custom(statted_id,flag);
-          i_statted_tags = atom->ivector[index2];
-        }
-
-        int index3 = atom->find_custom("react_tags",flag);
-        int *i_react_tags = atom->ivector[index3];
-
-        i_limit_tags[n] = update->ntimestep + 1;
-        if (stabilization_flag == 1) i_statted_tags[n] = 0;
-        i_react_tags[n] = rxnID;
-      }
-      // globally update mega_glove and equivalences
-      MPI_Allreduce(MPI_IN_PLACE,&root,1,MPI_INT,MPI_SUM,world);
-      MPI_Bcast(&my_mega_glove[preID][iupdate],1,MPI_LMP_TAGINT,root,world);
-      equivalences[m][0][rxnID] = m+1;
-      equivalences[m][1][rxnID] = preID;
-      reverse_equiv[preID-1][0][rxnID] = preID;
-      reverse_equiv[preID-1][1][rxnID] = m+1;
-    }
-  }
-
-  // reset global natoms here
-  // reset atom map elsewhere, after all calls to 'insert_atoms'
-  atom->natoms += add_count;
-  if (atom->natoms < 0)
-    error->all(FLERR,"Too many total atoms");
-  maxtag_all += add_count;
-  if (maxtag_all >= MAXTAGINT)
-    error->all(FLERR,"New atom IDs exceed maximum allowed ID");
-  // atom creation successful
-  memory->destroy(coords);
-  memory->destroy(imageflags);
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
-read superimpose file
-------------------------------------------------------------------------- */
-
-void FixBondReact::read(int myrxn)
-{
-  char line[MAXLINE],keyword[MAXLINE];
-  char *eof,*ptr;
-
-  // skip 1st line of file
-  eof = fgets(line,MAXLINE,fp);
-  if (eof == nullptr) error->one(FLERR,"Bond/react: Unexpected end of superimpose file");
-
-  // read header lines
-  // skip blank lines or lines that start with "#"
-  // stop when read an unrecognized line
-
-  ncreate = 0;
-  while (1) {
-
-    readline(line);
-
-    // trim anything from '#' onward
-    // if line is blank, continue
-
-    if ((ptr = strchr(line,'#'))) *ptr = '\0';
-    if (strspn(line," \t\n\r") == strlen(line)) continue;
-
-    if (strstr(line,"edgeIDs")) sscanf(line,"%d",&nedge);
-    else if (strstr(line,"equivalences")) {
-      sscanf(line,"%d",&nequivalent);
-      if (nequivalent != onemol->natoms)
-        error->one(FLERR,"Bond/react: Number of equivalences in map file must "
-                   "equal number of atoms in reaction templates");
-    }
-    else if (strstr(line,"deleteIDs")) sscanf(line,"%d",&ndelete);
-    else if (strstr(line,"createIDs")) sscanf(line,"%d",&ncreate);
-    else if (strstr(line,"chiralIDs")) sscanf(line,"%d",&nchiral);
-    else if (strstr(line,"constraints")) {
-      sscanf(line,"%d",&nconstraints[myrxn]);
-      if (maxnconstraints < nconstraints[myrxn]) maxnconstraints = nconstraints[myrxn];
-      memory->grow(constraints,maxnconstraints,nreacts,"bond/react:constraints");
-    } else break;
-  }
-
-  // grab keyword and skip next line
-
-  parse_keyword(0,line,keyword);
-  readline(line);
-
-  // loop over sections of superimpose file
-
-  int equivflag = 0, bondflag = 0;
-  while (strlen(keyword)) {
-    if (strcmp(keyword,"InitiatorIDs") == 0 || strcmp(keyword,"BondingIDs") == 0) {
-      if (strcmp(keyword,"BondingIDs") == 0)
-        if (me == 0) error->warning(FLERR,"Bond/react: The BondingIDs section title has been deprecated. Please use InitiatorIDs instead.");
-      bondflag = 1;
-      readline(line);
-      sscanf(line,"%d",&ibonding[myrxn]);
-      if (ibonding[myrxn] > onemol->natoms)
-        error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-      readline(line);
-      sscanf(line,"%d",&jbonding[myrxn]);
-      if (jbonding[myrxn] > onemol->natoms)
-        error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    } else if (strcmp(keyword,"EdgeIDs") == 0) {
-      EdgeIDs(line, myrxn);
-    } else if (strcmp(keyword,"Equivalences") == 0) {
-      equivflag = 1;
-      Equivalences(line, myrxn);
-    } else if (strcmp(keyword,"DeleteIDs") == 0) {
-      DeleteAtoms(line, myrxn);
-    } else if (strcmp(keyword,"CreateIDs") == 0) {
-      CreateAtoms(line, myrxn);
-    } else if (strcmp(keyword,"ChiralIDs") == 0) {
-      ChiralCenters(line, myrxn);
-    } else if (strcmp(keyword,"Constraints") == 0) {
-      ReadConstraints(line, myrxn);
-    } else error->one(FLERR,"Bond/react: Unknown section in map file");
-
-    parse_keyword(1,line,keyword);
-
-  }
-
-  // error check
-  if (bondflag == 0 || equivflag == 0)
-    error->all(FLERR,"Bond/react: Map file missing InitiatorIDs or Equivalences section\n");
-}
-
-void FixBondReact::EdgeIDs(char *line, int myrxn)
-{
-  // puts a 1 at edge(edgeID)
-
-  int tmp;
-  for (int i = 0; i < nedge; i++) {
-    readline(line);
-    sscanf(line,"%d",&tmp);
-    if (tmp > onemol->natoms)
-      error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    edge[tmp-1][myrxn] = 1;
-  }
-}
-
-void FixBondReact::Equivalences(char *line, int myrxn)
-{
-  int tmp1;
-  int tmp2;
-  for (int i = 0; i < nequivalent; i++) {
-    readline(line);
-    sscanf(line,"%d %d",&tmp1,&tmp2);
-    if (tmp1 > onemol->natoms || tmp2 > twomol->natoms)
-      error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    //equivalences is-> clmn 1: post-reacted, clmn 2: pre-reacted
-    equivalences[tmp2-1][0][myrxn] = tmp2;
-    equivalences[tmp2-1][1][myrxn] = tmp1;
-    //reverse_equiv is-> clmn 1: pre-reacted, clmn 2: post-reacted
-    reverse_equiv[tmp1-1][0][myrxn] = tmp1;
-    reverse_equiv[tmp1-1][1][myrxn] = tmp2;
-  }
-}
-
-void FixBondReact::DeleteAtoms(char *line, int myrxn)
-{
-  int tmp;
-  for (int i = 0; i < ndelete; i++) {
-    readline(line);
-    sscanf(line,"%d",&tmp);
-    if (tmp > onemol->natoms)
-      error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    delete_atoms[tmp-1][myrxn] = 1;
-  }
-}
-
-void FixBondReact::CreateAtoms(char *line, int myrxn)
-{
-  create_atoms_flag[myrxn] = 1;
-  int tmp;
-  for (int i = 0; i < ncreate; i++) {
-    readline(line);
-    sscanf(line,"%d",&tmp);
-    create_atoms[tmp-1][myrxn] = 1;
-  }
-}
-
-void FixBondReact::CustomCharges(int ifragment, int myrxn)
-{
-  for (int i = 0; i < onemol->natoms; i++)
-    if (onemol->fragmentmask[ifragment][i])
-      custom_charges[i][myrxn] = 1;
-    else
-      custom_charges[i][myrxn] = 0;
-}
-
-void FixBondReact::ChiralCenters(char *line, int myrxn)
-{
-  int tmp;
-  for (int i = 0; i < nchiral; i++) {
-    readline(line);
-    sscanf(line,"%d",&tmp);
-    if (tmp > onemol->natoms)
-      error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    chiral_atoms[tmp-1][0][myrxn] = 1;
-    if (onemol->xflag == 0)
-      error->one(FLERR,"Bond/react: Molecule template 'Coords' section required for chiralIDs keyword");
-    if ((int) onemol_nxspecial[tmp-1][0] != 4)
-      error->one(FLERR,"Bond/react: Chiral atoms must have exactly four first neighbors");
-    for (int j = 0; j < 4; j++) {
-      for (int k = j+1; k < 4; k++) {
-        if (onemol->type[onemol_xspecial[tmp-1][j]-1] ==
-            onemol->type[onemol_xspecial[tmp-1][k]-1])
-          error->one(FLERR,"Bond/react: First neighbors of chiral atoms must be of mutually different types");
       }
     }
-    // record order of atom types, and coords
-    double my4coords[12];
-    for (int j = 0; j < 4; j++) {
-      chiral_atoms[tmp-1][j+2][myrxn] = onemol->type[onemol_xspecial[tmp-1][j]-1];
-      for (int k = 0; k < 3; k++) {
-        my4coords[3*j+k] = onemol->x[onemol_xspecial[tmp-1][j]-1][k];
-      }
-    }
-    // get orientation
-    chiral_atoms[tmp-1][1][myrxn] = get_chirality(my4coords);
-  }
-}
-
-void FixBondReact::ReadConstraints(char *line, int myrxn)
-{
-  double tmp[MAXCONARGS];
-  char **strargs,*ptr,*lptr;
-  memory->create(strargs,MAXCONARGS,MAXLINE,"bond/react:strargs");
-  char *constraint_type = new char[MAXLINE];
-  strcpy(constraintstr[myrxn],"("); // string for boolean constraint logic
-  for (int i = 0; i < nconstraints[myrxn]; i++) {
-    readline(line);
-    // find left parentheses, add to constraintstr, and update line
-    for (int j = 0; j < strlen(line); j++) {
-      if (line[j] == '(') strcat(constraintstr[myrxn],"(");
-      if (isalpha(line[j])) {
-        line = line + j;
-        break;
-      }
-    }
-    // 'C' indicates where to sub in next constraint
-    strcat(constraintstr[myrxn],"C");
-    // special consideration for 'custom' constraint
-    // find final double quote, or skip two words
-    lptr = line;
-    if ((ptr = strrchr(lptr,'\"'))) lptr = ptr+1;
-    else {
-      while (lptr[0] != ' ') lptr++; // skip first 'word'
-      while (lptr[0] == ' ' || lptr[0] == '\t') lptr++; // skip blanks
-      while (lptr[0] != ' ') lptr++; // skip second 'word'
-    }
-    // find right parentheses
-    for (int j = 0; j < strlen(lptr); j++)
-      if (lptr[j] == ')') strcat(constraintstr[myrxn],")");
-    // find logic symbols, and trim line via ptr
-    if ((ptr = strstr(lptr,"&&"))) {
-      strcat(constraintstr[myrxn],"&&");
-      *ptr = '\0';
-    } else if ((ptr = strstr(lptr,"||"))) {
-      strcat(constraintstr[myrxn],"||");
-      *ptr = '\0';
-    } else if (i+1 < nconstraints[myrxn]) {
-      strcat(constraintstr[myrxn],"&&");
-    }
-    if ((ptr = strchr(lptr,')')))
-      *ptr = '\0';
-    sscanf(line,"%s",constraint_type);
-    if (strcmp(constraint_type,"distance") == 0) {
-      constraints[i][myrxn].type = DISTANCE;
-      sscanf(line,"%*s %s %s %lg %lg",strargs[0],strargs[1],&tmp[0],&tmp[1]);
-      readID(strargs[0], i, myrxn, 0);
-      readID(strargs[1], i, myrxn, 1);
-      // cutoffs
-      constraints[i][myrxn].par[0] = tmp[0]*tmp[0]; // using square of distance
-      constraints[i][myrxn].par[1] = tmp[1]*tmp[1];
-    } else if (strcmp(constraint_type,"angle") == 0) {
-      constraints[i][myrxn].type = ANGLE;
-      sscanf(line,"%*s %s %s %s %lg %lg",strargs[0],strargs[1],strargs[2],&tmp[0],&tmp[1]);
-      readID(strargs[0], i, myrxn, 0);
-      readID(strargs[1], i, myrxn, 1);
-      readID(strargs[2], i, myrxn, 2);
-      constraints[i][myrxn].par[0] = tmp[0]/180.0 * MY_PI;
-      constraints[i][myrxn].par[1] = tmp[1]/180.0 * MY_PI;
-    } else if (strcmp(constraint_type,"dihedral") == 0) {
-      constraints[i][myrxn].type = DIHEDRAL;
-      tmp[2] = 181.0; // impossible range
-      tmp[3] = 182.0;
-      sscanf(line,"%*s %s %s %s %s %lg %lg %lg %lg",strargs[0],strargs[1],
-             strargs[2],strargs[3],&tmp[0],&tmp[1],&tmp[2],&tmp[3]);
-      readID(strargs[0], i, myrxn, 0);
-      readID(strargs[1], i, myrxn, 1);
-      readID(strargs[2], i, myrxn, 2);
-      readID(strargs[3], i, myrxn, 3);
-      constraints[i][myrxn].par[0] = tmp[0]/180.0 * MY_PI;
-      constraints[i][myrxn].par[1] = tmp[1]/180.0 * MY_PI;
-      constraints[i][myrxn].par[2] = tmp[2]/180.0 * MY_PI;
-      constraints[i][myrxn].par[3] = tmp[3]/180.0 * MY_PI;
-    } else if (strcmp(constraint_type,"arrhenius") == 0) {
-      constraints[i][myrxn].type = ARRHENIUS;
-      constraints[i][myrxn].par[0] = narrhenius++;
-      sscanf(line,"%*s %lg %lg %lg %lg",&tmp[0],&tmp[1],&tmp[2],&tmp[3]);
-      constraints[i][myrxn].par[1] = tmp[0];
-      constraints[i][myrxn].par[2] = tmp[1];
-      constraints[i][myrxn].par[3] = tmp[2];
-      constraints[i][myrxn].par[4] = tmp[3];
-    } else if (strcmp(constraint_type,"rmsd") == 0) {
-      constraints[i][myrxn].type = RMSD;
-      strcpy(strargs[0],"0");
-      sscanf(line,"%*s %lg %s",&tmp[0],strargs[0]);
-      constraints[i][myrxn].par[0] = tmp[0]; // RMSDmax
-      constraints[i][myrxn].id[0] = -1; // optional molecule fragment
-      if (isalpha(strargs[0][0])) {
-        int ifragment = onemol->findfragment(strargs[0]);
-        if (ifragment < 0) error->one(FLERR,"Bond/react: Molecule fragment does not exist");
-        else constraints[i][myrxn].id[0] = ifragment;
-      }
-    } else
-      error->one(FLERR,"Bond/react: Illegal constraint type in 'Constraints' section of map file");
-      constraints[i][myrxn].type = CUSTOM;
-      strtok(line," \t\n\r\f");
-      constraints[i][myrxn].str = strtok(nullptr,"\"\t
-\r\f");
-    } else error->one(FLERR,"Bond/react: Illegal constraint type in 'Constraints' section of map file");
-  }
-  strcat(constraintstr[myrxn],")"); // close boolean constraint logic string
-  delete [] constraint_type;
-  memory->destroy(strargs);
-}
-
-/* ----------------------------------------------------------------------
-if ID starts with character, assume it is a pre-reaction molecule fragment ID
-otherwise, it is a pre-reaction atom ID
----------------------------------------------------------------------- */
-
-void FixBondReact::readID(char *strarg, int iconstr, int myrxn, int i)
-{
-  if (isalpha(strarg[0])) {
-    constraints[iconstr][myrxn].idtype[i] = FRAG; // fragment vs. atom ID flag
-    int ifragment = onemol->findfragment(strarg);
-    if (ifragment < 0) error->one(FLERR,"Bond/react: Molecule fragment does not exist");
-    constraints[iconstr][myrxn].id[i] = ifragment;
-  } else {
-    constraints[iconstr][myrxn].idtype[i] = ATOM; // fragment vs. atom ID flag
-    int iatom = atoi(strarg);
-    if (iatom > onemol->natoms) error->one(FLERR,"Bond/react: Invalid template atom ID in map file");
-    constraints[iconstr][myrxn].id[i] = iatom;
-  }
-}
-
-void FixBondReact::open(char *file)
-{
-  fp = fopen(file,"r");
-  if (fp == nullptr) {
-    char str[128];
-    snprintf(str,128,"Bond/react: Cannot open map file %s",file);
-    error->one(FLERR,str);
-  }
-}
-
-void FixBondReact::readline(char *line)
-{
-  int n;
-  if (me == 0) {
-    if (fgets(line,MAXLINE,fp) == nullptr) n = 0;
-    else n = strlen(line) + 1;
-  }
-  MPI_Bcast(&n,1,MPI_INT,0,world);
-  if (n == 0) error->all(FLERR,"Bond/react: Unexpected end of map file");
-  MPI_Bcast(line,n,MPI_CHAR,0,world);
-}
-
-void FixBondReact::parse_keyword(int flag, char *line, char *keyword)
-{
-  if (flag) {
-
-    // read upto non-blank line plus 1 following line
-    // eof is set to 1 if any read hits end-of-file
-
-    int eof = 0;
-    if (me == 0) {
-      if (fgets(line,MAXLINE,fp) == nullptr) eof = 1;
-      while (eof == 0 && strspn(line," \t\n\r") == strlen(line)) {
-        if (fgets(line,MAXLINE,fp) == nullptr) eof = 1;
-      }
-      if (fgets(keyword,MAXLINE,fp) == nullptr) eof = 1;
-    }
-
-    // if eof, set keyword empty and return
-
-    MPI_Bcast(&eof,1,MPI_INT,0,world);
-    if (eof) {
-      keyword[0] = '\0';
-      return;
-    }
-
-    // bcast keyword line to all procs
-
-    int n;
-    if (me == 0) n = strlen(line) + 1;
-    MPI_Bcast(&n,1,MPI_INT,0,world);
-    MPI_Bcast(line,n,MPI_CHAR,0,world);
+    out_len[0] = elements_size;
+    out_len[1] = col_ptr_size;
   }
 
-  // copy non-whitespace portion of line into keyword
-
-  int start = strspn(line," \t\n\r");
-  int stop = strlen(line) - 1;
-  while (line[stop] == ' ' || line[stop] == '\t'
-         || line[stop] == '\n' || line[stop] == '\r') stop--;
-  line[stop+1] = '\0';
-  strcpy(keyword,&line[start]);
-}
-
-
-void FixBondReact::skip_lines(int n, char *line)
-{
-  for (int i = 0; i < n; i++) readline(line);
-}
-
-int FixBondReact::parse(char *line, char **words, int max)
-{
-  char *ptr;
-
-  int nwords = 0;
-  words[nwords++] = strtok(line," \t\n\r\f");
-
-  while ((ptr = strtok(nullptr," \t\n\r\f"))) {
-    if (nwords < max) words[nwords] = ptr;
-    nwords++;
-  }
-
-  return nwords;
-}
-
-/* ---------------------------------------------------------------------- */
-
-double FixBondReact::compute_vector(int n)
-{
-  // now we print just the totals for each reaction instance
-  return (double) reaction_count_total[n];
-
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::post_integrate_respa(int ilevel, int /*iloop*/)
-{
-  if (ilevel == nlevels_respa-1) post_integrate();
-}
-
-/* ---------------------------------------------------------------------- */
-
-int FixBondReact::pack_forward_comm(int n, int *list, double *buf,
-                                    int /*pbc_flag*/, int * /*pbc*/)
-{
-  int i,j,k,m,ns;
-
-  m = 0;
-
-  if (commflag == 2) {
-    for (i = 0; i < n; i++) {
-      j = list[i];
-      buf[m++] = ubuf(partner[j]).d;
-    }
-    return m;
-  }
-
-  m = 0;
-  for (i = 0; i < n; i++) {
-    j = list[i];
-    buf[m++] = ubuf(finalpartner[j]).d;
-    ns = nxspecial[j][0];
-    buf[m++] = ubuf(ns).d;
-    for (k = 0; k < ns; k++)
-      buf[m++] = ubuf(xspecial[j][k]).d;
-  }
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::unpack_forward_comm(int n, int first, double *buf)
-{
-  int i,j,m,ns,last;
-
-  m = 0;
-  last = first + n;
-
-  if (commflag == 2) {
-    for (i = first; i < last; i++)
-      partner[i] = (tagint) ubuf(buf[m++]).i;
-  } else {
-    m = 0;
-    last = first + n;
-    for (i = first; i < last; i++) {
-      finalpartner[i] = (tagint) ubuf(buf[m++]).i;
-      ns = (int) ubuf(buf[m++]).i;
-      nxspecial[i][0] = ns;
-      for (j = 0; j < ns; j++)
-        xspecial[i][j] = (tagint) ubuf(buf[m++]).i;
-    }
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-int FixBondReact::pack_reverse_comm(int n, int first, double *buf)
-{
-  int i,m,last;
-
-  m = 0;
-  last = first + n;
-
-  for (i = first; i < last; i++) {
-    buf[m++] = ubuf(partner[i]).d;
-    if (closeneigh[rxnID] != 0)
-      buf[m++] = distsq[i][1];
-    else
-      buf[m++] = distsq[i][0];
-  }
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::unpack_reverse_comm(int n, int *list, double *buf)
-{
-  int i,j,m;
-
-  m = 0;
-
-  for (i = 0; i < n; i++) {
-    j = list[i];
-    if (closeneigh[rxnID] != 0) {
-      if (buf[m+1] < distsq[j][1]) {
-        partner[j] = (tagint) ubuf(buf[m++]).i;
-        distsq[j][1] = buf[m++];
-      } else m += 2;
+  void Predict(int num_iteration, int predict_type, const char* data_filename,
+               int data_has_header, const Config& config,
+               const char* result_filename) const {
+    SHARED_LOCK(mutex_)
+    bool is_predict_leaf = false;
+    bool is_raw_score = false;
+    bool predict_contrib = false;
+    if (predict_type == C_API_PREDICT_LEAF_INDEX) {
+      is_predict_leaf = true;
+    } else if (predict_type == C_API_PREDICT_RAW_SCORE) {
+      is_raw_score = true;
+    } else if (predict_type == C_API_PREDICT_CONTRIB) {
+      predict_contrib = true;
     } else {
-      if (buf[m+1] > distsq[j][0]) {
-        partner[j] = (tagint) ubuf(buf[m++]).i;
-        distsq[j][0] = buf[m++];
-      } else m += 2;
+      is_raw_score = false;
     }
-  }
-}
-
-/* ----------------------------------------------------------------------
-   write Set data to restart file
-------------------------------------------------------------------------- */
-
-void FixBondReact::write_restart(FILE *fp)
-{
-  set[0].nreacts = nreacts;
-  for (int i = 0; i < nreacts; i++) {
-    set[i].reaction_count_total = reaction_count_total[i];
-    strncpy(set[i].rxn_name,rxn_name[i],MAXLINE);
-    set[i].rxn_name[MAXLINE-1] = '\0';
+    Predictor predictor(boosting_.get(), num_iteration, is_raw_score, is_predict_leaf, predict_contrib,
+                        config.pred_early_stop, config.pred_early_stop_freq, config.pred_early_stop_margin);
+    bool bool_data_has_header = data_has_header > 0 ? true : false;
+    predictor.Predict(data_filename, result_filename, bool_data_has_header, config.predict_disable_shape_check);
   }
 
-  if (me == 0) {
-    int size = nreacts*sizeof(Set);
-    fwrite(&size,sizeof(int),1,fp);
-    fwrite(set,sizeof(Set),nreacts,fp);
+  void GetPredictAt(int data_idx, double* out_result, int64_t* out_len) const {
+    boosting_->GetPredictAt(data_idx, out_result, out_len);
   }
-}
 
-/* ----------------------------------------------------------------------
-   use selected state info from restart file to restart the Fix
-------------------------------------------------------------------------- */
+  void SaveModelToFile(int start_iteration, int num_iteration, const char* filename) const {
+    boosting_->SaveModelToFile(start_iteration, num_iteration, filename);
+  }
 
-void FixBondReact::restart(char *buf)
-{
-  Set *set_restart = (Set *) buf;
-  for (int i = 0; i < set_restart[0].nreacts; i++) {
-    for (int j = 0; j < nreacts; j++) {
-      if (strcmp(set_restart[i].rxn_name,rxn_name[j]) == 0) {
-        reaction_count_total[j] = set_restart[i].reaction_count_total;
+  void LoadModelFromString(const char* model_str) {
+    size_t len = std::strlen(model_str);
+    boosting_->LoadModelFromString(model_str, len);
+  }
+
+  std::string SaveModelToString(int start_iteration, int num_iteration) const {
+    return boosting_->SaveModelToString(start_iteration, num_iteration);
+  }
+
+  std::string DumpModel(int start_iteration, int num_iteration) const {
+    return boosting_->DumpModel(start_iteration, num_iteration);
+  }
+
+  std::vector<double> FeatureImportance(int num_iteration, int importance_type) const {
+    return boosting_->FeatureImportance(num_iteration, importance_type);
+  }
+
+  double UpperBoundValue() const {
+    SHARED_LOCK(mutex_)
+    return boosting_->GetUpperBoundValue();
+  }
+
+  double LowerBoundValue() const {
+    SHARED_LOCK(mutex_)
+    return boosting_->GetLowerBoundValue();
+  }
+
+  double GetLeafValue(int tree_idx, int leaf_idx) const {
+    SHARED_LOCK(mutex_)
+    return dynamic_cast<GBDTBase*>(boosting_.get())->GetLeafValue(tree_idx, leaf_idx);
+  }
+
+  void SetLeafValue(int tree_idx, int leaf_idx, double val) {
+    UNIQUE_LOCK(mutex_)
+    dynamic_cast<GBDTBase*>(boosting_.get())->SetLeafValue(tree_idx, leaf_idx, val);
+  }
+
+  void ShuffleModels(int start_iter, int end_iter) {
+    UNIQUE_LOCK(mutex_)
+    boosting_->ShuffleModels(start_iter, end_iter);
+  }
+
+  int GetEvalCounts() const {
+    SHARED_LOCK(mutex_)
+    int ret = 0;
+    for (const auto& metric : train_metric_) {
+      ret += static_cast<int>(metric->GetName().size());
+    }
+    return ret;
+  }
+
+  int GetEvalNames(char** out_strs, const int len, const size_t buffer_len, size_t *out_buffer_len) const {
+    SHARED_LOCK(mutex_)
+    *out_buffer_len = 0;
+    int idx = 0;
+    for (const auto& metric : train_metric_) {
+      for (const auto& name : metric->GetName()) {
+        if (idx < len) {
+          std::memcpy(out_strs[idx], name.c_str(), std::min(name.size() + 1, buffer_len));
+          out_strs[idx][buffer_len - 1] = '\0';
+        }
+        *out_buffer_len = std::max(name.size() + 1, *out_buffer_len);
+        ++idx;
       }
     }
+    return idx;
   }
+
+  int GetFeatureNames(char** out_strs, const int len, const size_t buffer_len, size_t *out_buffer_len) const {
+    SHARED_LOCK(mutex_)
+    *out_buffer_len = 0;
+    int idx = 0;
+    for (const auto& name : boosting_->FeatureNames()) {
+      if (idx < len) {
+        std::memcpy(out_strs[idx], name.c_str(), std::min(name.size() + 1, buffer_len));
+        out_strs[idx][buffer_len - 1] = '\0';
+      }
+      *out_buffer_len = std::max(name.size() + 1, *out_buffer_len);
+      ++idx;
+    }
+    return idx;
+  }
+
+  const Boosting* GetBoosting() const { return boosting_.get(); }
+
+ private:
+  const Dataset* train_data_;
+  std::unique_ptr<Boosting> boosting_;
+  std::unique_ptr<SingleRowPredictor> single_row_predictor_[PREDICTOR_TYPES];
+
+  /*! \brief All configs */
+  Config config_;
+  /*! \brief Metric for training data */
+  std::vector<std::unique_ptr<Metric>> train_metric_;
+  /*! \brief Metrics for validation data */
+  std::vector<std::vector<std::unique_ptr<Metric>>> valid_metrics_;
+  /*! \brief Training objective function */
+  std::unique_ptr<ObjectiveFunction> objective_fun_;
+  /*! \brief mutex for threading safe call */
+  mutable yamc::alternate::shared_mutex mutex_;
+};
+
+}  // namespace LightGBM
+
+// explicitly declare symbols from LightGBM namespace
+using LightGBM::AllgatherFunction;
+using LightGBM::Booster;
+using LightGBM::Common::CheckElementsIntervalClosed;
+using LightGBM::Common::RemoveQuotationSymbol;
+using LightGBM::Common::Vector2Ptr;
+using LightGBM::Common::VectorSize;
+using LightGBM::Config;
+using LightGBM::data_size_t;
+using LightGBM::Dataset;
+using LightGBM::DatasetLoader;
+using LightGBM::kZeroThreshold;
+using LightGBM::LGBM_APIHandleException;
+using LightGBM::Log;
+using LightGBM::Network;
+using LightGBM::Random;
+using LightGBM::ReduceScatterFunction;
+
+// some help functions used to convert data
+
+std::function<std::vector<double>(int row_idx)>
+RowFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major);
+
+std::function<std::vector<std::pair<int, double>>(int row_idx)>
+RowPairFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major);
+
+std::function<std::vector<std::pair<int, double>>(int row_idx)>
+RowPairFunctionFromDenseRows(const void** data, int num_col, int data_type);
+
+template<typename T>
+std::function<std::vector<std::pair<int, double>>(T idx)>
+RowFunctionFromCSR(const void* indptr, int indptr_type, const int32_t* indices,
+                   const void* data, int data_type, int64_t nindptr, int64_t nelem);
+
+// Row iterator of on column for CSC matrix
+class CSC_RowIterator {
+ public:
+  CSC_RowIterator(const void* col_ptr, int col_ptr_type, const int32_t* indices,
+                  const void* data, int data_type, int64_t ncol_ptr, int64_t nelem, int col_idx);
+  ~CSC_RowIterator() {}
+  // return value at idx, only can access by ascent order
+  double Get(int idx);
+  // return next non-zero pair, if index < 0, means no more data
+  std::pair<int, double> NextNonZero();
+
+ private:
+  int nonzero_idx_ = 0;
+  int cur_idx_ = -1;
+  double cur_val_ = 0.0f;
+  bool is_end_ = false;
+  std::function<std::pair<int, double>(int idx)> iter_fun_;
+};
+
+// start of c_api functions
+
+const char* LGBM_GetLastError() {
+  return LastErrorMsg();
 }
 
-/* ----------------------------------------------------------------------
-memory usage of local atom-based arrays
-------------------------------------------------------------------------- */
-
-double FixBondReact::memory_usage()
-{
-  int nmax = atom->nmax;
-  double bytes = (double)nmax * sizeof(int);
-  bytes = 2*nmax * sizeof(tagint);
-  bytes += (double)nmax * sizeof(double);
-  return bytes;
+int LGBM_RegisterLogCallback(void (*callback)(const char*)) {
+  API_BEGIN();
+  Log::ResetCallBack(callback);
+  API_END();
 }
 
-/* ---------------------------------------------------------------------- */
-
-void FixBondReact::print_bb()
-{
-#if 0
-  //fix bond/create cargo code. eg nbonds needs to be added
-
-for (int i = 0; i < atom->nlocal; i++) {
-  // printf("TAG " TAGINT_FORMAT ": %d nbonds: ",atom->tag[i],atom->num_bond[i]);
-  for (int j = 0; j < atom->num_bond[i]; j++) {
-  // printf(" " TAGINT_FORMAT,atom->bond_atom[i][j]);
+int LGBM_DatasetCreateFromFile(const char* filename,
+                               const char* parameters,
+                               const DatasetHandle reference,
+                               DatasetHandle* out) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
   }
-  // printf("
-");
-  // printf("TAG " TAGINT_FORMAT ": %d nangles: ",atom->tag[i],atom->num_angle[i]);
-  for (int j = 0; j < atom->num_angle[i]; j++) {
-  // printf(" " TAGINT_FORMAT " " TAGINT_FORMAT " " TAGINT_FORMAT ",",
-      atom->angle_atom1[i][j], atom->angle_atom2[i][j],
-      atom->angle_atom3[i][j]);
+  DatasetLoader loader(config, nullptr, 1, filename);
+  if (reference == nullptr) {
+    if (Network::num_machines() == 1) {
+      *out = loader.LoadFromFile(filename);
+    } else {
+      *out = loader.LoadFromFile(filename, Network::rank(), Network::num_machines());
+    }
+  } else {
+    *out = loader.LoadFromFileAlignWithOtherDataset(filename,
+                                                    reinterpret_cast<const Dataset*>(reference));
   }
-  // printf("
-");
-  // printf("TAG " TAGINT_FORMAT ": %d ndihedrals: ",atom->tag[i],atom->num_dihedral[i]);
-  for (int j = 0; j < atom->num_dihedral[i]; j++) {
-  // printf(" " TAGINT_FORMAT " " TAGINT_FORMAT " " TAGINT_FORMAT " "
-      TAGINT_FORMAT ",", atom->dihedral_atom1[i][j],
-    atom->dihedral_atom2[i][j],atom->dihedral_atom3[i][j],
-    atom->dihedral_atom4[i][j]);
-  }
-  // printf("
-");
-  // printf("TAG " TAGINT_FORMAT ": %d nimpropers: ",atom->tag[i],atom->num_improper[i]);
-  for (int j = 0; j < atom->num_improper[i]; j++) {
-  // printf(" " TAGINT_FORMAT " " TAGINT_FORMAT " " TAGINT_FORMAT " "
-      TAGINT_FORMAT ",",atom->improper_atom1[i][j],
-    atom->improper_atom2[i][j],atom->improper_atom3[i][j],
-    atom->improper_atom4[i][j]);
-  }
-  // printf("
-");
-  // printf("TAG " TAGINT_FORMAT ": %d %d %d nspecial: ",atom->tag[i],
-  atom->nspecial[i][0],atom->nspecial[i][1],atom->nspecial[i][2]);
-  for (int j = 0; j < atom->nspecial[i][2]; j++) {
-    printf(" " TAGINT_FORMAT,atom->special[i][j]);
-  }
-  // printf("
-");
+  API_END();
 }
+
+
+int LGBM_DatasetCreateFromSampledColumn(double** sample_data,
+                                        int** sample_indices,
+                                        int32_t ncol,
+                                        const int* num_per_col,
+                                        int32_t num_sample_row,
+                                        int32_t num_total_row,
+                                        const char* parameters,
+                                        DatasetHandle* out) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  DatasetLoader loader(config, nullptr, 1, nullptr);
+  *out = loader.CostructFromSampleData(sample_data, sample_indices, ncol, num_per_col,
+                                       num_sample_row,
+                                       static_cast<data_size_t>(num_total_row));
+  API_END();
+}
+
+
+int LGBM_DatasetCreateByReference(const DatasetHandle reference,
+                                  int64_t num_total_row,
+                                  DatasetHandle* out) {
+  API_BEGIN();
+  std::unique_ptr<Dataset> ret;
+  ret.reset(new Dataset(static_cast<data_size_t>(num_total_row)));
+  ret->CreateValid(reinterpret_cast<const Dataset*>(reference));
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetPushRows(DatasetHandle dataset,
+                         const void* data,
+                         int data_type,
+                         int32_t nrow,
+                         int32_t ncol,
+                         int32_t start_row) {
+  API_BEGIN();
+  auto p_dataset = reinterpret_cast<Dataset*>(dataset);
+  auto get_row_fun = RowFunctionFromDenseMatric(data, nrow, ncol, data_type, 1);
+  OMP_INIT_EX();
+  #pragma omp parallel for schedule(static)
+  for (int i = 0; i < nrow; ++i) {
+    OMP_LOOP_EX_BEGIN();
+    const int tid = omp_get_thread_num();
+    auto one_row = get_row_fun(i);
+    p_dataset->PushOneRow(tid, start_row + i, one_row);
+    OMP_LOOP_EX_END();
+  }
+  OMP_THROW_EX();
+  if (start_row + nrow == p_dataset->num_data()) {
+    p_dataset->FinishLoad();
+  }
+  API_END();
+}
+
+int LGBM_DatasetPushRowsByCSR(DatasetHandle dataset,
+                              const void* indptr,
+                              int indptr_type,
+                              const int32_t* indices,
+                              const void* data,
+                              int data_type,
+                              int64_t nindptr,
+                              int64_t nelem,
+                              int64_t,
+                              int64_t start_row) {
+  API_BEGIN();
+  auto p_dataset = reinterpret_cast<Dataset*>(dataset);
+  auto get_row_fun = RowFunctionFromCSR<int>(indptr, indptr_type, indices, data, data_type, nindptr, nelem);
+  int32_t nrow = static_cast<int32_t>(nindptr - 1);
+  OMP_INIT_EX();
+  #pragma omp parallel for schedule(static)
+  for (int i = 0; i < nrow; ++i) {
+    OMP_LOOP_EX_BEGIN();
+    const int tid = omp_get_thread_num();
+    auto one_row = get_row_fun(i);
+    p_dataset->PushOneRow(tid,
+                          static_cast<data_size_t>(start_row + i), one_row);
+    OMP_LOOP_EX_END();
+  }
+  OMP_THROW_EX();
+  if (start_row + nrow == static_cast<int64_t>(p_dataset->num_data())) {
+    p_dataset->FinishLoad();
+  }
+  API_END();
+}
+
+int LGBM_DatasetCreateFromMat(const void* data,
+                              int data_type,
+                              int32_t nrow,
+                              int32_t ncol,
+                              int is_row_major,
+                              const char* parameters,
+                              const DatasetHandle reference,
+                              DatasetHandle* out) {
+  return LGBM_DatasetCreateFromMats(1,
+                                    &data,
+                                    data_type,
+                                    &nrow,
+                                    ncol,
+                                    is_row_major,
+                                    parameters,
+                                    reference,
+                                    out);
+}
+
+
+int LGBM_DatasetCreateFromMats(int32_t nmat,
+                               const void** data,
+                               int data_type,
+                               int32_t* nrow,
+                               int32_t ncol,
+                               int is_row_major,
+                               const char* parameters,
+                               const DatasetHandle reference,
+                               DatasetHandle* out) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  std::unique_ptr<Dataset> ret;
+  int32_t total_nrow = 0;
+  for (int j = 0; j < nmat; ++j) {
+    total_nrow += nrow[j];
+  }
+
+  std::vector<std::function<std::vector<double>(int row_idx)>> get_row_fun;
+  for (int j = 0; j < nmat; ++j) {
+    get_row_fun.push_back(RowFunctionFromDenseMatric(data[j], nrow[j], ncol, data_type, is_row_major));
+  }
+
+  if (reference == nullptr) {
+    // sample data first
+    Random rand(config.data_random_seed);
+    int sample_cnt = static_cast<int>(total_nrow < config.bin_construct_sample_cnt ? total_nrow : config.bin_construct_sample_cnt);
+    auto sample_indices = rand.Sample(total_nrow, sample_cnt);
+    sample_cnt = static_cast<int>(sample_indices.size());
+    std::vector<std::vector<double>> sample_values(ncol);
+    std::vector<std::vector<int>> sample_idx(ncol);
+
+    int offset = 0;
+    int j = 0;
+    for (size_t i = 0; i < sample_indices.size(); ++i) {
+      auto idx = sample_indices[i];
+      while ((idx - offset) >= nrow[j]) {
+        offset += nrow[j];
+        ++j;
+      }
+
+      auto row = get_row_fun[j](static_cast<int>(idx - offset));
+      for (size_t k = 0; k < row.size(); ++k) {
+        if (std::fabs(row[k]) > kZeroThreshold || std::isnan(row[k])) {
+          sample_values[k].emplace_back(row[k]);
+          sample_idx[k].emplace_back(static_cast<int>(i));
+        }
+      }
+    }
+    DatasetLoader loader(config, nullptr, 1, nullptr);
+    ret.reset(loader.CostructFromSampleData(Vector2Ptr<double>(&sample_values).data(),
+                                            Vector2Ptr<int>(&sample_idx).data(),
+                                            ncol,
+                                            VectorSize<double>(sample_values).data(),
+                                            sample_cnt, total_nrow));
+  } else {
+    ret.reset(new Dataset(total_nrow));
+    ret->CreateValid(
+      reinterpret_cast<const Dataset*>(reference));
+  }
+  int32_t start_row = 0;
+  for (int j = 0; j < nmat; ++j) {
+    OMP_INIT_EX();
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < nrow[j]; ++i) {
+      OMP_LOOP_EX_BEGIN();
+      const int tid = omp_get_thread_num();
+      auto one_row = get_row_fun[j](i);
+      ret->PushOneRow(tid, start_row + i, one_row);
+      OMP_LOOP_EX_END();
+    }
+    OMP_THROW_EX();
+
+    start_row += nrow[j];
+  }
+  ret->FinishLoad();
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetCreateFromCSR(const void* indptr,
+                              int indptr_type,
+                              const int32_t* indices,
+                              const void* data,
+                              int data_type,
+                              int64_t nindptr,
+                              int64_t nelem,
+                              int64_t num_col,
+                              const char* parameters,
+                              const DatasetHandle reference,
+                              DatasetHandle* out) {
+  API_BEGIN();
+  if (num_col <= 0) {
+    Log::Fatal("The number of columns should be greater than zero.");
+  } else if (num_col >= INT32_MAX) {
+    Log::Fatal("The number of columns should be smaller than INT32_MAX.");
+  }
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  std::unique_ptr<Dataset> ret;
+  auto get_row_fun = RowFunctionFromCSR<int>(indptr, indptr_type, indices, data, data_type, nindptr, nelem);
+  int32_t nrow = static_cast<int32_t>(nindptr - 1);
+  if (reference == nullptr) {
+    // sample data first
+    Random rand(config.data_random_seed);
+    int sample_cnt = static_cast<int>(nrow < config.bin_construct_sample_cnt ? nrow : config.bin_construct_sample_cnt);
+    auto sample_indices = rand.Sample(nrow, sample_cnt);
+    sample_cnt = static_cast<int>(sample_indices.size());
+    std::vector<std::vector<double>> sample_values(num_col);
+    std::vector<std::vector<int>> sample_idx(num_col);
+    for (size_t i = 0; i < sample_indices.size(); ++i) {
+      auto idx = sample_indices[i];
+      auto row = get_row_fun(static_cast<int>(idx));
+      for (std::pair<int, double>& inner_data : row) {
+        CHECK_LT(inner_data.first, num_col);
+        if (std::fabs(inner_data.second) > kZeroThreshold || std::isnan(inner_data.second)) {
+          sample_values[inner_data.first].emplace_back(inner_data.second);
+          sample_idx[inner_data.first].emplace_back(static_cast<int>(i));
+        }
+      }
+    }
+    DatasetLoader loader(config, nullptr, 1, nullptr);
+    ret.reset(loader.CostructFromSampleData(Vector2Ptr<double>(&sample_values).data(),
+                                            Vector2Ptr<int>(&sample_idx).data(),
+                                            static_cast<int>(num_col),
+                                            VectorSize<double>(sample_values).data(),
+                                            sample_cnt, nrow));
+  } else {
+    ret.reset(new Dataset(nrow));
+    ret->CreateValid(
+      reinterpret_cast<const Dataset*>(reference));
+  }
+  OMP_INIT_EX();
+  #pragma omp parallel for schedule(static)
+  for (int i = 0; i < nindptr - 1; ++i) {
+    OMP_LOOP_EX_BEGIN();
+    const int tid = omp_get_thread_num();
+    auto one_row = get_row_fun(i);
+    ret->PushOneRow(tid, i, one_row);
+    OMP_LOOP_EX_END();
+  }
+  OMP_THROW_EX();
+  ret->FinishLoad();
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetCreateFromCSRFunc(void* get_row_funptr,
+                                  int num_rows,
+                                  int64_t num_col,
+                                  const char* parameters,
+                                  const DatasetHandle reference,
+                                  DatasetHandle* out) {
+  API_BEGIN();
+  if (num_col <= 0) {
+    Log::Fatal("The number of columns should be greater than zero.");
+  } else if (num_col >= INT32_MAX) {
+    Log::Fatal("The number of columns should be smaller than INT32_MAX.");
+  }
+  auto get_row_fun = *static_cast<std::function<void(int idx, std::vector<std::pair<int, double>>&)>*>(get_row_funptr);
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  std::unique_ptr<Dataset> ret;
+  int32_t nrow = num_rows;
+  if (reference == nullptr) {
+    // sample data first
+    Random rand(config.data_random_seed);
+    int sample_cnt = static_cast<int>(nrow < config.bin_construct_sample_cnt ? nrow : config.bin_construct_sample_cnt);
+    auto sample_indices = rand.Sample(nrow, sample_cnt);
+    sample_cnt = static_cast<int>(sample_indices.size());
+    std::vector<std::vector<double>> sample_values(num_col);
+    std::vector<std::vector<int>> sample_idx(num_col);
+    // local buffer to re-use memory
+    std::vector<std::pair<int, double>> buffer;
+    for (size_t i = 0; i < sample_indices.size(); ++i) {
+      auto idx = sample_indices[i];
+      get_row_fun(static_cast<int>(idx), buffer);
+      for (std::pair<int, double>& inner_data : buffer) {
+        CHECK_LT(inner_data.first, num_col);
+        if (std::fabs(inner_data.second) > kZeroThreshold || std::isnan(inner_data.second)) {
+          sample_values[inner_data.first].emplace_back(inner_data.second);
+          sample_idx[inner_data.first].emplace_back(static_cast<int>(i));
+        }
+      }
+    }
+    DatasetLoader loader(config, nullptr, 1, nullptr);
+    ret.reset(loader.CostructFromSampleData(Vector2Ptr<double>(&sample_values).data(),
+                                            Vector2Ptr<int>(&sample_idx).data(),
+                                            static_cast<int>(num_col),
+                                            VectorSize<double>(sample_values).data(),
+                                            sample_cnt, nrow));
+  } else {
+    ret.reset(new Dataset(nrow));
+    ret->CreateValid(
+      reinterpret_cast<const Dataset*>(reference));
+  }
+
+  OMP_INIT_EX();
+  std::vector<std::pair<int, double>> thread_buffer;
+  #pragma omp parallel for schedule(static) private(thread_buffer)
+  for (int i = 0; i < num_rows; ++i) {
+    OMP_LOOP_EX_BEGIN();
+    {
+      const int tid = omp_get_thread_num();
+      get_row_fun(i, thread_buffer);
+      ret->PushOneRow(tid, i, thread_buffer);
+    }
+    OMP_LOOP_EX_END();
+  }
+  OMP_THROW_EX();
+  ret->FinishLoad();
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetCreateFromCSC(const void* col_ptr,
+                              int col_ptr_type,
+                              const int32_t* indices,
+                              const void* data,
+                              int data_type,
+                              int64_t ncol_ptr,
+                              int64_t nelem,
+                              int64_t num_row,
+                              const char* parameters,
+                              const DatasetHandle reference,
+                              DatasetHandle* out) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  std::unique_ptr<Dataset> ret;
+  int32_t nrow = static_cast<int32_t>(num_row);
+  if (reference == nullptr) {
+    // sample data first
+    Random rand(config.data_random_seed);
+    int sample_cnt = static_cast<int>(nrow < config.bin_construct_sample_cnt ? nrow : config.bin_construct_sample_cnt);
+    auto sample_indices = rand.Sample(nrow, sample_cnt);
+    sample_cnt = static_cast<int>(sample_indices.size());
+    std::vector<std::vector<double>> sample_values(ncol_ptr - 1);
+    std::vector<std::vector<int>> sample_idx(ncol_ptr - 1);
+    OMP_INIT_EX();
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < static_cast<int>(sample_values.size()); ++i) {
+      OMP_LOOP_EX_BEGIN();
+      CSC_RowIterator col_it(col_ptr, col_ptr_type, indices, data, data_type, ncol_ptr, nelem, i);
+      for (int j = 0; j < sample_cnt; j++) {
+        auto val = col_it.Get(sample_indices[j]);
+        if (std::fabs(val) > kZeroThreshold || std::isnan(val)) {
+          sample_values[i].emplace_back(val);
+          sample_idx[i].emplace_back(j);
+        }
+      }
+      OMP_LOOP_EX_END();
+    }
+    OMP_THROW_EX();
+    DatasetLoader loader(config, nullptr, 1, nullptr);
+    ret.reset(loader.CostructFromSampleData(Vector2Ptr<double>(&sample_values).data(),
+                                            Vector2Ptr<int>(&sample_idx).data(),
+                                            static_cast<int>(sample_values.size()),
+                                            VectorSize<double>(sample_values).data(),
+                                            sample_cnt, nrow));
+  } else {
+    ret.reset(new Dataset(nrow));
+    ret->CreateValid(
+      reinterpret_cast<const Dataset*>(reference));
+  }
+  OMP_INIT_EX();
+  #pragma omp parallel for schedule(static)
+  for (int i = 0; i < ncol_ptr - 1; ++i) {
+    OMP_LOOP_EX_BEGIN();
+    const int tid = omp_get_thread_num();
+    int feature_idx = ret->InnerFeatureIndex(i);
+    if (feature_idx < 0) { continue; }
+    int group = ret->Feature2Group(feature_idx);
+    int sub_feature = ret->Feture2SubFeature(feature_idx);
+    CSC_RowIterator col_it(col_ptr, col_ptr_type, indices, data, data_type, ncol_ptr, nelem, i);
+    auto bin_mapper = ret->FeatureBinMapper(feature_idx);
+    if (bin_mapper->GetDefaultBin() == bin_mapper->GetMostFreqBin()) {
+      int row_idx = 0;
+      while (row_idx < nrow) {
+        auto pair = col_it.NextNonZero();
+        row_idx = pair.first;
+        // no more data
+        if (row_idx < 0) { break; }
+        ret->PushOneData(tid, row_idx, group, sub_feature, pair.second);
+      }
+    } else {
+      for (int row_idx = 0; row_idx < nrow; ++row_idx) {
+        auto val = col_it.Get(row_idx);
+        ret->PushOneData(tid, row_idx, group, sub_feature, val);
+      }
+    }
+    OMP_LOOP_EX_END();
+  }
+  OMP_THROW_EX();
+  ret->FinishLoad();
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetGetSubset(
+  const DatasetHandle handle,
+  const int32_t* used_row_indices,
+  int32_t num_used_row_indices,
+  const char* parameters,
+  DatasetHandle* out) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameters);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  auto full_dataset = reinterpret_cast<const Dataset*>(handle);
+  CHECK_GT(num_used_row_indices, 0);
+  const int32_t lower = 0;
+  const int32_t upper = full_dataset->num_data() - 1;
+  CheckElementsIntervalClosed(used_row_indices, lower, upper, num_used_row_indices, "Used indices of subset");
+  if (!std::is_sorted(used_row_indices, used_row_indices + num_used_row_indices)) {
+    Log::Fatal("used_row_indices should be sorted in Subset");
+  }
+  auto ret = std::unique_ptr<Dataset>(new Dataset(num_used_row_indices));
+  ret->CopyFeatureMapperFrom(full_dataset);
+  ret->CopySubrow(full_dataset, used_row_indices, num_used_row_indices, true);
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_DatasetSetFeatureNames(
+  DatasetHandle handle,
+  const char** feature_names,
+  int num_feature_names) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  std::vector<std::string> feature_names_str;
+  for (int i = 0; i < num_feature_names; ++i) {
+    feature_names_str.emplace_back(feature_names[i]);
+  }
+  dataset->set_feature_names(feature_names_str);
+  API_END();
+}
+
+int LGBM_DatasetGetFeatureNames(
+    DatasetHandle handle,
+    const int len,
+    int* num_feature_names,
+    const size_t buffer_len,
+    size_t* out_buffer_len,
+    char** feature_names) {
+  API_BEGIN();
+  *out_buffer_len = 0;
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  auto inside_feature_name = dataset->feature_names();
+  *num_feature_names = static_cast<int>(inside_feature_name.size());
+  for (int i = 0; i < *num_feature_names; ++i) {
+    if (i < len) {
+      std::memcpy(feature_names[i], inside_feature_name[i].c_str(), std::min(inside_feature_name[i].size() + 1, buffer_len));
+      feature_names[i][buffer_len - 1] = '\0';
+    }
+    *out_buffer_len = std::max(inside_feature_name[i].size() + 1, *out_buffer_len);
+  }
+  API_END();
+}
+
+#ifdef _MSC_VER
+  #pragma warning(disable : 4702)
 #endif
+int LGBM_DatasetFree(DatasetHandle handle) {
+  API_BEGIN();
+  delete reinterpret_cast<Dataset*>(handle);
+  API_END();
+}
+
+int LGBM_DatasetSaveBinary(DatasetHandle handle,
+                           const char* filename) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  dataset->SaveBinaryFile(filename);
+  API_END();
+}
+
+int LGBM_DatasetDumpText(DatasetHandle handle,
+                         const char* filename) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  dataset->DumpTextFile(filename);
+  API_END();
+}
+
+int LGBM_DatasetSetField(DatasetHandle handle,
+                         const char* field_name,
+                         const void* field_data,
+                         int num_element,
+                         int type) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  bool is_success = false;
+  if (type == C_API_DTYPE_FLOAT32) {
+    is_success = dataset->SetFloatField(field_name, reinterpret_cast<const float*>(field_data), static_cast<int32_t>(num_element));
+  } else if (type == C_API_DTYPE_INT32) {
+    is_success = dataset->SetIntField(field_name, reinterpret_cast<const int*>(field_data), static_cast<int32_t>(num_element));
+  } else if (type == C_API_DTYPE_FLOAT64) {
+    is_success = dataset->SetDoubleField(field_name, reinterpret_cast<const double*>(field_data), static_cast<int32_t>(num_element));
+  }
+  if (!is_success) { Log::Fatal("Input data type error or field not found"); }
+  API_END();
+}
+
+int LGBM_DatasetGetField(DatasetHandle handle,
+                         const char* field_name,
+                         int* out_len,
+                         const void** out_ptr,
+                         int* out_type) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  bool is_success = false;
+  if (dataset->GetFloatField(field_name, out_len, reinterpret_cast<const float**>(out_ptr))) {
+    *out_type = C_API_DTYPE_FLOAT32;
+    is_success = true;
+  } else if (dataset->GetIntField(field_name, out_len, reinterpret_cast<const int**>(out_ptr))) {
+    *out_type = C_API_DTYPE_INT32;
+    is_success = true;
+  } else if (dataset->GetDoubleField(field_name, out_len, reinterpret_cast<const double**>(out_ptr))) {
+    *out_type = C_API_DTYPE_FLOAT64;
+    is_success = true;
+  }
+  if (!is_success) { Log::Fatal("Field not found"); }
+  if (*out_ptr == nullptr) { *out_len = 0; }
+  API_END();
+}
+
+int LGBM_DatasetUpdateParamChecking(const char* old_parameters, const char* new_parameters) {
+  API_BEGIN();
+  auto old_param = Config::Str2Map(old_parameters);
+  Config old_config;
+  old_config.Set(old_param);
+  auto new_param = Config::Str2Map(new_parameters);
+  Booster::CheckDatasetResetConfig(old_config, new_param);
+  API_END();
+}
+
+int LGBM_DatasetGetNumData(DatasetHandle handle,
+                           int* out) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  *out = dataset->num_data();
+  API_END();
+}
+
+int LGBM_DatasetGetNumFeature(DatasetHandle handle,
+                              int* out) {
+  API_BEGIN();
+  auto dataset = reinterpret_cast<Dataset*>(handle);
+  *out = dataset->num_total_features();
+  API_END();
+}
+
+int LGBM_DatasetAddFeaturesFrom(DatasetHandle target,
+                                DatasetHandle source) {
+  API_BEGIN();
+  auto target_d = reinterpret_cast<Dataset*>(target);
+  auto source_d = reinterpret_cast<Dataset*>(source);
+  target_d->AddFeaturesFrom(source_d);
+  API_END();
+}
+
+// ---- start of booster
+
+int LGBM_BoosterCreate(const DatasetHandle train_data,
+                       const char* parameters,
+                       BoosterHandle* out) {
+  API_BEGIN();
+  const Dataset* p_train_data = reinterpret_cast<const Dataset*>(train_data);
+  auto ret = std::unique_ptr<Booster>(new Booster(p_train_data, parameters));
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_BoosterCreateFromModelfile(
+  const char* filename,
+  int* out_num_iterations,
+  BoosterHandle* out) {
+  API_BEGIN();
+  auto ret = std::unique_ptr<Booster>(new Booster(filename));
+  *out_num_iterations = ret->GetBoosting()->GetCurrentIteration();
+  *out = ret.release();
+  API_END();
+}
+
+int LGBM_BoosterLoadModelFromString(
+  const char* model_str,
+  int* out_num_iterations,
+  BoosterHandle* out) {
+  API_BEGIN();
+  auto ret = std::unique_ptr<Booster>(new Booster(nullptr));
+  ret->LoadModelFromString(model_str);
+  *out_num_iterations = ret->GetBoosting()->GetCurrentIteration();
+  *out = ret.release();
+  API_END();
+}
+
+#ifdef _MSC_VER
+  #pragma warning(disable : 4702)
+#endif
+int LGBM_BoosterFree(BoosterHandle handle) {
+  API_BEGIN();
+  delete reinterpret_cast<Booster*>(handle);
+  API_END();
+}
+
+int LGBM_BoosterShuffleModels(BoosterHandle handle, int start_iter, int end_iter) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->ShuffleModels(start_iter, end_iter);
+  API_END();
+}
+
+int LGBM_BoosterMerge(BoosterHandle handle,
+                      BoosterHandle other_handle) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  Booster* ref_other_booster = reinterpret_cast<Booster*>(other_handle);
+  ref_booster->MergeFrom(ref_other_booster);
+  API_END();
+}
+
+int LGBM_BoosterAddValidData(BoosterHandle handle,
+                             const DatasetHandle valid_data) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  const Dataset* p_dataset = reinterpret_cast<const Dataset*>(valid_data);
+  ref_booster->AddValidData(p_dataset);
+  API_END();
+}
+
+int LGBM_BoosterResetTrainingData(BoosterHandle handle,
+                                  const DatasetHandle train_data) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  const Dataset* p_dataset = reinterpret_cast<const Dataset*>(train_data);
+  ref_booster->ResetTrainingData(p_dataset);
+  API_END();
+}
+
+int LGBM_BoosterResetParameter(BoosterHandle handle, const char* parameters) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->ResetConfig(parameters);
+  API_END();
+}
+
+int LGBM_BoosterGetNumClasses(BoosterHandle handle, int* out_len) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = ref_booster->GetBoosting()->NumberOfClasses();
+  API_END();
+}
+
+int LGBM_BoosterRefit(BoosterHandle handle, const int32_t* leaf_preds, int32_t nrow, int32_t ncol) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->Refit(leaf_preds, nrow, ncol);
+  API_END();
+}
+
+int LGBM_BoosterUpdateOneIter(BoosterHandle handle, int* is_finished) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  if (ref_booster->TrainOneIter()) {
+    *is_finished = 1;
+  } else {
+    *is_finished = 0;
+  }
+  API_END();
+}
+
+int LGBM_BoosterUpdateOneIterCustom(BoosterHandle handle,
+                                    const float* grad,
+                                    const float* hess,
+                                    int* is_finished) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  #ifdef SCORE_T_USE_DOUBLE
+  Log::Fatal("Don't support custom loss function when SCORE_T_USE_DOUBLE is enabled");
+  #else
+  if (ref_booster->TrainOneIter(grad, hess)) {
+    *is_finished = 1;
+  } else {
+    *is_finished = 0;
+  }
+  #endif
+  API_END();
+}
+
+int LGBM_BoosterRollbackOneIter(BoosterHandle handle) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->RollbackOneIter();
+  API_END();
+}
+
+int LGBM_BoosterGetCurrentIteration(BoosterHandle handle, int* out_iteration) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_iteration = ref_booster->GetBoosting()->GetCurrentIteration();
+  API_END();
+}
+
+int LGBM_BoosterNumModelPerIteration(BoosterHandle handle, int* out_tree_per_iteration) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_tree_per_iteration = ref_booster->GetBoosting()->NumModelPerIteration();
+  API_END();
+}
+
+int LGBM_BoosterNumberOfTotalModel(BoosterHandle handle, int* out_models) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_models = ref_booster->GetBoosting()->NumberOfTotalModel();
+  API_END();
+}
+
+int LGBM_BoosterGetEvalCounts(BoosterHandle handle, int* out_len) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = ref_booster->GetEvalCounts();
+  API_END();
+}
+
+int LGBM_BoosterGetEvalNames(BoosterHandle handle,
+                             const int len,
+                             int* out_len,
+                             const size_t buffer_len,
+                             size_t* out_buffer_len,
+                             char** out_strs) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = ref_booster->GetEvalNames(out_strs, len, buffer_len, out_buffer_len);
+  API_END();
+}
+
+int LGBM_BoosterGetFeatureNames(BoosterHandle handle,
+                                const int len,
+                                int* out_len,
+                                const size_t buffer_len,
+                                size_t* out_buffer_len,
+                                char** out_strs) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = ref_booster->GetFeatureNames(out_strs, len, buffer_len, out_buffer_len);
+  API_END();
+}
+
+int LGBM_BoosterGetNumFeature(BoosterHandle handle, int* out_len) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = ref_booster->GetBoosting()->MaxFeatureIdx() + 1;
+  API_END();
+}
+
+int LGBM_BoosterGetEval(BoosterHandle handle,
+                        int data_idx,
+                        int* out_len,
+                        double* out_results) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto boosting = ref_booster->GetBoosting();
+  auto result_buf = boosting->GetEvalAt(data_idx);
+  *out_len = static_cast<int>(result_buf.size());
+  for (size_t i = 0; i < result_buf.size(); ++i) {
+    (out_results)[i] = static_cast<double>(result_buf[i]);
+  }
+  API_END();
+}
+
+int LGBM_BoosterGetNumPredict(BoosterHandle handle,
+                              int data_idx,
+                              int64_t* out_len) {
+  API_BEGIN();
+  auto boosting = reinterpret_cast<Booster*>(handle)->GetBoosting();
+  *out_len = boosting->GetNumPredictAt(data_idx);
+  API_END();
+}
+
+int LGBM_BoosterGetPredict(BoosterHandle handle,
+                           int data_idx,
+                           int64_t* out_len,
+                           double* out_result) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->GetPredictAt(data_idx, out_result, out_len);
+  API_END();
+}
+
+int LGBM_BoosterPredictForFile(BoosterHandle handle,
+                               const char* data_filename,
+                               int data_has_header,
+                               int predict_type,
+                               int num_iteration,
+                               const char* parameter,
+                               const char* result_filename) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->Predict(num_iteration, predict_type, data_filename, data_has_header,
+                       config, result_filename);
+  API_END();
+}
+
+int LGBM_BoosterCalcNumPredict(BoosterHandle handle,
+                               int num_row,
+                               int predict_type,
+                               int num_iteration,
+                               int64_t* out_len) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_len = static_cast<int64_t>(num_row) * ref_booster->GetBoosting()->NumPredictOneRow(
+    num_iteration, predict_type == C_API_PREDICT_LEAF_INDEX, predict_type == C_API_PREDICT_CONTRIB);
+  API_END();
+}
+
+int LGBM_BoosterPredictForCSR(BoosterHandle handle,
+                              const void* indptr,
+                              int indptr_type,
+                              const int32_t* indices,
+                              const void* data,
+                              int data_type,
+                              int64_t nindptr,
+                              int64_t nelem,
+                              int64_t num_col,
+                              int predict_type,
+                              int num_iteration,
+                              const char* parameter,
+                              int64_t* out_len,
+                              double* out_result) {
+  API_BEGIN();
+  if (num_col <= 0) {
+    Log::Fatal("The number of columns should be greater than zero.");
+  } else if (num_col >= INT32_MAX) {
+    Log::Fatal("The number of columns should be smaller than INT32_MAX.");
+  }
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto get_row_fun = RowFunctionFromCSR<int>(indptr, indptr_type, indices, data, data_type, nindptr, nelem);
+  int nrow = static_cast<int>(nindptr - 1);
+  ref_booster->Predict(num_iteration, predict_type, nrow, static_cast<int>(num_col), get_row_fun,
+                       config, out_result, out_len);
+  API_END();
+}
+
+int LGBM_BoosterPredictSparseOutput(BoosterHandle handle,
+                                    const void* indptr,
+                                    int indptr_type,
+                                    const int32_t* indices,
+                                    const void* data,
+                                    int data_type,
+                                    int64_t nindptr,
+                                    int64_t nelem,
+                                    int64_t num_col_or_row,
+                                    int predict_type,
+                                    int num_iteration,
+                                    const char* parameter,
+                                    int matrix_type,
+                                    int64_t* out_len,
+                                    void** out_indptr,
+                                    int32_t** out_indices,
+                                    void** out_data) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  if (matrix_type == C_API_MATRIX_TYPE_CSR) {
+    if (num_col_or_row <= 0) {
+      Log::Fatal("The number of columns should be greater than zero.");
+    } else if (num_col_or_row >= INT32_MAX) {
+      Log::Fatal("The number of columns should be smaller than INT32_MAX.");
+    }
+    auto get_row_fun = RowFunctionFromCSR<int64_t>(indptr, indptr_type, indices, data, data_type, nindptr, nelem);
+    int64_t nrow = nindptr - 1;
+    ref_booster->PredictSparseCSR(num_iteration, predict_type, nrow, static_cast<int>(num_col_or_row), get_row_fun,
+                                  config, out_len, out_indptr, indptr_type, out_indices, out_data, data_type);
+  } else if (matrix_type == C_API_MATRIX_TYPE_CSC) {
+    int num_threads = OMP_NUM_THREADS();
+    int ncol = static_cast<int>(nindptr - 1);
+    std::vector<std::vector<CSC_RowIterator>> iterators(num_threads, std::vector<CSC_RowIterator>());
+    for (int i = 0; i < num_threads; ++i) {
+      for (int j = 0; j < ncol; ++j) {
+        iterators[i].emplace_back(indptr, indptr_type, indices, data, data_type, nindptr, nelem, j);
+      }
+    }
+    std::function<std::vector<std::pair<int, double>>(int64_t row_idx)> get_row_fun =
+      [&iterators, ncol](int64_t i) {
+      std::vector<std::pair<int, double>> one_row;
+      one_row.reserve(ncol);
+      const int tid = omp_get_thread_num();
+      for (int j = 0; j < ncol; ++j) {
+        auto val = iterators[tid][j].Get(static_cast<int>(i));
+        if (std::fabs(val) > kZeroThreshold || std::isnan(val)) {
+          one_row.emplace_back(j, val);
+        }
+      }
+      return one_row;
+    };
+    ref_booster->PredictSparseCSC(num_iteration, predict_type, num_col_or_row, ncol, get_row_fun, config,
+                                  out_len, out_indptr, indptr_type, out_indices, out_data, data_type);
+  } else {
+    Log::Fatal("Unknown matrix type in LGBM_BoosterPredictSparseOutput");
+  }
+  API_END();
+}
+
+int LGBM_BoosterFreePredictSparse(void* indptr, int32_t* indices, void* data, int indptr_type, int data_type) {
+  API_BEGIN();
+  if (indptr_type == C_API_DTYPE_INT32) {
+    delete reinterpret_cast<int32_t*>(indptr);
+  } else if (indptr_type == C_API_DTYPE_INT64) {
+    delete reinterpret_cast<int64_t*>(indptr);
+  } else {
+    Log::Fatal("Unknown indptr type in LGBM_BoosterFreePredictSparse");
+  }
+  delete indices;
+  if (data_type == C_API_DTYPE_FLOAT32) {
+    delete reinterpret_cast<float*>(data);
+  } else if (data_type == C_API_DTYPE_FLOAT64) {
+    delete reinterpret_cast<double*>(data);
+  } else {
+    Log::Fatal("Unknown data type in LGBM_BoosterFreePredictSparse");
+  }
+  API_END();
+}
+
+int LGBM_BoosterPredictForCSRSingleRow(BoosterHandle handle,
+                                       const void* indptr,
+                                       int indptr_type,
+                                       const int32_t* indices,
+                                       const void* data,
+                                       int data_type,
+                                       int64_t nindptr,
+                                       int64_t nelem,
+                                       int64_t num_col,
+                                       int predict_type,
+                                       int num_iteration,
+                                       const char* parameter,
+                                       int64_t* out_len,
+                                       double* out_result) {
+  API_BEGIN();
+  if (num_col <= 0) {
+    Log::Fatal("The number of columns should be greater than zero.");
+  } else if (num_col >= INT32_MAX) {
+    Log::Fatal("The number of columns should be smaller than INT32_MAX.");
+  }
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto get_row_fun = RowFunctionFromCSR<int>(indptr, indptr_type, indices, data, data_type, nindptr, nelem);
+  ref_booster->SetSingleRowPredictor(num_iteration, predict_type, config);
+  ref_booster->PredictSingleRow(predict_type, static_cast<int32_t>(num_col), get_row_fun, config, out_result, out_len);
+  API_END();
+}
+
+
+int LGBM_BoosterPredictForCSC(BoosterHandle handle,
+                              const void* col_ptr,
+                              int col_ptr_type,
+                              const int32_t* indices,
+                              const void* data,
+                              int data_type,
+                              int64_t ncol_ptr,
+                              int64_t nelem,
+                              int64_t num_row,
+                              int predict_type,
+                              int num_iteration,
+                              const char* parameter,
+                              int64_t* out_len,
+                              double* out_result) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  int num_threads = OMP_NUM_THREADS();
+  int ncol = static_cast<int>(ncol_ptr - 1);
+  std::vector<std::vector<CSC_RowIterator>> iterators(num_threads, std::vector<CSC_RowIterator>());
+  for (int i = 0; i < num_threads; ++i) {
+    for (int j = 0; j < ncol; ++j) {
+      iterators[i].emplace_back(col_ptr, col_ptr_type, indices, data, data_type, ncol_ptr, nelem, j);
+    }
+  }
+  std::function<std::vector<std::pair<int, double>>(int row_idx)> get_row_fun =
+      [&iterators, ncol](int i) {
+        std::vector<std::pair<int, double>> one_row;
+        one_row.reserve(ncol);
+        const int tid = omp_get_thread_num();
+        for (int j = 0; j < ncol; ++j) {
+          auto val = iterators[tid][j].Get(i);
+          if (std::fabs(val) > kZeroThreshold || std::isnan(val)) {
+            one_row.emplace_back(j, val);
+          }
+        }
+        return one_row;
+      };
+  ref_booster->Predict(num_iteration, predict_type, static_cast<int>(num_row), ncol, get_row_fun, config,
+                       out_result, out_len);
+  API_END();
+}
+
+int LGBM_BoosterPredictForMat(BoosterHandle handle,
+                              const void* data,
+                              int data_type,
+                              int32_t nrow,
+                              int32_t ncol,
+                              int is_row_major,
+                              int predict_type,
+                              int num_iteration,
+                              const char* parameter,
+                              int64_t* out_len,
+                              double* out_result) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto get_row_fun = RowPairFunctionFromDenseMatric(data, nrow, ncol, data_type, is_row_major);
+  ref_booster->Predict(num_iteration, predict_type, nrow, ncol, get_row_fun,
+                       config, out_result, out_len);
+  API_END();
+}
+
+int LGBM_BoosterPredictForMatSingleRow(BoosterHandle handle,
+                                       const void* data,
+                                       int data_type,
+                                       int32_t ncol,
+                                       int is_row_major,
+                                       int predict_type,
+                                       int num_iteration,
+                                       const char* parameter,
+                                       int64_t* out_len,
+                                       double* out_result) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto get_row_fun = RowPairFunctionFromDenseMatric(data, 1, ncol, data_type, is_row_major);
+  ref_booster->SetSingleRowPredictor(num_iteration, predict_type, config);
+  ref_booster->PredictSingleRow(predict_type, ncol, get_row_fun, config, out_result, out_len);
+  API_END();
+}
+
+
+int LGBM_BoosterPredictForMats(BoosterHandle handle,
+                               const void** data,
+                               int data_type,
+                               int32_t nrow,
+                               int32_t ncol,
+                               int predict_type,
+                               int num_iteration,
+                               const char* parameter,
+                               int64_t* out_len,
+                               double* out_result) {
+  API_BEGIN();
+  auto param = Config::Str2Map(parameter);
+  Config config;
+  config.Set(param);
+  if (config.num_threads > 0) {
+    omp_set_num_threads(config.num_threads);
+  }
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  auto get_row_fun = RowPairFunctionFromDenseRows(data, ncol, data_type);
+  ref_booster->Predict(num_iteration, predict_type, nrow, ncol, get_row_fun, config, out_result, out_len);
+  API_END();
+}
+
+int LGBM_BoosterSaveModel(BoosterHandle handle,
+                          int start_iteration,
+                          int num_iteration,
+                          const char* filename) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->SaveModelToFile(start_iteration, num_iteration, filename);
+  API_END();
+}
+
+int LGBM_BoosterSaveModelToString(BoosterHandle handle,
+                                  int start_iteration,
+                                  int num_iteration,
+                                  int64_t buffer_len,
+                                  int64_t* out_len,
+                                  char* out_str) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  std::string model = ref_booster->SaveModelToString(start_iteration, num_iteration);
+  *out_len = static_cast<int64_t>(model.size()) + 1;
+  if (*out_len <= buffer_len) {
+    std::memcpy(out_str, model.c_str(), *out_len);
+  }
+  API_END();
+}
+
+int LGBM_BoosterDumpModel(BoosterHandle handle,
+                          int start_iteration,
+                          int num_iteration,
+                          int64_t buffer_len,
+                          int64_t* out_len,
+                          char* out_str) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  std::string model = ref_booster->DumpModel(start_iteration, num_iteration);
+  *out_len = static_cast<int64_t>(model.size()) + 1;
+  if (*out_len <= buffer_len) {
+    std::memcpy(out_str, model.c_str(), *out_len);
+  }
+  API_END();
+}
+
+int LGBM_BoosterGetLeafValue(BoosterHandle handle,
+                             int tree_idx,
+                             int leaf_idx,
+                             double* out_val) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  *out_val = static_cast<double>(ref_booster->GetLeafValue(tree_idx, leaf_idx));
+  API_END();
+}
+
+int LGBM_BoosterSetLeafValue(BoosterHandle handle,
+                             int tree_idx,
+                             int leaf_idx,
+                             double val) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  ref_booster->SetLeafValue(tree_idx, leaf_idx, val);
+  API_END();
+}
+
+int LGBM_BoosterFeatureImportance(BoosterHandle handle,
+                                  int num_iteration,
+                                  int importance_type,
+                                  double* out_results) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  std::vector<double> feature_importances = ref_booster->FeatureImportance(num_iteration, importance_type);
+  for (size_t i = 0; i < feature_importances.size(); ++i) {
+    (out_results)[i] = feature_importances[i];
+  }
+  API_END();
+}
+
+int LGBM_BoosterGetUpperBoundValue(BoosterHandle handle,
+                                   double* out_results) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  double max_value = ref_booster->UpperBoundValue();
+  *out_results = max_value;
+  API_END();
+}
+
+int LGBM_BoosterGetLowerBoundValue(BoosterHandle handle,
+                                   double* out_results) {
+  API_BEGIN();
+  Booster* ref_booster = reinterpret_cast<Booster*>(handle);
+  double min_value = ref_booster->LowerBoundValue();
+  *out_results = min_value;
+  API_END();
+}
+
+int LGBM_NetworkInit(const char* machines,
+                     int local_listen_port,
+                     int listen_time_out,
+                     int num_machines) {
+  API_BEGIN();
+  Config config;
+  config.machines = RemoveQuotationSymbol(std::string(machines));
+  config.local_listen_port = local_listen_port;
+  config.num_machines = num_machines;
+  config.time_out = listen_time_out;
+  if (num_machines > 1) {
+    Network::Init(config);
+  }
+  API_END();
+}
+
+int LGBM_NetworkFree() {
+  API_BEGIN();
+  Network::Dispose();
+  API_END();
+}
+
+int LGBM_NetworkInitWithFunctions(int num_machines, int rank,
+                                  void* reduce_scatter_ext_fun,
+                                  void* allgather_ext_fun) {
+  API_BEGIN();
+  if (num_machines > 1) {
+    Network::Init(num_machines, rank, (ReduceScatterFunction)reduce_scatter_ext_fun, (AllgatherFunction)allgather_ext_fun);
+  }
+  API_END();
+}
+
+// ---- start of some help functions
+
+std::function<std::vector<double>(int row_idx)>
+RowFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
+  if (data_type == C_API_DTYPE_FLOAT32) {
+    const float* data_ptr = reinterpret_cast<const float*>(data);
+    if (is_row_major) {
+      return [=] (int row_idx) {
+        std::vector<double> ret(num_col);
+        auto tmp_ptr = data_ptr + static_cast<size_t>(num_col) * row_idx;
+        for (int i = 0; i < num_col; ++i) {
+          ret[i] = static_cast<double>(*(tmp_ptr + i));
+        }
+        return ret;
+      };
+    } else {
+      return [=] (int row_idx) {
+        std::vector<double> ret(num_col);
+        for (int i = 0; i < num_col; ++i) {
+          ret[i] = static_cast<double>(*(data_ptr + static_cast<size_t>(num_row) * i + row_idx));
+        }
+        return ret;
+      };
+    }
+  } else if (data_type == C_API_DTYPE_FLOAT64) {
+    const double* data_ptr = reinterpret_cast<const double*>(data);
+    if (is_row_major) {
+      return [=] (int row_idx) {
+        std::vector<double> ret(num_col);
+        auto tmp_ptr = data_ptr + static_cast<size_t>(num_col) * row_idx;
+        for (int i = 0; i < num_col; ++i) {
+          ret[i] = static_cast<double>(*(tmp_ptr + i));
+        }
+        return ret;
+      };
+    } else {
+      return [=] (int row_idx) {
+        std::vector<double> ret(num_col);
+        for (int i = 0; i < num_col; ++i) {
+          ret[i] = static_cast<double>(*(data_ptr + static_cast<size_t>(num_row) * i + row_idx));
+        }
+        return ret;
+      };
+    }
+  }
+  Log::Fatal("Unknown data type in RowFunctionFromDenseMatric");
+  return nullptr;
+}
+
+std::function<std::vector<std::pair<int, double>>(int row_idx)>
+RowPairFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
+  auto inner_function = RowFunctionFromDenseMatric(data, num_row, num_col, data_type, is_row_major);
+  if (inner_function != nullptr) {
+    return [inner_function] (int row_idx) {
+      auto raw_values = inner_function(row_idx);
+      std::vector<std::pair<int, double>> ret;
+      ret.reserve(raw_values.size());
+      for (int i = 0; i < static_cast<int>(raw_values.size()); ++i) {
+        if (std::fabs(raw_values[i]) > kZeroThreshold || std::isnan(raw_values[i])) {
+          ret.emplace_back(i, raw_values[i]);
+        }
+      }
+      return ret;
+    };
+  }
+  return nullptr;
+}
+
+// data is array of pointers to individual rows
+std::function<std::vector<std::pair<int, double>>(int row_idx)>
+RowPairFunctionFromDenseRows(const void** data, int num_col, int data_type) {
+  return [=](int row_idx) {
+    auto inner_function = RowFunctionFromDenseMatric(data[row_idx], 1, num_col, data_type, /* is_row_major */ true);
+    auto raw_values = inner_function(0);
+    std::vector<std::pair<int, double>> ret;
+    ret.reserve(raw_values.size());
+    for (int i = 0; i < static_cast<int>(raw_values.size()); ++i) {
+      if (std::fabs(raw_values[i]) > kZeroThreshold || std::isnan(raw_values[i])) {
+        ret.emplace_back(i, raw_values[i]);
+      }
+    }
+    return ret;
+  };
+}
+
+template<typename T>
+std::function<std::vector<std::pair<int, double>>(T idx)>
+RowFunctionFromCSR(const void* indptr, int indptr_type, const int32_t* indices, const void* data, int data_type, int64_t , int64_t ) {
+  if (data_type == C_API_DTYPE_FLOAT32) {
+    const float* data_ptr = reinterpret_cast<const float*>(data);
+    if (indptr_type == C_API_DTYPE_INT32) {
+      const int32_t* ptr_indptr = reinterpret_cast<const int32_t*>(indptr);
+      return [=] (T idx) {
+        std::vector<std::pair<int, double>> ret;
+        int64_t start = ptr_indptr[idx];
+        int64_t end = ptr_indptr[idx + 1];
+        if (end - start > 0)  {
+          ret.reserve(end - start);
+        }
+        for (int64_t i = start; i < end; ++i) {
+          ret.emplace_back(indices[i], data_ptr[i]);
+        }
+        return ret;
+      };
+    } else if (indptr_type == C_API_DTYPE_INT64) {
+      const int64_t* ptr_indptr = reinterpret_cast<const int64_t*>(indptr);
+      return [=] (T idx) {
+        std::vector<std::pair<int, double>> ret;
+        int64_t start = ptr_indptr[idx];
+        int64_t end = ptr_indptr[idx + 1];
+        if (end - start > 0)  {
+          ret.reserve(end - start);
+        }
+        for (int64_t i = start; i < end; ++i) {
+          ret.emplace_back(indices[i], data_ptr[i]);
+        }
+        return ret;
+      };
+    }
+  } else if (data_type == C_API_DTYPE_FLOAT64) {
+    const double* data_ptr = reinterpret_cast<const double*>(data);
+    if (indptr_type == C_API_DTYPE_INT32) {
+      const int32_t* ptr_indptr = reinterpret_cast<const int32_t*>(indptr);
+      return [=] (T idx) {
+        std::vector<std::pair<int, double>> ret;
+        int64_t start = ptr_indptr[idx];
+        int64_t end = ptr_indptr[idx + 1];
+        if (end - start > 0)  {
+          ret.reserve(end - start);
+        }
+        for (int64_t i = start; i < end; ++i) {
+          ret.emplace_back(indices[i], data_ptr[i]);
+        }
+        return ret;
+      };
+    } else if (indptr_type == C_API_DTYPE_INT64) {
+      const int64_t* ptr_indptr = reinterpret_cast<const int64_t*>(indptr);
+      return [=] (T idx) {
+        std::vector<std::pair<int, double>> ret;
+        int64_t start = ptr_indptr[idx];
+        int64_t end = ptr_indptr[idx + 1];
+        if (end - start > 0)  {
+          ret.reserve(end - start);
+        }
+        for (int64_t i = start; i < end; ++i) {
+          ret.emplace_back(indices[i], data_ptr[i]);
+        }
+        return ret;
+      };
+    }
+  }
+  Log::Fatal("Unknown data type in RowFunctionFromCSR");
+  return nullptr;
+}
+
+std::function<std::pair<int, double>(int idx)>
+IterateFunctionFromCSC(const void* col_ptr, int col_ptr_type, const int32_t* indices, const void* data, int data_type, int64_t ncol_ptr, int64_t , int col_idx) {
+  CHECK(col_idx < ncol_ptr && col_idx >= 0);
+  if (data_type == C_API_DTYPE_FLOAT32) {
+    const float* data_ptr = reinterpret_cast<const float*>(data);
+    if (col_ptr_type == C_API_DTYPE_INT32) {
+      const int32_t* ptr_col_ptr = reinterpret_cast<const int32_t*>(col_ptr);
+      int64_t start = ptr_col_ptr[col_idx];
+      int64_t end = ptr_col_ptr[col_idx + 1];
+      return [=] (int offset) {
+        int64_t i = static_cast<int64_t>(start + offset);
+        if (i >= end) {
+          return std::make_pair(-1, 0.0);
+        }
+        int idx = static_cast<int>(indices[i]);
+        double val = static_cast<double>(data_ptr[i]);
+        return std::make_pair(idx, val);
+      };
+    } else if (col_ptr_type == C_API_DTYPE_INT64) {
+      const int64_t* ptr_col_ptr = reinterpret_cast<const int64_t*>(col_ptr);
+      int64_t start = ptr_col_ptr[col_idx];
+      int64_t end = ptr_col_ptr[col_idx + 1];
+      return [=] (int offset) {
+        int64_t i = static_cast<int64_t>(start + offset);
+        if (i >= end) {
+          return std::make_pair(-1, 0.0);
+        }
+        int idx = static_cast<int>(indices[i]);
+        double val = static_cast<double>(data_ptr[i]);
+        return std::make_pair(idx, val);
+      };
+    }
+  } else if (data_type == C_API_DTYPE_FLOAT64) {
+    const double* data_ptr = reinterpret_cast<const double*>(data);
+    if (col_ptr_type == C_API_DTYPE_INT32) {
+      const int32_t* ptr_col_ptr = reinterpret_cast<const int32_t*>(col_ptr);
+      int64_t start = ptr_col_ptr[col_idx];
+      int64_t end = ptr_col_ptr[col_idx + 1];
+      return [=] (int offset) {
+        int64_t i = static_cast<int64_t>(start + offset);
+        if (i >= end) {
+          return std::make_pair(-1, 0.0);
+        }
+        int idx = static_cast<int>(indices[i]);
+        double val = static_cast<double>(data_ptr[i]);
+        return std::make_pair(idx, val);
+      };
+    } else if (col_ptr_type == C_API_DTYPE_INT64) {
+      const int64_t* ptr_col_ptr = reinterpret_cast<const int64_t*>(col_ptr);
+      int64_t start = ptr_col_ptr[col_idx];
+      int64_t end = ptr_col_ptr[col_idx + 1];
+      return [=] (int offset) {
+        int64_t i = static_cast<int64_t>(start + offset);
+        if (i >= end) {
+          return std::make_pair(-1, 0.0);
+        }
+        int idx = static_cast<int>(indices[i]);
+        double val = static_cast<double>(data_ptr[i]);
+        return std::make_pair(idx, val);
+      };
+    }
+  }
+  Log::Fatal("Unknown data type in CSC matrix");
+  return nullptr;
+}
+
+CSC_RowIterator::CSC_RowIterator(const void* col_ptr, int col_ptr_type, const int32_t* indices,
+                                 const void* data, int data_type, int64_t ncol_ptr, int64_t nelem, int col_idx) {
+  iter_fun_ = IterateFunctionFromCSC(col_ptr, col_ptr_type, indices, data, data_type, ncol_ptr, nelem, col_idx);
+}
+
+double CSC_RowIterator::Get(int idx) {
+  while (idx > cur_idx_ && !is_end_) {
+    auto ret = iter_fun_(nonzero_idx_);
+    if (ret.first < 0) {
+      is_end_ = true;
+      break;
+    }
+    cur_idx_ = ret.first;
+    cur_val_ = ret.second;
+    ++nonzero_idx_;
+  }
+  if (idx == cur_idx_) {
+    return cur_val_;
+  } else {
+    return 0.0f;
+  }
+}
+
+std::pair<int, double> CSC_RowIterator::NextNonZero() {
+  if (!is_end_) {
+    auto ret = iter_fun_(nonzero_idx_);
+    ++nonzero_idx_;
+    if (ret.first < 0) {
+      is_end_ = true;
+    }
+    return ret;
+  } else {
+    return std::make_pair(-1, 0.0);
+  }
 }

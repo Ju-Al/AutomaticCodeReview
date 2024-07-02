@@ -12,12 +12,11 @@ const globals = [
   "CodeMirror",
   "document",
   "window",
-];
-let iframe = null;
-
 export default function scopedEval(code: string) {
   // $FlowFixMe
   new Function(...globals, code)();
+];
+
 export default function scopedEval(code: string, sourceMap: ?string) {
   if (iframe === null) {
     iframe = document.createElement("iframe");

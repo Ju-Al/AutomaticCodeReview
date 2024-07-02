@@ -1,5 +1,4 @@
 # Copyright 2004 by Bob Bussell.  All rights reserved.
-        """Return a dict of lines in \`data\` indexed by residue number or a nucleus.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -115,7 +114,7 @@ class Peaklist(object):
             self.data = [line.split("\012")[0] for line in infile]
 
     def residue_dict(self, index):
-        r"""Return a dict of lines in \`data\` indexed by residue number or a nucleus.
+        """Return a dict of lines in \`data\` indexed by residue number or a nucleus.
 
         The nucleus should be given as the input argument in the same form as
         it appears in the xpk label line (H1, 15N for example)

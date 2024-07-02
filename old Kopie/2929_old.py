@@ -1,18 +1,5 @@
 """Functions for extracting subgraphs.
-    sgi = graph._graph.edge_subgraph(induced_edges, preserve_nodes)
-    induced_nodes = sgi.induced_nodes
-    return _create_hetero_subgraph(graph, sgi, induced_nodes, induced_edges, store_ids)
 
-def in_subgraph(g, nodes):
-    An edge-induced subgraph is equivalent to creating a new graph
-    with the same number of nodes using the given edges.  In addition to extracting
-    the subgraph, DGL conducts the following:
-
-    * Copy the features of the extracted nodes and edges to the resulting graph.
-      The copy is *lazy* and incurs data movement only when needed.
-
-    * Store the IDs of the extracted edges in the ``edata``
-      of the resulting graph under name ``dgl.EID``.
 The module only contains functions for extracting subgraphs deterministically.
 For stochastic subgraph extraction, please see functions under :mod:`dgl.sampling`.
 """
@@ -308,7 +295,19 @@ def edge_subgraph(graph, edges, *, relabel_nodes=True, store_ids=True, **depreca
     for cetype in graph.canonical_etypes:
         eids = edges.get(cetype, F.copy_to(F.tensor([], graph.idtype), graph.device))
         induced_edges.append(_process_edges(cetype, eids))
-    sgi = graph._graph.edge_subgraph(induced_edges, not relabel_nodes)
+    sgi = graph._graph.edge_subgraph(induced_edges, preserve_nodes)
+    induced_nodes = sgi.induced_nodes
+def in_subgraph(g, nodes):
+    An edge-induced subgraph is equivalent to creating a new graph
+    with the same number of nodes using the given edges.  In addition to extracting
+    the subgraph, DGL conducts the following:
+
+    * Copy the features of the extracted nodes and edges to the resulting graph.
+      The copy is *lazy* and incurs data movement only when needed.
+
+    * Store the IDs of the extracted edges in the ``edata``
+      of the resulting graph under name ``dgl.EID``.
+    return _create_hetero_subgraph(graph, sgi, induced_nodes, induced_edges, store_ids)
     induced_nodes = sgi.induced_nodes if relabel_nodes else None
     return _create_hetero_subgraph(graph, sgi, induced_nodes, induced_edges, store_ids=store_ids)
 

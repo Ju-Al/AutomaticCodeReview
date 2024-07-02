@@ -21,7 +21,6 @@ def test_tensor_with_tensor():
     r = tensor(c)
     assert r.data_ptr()==c.data_ptr()
     assert torch.all(r==exp)
-
 def test_requires_grad():
     m = simple_cnn(b)
     assert requires_grad(m) == True

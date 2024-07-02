@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-                os.symlink(src_relpath, tar_path)
 # Copyright (c) OpenMMLab. All rights reserved.
 import os
 import os.path as osp
@@ -167,7 +166,6 @@ def add_mim_extension():
 
             if mode == 'symlink':
                 src_relpath = osp.relpath(src_path, osp.dirname(tar_path))
-                try:
                     os.symlink(src_relpath, tar_path)
                 except OSError:
                     # Symlink fails with WinError on Windows

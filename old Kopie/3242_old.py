@@ -1,9 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        pair, d = capped_distance(self.h.positions, self.a.positions, max_cutoff=self.d_crit, box=box)
-        if self.exclusions:
-            # set to above dist crit to exclude
-            exclude = np.column_stack((self.exclusions[0], self.exclusions[1]))
-            pair = np.delete(pair, np.where(pair==exclude), 0)
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -435,7 +430,11 @@ class HydrogenBondAutoCorrel(object):
         box = self.u.dimensions if self.pbc else None
 
         # 2d array of all distances
-        pair = capped_distance(self.h.positions, self.a.positions, max_cutoff=self.d_crit, box=box,
+        pair, d = capped_distance(self.h.positions, self.a.positions, max_cutoff=self.d_crit, box=box)
+        if self.exclusions:
+            # set to above dist crit to exclude
+            exclude = np.column_stack((self.exclusions[0], self.exclusions[1]))
+            pair = np.delete(pair, np.where(pair==exclude), 0)
                                return_distances=False)
         if not self.exclusions is None:
             pair = pair[~ _in2d(pair, self.exclusions)]

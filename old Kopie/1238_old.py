@@ -1,5 +1,4 @@
 """Module for converting graph from/to other object."""
-    hgidx = heterograph_index.create_unitgraph_from_coo(num_ntypes, urange, vrange, u, v)
 from collections import defaultdict
 import numpy as np
 import scipy as sp
@@ -792,7 +791,7 @@ def create_from_edges(u, v, utype, etype, vtype, urange=None, vrange=None, valid
         num_ntypes = 1
     else:
         num_ntypes = 2
-
+    hgidx = heterograph_index.create_unitgraph_from_coo(num_ntypes, urange, vrange, u, v)
     if _prefer_coo == 'auto':
         _prefer_coo = detect_prefer_coo(urange, vrange, u, v)
 

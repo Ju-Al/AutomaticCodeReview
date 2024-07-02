@@ -1,6 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-            download_manager.get(self._current_url(), user_agent=user_agent,
-                                 qnam=qnam, target=target)
 
 # Copyright 2014-2017 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
@@ -1445,7 +1443,8 @@ class CommandDispatcher:
                 download_manager.get_mhtml(tab, target)
         else:
             qnam = tab.networkaccessmanager()
-
+            download_manager.get(self._current_url(), user_agent=user_agent,
+                                 qnam=qnam, target=target)
             # Downloads of URLs with file extensions in the whitelist will use
             # the page title as the filename.
             ext_whitelist = [".html", ".htm", ".php", ""]

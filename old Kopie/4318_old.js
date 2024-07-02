@@ -1,5 +1,4 @@
 // Copyright (c) Jupyter Development Team.
-        document.title = (dirty?'*':'')+this._filename;
 // Distributed under the terms of the Modified BSD License.
 
 define([
@@ -123,7 +122,7 @@ define([
         if(filename){
             this._filename = filename;
         }
-        document.title = (dirty?'*':'')+this._filename+' - Jupyter Notebook';
+        document.title = (dirty?'*':'')+this._filename;
     };
 
     SaveWidget.prototype.update_address_bar = function (path) {

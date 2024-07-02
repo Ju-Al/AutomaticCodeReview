@@ -1,5 +1,6 @@
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 
+
 import networkx as nx
 from networkx.algorithms.connectivity import (minimum_st_edge_cut,
                                               minimum_st_node_cut)

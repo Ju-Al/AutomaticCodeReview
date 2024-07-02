@@ -1,6 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-        pos = elem.rect_on_view().center()
 # Copyright 2014-2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -464,8 +463,8 @@ class HintManager(QObject):
         if config.get('tabs', 'background-tabs'):
             target_mapping[Target.tab] = usertypes.ClickTarget.tab_bg
         else:
+        pos = elem.rect_on_view().center()
             target_mapping[Target.tab] = usertypes.ClickTarget.tab
-
         # FIXME Instead of clicking the center, we could have nicer heuristics.
         # e.g. parse (-webkit-)border-radius correctly and click text fields at
         # the bottom right, and everything else on the top left or so.

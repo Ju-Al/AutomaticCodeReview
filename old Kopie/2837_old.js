@@ -40,7 +40,6 @@ module.exports = {
   async init(self) {
     self.name = 'attachment';
 
-    self.imageSizes = self.apos.modules['@apostrophecms/uploadfs'].imageSizes;
     self.fileGroups = self.options.fileGroups || [
       {
         name: 'images',

@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Google LLC
+Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,237 +14,397 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resources
+package v1alpha1
 
 import (
-	"context"
-	"fmt"
+	"testing"
 
-	"github.com/google/knative-gcp/pkg/testing/testloggingutil"
-
-	"go.uber.org/zap"
-
-	"knative.dev/pkg/apis"
-	"knative.dev/pkg/kmeta"
-	"knative.dev/pkg/logging"
-
-	"github.com/google/knative-gcp/pkg/apis/intevents"
-	intereventsv1 "github.com/google/knative-gcp/pkg/apis/intevents/v1"
-	"github.com/google/knative-gcp/pkg/pubsub/adapter/converters"
-	"github.com/google/knative-gcp/pkg/utils"
-
-	v1 "k8s.io/api/apps/v1"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/pkg/apis"
+	duckv1 "knative.dev/pkg/apis/duck/v1"
 )
 
-// ReceiveAdapterArgs are the arguments needed to create a PullSubscription Receive
-// Adapter. Every field is required.
-type ReceiveAdapterArgs struct {
-	Image            string
-	PullSubscription *intereventsv1.PullSubscription
-	Labels           map[string]string
-	SubscriptionID   string
-	SinkURI          *apis.URL
-	TransformerURI   *apis.URL
-	MetricsConfig    string
-	LoggingConfig    string
-	TracingConfig    string
-	// There are three types: `secret`, `workload-identity-gsa` and `workload-identity-ubermint`.
-	AuthType string
-}
+var (
+	brokerCellConditionReady = apis.Condition{
+		Type:   BrokerCellConditionReady,
+		Status: corev1.ConditionTrue,
+	}
 
-const (
-	credsVolume          = "google-cloud-key"
-	credsMountPath       = "/var/secrets/google"
-	metricsDomain        = "cloud.google.com/events"
-	defaultResourceGroup = "pullsubscriptions.internal.events.cloud.google.com"
+	brokerCellConditionIngress = apis.Condition{
+		Type:   BrokerCellConditionIngress,
+		Status: corev1.ConditionTrue,
+	}
+
+	brokerCellConditionIngressFalse = apis.Condition{
+		Type:   BrokerCellConditionIngress,
+		Status: corev1.ConditionFalse,
+	}
+
+	brokerCellConditionFanout = apis.Condition{
+		Type:   BrokerCellConditionFanout,
+		Status: corev1.ConditionTrue,
+	}
+
+	brokerCellConditionRetry = apis.Condition{
+		Type:   BrokerCellConditionRetry,
+		Status: corev1.ConditionTrue,
+	}
 )
 
-func makeReceiveAdapterPodSpec(ctx context.Context, args *ReceiveAdapterArgs) *corev1.PodSpec {
-	// Convert CloudEvent Overrides to pod embeddable properties.
-	ceExtensions := ""
-	if args.PullSubscription.Spec.CloudEventOverrides != nil && args.PullSubscription.Spec.CloudEventOverrides.Extensions != nil {
-		var err error
-		ceExtensions, err = utils.MapToBase64(args.PullSubscription.Spec.CloudEventOverrides.Extensions)
-		if err != nil {
-			logging.FromContext(ctx).Warnw("failed to make cloudevents overrides extensions",
-				zap.Error(err),
-				zap.Any("extensions", args.PullSubscription.Spec.CloudEventOverrides.Extensions))
-		}
-	}
-
-	var resourceGroup = defaultResourceGroup
-	if rg, ok := args.PullSubscription.Annotations["metrics-resource-group"]; ok {
-		resourceGroup = rg
-	}
-	// Needed for Channels, as we use a generate name for the PullSubscription.
-	var resourceName = args.PullSubscription.Name
-	if rn, ok := args.PullSubscription.Annotations["metrics-resource-name"]; ok {
-		resourceName = rn
-	}
-
-	var transformerURI string
-	if args.TransformerURI != nil {
-		transformerURI = args.TransformerURI.String()
-	}
-
-	adapterType := args.PullSubscription.Spec.AdapterType
-	// If the PullSubscription has no Channel nor Source label, means that users created a PullSubscription manually.
-	// Then we set the adapter type to be PubSubPull.
-	_, isFromSource := args.PullSubscription.Labels[intevents.SourceLabelKey]
-	_, isFromChannel := args.PullSubscription.Labels[intevents.ChannelLabelKey]
-	if !isFromSource && !isFromChannel {
-		adapterType = string(converters.PubSubPull)
-	}
-
-	receiveAdapterContainer := corev1.Container{
-		Name:  "receive-adapter",
-		Image: args.Image,
-		// Such resources setting should support tps with 1000/s
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				// The memory limit we set is 600Mi which is mostly used to prevent surging memory usage causing OOM.
-				corev1.ResourceMemory: resource.MustParse("600Mi"),
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceMemory: resource.MustParse("50Mi"),
-				corev1.ResourceCPU:    resource.MustParse("400m"),
+func TestBrokerCellGetCondition(t *testing.T) {
+	tests := []struct {
+		name      string
+		ts        *BrokerCellStatus
+		condQuery apis.ConditionType
+		want      *apis.Condition
+	}{{
+		name: "single condition",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{
+					brokerCellConditionReady,
+				},
 			},
 		},
-		Env: []corev1.EnvVar{{
-			Name:  "PROJECT_ID",
-			Value: args.PullSubscription.Spec.Project,
-		}, {
-			Name:  "PUBSUB_TOPIC_ID",
-			Value: args.PullSubscription.Spec.Topic,
-		}, {
-			Name:  "PUBSUB_SUBSCRIPTION_ID",
-			Value: args.SubscriptionID,
-		}, {
-			Name:  "SINK_URI",
-			Value: args.SinkURI.String(),
-		}, {
-			Name:  "TRANSFORMER_URI",
-			Value: transformerURI,
-		}, {
-			Name:  "ADAPTER_TYPE",
-			Value: adapterType,
-		}, {
-			Name:  "K_CE_EXTENSIONS",
-			Value: ceExtensions,
-		}, {
-			Name:  "K_METRICS_CONFIG",
-			Value: args.MetricsConfig,
-		}, {
-			Name:  "K_LOGGING_CONFIG",
-			Value: args.LoggingConfig,
-		}, {
-			Name:  "K_TRACING_CONFIG",
-			Value: args.TracingConfig,
-		}, {
-			Name:  "NAME",
-			Value: resourceName,
-		}, {
-			Name:  "NAMESPACE",
-			Value: args.PullSubscription.Namespace,
-		}, {
-			Name:  "RESOURCE_GROUP",
-			Value: resourceGroup,
-		}, {
-			Name:  "METRICS_DOMAIN",
-			Value: metricsDomain,
-		}, {
-			Name:  "K_GCP_AUTH_TYPE",
-			Value: args.AuthType,
-		}},
-		Ports: []corev1.ContainerPort{{
-			Name:          "metrics",
-			ContainerPort: 9090,
-		}},
-	}
-
-	// This is added purely for the TestCloudLogging E2E tests, which verify that the log line is
-	// written certain annotations are present.
-	receiveAdapterContainer.Env = testloggingutil.PropagateLoggingE2ETestAnnotation(
-		args.PullSubscription.Annotations, receiveAdapterContainer.Env)
-
-	// If there is no secret to embed, return what we have.
-	if args.PullSubscription.Spec.Secret == nil {
-		return &corev1.PodSpec{
-			ServiceAccountName: args.PullSubscription.Spec.ServiceAccountName,
-			Containers: []corev1.Container{
-				receiveAdapterContainer,
+		condQuery: apis.ConditionReady,
+		want:      &brokerCellConditionReady,
+	}, {
+		name: "multiple conditions",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{
+					brokerCellConditionIngress,
+					brokerCellConditionFanout,
+				},
 			},
-		}
-	}
-
-	// Otherwise, use secret as credential.
-	secret := args.PullSubscription.Spec.Secret
-	credsFile := fmt.Sprintf("%s/%s", credsMountPath, secret.Key)
-
-	receiveAdapterContainer.Env = append(
-		receiveAdapterContainer.Env,
-		corev1.EnvVar{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: credsFile,
 		},
-		corev1.EnvVar{
-			// Needed for Keda scaling.
-			// TODO set it only when using Keda.
-			Name:      "GOOGLE_APPLICATION_CREDENTIALS_JSON",
-			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: secret},
-		})
-
-	receiveAdapterContainer.VolumeMounts = []corev1.VolumeMount{{
-		Name:      credsVolume,
-		MountPath: credsMountPath,
+		condQuery: BrokerCellConditionIngress,
+		want:      &brokerCellConditionIngress,
+	}, {
+		name: "multiple conditions, condition false",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{
+					brokerCellConditionIngressFalse,
+					brokerCellConditionFanout,
+				},
+			},
+		},
+		condQuery: BrokerCellConditionIngress,
+		want:      &brokerCellConditionIngressFalse,
+	}, {
+		name: "unknown condition",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{
+					brokerCellConditionIngress,
+				},
+			},
+		},
+		condQuery: apis.ConditionType("foo"),
+		want:      nil,
 	}}
 
-	return &corev1.PodSpec{
-		ServiceAccountName: args.PullSubscription.Spec.ServiceAccountName,
-		Containers: []corev1.Container{
-			receiveAdapterContainer,
-		},
-		Volumes: []corev1.Volume{{
-			Name: credsVolume,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: secret.Name,
-				},
-			},
-		}},
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := test.ts.GetCondition(test.condQuery)
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("unexpected condition (-want, +got) = %v", diff)
+			}
+		})
 	}
 }
 
-// MakeReceiveAdapter generates (but does not insert into K8s) the Receive Adapter Deployment for
-// PullSubscriptions.
-func MakeReceiveAdapter(ctx context.Context, args *ReceiveAdapterArgs) *v1.Deployment {
-	podSpec := makeReceiveAdapterPodSpec(ctx, args)
-	replicas := int32(1)
+func TestBrokerCellInitializeConditions(t *testing.T) {
+	tests := []struct {
+		name string
+		ts   *BrokerCellStatus
+		want *BrokerCellStatus
+	}{{
+		name: "empty",
+		ts:   &BrokerCellStatus{},
+		want: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{{
+					Type:   BrokerCellConditionFanout,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionIngress,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionReady,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionRetry,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionTargetsConfig,
+					Status: corev1.ConditionUnknown,
+				}},
+			},
+		},
+	}, {
+		name: "one false",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{{
+					Type:   BrokerCellConditionIngress,
+					Status: corev1.ConditionFalse,
+				}},
+			},
+		},
+		want: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{{
+					Type:   BrokerCellConditionFanout,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionIngress,
+					Status: corev1.ConditionFalse,
+				}, {
+					Type:   BrokerCellConditionReady,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionRetry,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionTargetsConfig,
+					Status: corev1.ConditionUnknown,
+				}},
+			},
+		},
+	}, {
+		name: "one true",
+		ts: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{{
+					Type:   BrokerCellConditionIngress,
+					Status: corev1.ConditionTrue,
+				}},
+			},
+		},
+		want: &BrokerCellStatus{
+			Status: duckv1.Status{
+				Conditions: []apis.Condition{{
+					Type:   BrokerCellConditionFanout,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionIngress,
+					Status: corev1.ConditionTrue,
+				}, {
+					Type:   BrokerCellConditionReady,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionRetry,
+					Status: corev1.ConditionUnknown,
+				}, {
+					Type:   BrokerCellConditionTargetsConfig,
+					Status: corev1.ConditionUnknown,
+				}},
+			},
+		},
+	}}
 
-	return &v1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:       args.PullSubscription.Namespace,
-			Name:            GenerateReceiveAdapterName(args.PullSubscription),
-			Labels:          args.Labels,
-			OwnerReferences: []metav1.OwnerReference{*kmeta.NewControllerRef(args.PullSubscription)},
-			// Copy the source annotations so that the appropriate reconciler is called.
-			Annotations: args.PullSubscription.Annotations,
-		},
-		Spec: v1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: args.Labels,
-			},
-			Replicas: &replicas,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: args.Labels,
-				},
-				Spec: *podSpec,
-			},
-		},
+	ignoreAllButTypeAndStatus := cmpopts.IgnoreFields(
+		apis.Condition{},
+		"LastTransitionTime", "Message", "Reason", "Severity")
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.ts.InitializeConditions()
+			if diff := cmp.Diff(test.want, test.ts, ignoreAllButTypeAndStatus); diff != "" {
+				t.Errorf("unexpected conditions (-want, +got) = %v", diff)
+			}
+		})
+	}
+}
+
+func TestBrokerCellConditionStatus(t *testing.T) {
+	tests := []struct {
+		name                string
+		fanoutStatus        *appsv1.Deployment
+		ingressStatus       *corev1.Endpoints
+		retryStatus         *appsv1.Deployment
+		targetsStatus       bool
+		wantConditionStatus corev1.ConditionStatus
+	}{{
+		name:                "all happy",
+		fanoutStatus:        TestHelper.AvailableDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.AvailableDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionTrue,
+	}, {
+		name:                "fanout sad",
+		fanoutStatus:        TestHelper.UnavailableDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.AvailableDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionFalse,
+	}, {
+		name:                "fanout unknown",
+		fanoutStatus:        TestHelper.UnknownDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.AvailableDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionUnknown,
+	}, {
+		name:                "ingress sad",
+		fanoutStatus:        TestHelper.AvailableDeployment(),
+		ingressStatus:       TestHelper.UnavailableEndpoints(),
+		retryStatus:         TestHelper.AvailableDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionFalse,
+	}, {
+		name:                "retry sad",
+		fanoutStatus:        TestHelper.AvailableDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.UnavailableDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionFalse,
+	}, {
+		name:                "retry unknown",
+		fanoutStatus:        TestHelper.AvailableDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.UnknownDeployment(),
+		targetsStatus:       true,
+		wantConditionStatus: corev1.ConditionUnknown,
+	}, {
+		name:                "targets sad",
+		fanoutStatus:        TestHelper.AvailableDeployment(),
+		ingressStatus:       TestHelper.AvailableEndpoints(),
+		retryStatus:         TestHelper.AvailableDeployment(),
+		targetsStatus:       false,
+		wantConditionStatus: corev1.ConditionFalse,
+	}, {
+		name:                "all sad",
+		fanoutStatus:        TestHelper.UnavailableDeployment(),
+		ingressStatus:       TestHelper.UnavailableEndpoints(),
+		retryStatus:         TestHelper.UnavailableDeployment(),
+		targetsStatus:       false,
+		wantConditionStatus: corev1.ConditionFalse,
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bs := &BrokerCellStatus{}
+			if test.fanoutStatus != nil {
+				bs.PropagateFanoutAvailability(test.fanoutStatus)
+			} else {
+				bs.PropagateFanoutAvailability(&appsv1.Deployment{})
+			}
+			if test.ingressStatus != nil {
+				bs.PropagateIngressAvailability(test.ingressStatus)
+			} else {
+				bs.PropagateIngressAvailability(&corev1.Endpoints{})
+			}
+			if test.retryStatus != nil {
+				bs.PropagateRetryAvailability(test.retryStatus)
+			} else {
+				bs.PropagateRetryAvailability(&appsv1.Deployment{})
+			}
+			if test.targetsStatus {
+				bs.MarkTargetsConfigReady()
+			} else {
+				bs.MarkTargetsConfigFailed("Unable to sync targets config", "induced failure")
+			}
+			got := bs.GetTopLevelCondition().Status
+			if test.wantConditionStatus != got {
+				t.Errorf("unexpected readiness: want %v, got %v", test.wantConditionStatus, got)
+			}
+			happy := bs.IsReady()
+			switch test.wantConditionStatus {
+			case corev1.ConditionTrue:
+				if !happy {
+					t.Error("expected happy true, got false")
+				}
+			case corev1.ConditionFalse, corev1.ConditionUnknown:
+				if happy {
+					t.Error("expected happy false, got true")
+				}
+			}
+		})
+func TestMarkBrokerCellStatus(t *testing.T) {
+	tests := []struct {
+		name          string
+		s             *BrokerCellStatus
+		wantType      apis.ConditionType
+		wantCondition corev1.ConditionStatus
+	}{{
+		name: "mark ingressReady unknown",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkIngressUnknown("test", "the status of ingressReady is unknown")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionIngress,
+		wantCondition: corev1.ConditionUnknown,
+	}, {}, {
+		name: "mark ingressReady false",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkIngressFailed("test", "the status of ingressReady is false")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionIngress,
+		wantCondition: corev1.ConditionFalse,
+	}, {
+		name: "mark fanoutReady unknown",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkFanoutUnknown("test", "the status of fanoutReady is unknown")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionFanout,
+		wantCondition: corev1.ConditionUnknown,
+	}, {
+		name: "mark fanoutReady false",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkFanoutFailed("test", "the status of fanoutReady is false")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionFanout,
+		wantCondition: corev1.ConditionFalse,
+	}, {
+		name: "mark retryReady unknown",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkRetryUnknown("test", "the status of retryReady is unknown")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionRetry,
+		wantCondition: corev1.ConditionUnknown,
+	}, {
+		name: "mark retryReady false",
+		s: func() *BrokerCellStatus {
+			s := &BrokerCell{}
+			s.Status.InitializeConditions()
+			s.Status.MarkRetryFailed("test", "the status of retryReady is false")
+			return &s.Status
+		}(),
+		wantType:      BrokerCellConditionRetry,
+		wantCondition: corev1.ConditionFalse,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.wantType != "" {
+				gotConditionStatus := test.s.Status
+				for _, cd := range gotConditionStatus.Conditions {
+					if cd.Type == test.wantType &&
+						cd.Status != test.wantCondition {
+						t.Errorf("unexpected condition status for %v: want %v, got %v", test.wantType, test.wantCondition, cd.Status)
+					}
+				}
+			}
+		})
 	}
 }

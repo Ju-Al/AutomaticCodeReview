@@ -1,62 +1,158 @@
-define(['jQuery', 'loading', 'libraryMenu', 'globalize'], function ($, loading, libraryMenu, globalize) {
+define(['jQuery', 'loading', 'libraryMenu', 'globalize', 'connectionManager', 'emby-button'], function ($, loading, libraryMenu, globalize, connectionManager) {
     'use strict';
 
-    function loadPage(page, config, users) {
-        page.querySelector('#chkEnablePlayTo').checked = config.EnablePlayTo;
-        page.querySelector('#chkEnableDlnaDebugLogging').checked = config.EnableDebugLog;
-        page.querySelector('#txtClientDiscoveryInterval').value = config.ClientDiscoveryIntervalSeconds;
-        page.querySelector('#chkEnableServer').checked = config.EnableServer;
-        page.querySelector('#chkBlastAliveMessages').checked = config.BlastAliveMessages;
-        page.querySelector('#txtBlastInterval').value = config.BlastAliveMessageIntervalSeconds;
-        var usersHtml = users.map(function (u) {
-            return '<option value="' + u.Id + '">' + u.Name + '</option>';
-        }).join('');
-        const elem = $('#selectUser', page);
-        elem.innerHtml = usersHtml;
-        elem.val(config.DefaultUserId || '');
+    function populateHistory(packageInfo, page) {
+        var html = '';
+        var length = Math.min(packageInfo.versions.length, 10);
+
+        for (var i = 0; i < length; i++) {
+            var version = packageInfo.versions[i];
+            html += '<h2 style="margin:.5em 0;">' + version.version + '</h2>';
+            html += '<div style="margin-bottom:1.5em;">' + version.changelog + '</div>';
+        }
+
+        page.querySelector('#revisionHistory').innerHtml = html;
+    }
+
+    function populateVersions(packageInfo, page, installedPlugin) {
+        var html = '';
+
+        for (var i = 0; i < packageInfo.versions.length; i++) {
+            var version = packageInfo.versions[i];
+            html += '<option value="' + version.version + '">' + version.version + '</option>';
+        }
+
+        var selectmenu = page.querySelector$('#selectVersion');
+        selectmenu.innerHtml = html;
+
+        if (!installedPlugin) {
+            const currentVersion = page.querySelector('#pCurrentVersion');
+            currentVersion.classList.add('hide');
+            currentVersion.innerHtml = '';
+        }
+
+        var packageVersion = packageInfo.versions[0];
+        if (packageVersion) {
+            selectmenu.val(packageVersion.version);
+        }
+    }
+
+    function renderPackage(pkg, installedPlugins, page) {
+        var installedPlugin = installedPlugins.filter(function (ip) {
+            return ip.Name == pkg.name;
+        })[0];
+
+        populateVersions(pkg, page, installedPlugin);
+        populateHistory(pkg, page);
+
+        $('.pluginName', page).html(pkg.name);
+        $('#btnInstallDiv', page).removeClass('hide');
+            $('#overview', page).show().html(pkg.overview);
+            $('#overview', page).hide();
+        $('#description', page).html(pkg.description);
+        $('#developer', page).html(pkg.owner);
+        $('#pSelectVersion', page).removeClass('hide');
+        page.querySelector('#btnInstallDiv').classList.remove('hide');
+        page.querySelector('#pSelectVersion').classList.remove('hide');
+
+        if (pkg.overview) {
+            const overview = page.querySelector('#overview');
+            overview.classList.remove('hide');
+            overview.innerHtml = pkg.overview;
+        } else {
+            page.querySelector('#overview').classList.add('hide');
+        }
+
+        $('#description', page).innerHtml = pkg.description;
+        $('#developer', page).innerHtml = pkg.owner;
+
+        if (installedPlugin) {
+            var currentVersionText = globalize.translate('MessageYouHaveVersionInstalled', '<strong>' + installedPlugin.Version + '</strong>');
+            const currentVersion = page.querySelector('#pCurrentVersion');
+            currentVersion.classList.remove('hide');
+            currentVersion.innerHtml = currentVersionText;
+        } else {
+            const currentVersion = page.querySelector('#pCurrentVersion');
+            currentVersion.classList.add('hide');
+            currentVersion.innerHtml = '';
+        }
+
         loading.hide();
     }
 
-    function onSubmit() {
-        loading.show();
-        var form = this;
-        ApiClient.getNamedConfiguration('dlna').then(function (config) {
-            config.EnablePlayTo = form.querySelector('#chkEnablePlayTo').checked;
-            config.EnableDebugLog = form.querySelector('#chkEnableDlnaDebugLogging').checked;
-            config.ClientDiscoveryIntervalSeconds = $('#txtClientDiscoveryInterval', form).val();
-            config.EnableServer = $('#chkEnableServer', form).is(':checked');
-            config.BlastAliveMessages = $('#chkBlastAliveMessages', form).is(':checked');
-            config.BlastAliveMessageIntervalSeconds = $('#txtBlastInterval', form).val();
-            config.DefaultUserId = $('#selectUser', form).val();
-            config.EnableServer = $('#chkEnableServer', form).matches(':checked');
-            config.BlastAliveMessages = $('#chkBlastAliveMessages', form).matches(':checked');
-            config.BlastAliveMessageIntervalSeconds = form.querySelector('#txtBlastInterval').value;
-            config.DefaultUserId = form.querySelector('#selectUser', form).value;
-            ApiClient.updateNamedConfiguration('dlna', config).then(Dashboard.processServerConfigurationUpdateResult);
+    function alertText(options) {
+        require(['alert'], function (alert) {
+            alert(options);
         });
-        return false;
     }
 
-    function getTabs() {
-        return [{
-            href: 'dlnasettings.html',
-            name: globalize.translate('TabSettings')
-        }, {
-            href: 'dlnaprofiles.html',
-            name: globalize.translate('TabProfiles')
-        }];
+    function performInstallation(page, name, guid, version) {
+        var developer = page.querySelector('#developer').innerHtml.toLowerCase();
+
+        var alertCallback = function () {
+            loading.show();
+            page.querySelector('#btnInstall').disabled = true;
+            ApiClient.installPlugin(name, guid, version).then(function () {
+                loading.hide();
+                alertText(globalize.translate('PluginInstalledMessage'));
+            });
+        };
+
+        if (developer !== 'jellyfin') {
+            loading.hide();
+            var msg = globalize.translate('MessagePluginInstallDisclaimer');
+            msg += '<br/>';
+            msg += '<br/>';
+            msg += globalize.translate('PleaseConfirmPluginInstallation');
+
+            require(['confirm'], function (confirm) {
+                confirm(msg, globalize.translate('HeaderConfirmPluginInstallation')).then(function () {
+                    alertCallback();
+                }, function () {
+                    console.debug('plugin not installed');
+                });
+            });
+        } else {
+            alertCallback();
+        }
     }
 
-    $(document).on('pageinit', '#dlnaSettingsPage', function () {
-        $('.dlnaSettingsForm').off('submit', onSubmit).on('submit', onSubmit);
-    }).on('pageshow', '#dlnaSettingsPage', function () {
-        libraryMenu.setTabs('dlna', 0, getTabs);
-        loading.show();
-        var page = this;
-        var promise1 = ApiClient.getNamedConfiguration('dlna');
-        var promise2 = ApiClient.getUsers();
-        Promise.all([promise1, promise2]).then(function (responses) {
-            loadPage(page, responses[0], responses[1]);
+    return function (view, params) {
+        $('.addPluginForm', view).on('submit', function () {
+            loading.show();
+            var page = this.closest('#addPluginPage');
+            var name = params.name;
+            var guid = params.guid;
+            ApiClient.getInstalledPlugins().then(function (plugins) {
+                var installedPlugin = plugins.filter(function (plugin) {
+                    return plugin.Name == name;
+                })[0];
+
+                var version = page.querySelector('#selectVersion').value;
+                if (installedPlugin) {
+                    if (installedPlugin.Version === version) {
+                        loading.hide();
+                        Dashboard.alert({
+                            message: globalize.translate('MessageAlreadyInstalled'),
+                            title: globalize.translate('HeaderPluginInstallation')
+                        });
+                    }
+                } else {
+                    performInstallation(page, name, guid, version);
+                }
+            });
+            return false;
         });
-    });
+        view.addEventListener('viewshow', function () {
+            var page = this;
+            loading.show();
+            var name = params.name;
+            var guid = params.guid;
+            var promise1 = ApiClient.getPackageInfo(name, guid);
+            var promise2 = ApiClient.getInstalledPlugins();
+            Promise.all([promise1, promise2]).then(function (responses) {
+                renderPackage(responses[0], responses[1], page);
+            });
+        });
+    };
 });

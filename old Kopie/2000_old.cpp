@@ -1,5 +1,4 @@
 /*
-      result->setToNull();
  * This file is part of Hootenanny.
  *
  * Hootenanny is free software: you can redistribute it and/or modify
@@ -151,7 +150,7 @@ Envelope Relation::getEnvelopeInternal(const boost::shared_ptr<const ElementProv
     // if any of the elements don't exist then return an empty envelope.
     if (ep->containsElement(m.getElementId()) == false)
     {
-      result.setToNull();
+      result->setToNull();
       return result;
     }
     const boost::shared_ptr<const Element> e = ep->getElement(m.getElementId());

@@ -25,7 +25,6 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export.Models
             SchemaVersion = 1;
             Status = OperationStatus.Queued;
             Id = Guid.NewGuid().ToString();
-            SecretName = Id;
             QueuedTime = DateTimeOffset.Now;
             LastModifiedTime = DateTimeOffset.Now;
         }

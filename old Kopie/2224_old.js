@@ -1,5 +1,4 @@
 import { hash } from 'rsvp';
-      return this.ajax.get(url, (data) => {
 import EmberObject from '@ember/object';
 import TravisRoute from 'travis/routes/basic';
 import config from 'travis/config/environment';
@@ -60,7 +59,7 @@ export default TravisRoute.extend({
     if (config.endpoints.sshKey) {
       const repo = this.modelFor('repo');
       const url = `/repos/${repo.get('id')}/key`;
-      return this.ajax.get(url).then((data) => {
+      return this.ajax.get(url, (data) => {
         const fingerprint = EmberObject.create({
           fingerprint: data.fingerprint
         });

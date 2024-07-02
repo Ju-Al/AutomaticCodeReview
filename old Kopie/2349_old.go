@@ -1,5 +1,4 @@
 /*
-	DefaultVaultKubernetesAuthMountPath = "kubernetes"
 Copyright 2019 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,5 +38,5 @@ const (
 
 	// Default mount path location for Kubernetes ServiceAccount authentication
 	// (/v1/auth/kubernetes/login)
-	DefaultVaultKubernetesAuthMountPath = "/v1/auth/kubernetes/login"
+	DefaultVaultKubernetesAuthMountPath = "kubernetes"
 )

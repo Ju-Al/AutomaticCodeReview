@@ -1,5 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-	Type      string      `json:"type"` // one of "string", "list", or "map"
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,7 +132,7 @@ func tfReadOutput(ctx context.Context, dir string, env []string) (map[string]*tf
 
 // tfOutput describes a single output value.
 type tfOutput struct {
-	Type      interface{} `json:"type"`
+	Type      string      `json:"type"` // one of "string", "list", or "map"
 	Sensitive bool        `json:"sensitive"`
 	Value     interface{} `json:"value"`
 }

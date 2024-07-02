@@ -1,7 +1,4 @@
 /*
-		auditData.put("Deleted # of Task Executions", taskExecutionIdsWithChildren.size());
-		auditData.put("Deleted Task Execution IDs", StringUtils.collectionToDelimitedString(taskExecutionIdsWithChildren, ", "));
-		final int numberOfDeletedTaskManifestRows = this.dataflowTaskExecutionMetadataDao.deleteManifestsByTaskExecutionIds(taskExecutionIdsWithChildren);
  * Copyright 2016-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -280,9 +277,11 @@ public class DefaultTaskDeleteService implements TaskDeleteService {
 
 		// Delete Task Related Data
 
+		auditData.put("Deleted # of Task Executions", taskExecutionIdsWithChildren.size());
+		auditData.put("Deleted Task Execution IDs", StringUtils.collectionToDelimitedString(taskExecutionIdsWithChildren, ", "));
 		final int numberOfDeletedTaskExecutionParamRows = dataflowTaskExecutionDao.deleteTaskExecutionParamsByTaskExecutionIds(taskExecutionIdsWithChildren);
 		final int numberOfDeletedTaskTaskBatchRelationshipRows = dataflowTaskExecutionDao.deleteTaskTaskBatchRelationshipsByTaskExecutionIds(taskExecutionIdsWithChildren);
-
+		final int numberOfDeletedTaskManifestRows = this.dataflowTaskExecutionMetadataDao.deleteManifestsByTaskExecutionIds(taskExecutionIdsWithChildren);
 		int numberOfDeletedTaskManifestRows = 0;
 		for (Long taskExecutionId : taskExecutionIdsWithChildren) {
 			numberOfDeletedTaskManifestRows += this.taskManifestRepository.deleteTaskExecutionManifestByTaskExecutionId(taskExecutionId);

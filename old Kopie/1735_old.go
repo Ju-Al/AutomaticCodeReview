@@ -1,10 +1,5 @@
 package resolver
 
-		if b.replaces == "" {
-			continue
-		if r, ok := bundleLookup[b.replaces]; ok {
-			replacedBy[r] = b
-			replaces[b] = r
 import (
 	"context"
 	"encoding/json"
@@ -536,7 +531,11 @@ func (r *SatResolver) sortChannel(bundles []*Operator) ([]*Operator, error) {
 	}
 
 	for _, b := range bundles {
-		if b.replaces != "" {
+		if b.replaces == "" {
+		if r, ok := bundleLookup[b.replaces]; ok {
+			replacedBy[r] = b
+			replaces[b] = r
+			continue
 			if r, ok := bundleLookup[b.replaces]; ok {
 				replacedBy[r] = b
 				replaces[b] = r

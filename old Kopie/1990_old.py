@@ -1,10 +1,11 @@
+from pontoon.insights.models import LocaleInsightsSnapshot, active_users_default
+def get_insights(query_filters=None):
+    """Get data required by the Insights tab.
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 from django.db.models.functions import TruncMonth
 from django.db.models import Avg, Sum
 
 from pontoon.base.utils import aware_datetime, convert_to_unix_time, get_last_months
-from pontoon.insights.models import LocaleInsightsSnapshot, active_users_default
 from pontoon.insights.models import (
     LocaleInsightsSnapshot,
     ProjectInsightsSnapshot,
@@ -12,8 +13,6 @@ from pontoon.insights.models import (
 )
 
 
-def get_insights(query_filters=None):
-    """Get data required by the Insights tab.
 def get_insight_start_date():
     """Include at most the last year of data in insights"""
     return datetime.now() - relativedelta(months=12)

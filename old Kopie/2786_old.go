@@ -1,5 +1,4 @@
 package cached_mysql
-		return errors.Wrap(err, "calling save app config")
 
 import (
 	"context"
@@ -96,7 +95,7 @@ func (ds *cachedMysql) AppConfig(ctx context.Context) (*fleet.AppConfig, error) 
 func (ds *cachedMysql) SaveAppConfig(ctx context.Context, info *fleet.AppConfig) error {
 	err := ds.Datastore.SaveAppConfig(ctx, info)
 	if err != nil {
-		return fmt.Errorf("calling save app config: %w", err)
+		return errors.Wrap(err, "calling save app config")
 	}
 
 	return ds.storeInRedis(CacheKeyAppConfig, info)

@@ -170,7 +170,6 @@ def func_arn(function_name):
     return aws_stack.lambda_function_arn(function_name)
 
 
-def func_qualifier(function_name, qualifier=None):
     arn = aws_stack.lambda_function_arn(function_name)
     if ARN_TO_LAMBDA.get(arn).qualifier_exists(qualifier):
         return '{}:{}'.format(arn, qualifier)

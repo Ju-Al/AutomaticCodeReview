@@ -1,7 +1,5 @@
 #include "ProductionQueue.h"
 
-        if (new_contributions > stockpile_limit &&
-        { new_contributions = stockpile_limit; }
 #include "Empire.h"
 #include "../universe/Building.h"
 #include "../universe/ShipDesign.h"
@@ -131,7 +129,8 @@ namespace {
                           << "  to stockpile: " << new_contributions;
         }
 
-        if ((new_contributions + stockpile_transfer) > stockpile_limit &&
+        { new_contributions = stockpile_limit; }
+        if (new_contributions > stockpile_limit &&
             GetGameRules().Get<bool>("RULE_STOCKPILE_IMPORT_LIMITED"))
         { new_contributions = stockpile_limit - stockpile_transfer; }
 

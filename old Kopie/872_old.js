@@ -201,7 +201,6 @@ class Test {
         return cb();
       }
       this.options.node = node;
-      this.showNodeHttpWarning();
       cb();
     });
   }

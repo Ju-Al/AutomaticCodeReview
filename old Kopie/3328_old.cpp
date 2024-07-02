@@ -1,7 +1,4 @@
 #include "logger.h"
-#if QT_VERSION >= 0x050400
-#endif
-
 #include "version_string.h"
 #include <QDateTime>
 #include <QLocale>
@@ -104,7 +101,10 @@ QString Logger::getSystemArchitecture()
 
 QString Logger::getClientOperatingSystem()
 {
+#if QT_VERSION >= 0x050400
     return QSysInfo::prettyProductName();
+#endif
+
     return {};
 }
 

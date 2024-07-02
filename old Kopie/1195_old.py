@@ -1,93 +1,199 @@
-import string
-    def __getslice__(self, a, b):
-        d = self.gen.__getslice__(a, b)
-        return self.transform(a, d)
+# vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-import random
-import mmap
+# Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+#
+# This file is part of qutebrowser.
+#
+# qutebrowser is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qutebrowser is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-DATATYPES = dict(
-    ascii_letters=string.ascii_letters.encode(),
-    ascii_lowercase=string.ascii_lowercase.encode(),
-    ascii_uppercase=string.ascii_uppercase.encode(),
-    digits=string.digits.encode(),
-    hexdigits=string.hexdigits.encode(),
-    octdigits=string.octdigits.encode(),
-    punctuation=string.punctuation.encode(),
-    whitespace=string.whitespace.encode(),
-    ascii=string.printable.encode(),
-    bytes=bytes(bytearray(range(256)))
-)
+"""A filtering/sorting base model for completions.
+
+Contains:
+    CompletionFilterModel -- A QSortFilterProxyModel subclass for completions.
+"""
+
+from PyQt5.QtCore import QSortFilterProxyModel, QModelIndex, Qt
+
+from qutebrowser.utils import log, qtutils, debug
+from qutebrowser.completion.models import base as completion
+import re
 
 
-class TransformGenerator(object):
+class CompletionFilterModel(QSortFilterProxyModel):
 
+    """Subclass of QSortFilterProxyModel with custom sorting/filtering.
+
+    Attributes:
+        pattern: The pattern to filter with.
+        srcmodel: The current source model.
+                   Kept as attribute because calling `sourceModel` takes quite
+                   a long time for some reason.
+        _sort_order: The order to use for sorting if using dumb_sort.
     """
-        Perform a byte-by-byte transform another generator - that is, for each
-        input byte, the transformation must produce one output byte.
 
-        gen: A generator to wrap
-        transform: A function (offset, data) -> transformed
-    """
+    def __init__(self, source, parent=None):
+        super().__init__(parent)
+        super().setSourceModel(source)
+        self.srcmodel = source
+        self.pattern = ''
 
-    def __init__(self, gen, transform):
-        self.gen = gen
-        self.transform = transform
+        dumb_sort = self.srcmodel.DUMB_SORT
+        if dumb_sort is None:
+            # pylint: disable=invalid-name
+            self.lessThan = self.intelligentLessThan
+            self._sort_order = Qt.AscendingOrder
+        else:
+            self.setSortRole(completion.Role.sort)
+            self._sort_order = dumb_sort
 
-    def __len__(self):
-        return len(self.gen)
+    def set_pattern(self, val):
+        """Setter for pattern.
 
-    def __getitem__(self, x):
-        d = self.gen.__getitem__(x)
-        return self.transform(x, d)
+        Invalidates the filter and re-sorts the model.
 
-    def __repr__(self):
-        return "'transform(%s)'" % self.gen
+        If the current completion model overrides sort(), it is used.
+        If not, the default implementation in QCompletionFilterModel is called.
 
+        Args:
+            val: The value to set.
+        """
+        with debug.log_time(log.completion, 'Setting filter pattern'):
+            self.pattern = val
+            val = val.casefold()
+            val = re.escape(val)
+            val = val.replace(r'\ ', r'.*')
+            self.patternre = re.compile(val)
+            self.invalidateFilter()
+            sortcol = 0
+            try:
+                self.srcmodel.sort(sortcol)
+            except NotImplementedError:
+                self.sort(sortcol)
+            self.invalidate()
 
-def rand_byte(chars):
-    """
-        Return a random character as byte from a charset.
-    """
-    # bytearray has consistent behaviour on both Python 2 and 3
-    # while bytes does not
-    return bytes(bytearray([random.choice(chars)]))
+    def count(self):
+        """Get the count of non-toplevel items currently visible.
 
+        Note this only iterates one level deep, as we only need root items
+        (categories) and children (items) in our model.
+        """
+        count = 0
+        for i in range(self.rowCount()):
+            cat = self.index(i, 0)
+            qtutils.ensure_valid(cat)
+            count += self.rowCount(cat)
+        return count
 
-class RandomGenerator(object):
+    def first_item(self):
+        """Return the first item in the model."""
+        for i in range(self.rowCount()):
+            cat = self.index(i, 0)
+            qtutils.ensure_valid(cat)
+            if cat.model().hasChildren(cat):
+                index = self.index(0, 0, cat)
+                qtutils.ensure_valid(index)
+                return index
+        return QModelIndex()
 
-    def __init__(self, dtype, length):
-        self.dtype = dtype
-        self.length = length
+    def last_item(self):
+        """Return the last item in the model."""
+        for i in range(self.rowCount() - 1, -1, -1):
+            cat = self.index(i, 0)
+            qtutils.ensure_valid(cat)
+            if cat.model().hasChildren(cat):
+                index = self.index(self.rowCount(cat) - 1, 0, cat)
+                qtutils.ensure_valid(index)
+                return index
+        return QModelIndex()
 
-    def __len__(self):
-        return self.length
+    def setSourceModel(self, model):
+        """Override QSortFilterProxyModel's setSourceModel to clear pattern."""
+        log.completion.debug("Setting source model: {}".format(model))
+        self.set_pattern('')
+        super().setSourceModel(model)
+        self.srcmodel = model
 
-    def __getitem__(self, x):
-        chars = DATATYPES[self.dtype]
-        if isinstance(x, slice):
-            return b"".join(rand_byte(chars) for _ in range(*x.indices(self.length)))
-        return rand_byte(chars)
+    def filterAcceptsRow(self, row, parent):
+        """Custom filter implementation.
 
-    def __repr__(self):
-        return "%s random from %s" % (self.length, self.dtype)
+        Override QSortFilterProxyModel::filterAcceptsRow.
 
+        Args:
+            row: The row of the item.
+            parent: The parent item QModelIndex.
 
-class FileGenerator(object):
+        Return:
+            True if self.pattern is contained in item, or if it's a root item
+            (category). False in all other cases
+        """
+        if parent == QModelIndex() or not self.pattern:
+            return True
 
-    def __init__(self, path):
-        self.path = path
-        self.fp = open(path, "rb")
-        self.map = mmap.mmap(self.fp.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            return self.srcmodel.custom_filter(self.pattern, row, parent)
+        except NotImplementedError:
+            for col in self.srcmodel.columns_to_filter:
+                idx = self.srcmodel.index(row, col, parent)
+                if not idx.isValid():
+                    # No entries in parent model
+                    continue
+                data = self.srcmodel.data(idx)
+                if not data:
+                    continue
+                elif self.patternre.search(data.casefold()):
+                    return True
+            return False
 
-    def __len__(self):
-        return len(self.map)
+    def intelligentLessThan(self, lindex, rindex):
+        """Custom sorting implementation.
 
-    def __getitem__(self, x):
-        if isinstance(x, slice):
-            return self.map.__getitem__(x)
-        # A slice of length 1 returns a byte object (not an integer)
-        return self.map.__getitem__(slice(x, x+1 or self.map.size()))
+        Prefers all items which start with self.pattern. Other than that, uses
+        normal Python string sorting.
 
-    def __repr__(self):
-        return "<%s" % self.path
+        Args:
+            lindex: The QModelIndex of the left item (*left* < right)
+            rindex: The QModelIndex of the right item (left < *right*)
+
+        Return:
+            True if left < right, else False
+        """
+        qtutils.ensure_valid(lindex)
+        qtutils.ensure_valid(rindex)
+
+        left_sort = self.srcmodel.data(lindex, role=completion.Role.sort)
+        right_sort = self.srcmodel.data(rindex, role=completion.Role.sort)
+
+        if left_sort is not None and right_sort is not None:
+            return left_sort < right_sort
+
+        left = self.srcmodel.data(lindex)
+        right = self.srcmodel.data(rindex)
+
+        leftstart = left.startswith(self.pattern)
+        rightstart = right.startswith(self.pattern)
+
+        if leftstart and rightstart:
+            return left < right
+        elif leftstart:
+            return True
+        elif rightstart:
+            return False
+        else:
+            return left < right
+
+    def sort(self, column, order=None):
+        """Extend sort to respect self._sort_order if no order was given."""
+        if order is None:
+            order = self._sort_order
+        super().sort(column, order)

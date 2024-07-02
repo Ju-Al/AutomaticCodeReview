@@ -1843,7 +1843,6 @@ PJ  *proj_create_crs_to_crs_from_pj (PJ_CONTEXT *ctx, const PJ *source_crs, cons
     const char* authority = nullptr;
     double accuracy = -1;
     bool allowBallparkTransformations = true;
-    int forceOver = 0;
     for (auto iter = options; iter && iter[0]; ++iter) {
         const char *value;
         if ((value = getOptionValue(*iter, "AUTHORITY="))) {

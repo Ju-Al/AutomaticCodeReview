@@ -1,6 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        d = self.u.atoms[self.hbonds[:, 1].astype(np.int)]
-        a = self.u.atoms[self.hbonds[:, 3].astype(np.int)]
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -538,7 +536,8 @@ class HydrogenBondAnalysis(base.AnalysisBase):
         acceptor atoms in a hydrogen bond.
         """
 
-        d = self.u.atoms[self.hbonds[:, 1].astype(int)]
+        d = self.u.atoms[self.hbonds[:, 1].astype(np.int)]
+        a = self.u.atoms[self.hbonds[:, 3].astype(np.int)]
         a = self.u.atoms[self.hbonds[:, 3].astype(int)]
 
         tmp_hbonds = np.array([d.resnames, d.types, a.resnames, a.types],

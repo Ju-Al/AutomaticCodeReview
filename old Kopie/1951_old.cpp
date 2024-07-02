@@ -1,15 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////////
-void buffered_data_coordinator<TensorDataType>::distribute_from_local_matrix(execution_mode mode, std::map<input_data_type, AbsDistMatrixType*>& input_buffers) {
-  for(auto idt : input_data_type_iterator()) {
-    if(buf.m_input_buffers.count(idt)) {
-      if(input_buffers.count(idt)) {
-        view_or_copy_tensor(*buf.m_input_buffers[idt], *input_buffers[idt]);
-      }
-    }else {
-      if(input_buffers.count(idt)) {
-        LBANN_ERROR("Requested input data of type ", to_string(idt), " - no data in data coordinator");
-      }
-    }
 // Copyright (c) 2014-2021, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory.
 // Written by the LBANN Research Team (B. Van Essen, et al.) listed in
@@ -325,7 +314,17 @@ bool buffered_data_coordinator<TensorDataType>::update_data_set(generic_data_rea
 }
 
 template <typename TensorDataType>
-void buffered_data_coordinator<TensorDataType>::distribute_from_local_matrix(execution_mode mode, data_field_type const data_field, AbsDistMatrixType& input_buffer) {
+  for(auto idt : input_data_type_iterator()) {
+    if(buf.m_input_buffers.count(idt)) {
+      if(input_buffers.count(idt)) {
+        view_or_copy_tensor(*buf.m_input_buffers[idt], *input_buffers[idt]);
+      }
+    }else {
+      if(input_buffers.count(idt)) {
+        LBANN_ERROR("Requested input data of type ", to_string(idt), " - no data in data coordinator");
+      }
+    }
+void buffered_data_coordinator<TensorDataType>::distribute_from_local_matrix(execution_mode mode, std::map<input_data_type, AbsDistMatrixType*>& input_buffers) {
   prof_region_begin("distribute_from_local_matrix", prof_colors[3], false);
   data_buffer<IODataType>& buf = get_active_buffer(mode);
   if(data_field == INPUT_DATA_TYPE_SAMPLES) {

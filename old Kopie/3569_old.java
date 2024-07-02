@@ -205,7 +205,6 @@ public class UploadModel {
         UploadItem uploadItem1 = items.get(index);
         uploadItem1.setDescriptions(uploadItem.descriptions);
         uploadItem1.setTitle(uploadItem.title);
-        store.putString("Title", uploadItem.place.getName());
     }
 
     public void useSimilarPictureCoordinates(ImageCoordinates imageCoordinates, int uploadItemIndex) {

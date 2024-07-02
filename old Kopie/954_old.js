@@ -1,5 +1,4 @@
 import React from "react"
-    title: "Internet",
 
 import "../css/components/product-grid.css"
 
@@ -99,7 +98,7 @@ const products = [
     icon: "images",
   },
   {
-    title: "Cloudflare Fundamentals",
+    title: "Internet",
     path: "internet",
     icon: "internet",
   },

@@ -1,6 +1,4 @@
 /*
-      final Map<Long, List<Message>> futureMessages) {
-    handleMessage(msg.getMessage());
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -79,7 +77,8 @@ public class IbftController {
       final IbftFinalState ibftFinalState,
       final IbftBlockHeightManagerFactory ibftBlockHeightManagerFactory,
       final Gossiper gossiper,
-      final Map<Long, List<Message>> futureMessages,
+    handleMessage(msg.getMessage());
+      final Map<Long, List<Message>> futureMessages) {
       final MessageTracker messageTracker) {
     this.blockchain = blockchain;
     this.ibftFinalState = ibftFinalState;

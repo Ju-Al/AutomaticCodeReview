@@ -1,5 +1,4 @@
 package tech.pegasys.pantheon.tests.acceptance.dsl.transaction;
-
 import tech.pegasys.pantheon.ethereum.core.Hash;
 
 import java.util.ArrayList;

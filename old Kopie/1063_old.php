@@ -1,7 +1,5 @@
 <?php
 
-     * @param \Doctrine\DBAL\Migrations\Version[] $migratedVersions
-            if ($version->getVersion() === $migratedVersion->getVersion()) {
 namespace Shopsys\MigrationBundle\Component\Doctrine\Migrations;
 
 use Doctrine\DBAL\Connection;
@@ -135,7 +133,8 @@ class Configuration extends DoctrineConfiguration
 
     /**
      * @param \Doctrine\DBAL\Migrations\Version $version
-     * @param string[] $migratedVersions
+            if ($version->getVersion() === $migratedVersion->getVersion()) {
+     * @param \Doctrine\DBAL\Migrations\Version[] $migratedVersions
      * @return bool
      */
     private function shouldExecuteMigration(Version $version, array $migratedVersions)

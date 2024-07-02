@@ -1,5 +1,4 @@
 # various programs
-
 blacklist ${HOME}/.Atom
 blacklist ${HOME}/.remmina
 blacklist ${HOME}/.tconn
@@ -45,7 +44,7 @@ blacklist ${HOME}/.openshot_qt
 blacklist ${HOME}/.flowblade
 blacklist ${HOME}/.config/flowblade
 blacklist ${HOME}/.config/eog
-blacklist ${HOME}/.config/arkrc
+
 blacklist ${HOME}/.config/atril
 blacklist ${HOME}/.config/aweather
 blacklist ${HOME}/.config/brasero

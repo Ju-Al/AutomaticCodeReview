@@ -1,5 +1,4 @@
 package httpserver
-		return time.Now().Format(timeFormat)
 
 import (
 	"bytes"
@@ -253,7 +252,7 @@ func (r *replacer) getSubstitution(key string) string {
 	case "{uri_escaped}":
 		return url.QueryEscape(r.request.URL.RequestURI())
 	case "{when}":
-		return now().Format(timeFormat)
+		return time.Now().Format(timeFormat)
 	case "{whenISO}":
 		return now().UTC().Format(timeFormatISOUTC)
 	case "{file}":

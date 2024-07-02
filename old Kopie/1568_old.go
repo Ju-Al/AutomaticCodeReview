@@ -1,5 +1,4 @@
 // Copyright 2018 The go-ethereum Authors
-// put stores Chunks to database and updates other indexes. It acquires lockAddr
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -45,7 +44,7 @@ func (db *DB) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk)
 	return exist, err
 }
 
-// put stores Chunks to database and updates other indexes. It acquires batchMu
+// put stores Chunks to database and updates other indexes. It acquires lockAddr
 // to protect two calls of this function for the same address in parallel. Item
 // fields Address and Data must not be with their nil values. If chunks with the
 // same address are passed in arguments, only the first chunk will be stored,

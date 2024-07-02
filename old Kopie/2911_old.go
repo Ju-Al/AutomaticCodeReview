@@ -1,7 +1,4 @@
 package agent
-		for _, c := range controllers {
-			switch c {
-			case "cpu":
 
 import (
 	"bufio"
@@ -203,7 +200,9 @@ func checkCgroups() (kubeletRoot, runtimeRoot string, hasCFS, hasPIDs bool) {
 		if err != nil {
 			return "", "", false, false
 		}
-		for _, controller := range controllers {
+		for _, c := range controllers {
+			switch c {
+			case "cpu":
 			switch {
 			case controller == "cpu":
 				hasCFS = true

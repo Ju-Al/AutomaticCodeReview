@@ -1,266 +1,144 @@
-try:
-    import itertools.izip as zip
-except ImportError:
-    pass
+# -*- coding: utf-8 -*-
+_default_commands = [
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+import contextlib
+import os
+import re
+import subprocess
 
-import numpy as np
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import patch, data_dir
 
-from .interface import Interface, DataError
-from ..dimension import Dimension
-from ..element import Element
-from ..ndmapping import NdMapping, item_check
-from .. import util
+#
+# Default values for the mocked commands.
+#
+# The output comes from an Ubuntu 18 system
+#
+_default_commands = [ # pylint: disable=invalid-name
+    (r"^systemctl --version$",
+    # pylint: disable=bad-continuation 
+'''systemd 237
++PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
+'''),
+    # pylint: enable=bad-continuation 
 
+    (r"^mount -t cgroup$",
+    # pylint: disable=bad-continuation     
+'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
+cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+'''),
+    # pylint: enable=bad-continuation 
+    (r"^mount -t cgroup2$",
+    # pylint: disable=bad-continuation 
+'''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime) 
+'''),
+    # pylint: enable=bad-continuation 
 
-class ArrayInterface(Interface):
+    (r"^systemctl show walinuxagent\.service --property CPUAccounting$",
+    # pylint: disable=bad-continuation 
+'''CPUAccounting=no
+'''),
+    # pylint: enable=bad-continuation 
 
-    types = (np.ndarray,)
+    (r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
+    # pylint: disable=bad-continuation 
+'''MemoryAccounting=no
+'''),
+    # pylint: enable=bad-continuation 
 
-    datatype = 'array'
+    (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+    # pylint: disable=bad-continuation 
+''' 
+Running scope as unit: TEST_UNIT.scope
+Thu 28 May 2020 07:25:55 AM PDT
+'''),
+    # pylint: enable=bad-continuation 
 
-    @classmethod
-    def dimension_type(cls, dataset, dim):
-        return dataset.data.dtype.type
+    (r"^systemd-cgls.+/walinuxagent.service$",
+    # pylint: disable=bad-continuation
+'''
+Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
+├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
+└─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
+'''),
+    # pylint: enable=bad-continuation 
+]
 
-    @classmethod
-    def init(cls, eltype, data, kdims, vdims):
-        if kdims is None:
-            kdims = eltype.kdims
-        if vdims is None:
-            vdims = eltype.vdims
+_default_files = [ # pylint: disable=invalid-name
+    (r"^/proc/self/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
+    (r"^/proc/[0-9]+/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
+    (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
+]
 
-        dimensions = [d.name if isinstance(d, Dimension) else
-                      d for d in kdims + vdims]
-        if ((isinstance(data, dict) or util.is_dataframe(data)) and
-            all(d in data for d in dimensions)):
-            dataset = [data[d] for d in dimensions]
-            data = np.column_stack(dataset)
-        elif isinstance(data, dict) and not all(d in data for d in dimensions):
-            dict_data = sorted(data.items())
-            dataset = zip(*((util.wrap_tuple(k)+util.wrap_tuple(v))
-                            for k, v in dict_data))
-            data = np.column_stack(dataset)
-        elif isinstance(data, tuple):
-            data = [d if isinstance(d, np.ndarray) else np.array(d) for d in data]
-            if cls.expanded(data):
-                data = np.column_stack(data)
-            else:
-                raise ValueError('ArrayInterface expects data to be of uniform shape.')
-        elif isinstance(data, list) and data == []:
-            data = np.empty((0,len(dimensions)))
-        elif not isinstance(data, np.ndarray):
-            data = np.array([], ndmin=2).T if data is None else list(data)
-            try:
-                data = np.array(data)
-            except:
-                data = None
+@contextlib.contextmanager
+def mock_cgroup_commands():
+    original_popen = subprocess.Popen
+    original_read_file = fileutil.read_file
+    original_path_exists = os.path.exists
 
-        if kdims is None:
-            kdims = eltype.kdims
-        if vdims is None:
-            vdims = eltype.vdims
+    def add_command(pattern, output):
+        patcher.commands.insert(0, (pattern, output))
 
-        if data is None or data.ndim > 2 or data.dtype.kind in ['S', 'U', 'O']:
-            raise ValueError("ArrayInterface interface could not handle input type.")
-        elif data.ndim == 1:
-            if eltype._auto_indexable_1d and len(kdims)+len(vdims)>1:
-                data = np.column_stack([np.arange(len(data)), data])
-            else:
-                data = np.atleast_2d(data).T
-
-        return data, {'kdims':kdims, 'vdims':vdims}, {}
-
-    @classmethod
-    def validate(cls, dataset):
-        ndims = len(dataset.dimensions())
-        ncols = dataset.data.shape[1] if dataset.data.ndim > 1 else 1
-        if ncols < ndims:
-            raise DataError("Supplied data does not match specified "
-                            "dimensions, expected at least %s columns." % ndims, cls)
-
-
-    @classmethod
-    def isscalar(cls, dataset, dim):
-        idx = dataset.get_dimension_index(dim)
-        return len(np.unique(dataset.data[:, idx])) == 1
-
-
-    @classmethod
-    def array(cls, dataset, dimensions):
-        if dimensions:
-            indices = [dataset.get_dimension_index(d) for d in dimensions]
-            return dataset.data[:, indices]
+    def mock_popen(command, *args, **kwargs):
+        if isinstance(command, list):
+            command_string = " ".join(command)
         else:
-            return dataset.data
+            command_string = command
 
+        for cmd in patcher.commands:
+            match = re.match(cmd[0], command_string)
+            if match is not None:
+                command = ["echo", cmd[1]]
+                break
 
-    @classmethod
-    def add_dimension(cls, dataset, dimension, dim_pos, values, vdim):
-        data = dataset.data.copy()
-        return np.insert(data, dim_pos, values, axis=1)
+        return original_popen(command, *args, **kwargs)
+    
+    def mock_read_file(filepath, **kwargs):
+        for file in patcher.files: # pylint: disable=redefined-builtin
+            match = re.match(file[0], filepath)
+            if match is not None:
+                filepath = file[1]
+        return original_read_file(filepath, **kwargs)
 
+    def mock_path_exists(path):
+        for file in patcher.files: # pylint: disable=redefined-builtin
+            match = re.match(file[0], path)
+            if match is not None:
+                return True
+        return original_path_exists(path)
 
-    @classmethod
-    def concat(cls, dataset_objs):
-        cast_objs = cls.cast(dataset_objs)
-        return np.concatenate([col.data for col in cast_objs])
+    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
+            with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
+                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
+                        patcher.commands = _default_commands[:]
+                        patcher.files = _default_files[:]
+                        patcher.add_command = add_command
+                        yield patcher
 
-
-    @classmethod
-    def sort(cls, dataset, by=[], reverse=False):
-        data = dataset.data
-        if len(by) == 1:
-            sorting = cls.values(dataset, by[0]).argsort()
-        else:
-            dtypes = [(d.name, dataset.data.dtype) for d in dataset.dimensions()]
-            sort_fields = tuple(dataset.get_dimension(d).name for d in by)
-            sorting = dataset.data.view(dtypes, np.recarray).T
-            sorting = sorting.argsort(order=sort_fields)[0]
-        sorted_data = data[sorting]
-        return sorted_data[::-1] if reverse else sorted_data
-
-
-    @classmethod
-    def values(cls, dataset, dim, expanded=True, flat=True):
-        data = dataset.data
-        dim_idx = dataset.get_dimension_index(dim)
-        if data.ndim == 1:
-            data = np.atleast_2d(data).T
-        values = data[:, dim_idx]
-        if not expanded:
-            return util.unique_array(values)
-        return values
-
-
-    @classmethod
-    def reindex(cls, dataset, kdims=None, vdims=None):
-        # DataFrame based tables don't need to be reindexed
-        dims = kdims + vdims
-        data = [dataset.dimension_values(d) for d in dims]
-        return np.column_stack(data)
-
-
-    @classmethod
-    def groupby(cls, dataset, dimensions, container_type, group_type, **kwargs):
-        data = dataset.data
-
-        # Get dimension objects, labels, indexes and data
-        dimensions = [dataset.get_dimension(d, strict=True) for d in dimensions]
-        dim_idxs = [dataset.get_dimension_index(d) for d in dimensions]
-        kdims = [kdim for kdim in dataset.kdims
-                 if kdim not in dimensions]
-        vdims = dataset.vdims
-
-        # Find unique entries along supplied dimensions
-        # by creating a view that treats the selected
-        # groupby keys as a single object.
-        indices = data[:, dim_idxs].copy()
-        group_shape = indices.dtype.itemsize * indices.shape[1]
-        view = indices.view(np.dtype((np.void, group_shape)))
-        _, idx = np.unique(view, return_index=True)
-        idx.sort()
-        unique_indices = indices[idx]
-
-        # Get group
-        group_kwargs = {}
-        if group_type != 'raw' and issubclass(group_type, Element):
-            group_kwargs.update(util.get_param_values(dataset))
-            group_kwargs['kdims'] = kdims
-        group_kwargs.update(kwargs)
-
-        # Iterate over the unique entries building masks
-        # to apply the group selection
-        grouped_data = []
-        col_idxs = [dataset.get_dimension_index(d) for d in dataset.dimensions()
-                    if d not in dimensions]
-        for group in unique_indices:
-            mask = np.logical_and.reduce([data[:, d_idx] == group[i]
-                                          for i, d_idx in enumerate(dim_idxs)])
-            group_data = data[mask][:, col_idxs]
-            if not group_type == 'raw':
-                if issubclass(group_type, dict):
-                    group_data = {d.name: group_data[:, i] for i, d in
-                                  enumerate(kdims+vdims)}
-                else:
-                    group_data = group_type(group_data, **group_kwargs)
-            grouped_data.append((tuple(group), group_data))
-
-        if issubclass(container_type, NdMapping):
-            with item_check(False):
-                return container_type(grouped_data, kdims=dimensions)
-        else:
-            return container_type(grouped_data)
-
-
-    @classmethod
-    def select(cls, dataset, selection_mask=None, **selection):
-        if selection_mask is None:
-            selection_mask = cls.select_mask(dataset, selection)
-        indexed = cls.indexed(dataset, selection)
-        data = np.atleast_2d(dataset.data[selection_mask, :])
-        if len(data) == 1 and indexed and len(dataset.vdims) == 1:
-            data = data[0, dataset.ndims]
-        return data
-
-
-    @classmethod
-    def sample(cls, dataset, samples=[]):
-        data = dataset.data
-        mask = False
-        for sample in samples:
-            sample_mask = True
-            if np.isscalar(sample): sample = [sample]
-            for i, v in enumerate(sample):
-                sample_mask &= data[:, i]==v
-            mask |= sample_mask
-
-        return data[mask]
-
-
-    @classmethod
-    def unpack_scalar(cls, dataset, data):
-        """
-        Given a dataset object and data in the appropriate format for
-        the interface, return a simple scalar.
-        """
-        if data.shape == (1, 1):
-            return data[0, 0]
-        return data
-
-
-    @classmethod
-    def aggregate(cls, dataset, dimensions, function, **kwargs):
-        reindexed = dataset.reindex(dimensions)
-        grouped = (cls.groupby(reindexed, dimensions, list, 'raw')
-                   if len(dimensions) else [((), reindexed.data)])
-
-        rows = []
-        for k, group in grouped:
-            if isinstance(function, np.ufunc):
-                reduced = function.reduce(group, axis=0, **kwargs)
-            else:
-                reduced = function(group, axis=0, **kwargs)
-            rows.append(np.concatenate([k, (reduced,) if np.isscalar(reduced) else reduced]))
-        return np.atleast_2d(rows)
-
-
-    @classmethod
-    def iloc(cls, dataset, index):
-        rows, cols = index
-        if np.isscalar(cols):
-            if isinstance(cols, util.basestring):
-                cols = dataset.get_dimension_index(cols)
-            if np.isscalar(rows):
-                return dataset.data[rows, cols]
-            cols = [dataset.get_dimension_index(cols)]
-        elif not isinstance(cols, slice):
-            cols = [dataset.get_dimension_index(d) for d in cols]
-
-        if np.isscalar(rows):
-            rows = [rows]
-        data = dataset.data[rows, :][:, cols]
-        if data.ndim == 1:
-            return np.atleast_2d(data).T
-        return data
-
-Interface.register(ArrayInterface)

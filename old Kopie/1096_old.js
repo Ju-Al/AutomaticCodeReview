@@ -7,7 +7,6 @@ When(/^I freeze$/, { timeout: oneHour }, (callback) => {
   setTimeout(callback, oneHour);
 });
 
-When(/^I refresh the application$/, async function () {
   return this.client.refresh();
 });
 

@@ -8,7 +8,6 @@ import (
 	"github.com/kiali/kiali/log"
 	"github.com/kiali/kiali/models"
 	"github.com/kiali/kiali/util/mtls"
-	core_v1 "k8s.io/api/core/v1"
 )
 
 type TLSService struct {

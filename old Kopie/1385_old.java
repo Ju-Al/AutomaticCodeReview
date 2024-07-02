@@ -1,5 +1,4 @@
 /*
-      MetricsConfig metricsConfig = MetricsConfig.fromProperties(props);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -127,7 +126,7 @@ class RowDataTaskWriterFactory implements TaskWriterFactory<RowData> {
     @Override
     public FileAppender<RowData> newAppender(OutputFile outputFile, FileFormat format) {
       // TODO MetricsConfig will be used for building parquet RowData writer.
-      // MetricsConfig metricsConfig = MetricsConfig.fromProperties(props);
+      MetricsConfig metricsConfig = MetricsConfig.fromProperties(props);
       try {
         switch (format) {
           case AVRO:

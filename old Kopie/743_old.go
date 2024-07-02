@@ -1,56 +1,4 @@
 // Copyright The OpenTelemetry Authors
-	timer := time.NewTimer(bsp.o.ScheduledDelayMillis)
-	defer timer.Stop()
-
-	batch := make([]*export.SpanData, 0, bsp.o.MaxExportBatchSize)
-	exportSpans := func() {
-		timer.Reset(bsp.o.ScheduledDelayMillis)
-
-		if len(batch) > 0 {
-			bsp.e.ExportSpans(context.Background(), batch)
-			batch = batch[:0]
-		}
-	}
-
-loop:
-			break loop
-		case <-timer.C:
-			exportSpans()
-			batch = append(batch, sd)
-			if len(batch) == bsp.o.MaxExportBatchSize {
-				if !timer.Stop() {
-					<-timer.C
-				exportSpans()
-			}
-		}
-	}
-
-	for {
-		select {
-		case sd := <-bsp.queue:
-			if sd == nil { // queue is closed
-				go throwAwayFutureSends(bsp.queue)
-				exportSpans()
-				return
-
-			batch = append(batch, sd)
-			if len(batch) == bsp.o.MaxExportBatchSize {
-				exportSpans()
-			}
-		default:
-			// Send nil instead of closing to prevent "send on closed channel".
-			bsp.queue <- nil
-func throwAwayFutureSends(ch <-chan *export.SpanData) {
-	for {
-		select {
-		case <-ch:
-		case <-time.After(time.Minute):
-			return
-	select {
-	case <-bsp.stopCh:
-		return
-	default:
-	}
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,11 +154,59 @@ func WithScheduleDelayMillis(delay time.Duration) BatchSpanProcessorOption {
 
 func WithBlocking() BatchSpanProcessorOption {
 	return func(o *BatchSpanProcessorOptions) {
-		o.BlockOnQueueFull = true
-	}
-}
+	timer := time.NewTimer(bsp.o.ScheduledDelayMillis)
+	defer timer.Stop()
 
-// exportSpans is a subroutine of processing and draining the queue.
+	batch := make([]*export.SpanData, 0, bsp.o.MaxExportBatchSize)
+	exportSpans := func() {
+		timer.Reset(bsp.o.ScheduledDelayMillis)
+
+		if len(batch) > 0 {
+			bsp.e.ExportSpans(context.Background(), batch)
+			batch = batch[:0]
+		}
+	}
+
+loop:
+			break loop
+		case <-timer.C:
+			exportSpans()
+			batch = append(batch, sd)
+			if len(batch) == bsp.o.MaxExportBatchSize {
+				if !timer.Stop() {
+					<-timer.C
+				exportSpans()
+			}
+		}
+	}
+
+	for {
+		select {
+		case sd := <-bsp.queue:
+			if sd == nil { // queue is closed
+				go throwAwayFutureSends(bsp.queue)
+				exportSpans()
+				return
+
+			batch = append(batch, sd)
+			if len(batch) == bsp.o.MaxExportBatchSize {
+				exportSpans()
+			}
+		default:
+			// Send nil instead of closing to prevent "send on closed channel".
+			bsp.queue <- nil
+func throwAwayFutureSends(ch <-chan *export.SpanData) {
+	for {
+		select {
+		case <-ch:
+		case <-time.After(time.Minute):
+			return
+	select {
+	case <-bsp.stopCh:
+		return
+	default:
+	}
+		o.BlockOnQueueFull = true
 func (bsp *BatchSpanProcessor) exportSpans() {
 	bsp.timer.Reset(bsp.o.ScheduledDelayMillis)
 

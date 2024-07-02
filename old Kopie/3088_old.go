@@ -545,7 +545,6 @@ func (o *initEnvOpts) askAdjustResources() error {
 	return nil
 }
 
-func (o *initEnvOpts) validateDuplicateEnv() error {
 	_, err := o.store.GetEnvironment(o.appName, o.name)
 	if err == nil {
 		log.Errorf(`It seems like you are trying to init an environment that already exists.

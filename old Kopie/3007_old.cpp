@@ -1896,7 +1896,6 @@ void DesignWnd::PartPalette::CompleteConstruction() {
 
     CUIWnd::CompleteConstruction();
 
-    SetMinSize(GG::Pt(PART_CONTROL_WIDTH + 70 ,PART_CONTROL_HEIGHT + 70));
 
     DoLayout();
     SaveDefaultedOptions();

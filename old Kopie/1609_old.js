@@ -1,5 +1,5 @@
 /**
- * @package * @license
+ * @license
  * Visual Blocks Editor
  *
  * Copyright 2018 Google Inc.
@@ -37,8 +37,7 @@ goog.require('Blockly.Msg');
  * The object containing messages for all locales - loaded from msg/scratch_msgs.
  * @type {Object}
  */
-Blockly.ScratchMsgs.locales = {};
-
+ * @packageBlockly.ScratchMsgs.locales = {};
 /**
  * The current locale.
  * @type {String}

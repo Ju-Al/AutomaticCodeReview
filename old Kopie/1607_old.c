@@ -391,7 +391,6 @@ static int submit_worker( struct batch_queue *queue )
 	}
 
 	debug(D_WQ,"submitting worker: %s",cmd);
-	free(worker);
 
 	return batch_job_submit(queue,cmd,files,"output.log",0,resources);
 }

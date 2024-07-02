@@ -1,8 +1,5 @@
 package dkg
 
-	// initially append group public key
-	trimmedGroupHexString := trim0x(groupPublicKey.String())
-	finalSubmission = append(finalSubmission, cadence.NewString(trimmedGroupHexString))
 import (
 	"context"
 	"encoding/json"
@@ -186,7 +183,8 @@ func (c *Client) SubmitResult(groupPublicKey crypto.PublicKey, publicKeys []cryp
 	// we have done here. Group Public key first followed by the individual public keys
 	finalSubmission := make([]cadence.Value, 0, len(publicKeys))
 
-	// first append group public key
+	// initially append group public key
+	trimmedGroupHexString := trim0x(groupPublicKey.String())
 	if groupPublicKey != nil {
 		trimmedGroupHexString := trim0x(groupPublicKey.String())
 		finalSubmission = append(finalSubmission, cadence.NewString(trimmedGroupHexString))

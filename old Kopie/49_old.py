@@ -1,5 +1,4 @@
 from django_nose.tools import assert_equal
-
 from pontoon.base.tests import TestCase
 from pontoon.base.utils import NewlineEscapePlaceable
 

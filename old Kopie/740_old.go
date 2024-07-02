@@ -1,8 +1,4 @@
 // Cothorityd is the main binary for running a Cothority server.
-			Name:    "check",
-			Aliases: []string{"c"},
-			Usage:   "Check if the servers in the group definition are up and running",
-			Action:  checkConfig,
 // A Cothority server can participate in various distributed protocols using the
 // *onet* library as a network and overlay library and the *dedis/crypto*
 // library for all cryptographic primitives.
@@ -84,7 +80,10 @@ func main() {
 			Flags: serverFlags,
 		},
 		{
-			Name:      "check",
+			Name:    "check",
+			Aliases: []string{"c"},
+			Usage:   "Check if the servers in the group definition are up and running",
+			Action:  checkConfig,
 			Aliases:   []string{"c"},
 			Usage:     "Check if the servers in the group definition are up and running",
 			ArgsUsage: "Cothority group definition file",

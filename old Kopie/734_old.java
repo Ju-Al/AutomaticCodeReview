@@ -1,5 +1,4 @@
 /*
-          client.alter_table(database, tableName, tbl);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -166,7 +165,7 @@ public class HiveTableOperations extends BaseMetastoreTableOperations {
 
       if (base != null) {
         metaClients.run(client -> {
-          client.alter_table(database, tableName, tbl,
+          client.alter_table(database, tableName, tbl);
                   new EnvironmentContext(
                           Collections.singletonMap(StatsSetupConst.DO_NOT_UPDATE_STATS, StatsSetupConst.TRUE)
                   ));

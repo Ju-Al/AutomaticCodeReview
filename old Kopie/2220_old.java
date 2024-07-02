@@ -1,7 +1,4 @@
 /*
-      System.out.println(indent + "Up to size      count      %-age");
-        System.out.println(String.format("%s%11.0f : %10d %6.2f%%", indent, Math.pow(10, i),
-            countBuckets[i], sizeBuckets[i] * 100. / totalSize));
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -110,7 +107,9 @@ public class PrintInfo implements KeywordExecutable {
     }
 
     public void print(String indent) {
-      System.out.println(indent + "Up to size      Count      %-age");
+        System.out.println(String.format("%s%11.0f : %10d %6.2f%%", indent, Math.pow(10, i),
+            countBuckets[i], sizeBuckets[i] * 100. / totalSize));
+      System.out.println(indent + "Up to size      count      %-age");
       for (int i = 1; i < countBuckets.length; i++) {
         System.out.println(String.format("%s%11s : %10d %6.2f%%", indent,
             NumUtil.bigNumberForSize(Double.valueOf(Math.pow(10, i)).longValue()), countBuckets[i],

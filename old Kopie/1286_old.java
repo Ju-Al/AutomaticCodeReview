@@ -1,5 +1,4 @@
 /*
-      if (list.size() == 1) {
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -391,7 +390,7 @@ public class RelToSqlConverter extends SqlImplementor
                 new SqlIdentifier("DUAL", POS), null, null,
                 null, null, null, null, null));
       }
-      if (list.isEmpty()) {
+      if (list.size() == 1) {
         //In this case we need to construct the following query:
         // SELECT NULL as C0, NULL as C1, NULL as C2 ... FROM DUAL WHERE FALSE
         //This would return an empty result set with the same number of columns as the field names.

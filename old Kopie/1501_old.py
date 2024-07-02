@@ -927,7 +927,6 @@ class Packet(six.with_metaclass(Packet_metaclass, BasePacket)):
             return self.payload.answers(other.payload)
         return 0
 
-    def layers(self):
         """returns a list of layer classes (including subclasses) in this packet"""  # noqa: E501
         layers = []
         l = self

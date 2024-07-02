@@ -1,5 +1,4 @@
 package credentialstorescmd
-
 import (
 	"fmt"
 	"sort"

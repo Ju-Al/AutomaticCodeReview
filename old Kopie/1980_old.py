@@ -2,16 +2,19 @@
 
 import time
 from math import ceil
-from random import random, randint
-from math import exp
-from random import random, gauss, uniform
-from collections import defaultdict
-
-
 def sleep(seconds, delta=0.3):
     jitter = ceil(delta * seconds)
     sleep_time = randint(int(seconds - jitter), int(seconds + jitter))
     time.sleep(sleep_time)
+def random_lat_long_delta():
+    # Return random value from [-.000025, .000025]. Since 364,000 feet is equivalent to one degree of latitude, this
+    # should be 364,000 * .000025 = 9.1. So it returns between [-9.1, 9.1]
+    return ((random() * 0.00001) - 0.000005) * 5
+from random import random, randint
+from random import random, gauss, uniform
+from collections import defaultdict
+
+
 def lognormal_model(path='data/lognormal.model'):
     '''
     lazy initialization of model
@@ -26,10 +29,6 @@ def lognormal_model(path='data/lognormal.model'):
     return lognormal_model.delay_range2mu_sigma
 
 
-def random_lat_long_delta():
-    # Return random value from [-.000025, .000025]. Since 364,000 feet is equivalent to one degree of latitude, this
-    # should be 364,000 * .000025 = 9.1. So it returns between [-9.1, 9.1]
-    return ((random() * 0.00001) - 0.000005) * 5
 def pareto(alpha=5.0, cap=10):
     '''
     somehow reflects human behaviour (Zipf's law)

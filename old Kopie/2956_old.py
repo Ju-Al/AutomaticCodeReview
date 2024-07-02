@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-            parameters=('pokemon', 'iv', 'cp')
 from __future__ import unicode_literals
 
 import datetime
@@ -266,7 +265,7 @@ class PokemonGoBot(object):
         )
         self.event_manager.register_event(
             'pokemon_evolved',
-            parameters=('pokemon', 'iv', 'cp', 'xp')
+            parameters=('pokemon', 'iv', 'cp')
         )
         self.event_manager.register_event(
             'pokemon_evolve_fail',

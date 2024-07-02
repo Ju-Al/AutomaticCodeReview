@@ -1,6 +1,5 @@
 from pontoon.base.models import Translation
 from pontoon.checks import DB_LIBRARIES
-
 from pontoon.checks import (
     DB_FORMATS,
     DB_LIBRARIES,

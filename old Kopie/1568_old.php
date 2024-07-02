@@ -1,6 +1,6 @@
 <?php
 
-    public function preUpdate(LifecycleEventArgs $args): voiddeclare(strict_types=1);
+declare(strict_types=1);
 
 namespace Bolt\Event\Listener;
 
@@ -30,7 +30,7 @@ class ContentFillListener
         $this->users = $users;
     }
 
-    public function prePersist(LifecycleEventArgs $args): void
+    public function preUpdate(LifecycleEventArgs $args): void    public function prePersist(LifecycleEventArgs $args): void
     {
         $entity = $args->getEntity();
 

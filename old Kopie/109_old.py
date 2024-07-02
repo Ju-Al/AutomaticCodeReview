@@ -1,8 +1,4 @@
 import string
-    
-        
-    
-        
 import random
 
 from django.contrib.auth.forms import AuthenticationForm
@@ -45,7 +41,6 @@ class EmailUserCreationForm(forms.ModelForm):
         except User.DoesNotExist:
             return email
         raise forms.ValidationError(_("A user with that email address already exists."))
-
     def clean_password2(self):
         password1 = self.cleaned_data.get('password1', '')
         password2 = self.cleaned_data.get('password2', '')

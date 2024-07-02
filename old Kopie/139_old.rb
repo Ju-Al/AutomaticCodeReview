@@ -1,5 +1,4 @@
 require 'uri'
-              executor.run_script(nodes, options[:object], options[:leftovers])
 require 'optparse'
 require 'benchmark'
 require 'logger'
@@ -364,7 +363,7 @@ HELP
             when 'command'
               executor.run_command(nodes, options[:object])
             when 'script'
-              script = options[:object]
+              executor.run_script(nodes, options[:object], options[:leftovers])
               unless file_exist?(script)
                 raise Bolt::CLIError, "The script '#{script}' does not exist"
               end

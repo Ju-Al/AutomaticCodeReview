@@ -107,7 +107,7 @@ func (p *proxier) removeStaleServices() {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
-		for _, endpoint := range p.endpointsMap[svcPortName] {		delete(p.serviceInstalledMap, svcPortName)
+		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
 	}
@@ -133,7 +133,6 @@ func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) bind
 	return bindingProtocol
 }
 
-// removeEndpoint removes flows of an Endpoint from data path. Callers should guarantee the Endpoint is
 // expired or need to be removed. If the Endpoint is still be referenced by any other Services, there
 // is no operation on data path. The error only reflects failure of operation on data path. If the Endpoint
 // is removed from data path, this function return true. otherwise, return false.

@@ -148,7 +148,6 @@ abstract class Abstract_Component implements Component {
 		add_action( 'init', [ $this, 'define_settings' ] );
 	}
 
-	/**
 	 * Method to filter component loading if needed.
 	 *
 	 * @since   1.0.1

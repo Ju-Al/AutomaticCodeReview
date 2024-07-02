@@ -1,23 +1,5 @@
 # This file contains DGL distributed kvstore APIs.
-    def set_partition_book(self, name, partition_book):
-        """Set partition book for KVClient. 
-
-        Using partition book, client can know the corresponded server ID of each data.
-            A book that maps global ID to target server ID.
-        assert len(name) > 0, 'name cannot be empty.'
-        assert len(partition_book) > 0, 'partition_book cannot be empty.'
-
-        if isinstance(partition_book, list):
-            self._data_store[name+'-part-'] = F.tensor(partition_book)
-        else:
-            self._data_store[name+'-part-'] = partition_book
-            server_ip, server_port = addr.split(':')
-        self._addr = self._get_local_addr()
-        # find local server nodes
-        for ID, addr in self._server_namebook.items():
-            server_ip, server_port = addr.split(':')
-            if server_ip in self._ip4_addr_list():
-                self._local_server_id.add(ID)from ..network import _create_sender, _create_receiver
+from ..network import _create_sender, _create_receiver
 from ..network import _finalize_sender, _finalize_receiver
 from ..network import _network_wait, _add_receiver_addr
 from ..network import _receiver_wait, _sender_connect
@@ -513,7 +495,24 @@ class KVClient(object):
         _finalize_receiver(self._receiver)
 
 
-    def set_partition_book(self, name, partition_book=None, data_shape=None):
+    def set_partition_book(self, name, partition_book):
+        """Set partition book for KVClient. 
+
+            A book that maps global ID to target server ID.
+        assert len(name) > 0, 'name cannot be empty.'
+        assert len(partition_book) > 0, 'partition_book cannot be empty.'
+
+        if isinstance(partition_book, list):
+            self._data_store[name+'-part-'] = F.tensor(partition_book)
+        else:
+            self._data_store[name+'-part-'] = partition_book
+            server_ip, server_port = addr.split(':')
+        self._addr = self._get_local_addr()
+        # find local server nodes
+        for ID, addr in self._server_namebook.items():
+            server_ip, server_port = addr.split(':')
+            if server_ip in self._ip4_addr_list():
+                self._local_server_id.add(ID)        Using partition book, client can know the corresponded server ID of each data.
         """Partition book contains the mapping of global ID to machine ID.
 
         Parameters

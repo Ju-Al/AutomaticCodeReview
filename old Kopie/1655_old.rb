@@ -1,5 +1,4 @@
 require 'socket'
-           ssh_opts[:paranoid] = ssh_opts.delete(:strict_host_key_checking)
 require 'timeout'
 require 'net/scp'
 
@@ -69,8 +68,7 @@ module Beaker
       max_connection_tries = options[:max_connection_tries] || 11
       begin
          @logger.debug "Attempting ssh connection to #{host}, user: #{user}, opts: #{ssh_opts}"
-
-         # Work around net-ssh 6+ incompatibilities
+           ssh_opts[:paranoid] = ssh_opts.delete(:strict_host_key_checking)
          if ssh_opts.include?(:strict_host_key_checking) && (Net::SSH::Version::CURRENT.major > 5)
            strict_host_key_checking = ssh_opts.delete(:strict_host_key_checking)
 

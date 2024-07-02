@@ -1,5 +1,4 @@
 /******************************************************************************
-int FreeMotionAnimationLoopClass = core::RegisterObject("Constraint solver")
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2018 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -289,7 +288,7 @@ void FreeMotionAnimationLoop::step(const sofa::core::ExecParams* params, SReal d
 
 SOFA_DECL_CLASS(FreeMotionAnimationLoop)
 
-int FreeMotionAnimationLoopClass = core::RegisterObject(R"(
+int FreeMotionAnimationLoopClass = core::RegisterObject("Constraint solver")
 The animation loop to use with constraints.
 You must add this loop at the beginning of the scene if you are using constraints.")")
         .add< FreeMotionAnimationLoop >()

@@ -323,7 +323,6 @@ static int signal_handler(int fd, uint32_t events, void *data,
 	if (ret == 0 && info.si_pid == hdlr->pid)
 		hdlr->init_died = true;
 
-	/* Try to figure out a reasonable exit status to report. */
 	if (hdlr->init_died) {
 		switch (info.si_code) {
 		case CLD_EXITED:

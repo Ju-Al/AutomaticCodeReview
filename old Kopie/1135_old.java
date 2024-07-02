@@ -160,7 +160,6 @@ public class SingularityTaskReconciliation {
     if (taskStatuses.isEmpty()) {
       LOG.info("Task reconciliation ended after {} checks and {}", numTimes, JavaUtils.duration(reconciliationStart));
 
-      stateManager.saveTaskReconciliationStatistics(new SingularityTaskReconciliationStatistics(reconciliationStart, System.currentTimeMillis() - reconciliationStart, numTimes, remainingTaskCounts));
 
       isRunningReconciliation.set(false);
 

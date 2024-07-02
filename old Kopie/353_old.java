@@ -1,5 +1,4 @@
 package com.pinterest.secor.timestamp;
-
 import kafka.message.MessageAndMetadata;
 import kafka.message.MessageAndOffset;
 

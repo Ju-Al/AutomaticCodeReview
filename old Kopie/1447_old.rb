@@ -1,6 +1,5 @@
 # vim:set ts=2 sw=2 sts=2 autoindent:
-        DEFAULTS = {
-          julia: 'release',
+
 # Community maintainers:
 #
 #   Tony Kelman       <tony kelman net, @tkelman>
@@ -12,7 +11,8 @@ module Travis
   module Build
     class Script
       class Julia < Script
-        def export
+        DEFAULTS = {
+          julia: 'release',        def export
           super
 
           sh.export 'TRAVIS_JULIA_VERSION', config[:julia].to_s.shellescape,

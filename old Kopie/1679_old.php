@@ -1,10 +1,10 @@
 <?php
 /**
- * Cover image router
+ * GetRecordCover AJAX handler.
  *
  * PHP version 7
  *
- * Copyright (C) Villanova University 2016.
+ * Copyright (C) Villanova University 2018.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
@@ -20,119 +20,120 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  *
  * @category VuFind
- * @package  Cover_Generator
- * @author   Demian Katz <demian.katz@villanova.edu>
+ * @package  AJAX
+ * @author   Josef Moravec <moravec@mzk.cz>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org/wiki/configuration:external_content Wiki
+ * @link     https://vufind.org/wiki/development Wiki
  */
-namespace VuFind\Cover;
+namespace VuFind\AjaxHandler;
 
-use VuFind\Cover\Loader as CoverLoader;
-use VuFind\RecordDriver\AbstractBase as RecordDriver;
+use Laminas\Config\Config;
+use Laminas\Mvc\Controller\Plugin\Params;
+use Laminas\View\Renderer\PhpRenderer;
+use VuFind\Cover\Loader;
+use VuFind\Cover\Router as CoverRouter;
+use VuFind\Exception\RecordMissing as RecordMissingException;
+use VuFind\ILS\Driver\CacheTrait;
+use VuFind\Record\Loader as RecordLoader;
 
 /**
- * Cover image router
+ * GetRecordCover AJAX handler.
  *
  * @category VuFind
- * @package  Cover_Generator
- * @author   Demian Katz <demian.katz@villanova.edu>
+ * @package  AJAX
+ * @author   Josef Moravec <moravec@mzk.cz>
  * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org/wiki/configuration:external_content Wiki
+ * @link     https://vufind.org/wiki/development Wiki
  */
-class Router implements \Laminas\Log\LoggerAwareInterface
+class GetRecordCover extends AbstractBase implements AjaxHandlerInterface
 {
-    use \VuFind\Log\LoggerAwareTrait;
+    use CacheTrait;
 
     /**
-     * Base URL for dynamic cover images.
+     * Record loader
      *
-     * @var string
+     * @var RecordLoader
      */
-    protected $dynamicUrl;
+    protected $recordLoader;
 
     /**
-     * Cover loader
+     * Cover router
      *
-     * @var CoverLoader
+     * @var CoverRouter
      */
-    protected $coverLoader;
+        CoverRouter $coverRouter
+    protected $coverRouter;
+     * @var PhpRenderer
+     */
+    protected $renderer;
 
     /**
-     * Constructor
-     *
-     * @param string      $url         Base URL for dynamic cover images.
-     * @param CoverLoader $coverLoader Cover loader
+     * @var bool
      */
-    public function __construct($url, CoverLoader $coverLoader)
-    {
-        $this->dynamicUrl = $url;
-        $this->coverLoader = $coverLoader;
+    protected $useCoverFallbacksOnFail = false;
+
+    /**
+     * GetRecordCover constructor.
+     *
+     * @param RecordLoader $recordLoader Record loader
+     * @param CoverRouter  $coverRouter  Cover router
+     */
+    public function __construct(RecordLoader $recordLoader,
+        CoverRouter $coverRouter, PhpRenderer $renderer, Config $config
+    ) {
+        $this->recordLoader = $recordLoader;
+        $this->coverRouter = $coverRouter;
+        $this->renderer = $renderer;
+        $this->useCoverFallbacksOnFail = $config->Content->useCoverFallbacksOnFail ?? false;
     }
 
     /**
-     * Generate a thumbnail URL (return false if unsupported; return null to indicate
-     * that a subsequent AJAX check is needed).
+     * Handle request
      *
-     * @param RecordDriver $driver         Record driver
-     * @param string       $size           Size of thumbnail (small, medium or large;
-     * small is default).
-     * @param bool         $resolveDynamic Should we resolve dynamic cover data into
-     * a URL (true) or simply return false (false)?
+     * @param Params $params Request parameters
      *
-     * @return string|bool
+     * @return array
+     * @throws \Exception
      */
-    public function getUrl(RecordDriver $driver, $size = 'small',
-        $resolveDynamic = true, $testLoadImage = false
-    ) {
-        // Try to build thumbnail:
-        $thumb = $driver->tryMethod('getThumbnail', [$size]);
-
-        // No thumbnail?  Return false:
-        if (empty($thumb)) {
-            return false;
+    public function handleRequest(Params $params)
+    {
+        $recordId = $params->fromQuery('recordId');
+        $recordSource = $params->fromQuery('source', DEFAULT_SEARCH_BACKEND);
+        $size = $params->fromQuery('size', 'small');
+        try {
+            $record = $this->recordLoader->load($recordId, $recordSource);
+        } catch (RecordMissingException $exception) {
+            return $this->formatResponse(
+                'Could not load record: ' . $exception->getMessage(),
+                self::STATUS_HTTP_BAD_REQUEST
+            );
         }
 
-        // Array? It's parameters to send to the cover generator:
-        if (is_array($thumb)) {
-            if (!$resolveDynamic) {
-                return null;
-            }
-            $dynamicUrl =  $this->dynamicUrl . '?' . http_build_query($thumb);
+        if (!in_array($size, ['small', 'medium', 'large'])) {
+            return $this->formatResponse(
+                'Not valid size: ' . $size,
+                self::STATUS_HTTP_BAD_REQUEST
+            );
+        }
+
+        $url = $this->coverRouter->getUrl($record, $size ?? 'small',true,$this->useCoverFallbacksOnFail);
+
+        if ($url || !$this->useCoverFallbacksOnFail) {
+            return $this->formatResponse(
+                [
+                    'url' => $url,
+                    'size' => $size,
+                ]
+            );
         } else {
-            return $thumb;
+            return $this->formatResponse(
+                [
+                    'html' => $this->renderer->render(
+                        'record/coverReplacement',
+                        ['driver' => $record]
+                    )
+                ]
+            );
         }
-
-        $settings = is_array($thumb) ? array_merge($thumb, ['size' => $size])
-            : ['size' => $size];
-        $handlers = $this->coverLoader->getHandlers();
-        $ids = $this->coverLoader->getIdentifiersForSettings($settings);
-        if ($testLoadImage) {
-            $this->coverLoader->loadImage($settings);
-            if ($this->coverLoader->hasLoadedUnavailable()) {
-                return false;
-            }
-        }
-
-        foreach ($handlers as $handler) {
-            try {
-                // Is the current provider appropriate for the available data?
-                if ($handler['handler']->supports($ids)
-                    && $handler['handler']->useDirectUrls()
-                ) {
-                    $nextDirectUrl = $handler['handler']
-                        ->getUrl($handler['key'], $size, $ids);
-                    if ($nextDirectUrl !== false) {
-                        $directUrl = $nextDirectUrl;
-                        break;
-                    }
-                }
-            } catch (\Exception $e) {
-                $this->debug(
-                    get_class($e) . ' during processing of '
-                    . get_class($handler['handler']) . ': ' . $e->getMessage()
-                );
-            }
-        }
-        return $directUrl ?? $dynamicUrl ?? false;
     }
 }

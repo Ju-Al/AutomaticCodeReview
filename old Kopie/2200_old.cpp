@@ -1,5 +1,4 @@
 /***************************************************************************
-    if (rules.size() == 7)
  *   Copyright (C) 2008 by Max-Wilhelm Bruker   *
  *   brukie@gmx.net   *
  *                                                                         *
@@ -394,7 +393,7 @@ QString MainWindow::extractInvalidUsernameMessage(QString & in)
 {
     QString out = tr("Invalid username.") + "<br/>";
     QStringList rules = in.split(QChar('|'));
-    if (rules.size() == 9)
+    if (rules.size() == 7)
     {
         out += tr("Your username must respect these rules:") + "<ul>";
 

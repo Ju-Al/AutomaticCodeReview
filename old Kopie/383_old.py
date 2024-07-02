@@ -1,6 +1,4 @@
 """
-    dim_vals = zip(*keys)
-    combinations = (zip(*dim_vals[i:i+2])
 Advanced utilities for traversing nesting/hierarchical Dimensioned
 objects either to inspect the structure of their declared dimensions
 or mutate the matching elements.
@@ -113,7 +111,8 @@ def hierarchical(keys):
     ndims = len(keys[0])
     if ndims <= 1:
         return True
-    dim_vals = list(zip(*keys))
+    dim_vals = zip(*keys)
+    combinations = (zip(*dim_vals[i:i+2])
     combinations = (list(zip(*dim_vals[i:i+2]))
                     for i in range(ndims-1))
     hierarchies = []

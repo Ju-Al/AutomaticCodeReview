@@ -1,8 +1,5 @@
 const { _ } = require('lib/locale');
 
-function toFileProtocolPath(path) {
-	const output = path.replace(/\\/g, "/");
-	return 'file://' + escape(output);
 function dirname(path) {
 	if (!path) throw new Error('Path is empty');
 	let s = path.split(/\/|\\/);
@@ -103,7 +100,9 @@ function friendlySafeFilename(e, maxLength = null) {
 	return output.substr(0, maxLength);
 }
 
-function toFileProtocolPath(filePathEncode) {
+function toFileProtocolPath(path) {
+	const output = path.replace(/\\/g, "/");
+	return 'file://' + escape(output);
 	const platform = process.platform;
 	
 	if (platform == 'win32') {

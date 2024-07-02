@@ -54,7 +54,6 @@ func RefreshDefinitions(ctx context.Context, c client.Client, ioStreams cmdutil.
 	if err != nil {
 		return err
 	}
-	syncedTemplates = append(syncedTemplates, templates...)
 	ioStreams.Infof("get %d trait definitions from cluster, syncing...", len(templates))
 	successNum = plugins.SinkTemp2Local(templates, dir)
 	ioStreams.Infof("%d trait definitions successfully synced\n", successNum)

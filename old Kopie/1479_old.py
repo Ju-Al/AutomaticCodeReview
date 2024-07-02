@@ -1,5 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-class AbstractInventoryConfig(dict):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -113,7 +112,7 @@ class AbstractServiceConfig(object):
         raise NotImplementedError()
 
 
-class AbstractInventoryConfig(object):
+class AbstractInventoryConfig(dict):
     """Abstract base class for service configuration. This class
     is used to implement dependency injection for the gRPC services."""
 

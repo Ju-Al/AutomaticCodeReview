@@ -1,6 +1,4 @@
 // Code for running targets directly through Please.
-	if err := syscall.Exec(splitCmd[0], args, os.Environ()); err != nil {
-		log.Fatalf("Error running command %s: %s", strings.Join(args, " "), err)
 
 package run
 
@@ -74,7 +72,8 @@ func run(graph *core.BuildGraph, label core.BuildLabel, args []string, fork bool
 	args = append(splitCmd, args...)
 	log.Info("Running target %s...", strings.Join(args, " "))
 	output.SetWindowTitle("plz run: " + strings.Join(args, " "))
-	if fork {
+	if err := syscall.Exec(splitCmd[0], args, os.Environ()); err != nil {
+		log.Fatalf("Error running command %s: %s", strings.Join(args, " "), err)
 		cmd := exec.Command(splitCmd[0], args[1:]...) // args here don't include argv[0]
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

@@ -1,11 +1,4 @@
 import sys
-    credentials = pika.PlainCredentials(app.config['RABBITMQ_USERNAME'], app.config['RABBITMQ_PASSWORD'])
-    connection_parameters = pika.ConnectionParameters(
-            host=app.config['RABBITMQ_HOST'],
-            port=app.config['RABBITMQ_PORT'],
-            virtual_host=app.config['RABBITMQ_VHOST'],
-            credentials=credentials
-        )
 from time import sleep
 import pika
 import pika_pool
@@ -22,7 +15,13 @@ def init_rabbitmq_connection(app):
         sleep(2)
         sys.exit(-1)
 
-    connection_config = {
+    credentials = pika.PlainCredentials(app.config['RABBITMQ_USERNAME'], app.config['RABBITMQ_PASSWORD'])
+    connection_parameters = pika.ConnectionParameters(
+            host=app.config['RABBITMQ_HOST'],
+            port=app.config['RABBITMQ_PORT'],
+            virtual_host=app.config['RABBITMQ_VHOST'],
+            credentials=credentials
+        )
         "username": app.config['RABBITMQ_USERNAME'],
         "password": app.config['RABBITMQ_PASSWORD'],
         "host": app.config['RABBITMQ_HOST'],

@@ -1,6 +1,5 @@
 namespace Nancy.Bootstrapper
 {
-    /// <summary>
     /// Interface for pipeline hooks
     /// </summary>
     public interface IPipelines

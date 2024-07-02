@@ -1,5 +1,3 @@
-"""
-Algorithm for computing a :math:s -club cluster graph (an undirected graph where
 all connected components have diameter at most :math:s) from a given graph :math:G.
 
 Given a positive integer :math:d, and an undirected simple graph :math:G,

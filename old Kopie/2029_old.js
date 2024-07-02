@@ -1,5 +1,4 @@
 import Component from '@ember/component';
-      this.set('showError', true);
 import config from 'travis/config/environment';
 import { task } from 'ember-concurrency';
 import { computed } from '@ember/object';
@@ -50,7 +49,7 @@ export default Component.extend({
       yield repository.reload();
       this.pusher.subscribe(`repo-${repository.id}`);
     } catch (error) {
-      this.set('apiError', error);
+      this.set('showError', true);
     }
   }),
 

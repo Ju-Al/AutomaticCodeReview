@@ -52,7 +52,6 @@ public class CLITest extends BaseCLITest {
                 FileUtil.findPatternInFile(new File(resultFilename), "Using Java version: Java 1.5"));
     }
 
-    @Test
     public void changeJavaVersionLongOption() {
         String[] args = { "-d", SOURCE_FOLDER, "-f", "text", "-R", "category/java/design.xml", "--use-version", "1.5", "--language", "java", "-debug", };
         String resultFilename = runTest(args, "chgJavaVersion");

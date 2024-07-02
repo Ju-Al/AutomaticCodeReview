@@ -1,5 +1,4 @@
 /**
-			if ( tsc->data[SC_CLOAKINGEXCEED] && !(st->mode&MD_BOSS) )
  * This file is part of Hercules.
  * http://herc.ws - http://github.com/HerculesWS/Hercules
  *
@@ -3590,6 +3589,7 @@ static int status_check_visibility(struct block_list *src, struct block_list *ta
 
 		switch ( target->type ) { //Check for chase-walk/hiding/cloaking opponents.
 		case BL_PC:
+			if ( tsc->data[SC_CLOAKINGEXCEED] && !(st->mode&MD_BOSS) )
 			if ((tsc->data[SC_CLOAKINGEXCEED] != NULL || tsc->data[SC_NEWMOON] != NULL) && !(st->mode & MD_BOSS))
 				return 0;
 			if ((tsc->option&(OPTION_HIDE | OPTION_CLOAK | OPTION_CHASEWALK)

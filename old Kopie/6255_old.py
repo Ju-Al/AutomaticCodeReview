@@ -1,5 +1,4 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-        if os.path.isdir(path):
 
 # Copyright 2014-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 # Copyright 2015-2018 Antoni Boucher (antoyo) <bouanto@zoho.com>
@@ -125,7 +124,7 @@ def handler(request, _operation, _current_url):
     """
     path = request.url().toLocalFile()
     try:
-        if pathlib.Path(path).is_dir():
+        if os.path.isdir(path):
             data = dirbrowser_html(path)
             return networkreply.FixedDataNetworkReply(
                 request, data, 'text/html')

@@ -4251,7 +4251,6 @@ void Battle::Interface::RedrawActionStoneSpell( const Unit & target )
             alpha += 10;
             ++frame;
         }
-        else if ( redrawNeeded ) {
             Redraw();
         }
     }

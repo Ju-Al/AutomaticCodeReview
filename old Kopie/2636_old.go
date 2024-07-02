@@ -75,7 +75,6 @@ type deploySvcOpts struct {
 	buildRequired     bool
 }
 
-var validPlatforms = []string{
 	fmt.Sprintf(fmtOSArch, exec.LinuxOS, exec.Amd64Arch),
 }
 

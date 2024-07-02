@@ -1,110 +1,57 @@
-import torch.nn as nn
+import torch
 
-from mmdet.core import bbox2result
-from ..builder import DETECTORS, build_backbone, build_head, build_neck
-from .base import BaseDetector
+def matrix_nms(seg_masks, cate_labels, cate_scores,
+               kernel='gaussian', sigma=2.0, sum_masks=None):
+    """Matrix NMS for multi-class masks.
 
+    Args:
+        seg_masks (Tensor): shape (n, h, w)
+        cate_labels (Tensor): shape (n), mask labels in descending order
+        cate_scores (Tensor): shape (n), mask scores in descending order
+        kernel (str):  'linear' or 'gauss'
+        sigma (float): std in gaussian method
+        sum_masks (Tensor): The sum of seg_masks
 
-@DETECTORS.register_module()
-class SingleStageSegDetector(BaseDetector):
-    """Base class for single-stage instance segmenters.
-
-    Single-stage instance segmenters directly and densely predict object masks on the
-    output features of the backbone+neck.
+    Returns:
+        Tensor: cate_scores_update, tensors of shape (n)
     """
+    n_samples = len(cate_labels)
+    if n_samples == 0:
+        return []
+    if sum_masks is None:
+        sum_masks = seg_masks.sum((1, 2)).float()
+    seg_masks = seg_masks.reshape(n_samples, -1).float()
+    # inter.
+    inter_matrix = torch.mm(seg_masks, seg_masks.transpose(1, 0))
+    # union.
+    sum_masks_x = sum_masks.expand(n_samples, n_samples)
+    # iou.
+    iou_matrix = (inter_matrix / (sum_masks_x +
+                  sum_masks_x.transpose(1, 0) - inter_matrix)).triu(diagonal=1)
+    # label_specific matrix.
+    cate_labels_x = cate_labels.expand(n_samples, n_samples)
+    label_matrix = (cate_labels_x == cate_labels_x.transpose(1, 0)
+                    ).float().triu(diagonal=1)
 
-    def __init__(self,
-                 backbone,
-                 neck=None,
-                 bbox_head=None,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None):
-        super(SingleStageSegDetector, self).__init__()
-        self.backbone = build_backbone(backbone)
-        if neck is not None:
-            self.neck = build_neck(neck)
-        bbox_head.update(train_cfg=train_cfg)
-        bbox_head.update(test_cfg=test_cfg)
-        self.bbox_head = build_head(bbox_head)
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
-        self.init_weights(pretrained=pretrained)
+    # IoU compensation
+    compensate_iou, _ = (iou_matrix * label_matrix).max(0)
+    compensate_iou = compensate_iou.expand(
+                            n_samples, n_samples).transpose(1, 0)
 
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in detector.
+    # IoU decay
+    decay_iou = iou_matrix * label_matrix
 
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-        super(SingleStageSegDetector, self).init_weights(pretrained)
-        self.backbone.init_weights(pretrained=pretrained)
-        if self.with_neck:
-            if isinstance(self.neck, nn.Sequential):
-                for m in self.neck:
-                    m.init_weights()
-            else:
-                self.neck.init_weights()
-        self.bbox_head.init_weights()
-
-    def extract_feat(self, img):
-        """Directly extract features from the backbone+neck."""
-        x = self.backbone(img)
-        if self.with_neck:
-            x = self.neck(x)
-        return x
-
-    def forward_dummy(self, img):
-        """Used for computing network flops.
-
-        See `mmdetection/tools/get_flops.py`
-        """
-        x = self.extract_feat(img)
-        outs = self.bbox_head(x)
-        return outs
-
-    def forward_train(self,
-                      img,
-                      img_metas,
-                      gt_bboxes,
-                      gt_labels,
-                      gt_bboxes_ignore=None,
-                      gt_masks=None):
-        """
-        Args:
-            img (Tensor): Input images of shape (N, C, H, W).
-                Typically these should be mean centered and std scaled.
-            img_metas (list[dict]): A List of image info dict where each dict
-                has: 'img_shape', 'scale_factor', 'flip', and may also contain
-                'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
-                For details on the values of these keys see
-                :class:`mmdet.datasets.pipelines.Collect`.
-            gt_bboxes (list[Tensor]): Each item are the truth boxes for each
-                image in [tl_x, tl_y, br_x, br_y] format.
-            gt_labels (list[Tensor]): Class indices corresponding to each box
-            gt_bboxes_ignore (None | list[Tensor]): Specify which bounding
-                boxes can be ignored when computing the loss.
-            gt_masks (None | Tensor) : true segmentation masks for each box
-                used if the architecture supports a segmentation task.
-
-        Returns:
-            dict[str, Tensor]: A dictionary of loss components.
-        """
-        x = self.extract_feat(img)
-        losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
-                                              gt_labels, gt_bboxes_ignore, gt_masks)
-        return losses
-
-    def simple_test(self, img, img_meta, rescale=False):
-        """Test function without test time augmentation.
-        """
-        x = self.extract_feat(img)
-        outs = self.bbox_head(x, eval=True)
-
-        seg_inputs = outs + (img_meta, self.test_cfg, rescale)
-        bbox_results, segm_results = self.bbox_head.get_seg(*seg_inputs)
-        return bbox_results[0], segm_results[0]
-
-    def aug_test(self, imgs, img_metas, rescale=False):
+    # matrix nms
+    if kernel == 'gaussian':
+        decay_matrix = torch.exp(-1 * sigma * (decay_iou ** 2))
+        compensate_matrix = torch.exp(-1 * sigma * (compensate_iou ** 2))
+        decay_coefficient, _ = (decay_matrix / compensate_matrix).min(0)
+    elif kernel == 'linear':
+        decay_matrix = (1-decay_iou)/(1-compensate_iou)
+        decay_coefficient, _ = decay_matrix.min(0)
+    else:
         raise NotImplementedError
+
+    # update the score.
+    cate_scores_update = cate_scores * decay_coefficient
+    return cate_scores_update

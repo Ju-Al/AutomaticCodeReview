@@ -145,7 +145,6 @@ type FHTTPTransportBuilder struct {
 	requestSizeLimit  uint
 	responseSizeLimit uint
 	requestHeaders    map[string]string
-	getRequestHeaders func(FContext) map[string]string
 }
 
 // NewFHTTPTransportBuilder creates a builder which configures and builds HTTP

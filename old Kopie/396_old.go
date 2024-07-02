@@ -57,7 +57,6 @@ var Languages = LanguageOptions{
 	},
 	"py": Options{
 		"tornado":         "Generate code for use with Tornado",
-		"asyncio":         "Generate code for use with asyncio",
 		"gen_with_frugal": "[true|false] Whether to generate thrift files with frugal (experimental, true by default)",
 	},
 }

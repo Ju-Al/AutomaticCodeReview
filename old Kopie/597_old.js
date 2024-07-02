@@ -423,7 +423,6 @@ define(function(require){
                 env.notebook.show_command_palette();
             }
         },
-        'toggle-marks': {
             help_index : 'cj',
             help: 'toggle marks',
             icon: 'fa-check',

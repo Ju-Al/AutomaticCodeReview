@@ -34,7 +34,6 @@ import (
 // Kit is an opaque object that carries context for the Configurator. Build
 // functions that receive this object MUST NOT modify it.
 type Kit struct {
-	HTTPFallbackHandler http.Handler
 
 	c *Configurator
 

@@ -1,15 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-            CacheChange_t* change_to_add;
-            if (reserveCache(&change_to_add, change->serializedPayload.length)) //Reserve a new cache from the corresponding cache pool
-                if (!change_to_add->copy(change))
-                {
-                    logWarning(RTPS_MSG_IN, IDSTRING "Problem copying CacheChange, received data is: " << change->serializedPayload.length
-                                                                                                       << " bytes and max size in reader " << getGuid().entityId << " is " <<
-                            change_to_add->serializedPayload.max_size);
-                    releaseCache(change_to_add);
-                    return false;
-                }
-                logError(RTPS_MSG_IN, IDSTRING "Problem reserving CacheChange in reader: " << getGuid().entityId);
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -389,7 +378,17 @@ bool StatefulReader::processDataMsg(
             logInfo(RTPS_MSG_IN,
                     IDSTRING "Trying to add change " << change->sequenceNumber << " TO reader: " << getGuid().entityId);
 
-            // Ask the pool for a cache change
+            if (reserveCache(&change_to_add, change->serializedPayload.length)) //Reserve a new cache from the corresponding cache pool
+                if (!change_to_add->copy(change))
+                {
+                    logWarning(RTPS_MSG_IN, IDSTRING "Problem copying CacheChange, received data is: " << change->serializedPayload.length
+                                                                                                       << " bytes and max size in reader " << getGuid().entityId << " is " <<
+                            change_to_add->serializedPayload.max_size);
+                    releaseCache(change_to_add);
+                    return false;
+                }
+                logError(RTPS_MSG_IN, IDSTRING "Problem reserving CacheChange in reader: " << getGuid().entityId);
+            CacheChange_t* change_to_add;
             CacheChange_t* change_to_add = nullptr;
             if (!change_pool_->reserve_cache(change_to_add))
             {

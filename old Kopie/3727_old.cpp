@@ -1,6 +1,4 @@
 /***************************************************************************
-                                     "try again. If the error persists try updating your client to the most recent "
-                                     "build and if need be contact your software provider."));
  *   Copyright (C) 2008 by Max-Wilhelm Bruker   *
  *   brukie@gmx.net   *
  *                                                                         *
@@ -417,7 +415,8 @@ void MainWindow::loginError(Response::ResponseCode r,
         case Response::RespContextError:
             QMessageBox::critical(this, tr("Error"),
                                   tr("An internal error has occurred, please try closing and reopening your client and "
-                                     "trying again. If the error persists try updating your client to the most recent "
+                                     "try again. If the error persists try updating your client to the most recent "
+                                     "build and if need be contact your software provider."));
                                      "build and if needed contact software's developers."));
             break;
         case Response::RespAccountNotActivated: {

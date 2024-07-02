@@ -1,5 +1,4 @@
 <?php
-
 namespace WP_Rocket\ThirdParty\Hostings;
 
 use WP_Rocket\Engine\Cache\AdminSubscriber;

@@ -1,11 +1,5 @@
 package k8s
 
-		if !notAllContainersReady || attempt >= p.maxPollAttempts {
-			log.Printf("container id %q not found (attempt %d of %d)", containerID, attempt, p.maxPollAttempts)
-		log.Printf("container id %q not found (attempt %d of %d); trying again in %s", containerID, attempt, p.maxPollAttempts, p.pollRetryInterval)
-		case <-time.After(p.pollRetryInterval):
-func (p *k8sPlugin) getPodListFromInsecureKubeletPort() (out *podList, err error) {
-	httpResp, err := p.httpClient.Get(fmt.Sprintf("http://localhost:%d/pods", p.kubeletReadOnlyPort))
 import (
 	"context"
 	"crypto/tls"
@@ -159,7 +153,12 @@ func (p *k8sPlugin) Attest(ctx context.Context, req *workloadattestor.AttestRequ
 
 		// if the container was not located and there were no pods with
 		// uninitialized containers, then the search is over.
-		if !notAllContainersReady || attempt >= config.MaxPollAttempts {
+		if !notAllContainersReady || attempt >= p.maxPollAttempts {
+		log.Printf("container id %q not found (attempt %d of %d); trying again in %s", containerID, attempt, p.maxPollAttempts, p.pollRetryInterval)
+		case <-time.After(p.pollRetryInterval):
+func (p *k8sPlugin) getPodListFromInsecureKubeletPort() (out *podList, err error) {
+	httpResp, err := p.httpClient.Get(fmt.Sprintf("http://localhost:%d/pods", p.kubeletReadOnlyPort))
+			log.Printf("container id %q not found (attempt %d of %d)", containerID, attempt, p.maxPollAttempts)
 			log.Printf("container id %q not found (attempt %d of %d)", containerID, attempt, config.MaxPollAttempts)
 			return nil, k8sErr.New("no selectors found")
 		}

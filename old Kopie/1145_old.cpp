@@ -1,5 +1,4 @@
 /******************************************************************************
-            "points","forces","force","totalForce","arrowSizeCoef","showColor","indexFromEnd"
 *       SOFA, Simulation Open-Framework Architecture, development version     *
 *                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
 *                                                                             *
@@ -187,7 +186,7 @@ struct ConstantForceField_test : public Sofa_test<>
         /// List of the supported attributes the user expect to find
         /// This list needs to be updated if you add an attribute.
         vector<string> attrnames = {
-            "indices","forces","force","totalForce","arrowSizeCoef","showColor","indexFromEnd"
+            "points","forces","force","totalForce","arrowSizeCoef","showColor","indexFromEnd"
         };
 
         for(auto& attrname : attrnames)

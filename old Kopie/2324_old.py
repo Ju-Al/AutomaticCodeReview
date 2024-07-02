@@ -78,7 +78,6 @@ def init_swagger_documentation(app):
     """Makes swagger documentation available at /api/docs for any endpoints
     marked for aiohttp_apispec documentation.
     """
-    warnings.filterwarnings(
         "ignore",
         message="Multiple schemas resolved to the name"
     )

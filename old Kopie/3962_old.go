@@ -1,5 +1,4 @@
 /*
-	flag.CommandLine.Parse([]string{"-test.coverprofile", tempCoveragePath()})
 Copyright 2020 The cert-manager Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,7 +59,7 @@ func InitCoverage(name string) {
 	}
 
 	// Set up the unit test framework with the required arguments to activate test coverage.
-	if err := flag.CommandLine.Parse([]string{"-test.coverprofile", tempCoveragePath()}); err != nil {
+	flag.CommandLine.Parse([]string{"-test.coverprofile", tempCoveragePath()})
 		panic(err)
 	}
 

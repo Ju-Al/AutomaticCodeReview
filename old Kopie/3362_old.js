@@ -1,5 +1,4 @@
 /**
-    throw new Error($('Could not find account: ' + name + ' in any resource group in subscription: ' + subscription.name + ' with id: ' + subscription.id ));
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the 'License');
@@ -1163,7 +1162,7 @@ exports.init = function (cli) {
       }
     }
     
-    throw new Error($('Could not find account: ' + name + ' in any resource group in subscription: ' + subscription.name + ' with id: ' + subscription.id));
+    throw new Error($('Could not find account: ' + name + ' in any resource group in subscription: ' + subscription.name + ' with id: ' + subscription.id ));
   }
 
   function listPoll(client, accountName, jobId, waitInterval, attemptsLeft, maxAttempts, callback) {

@@ -1,6 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-            foreach ((Type type, int count) expectedNotification in expectedNotifications)
-                    Assert.False(_metricHandler.HandleCountDictionary.TryGetValue(expectedNotification.type, out var count));
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -76,7 +74,8 @@ namespace Microsoft.Health.Fhir.Tests.E2E.Rest.Metric
 
             var result = await action() as HttpResponseMessage;
 
-            foreach ((Type type, int count, string resourceType) expectedNotification in expectedNotifications)
+                    Assert.False(_metricHandler.HandleCountDictionary.TryGetValue(expectedNotification.type, out var count));
+            foreach ((Type type, int count) expectedNotification in expectedNotifications)
             {
                 if (expectedNotification.count == 0)
                 {

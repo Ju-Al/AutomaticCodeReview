@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2021 Algorand, Inc.
-	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusFuture)]
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -287,7 +286,7 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100SecondTestUnupgradedProtocol.json"))
 
 	// for the primary node, we want to have a different consensus which always enables applications.
-	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)]
+	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusFuture)]
 	primaryNodeUnupgradedProtocol.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 	primaryNodeUnupgradedProtocol.ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
 	consensus[consensusTestUnupgradedProtocol] = primaryNodeUnupgradedProtocol

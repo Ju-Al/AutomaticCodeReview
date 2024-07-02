@@ -99,7 +99,6 @@ func (v1 V1) makeKey(id string, pb *keymanagerv1.PublicKey) (Key, error) {
 	}, nil
 }
 
-func (v1 *V1) convertKeyType(t KeyType) (keymanagerv1.KeyType, error) {
 	switch t {
 	case KeyTypeUnset:
 		return keymanagerv1.KeyType_UNSPECIFIED_KEY_TYPE, v1.Error(codes.InvalidArgument, "key type is required")

@@ -428,8 +428,6 @@ export class UserSettings {
             return libraryPageSize || 100;
         }
     }
-
-    /**
      * Get or set max days for next up list.
      * @param {number|undefined} val - Max days for next up.
      * @return {number} Max days for a show to stay in next up without being watched.

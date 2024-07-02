@@ -1,20 +1,4 @@
 # This file is part of Scapy
-        return cls._stem.dec(s, context=context)
-        return cls._stem.safedec(s, context=context)
-        return cls.stem
-class ASN1_Codecs(six.with_metaclass(ASN1_Codecs_metaclass)):
-    BER = 1
-    DER = 2
-    PER = 3
-    CER = 4
-    LWER = 5
-    BACnet = 6
-    OER = 7
-    SER = 8
-    XER = 9
-    def __init__(self, key, value, context=None, codec=None):
-        self._context = context
-        return self.__class__(self._key, self._value, self._context, self._codec)  # noqa: E501
 # See http://www.secdev.org/projects/scapy for more information
 # Copyright (C) Philippe Biondi <phil@secdev.org>
 # Modified by Maxence Tury <maxence.tury@ssi.gouv.fr>
@@ -114,8 +98,23 @@ class ASN1_BadTag_Decoding_Error(ASN1_Decoding_Error):
 
 
 class ASN1Codec(EnumElement):
+        return cls._stem.dec(s, context=context)
+        return cls._stem.safedec(s, context=context)
+        return cls.stem
+class ASN1_Codecs(six.with_metaclass(ASN1_Codecs_metaclass)):
+    BER = 1
+    DER = 2
+    PER = 3
+    CER = 4
+    LWER = 5
+    BACnet = 6
+    OER = 7
+    SER = 8
+    XER = 9
+    def __init__(self, key, value, context=None, codec=None):
+        self._context = context
+        return self.__class__(self._key, self._value, self._context, self._codec)  # noqa: E501
     def register_stem(cls, stem):
-        # type: (Type[BERcodec_Object[Any]]) -> None
         cls._stem = stem
 
     def dec(cls, s, context=None):

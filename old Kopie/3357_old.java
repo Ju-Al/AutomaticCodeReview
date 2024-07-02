@@ -1,6 +1,4 @@
 /*
-        String storePathPhysic = this.brokerController.getMessageStoreConfig().getStorePathCommitLog();
-        double physicRatio = UtilAll.getDiskPartitionSpaceUsedPercent(storePathPhysic);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -638,7 +636,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
     }
 
     private String diskUtil() {
-        double physicRatio = -1;
+        String storePathPhysic = this.brokerController.getMessageStoreConfig().getStorePathCommitLog();
+        double physicRatio = UtilAll.getDiskPartitionSpaceUsedPercent(storePathPhysic);
         String storePath =this.brokerController.getMessageStoreConfig().getStorePathCommitLog();
         if (storePath.contains(MessageStoreConfig.MULTI_PATH_SPLITTER)) {
             String[] paths = storePath.trim().split(MessageStoreConfig.MULTI_PATH_SPLITTER);

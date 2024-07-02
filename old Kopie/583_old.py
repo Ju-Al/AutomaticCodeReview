@@ -97,7 +97,6 @@ class MaxIoUAssigner(BaseAssigner):
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
-        # trun the assign results back to cuda
         assign_result.gt_inds = assign_result.gt_inds.cuda()
         assign_result.max_overlaps = assign_result.max_overlaps.cuda()
         if assign_result.labels is not None:

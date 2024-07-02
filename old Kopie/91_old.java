@@ -1,5 +1,4 @@
 package com.hubspot.singularity;
-
 import java.util.List;
 import java.util.Map;
 

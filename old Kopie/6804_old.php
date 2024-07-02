@@ -42,7 +42,6 @@ class ItemImportRequest extends FormRequest
         $import->field_map  = request('column-mappings');
         $import->save();
         $fieldMappings=[];
-
         if ($import->field_map) {
             foreach ($import->field_map as $field => $fieldValue) {
                 $errorMessage = null;

@@ -267,7 +267,6 @@ class Plugin_Helper extends Plugin
 
 		return format_date($timestamp, $format);
 	}
-	
 	/**
 	 * Timespan
 	 *

@@ -42,7 +42,6 @@ class InfluxWriterSubscriber(object):
         self.time = 0
 
 
-    def on_connection_closed(self, connection, reply_code, reply_text):
         self.log.info('RabbitMQ connection got closed!')
         self.connection.add_timeout(5, self.connect_to_rabbitmq)
 

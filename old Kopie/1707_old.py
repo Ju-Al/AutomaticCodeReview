@@ -1,5 +1,4 @@
 # Copyright 1999-2003 by Jeffrey Chang.  All rights reserved.
-    developers by sending an email to biopython-dev@biopython.org.
 #
 # This file is part of the Biopython distribution and governed by your
 # choice of the "Biopython License Agreement" or the "BSD 3-Clause License".
@@ -85,7 +84,7 @@ class BiopythonDeprecationWarning(BiopythonWarning):
 
     Code marked as deprecated is likely to be removed in a future version
     of Biopython. To avoid removal of this code, please contact the Biopython
-    developers by sending an email mailing list or log an issue on GitHub.
+    developers by sending an email to biopython-dev@biopython.org.
     """
 
     pass

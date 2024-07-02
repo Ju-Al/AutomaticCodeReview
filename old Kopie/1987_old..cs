@@ -1,6 +1,4 @@
 using System.IO;
-            app.Option("--postgres", $"Connection string to a PostgreSQL database (default: SQLite)", CommandOptionType.SingleValue);
-            app.Option("--mysql", $"Connection string to a MySQL database (default: SQLite)", CommandOptionType.SingleValue);
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -27,7 +25,8 @@ namespace BTCPayServer.Configuration
             app.Option("--regtest | -regtest", $"Use regtest (deprecated, use --network instead)", CommandOptionType.BoolValue);
             app.Option("--allow-admin-registration", $"For debug only, will show a checkbox when a new user register to add himself as admin. (default: false)", CommandOptionType.BoolValue);
             app.Option("--chains | -c", $"Chains to support as a comma separated (default: btc; available: {chains})", CommandOptionType.SingleValue);
-            app.Option("--postgres", $"Connection string to a PostgreSQL database", CommandOptionType.SingleValue);
+            app.Option("--postgres", $"Connection string to a PostgreSQL database (default: SQLite)", CommandOptionType.SingleValue);
+            app.Option("--mysql", $"Connection string to a MySQL database (default: SQLite)", CommandOptionType.SingleValue);
             app.Option("--mysql", $"Connection string to a MySQL database", CommandOptionType.SingleValue);
             app.Option("--sqlite", $"Connection string to a SQLite database", CommandOptionType.SingleValue);
             app.Option("--sqlitefile", $"File name to an SQLite database file inside the data directory", CommandOptionType.SingleValue);

@@ -1,876 +1,1031 @@
 package vn.mbm.phimp.me;
 
-import android.app.Activity;
+import android.Manifest;
 import android.app.AlertDialog;
-import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
-import android.content.res.Resources;
-import android.graphics.Color;
+import android.database.Cursor;
+import android.gesture.GestureOverlayView;
+import android.graphics.Bitmap;
 import android.net.Uri;
-import android.os.Build;
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
-import android.support.annotation.IdRes;
-import android.support.annotation.Nullable;
+import android.preference.PreferenceManager;
+import android.provider.MediaStore;
+import android.support.annotation.NonNull;
+import android.support.design.widget.BottomNavigationView;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentStatePagerAdapter;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.AppCompatDelegate;
 import android.util.Log;
-import android.view.LayoutInflater;
+import android.view.Display;
+import android.view.KeyEvent;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
-import android.view.ViewGroup.LayoutParams;
-import android.widget.Button;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.Animation;
+import android.view.animation.TranslateAnimation;
 import android.widget.CheckBox;
-import android.widget.CompoundButton;
-import android.widget.CompoundButton.OnCheckedChangeListener;
-import android.widget.EditText;
-import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
-import android.widget.TextView;
-
-import com.paypal.android.MEP.CheckoutButton;
+import android.widget.TabHost.TabSpec;
+import android.widget.Toast;
 import com.paypal.android.MEP.PayPal;
-import com.tani.app.ui.IconContextMenu;
-
+import com.vistrav.ask.Ask;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
-
-import vn.mbm.phimp.me.database.AccountItem;
-import vn.mbm.phimp.me.database.DeviantArtItem;
-import vn.mbm.phimp.me.database.DownloadedPersonalPhotoDBItem;
-import vn.mbm.phimp.me.database.DownloadedPhotoDBItem;
-import vn.mbm.phimp.me.database.DrupalItem;
-import vn.mbm.phimp.me.database.FacebookItem;
-import vn.mbm.phimp.me.database.FlickrItem;
-import vn.mbm.phimp.me.database.ImageshackItem;
-import vn.mbm.phimp.me.database.KaixinDBItem;
-import vn.mbm.phimp.me.database.PicasaItem;
-import vn.mbm.phimp.me.database.QQItem;
-import vn.mbm.phimp.me.database.S500pxItem;
-import vn.mbm.phimp.me.database.SohuItem;
-import vn.mbm.phimp.me.database.TumblrItem;
-import vn.mbm.phimp.me.database.TwitterItem;
-import vn.mbm.phimp.me.database.VkItem;
-import vn.mbm.phimp.me.database.WordpressItem;
-import vn.mbm.phimp.me.gallery3d.media.StringTexture;
-import vn.mbm.phimp.me.services.DeviantArtService;
-import vn.mbm.phimp.me.services.DrupalServices;
-import vn.mbm.phimp.me.services.FacebookServices;
-import vn.mbm.phimp.me.services.FlickrServices;
-import vn.mbm.phimp.me.services.ImageshackServices;
-import vn.mbm.phimp.me.services.ImgurServices;
-import vn.mbm.phimp.me.services.KaixinServices;
-import vn.mbm.phimp.me.services.PicasaServices;
-import vn.mbm.phimp.me.services.QQServices;
-import vn.mbm.phimp.me.services.S500pxService;
-import vn.mbm.phimp.me.services.SohuServices;
-import vn.mbm.phimp.me.services.TumblrServices;
-import vn.mbm.phimp.me.services.TwitterServices;
-import vn.mbm.phimp.me.services.VKServices;
+import java.util.HashMap;
+import vn.mbm.phimp.me.database.AccountDBAdapter;
+import vn.mbm.phimp.me.database.TumblrDBAdapter;
+import vn.mbm.phimp.me.gallery.PhimpMeGallery;
 import vn.mbm.phimp.me.utils.Commons;
-import vn.mbm.phimp.me.utils.PrefManager;
-import vn.mbm.phimp.me.utils.RSSUtil;
+import vn.mbm.phimp.me.utils.RSSPhotoItem;
+import vn.mbm.phimp.me.utils.RSSPhotoItem_Personal;
 
-import static android.os.Environment.getExternalStorageDirectory;
-import static com.facebook.FacebookSdk.getApplicationContext;
-import static vn.mbm.phimp.me.PhimpMe.PREFS_NAME;
-
-
-public class Settings extends Fragment
+//import android.widget.ImageView;
+//import android.widget.TabHost;
+//import android.widget.TabHost.OnTabChangeListener;
+//import android.widget.TextView;
+//import com.google.android.gms.ads.AdRequest;
+//import com.google.android.maps.GeoPoint;
+//
+//@ReportsCrashes(formKey = "dFRsUzBJSWFKUFc3WmFjaXZab2V0dHc6MQ",
+//        mode = ReportingInteractionMode.TOAST,
+//        forceCloseDialogAfterToast = false,
+//        resToastText = R.string.crash_report_text)
+@SuppressWarnings("deprecation")
+public class PhimpMe extends AppCompatActivity implements BottomNavigationView.OnNavigationItemSelectedListener //, android.view.GestureDetector.OnGestureListener
 {
-	public  RadioButton radiotDarkBtn ;
-	public static RadioButton radiotLightBtn ;
-	private final int CONTEXT_MENU_ID = 1;
-	private final int DIALOG_FILE_SIZE_SETTINGS = 2;
-	private final int DIALOG_ADD_ACCOUNT_DRUPAL = 3;
-	private final int DIALOG_DISPLAY_PHOTOS_SETTINGS = 4;
-	private final int DIALOG_ADD_ACCOUNT_IMAGESHACK = 5;
-	private final int DIALOG_ADD_ACCOUNT_WORDPRESS = 6;
-	private final int DIALOG_ADD_ACCOUNT_JOOMLA = 7;
+    public static Context ctx ;
+    public static File DataDirectory;
+    public static final String PREFS_NAME = "PhimpMePrefs";
+    public static final String DATABASE_NAME = "PhimpMe";
+    private static final String DATA_DIRECTORY_NAME = "phimp.me";
+    public static int MAX_DISPLAY_PHOTOS;
+    public static int MAX_FILESIZE_DOWNLOAD;
+    /* Hon Nguyen */
+    public static String phimp_me_tmp;
+    public static Uri phimp_me_img_uri_temporary;
 
-	private IconContextMenu iconContextMenu = null;
+    public static boolean FEEDS_GOOGLE_ADMOB;
 
-	private final int SERVICES_FACEBOOK_ACTION = 1;
-	private final int SERVICES_FLICKR_ACTION = 2;
-	private final int SERVICES_PICASA_ACTION = 3;
-	private final int SERVICES_TUMBLR_ACTION = 4;
-	private final int SERVICES_TWITTER_ACTION = 5;
-	private final int SERVICES_DRUPAL_ACTION = 6;
-	private final int SERVICES_DEVIANTART_ACTION = 7;
-	private final int SERVICES_IMAGESHACK_ACTION = 8;
-	//private final int SERVICES_QQ_ACTION = 9;
-	private final int SERVICES_VK_ACTION = 10;
-	private final int SERVICES_KAIXIN_ACTION = 12;
-	private final int SERVICES_IMGUR_ACTION=13;
-	private final int SERVICES_500PX_ACTION = 11;
-	private final int SERVICES_SOHU_ACTION =15;
-	private final int SERVICES_WORDPRESS_ACTION =16;
-	private final int SERVICES_WORDPRESSDOTCOM_ACTION =17;
-	private final int SERVICES_JOOMLA_ACTION =18;
-	public static EditText etMyFeedServicesTextbox;
-	public static EditText etMyFeedServicesTextbox1;
-	public static EditText etMyFeedServicesTextbox2;
-	public static EditText etMyFeedServicesTextbox3;
-	public static EditText etMyFeedServicesTextbox4;
-	public static EditText etMyFeedServicesTextbox5;
+    public static boolean FEEDS_LIST_YAHOO_NEWS;
+    public static final String FEEDS_LIST_YAHOO_NEWS_TAG = "feeds_list_yahoo_news";
+    public static boolean FEEDS_LOCAL_GALLERY;
+    public static final String FEEDS_LOCAL_GALLERY_TAG = "feeds_local_gallery";
+    public static int check = 0;
+    public static boolean FEEDS_LIST_FLICKR_PUBLIC;
+    public static final String FEEDS_LIST_FLICKR_PUBLIC_TAG = "feeds_list_flickr_public";
+    public static boolean FEEDS_LIST_FLICKR_RECENT;
+    public static final String FEEDS_LIST_FLICKR_RECENT_TAG = "feeds_list_flickr_recent";
+    public static boolean FEEDS_LIST_FLICKR_PRIVATE;
+    public static final String FEEDS_LIST_FLICKR_PRIVATE_TAG = "feeds_list_flickr_private";
 
-	private static Context ctx;
-	private int i=1;
-	private int color = Color.parseColor("#757575");
-	private ImageButton btnAdd;
-	private ImageButton btnLangUS;
-	private ImageButton btnLangDE;
-	private ImageButton btnLangVI;
-	private ImageView btnSettingsMaxFilesize;
-	private ImageButton btnSettingsMaxDisplayPhotos;
-	private Button donatePaypal;
-	private EditText donateAmount;
+    public static boolean FEEDS_LIST_GOOGLE_PICASA_PUBLIC;
+    public static final String FEEDS_LIST_GOOGLE_PICASA_PUBLIC_TAG = "feeds_list_google_picasa_public";
+    public static boolean FEEDS_LIST_GOOGLE_NEWS;
+    public static final String FEEDS_LIST_GOOGLE_NEWS_TAG = "feeds_list_google_news";
+    public static boolean FEEDS_LIST_GOOGLE_PICASA_PRIVATE;
+    public static final String FEEDS_LIST_GOOGLE_PICASA_PRIVATE_TAG = "feeds_list_google_picasa_private";
 
-	private TextView txtMaxPhotoSize;
-	private TextView txtMaxDisplay;
-	private TextView txtMB;
-	private LinearLayout liFileSize;
-	private TextView tvLangEN;
-	private TextView tvLangDE;
-	private TextView tvLangVI;
-	private TextView noaccounttv;
+    public static boolean FEEDS_LIST_DEVIANTART_PUBLIC;
+    public static final String FEEDS_LIST_DEVIANTART_PUBLIC_TAG = "feeds_list_deviantart_public";
+    public static boolean FEEDS_LIST_DEVIANTART_PRIVITE;
+    public static final String FEEDS_LIST_DEVIANTART_PRIVITE_TAG = "feeds_list_deviantart_privite";
 
-	private LinearLayout lytGoogleAdmod;
-	private LinearLayout lytLocalGallery;
-	private LinearLayout lytMyFeedGallery;
-	private LinearLayout lytMyFeedServices;
-	private LinearLayout lytMyFeedMore;
-	private LinearLayout lytPublicFeedList;
-	private LinearLayout lytPrivateFeedList;
-	private LinearLayout lytAccounts;
-	private LinearLayout lyMore;
+    public static boolean FEEDS_LIST_IMAGESHACK_PRIVITE;
+    public static final String FEEDS_LIST_IMAGESHACK_PRIVITE_TAG = "feeds_list_imageshack_privite";
 
-	private RadioGroup rdgMaxPhotoSizeType;
-	private ImageButton btnMore;
-	private ImageView btnDelete;
-	//private ImageButton btnHelp;
-	private File rss_folder;
-	private File rss_thums;
-	private File tmp_folder;
-	private int error_count = 0;
-	private ProgressDialog pro_gress;
-	private AlertDialog maxSizeDialog = null;
+    public static boolean FEEDS_LIST_VK;
+    public static final String FEEDS_LIST_VK_TAG = "feeds_list_vk";
+
+    public static boolean FEEDS_LIST_FACEBOOK_PRIVATE;
+    public static final String FEEDS_LIST_FACEBOOK_PRIVATE_TAG = "feeds_list_facebook_private";
+
+    public static boolean FEEDS_LIST_TUMBLR_PRIVATE;
+    public static final String FEEDS_LIST_TUMBLR_PRIVATE_TAG = "feeds_list_tumblr_private";
+
+    public static boolean FEEDS_LIST_TWITTER_PRIVATE;
+    public static final String FEEDS_LIST_TWITTER_PRIVATE_TAG = "feeds_list_twitter_private";
+
+    public static boolean FEEDS_LIST_KAIXIN_PRIVATE;
+    public static final String FEEDS_LIST_KAIXIN_PRIVATE_TAG = "feeds_list_twitter_private";
+
+    public static boolean FEEDS_LIST_IMGUR_PERSONAL;
+    public static final String FEEDS_LIST_IMGUR_PERSONAL_TAG = "feeds_list_imgur_personal";
+    public static boolean FEEDS_LIST_IMGUR_PUBLIC;
+    public static final String FEEDS_LIST_IMGUR_PUBLIC_TAG = "feeds_list_imgur_public";
+
+    public static boolean FEEDS_LIST_MYSERVICES;
+    public static boolean FEEDS_LIST_MYSERVICES1;
+    public static boolean FEEDS_LIST_MYSERVICES2;
+    public static boolean FEEDS_LIST_MYSERVICES3;
+    public static boolean FEEDS_LIST_MYSERVICES4;
+    public static boolean FEEDS_LIST_MYSERVICES5;
+    public static final String FEDDS_LIST_MYSERVICES_TAG = "feeds_list_myservices";
+    public static final String FEDDS_LIST_MYSERVICES_TAG1 = "feeds_list_myservices";
+    public static final String FEDDS_LIST_MYSERVICES_TAG2 = "feeds_list_myservices";
+    public static final String FEDDS_LIST_MYSERVICES_TAG3 = "feeds_list_myservices";
+    public static final String FEDDS_LIST_MYSERVICES_TAG4 = "feeds_list_myservices";
+    public static final String FEDDS_LIST_MYSERVICES_TAG5 = "feeds_list_myservices";
+    public static String MY_FEED_URL = "";
 
 
-	@Nullable
-	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public static boolean FEEDS_LIST_500PX_PRIVATE;
+    public static final String FEEDS_LIST_500PX_PRIVATE_TAG = "feeds_list_500px_private";
+    public static boolean FEEDS_LIST_500PX_PUBLIC;
+    public static final String FEEDS_LIST_500PX_PUBLIC_TAG = "feeds_list_500px_public";
 
-		View decorView = getActivity().getWindow().getDecorView();
-		int uiOptions = View.SYSTEM_UI_FLAG_VISIBLE;
-		decorView.setSystemUiVisibility(uiOptions);
+    public static boolean FEEDS_LIST_SOHU_PERSONAL;
+    public static final String FEEDS_LIST_SOHU_PERSONAL_TAG = "feeds_list_sohu_personal";
 
-		return inflater.inflate(R.layout.settings, container, false);
-	}
+    public static boolean add_account_upload, add_account_setting;
+    public static HashMap<String, Boolean> checked_accounts = new HashMap<String, Boolean>();
+    public static Uri UploadPhotoPreview;
 
-	@SuppressWarnings("deprecation")
-	@Override
-	public void onViewCreated(View view, Bundle savedInstanceState)
-	{
-		super.onCreate(savedInstanceState);
-		getActivity().setRequestedOrientation (ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-		Resources res = getResources();
+    public static boolean addCurrentPin = false;
 
-		ctx = getContext();
+    //public static GeoPoint currentGeoPoint;
 
-        changeTheme();
+    public static Double curLatitude, curLongtitude;
 
+    public static Double UploadLatitude, UploadLongitude;
+    public static LinearLayout popupTabs; // !?!
+    public static int camera_use;
+    //LOCAL
+    public static ArrayList<String> filepath = new ArrayList<String>();
+    public static ArrayList<Integer> IdList;
+    public static int local_count = 1;
+    ProgressDialog progConfig;
+    //new Gallery
+    static ArrayList<ArrayList<RSSPhotoItem>> phimpme_array_list = new ArrayList<ArrayList<RSSPhotoItem>>();
+    static ArrayList<ArrayList<RSSPhotoItem_Personal>> phimpme_personal_array_list = new ArrayList<ArrayList<RSSPhotoItem_Personal>>();
+    //Cache
+    public static CacheStore cache;
+    public static CacheTask cachetask;
+    //Crash Report
+    public static String CRITTERCISM_APP_ID = "4fffa20fbe790e4bc7000002";
+    boolean serviceDisabled = false;
+    public static boolean check_cache;
+    public static boolean check_export = true;
+    public static BottomNavigationView mBottomNav;
+    public static boolean check_download = false;
+    public static boolean check_download_local_gallery = true;
+    public static int flashStatus = 2;
 
-
-        PayPal pp = PayPal.getInstance();
-
-		//create donate button
-		final CheckoutButton donateButton = pp.getCheckoutButton(ctx, PayPal.BUTTON_278x43, CheckoutButton.TEXT_DONATE);
-
-		//Add donate button to the screen
-		//((LinearLayout)getView().findViewById(R.id.linearSettingsDonate)).addView(donateButton);
-
-		//initial amount field
-		//donateAmount = (EditText) getView().findViewById(R.id.donateAmount);
-
-
-		lytAccounts = (LinearLayout) getView().findViewById(R.id.linearSettingsAccounts);
-		noaccounttv = (TextView) getView().findViewById(R.id.noaccounttv);
-
-		try{
-			try{
-				rss_folder = new File(PhimpMe.DataDirectory.getAbsolutePath() + "/" + RSSUtil.RSS_ITEM_FOLDER);
-			}catch(Exception e){
-			}
-			try{
-				rss_thums = new File(PhimpMe.DataDirectory.getAbsolutePath() + "/" + RSSUtil.RSS_THUMB_FOLDER);
-			}catch(Exception e){
-			}
-			try{
-				tmp_folder = new File(PhimpMe.DataDirectory.getAbsolutePath() + "/" + RSSUtil.TMP_FOLDER);
-			}catch(Exception e){
-			}
-			btnDelete = (ImageView)getView().findViewById(R.id.deletebtn);
-
-			btnDelete.setColorFilter(color);
-			btnDelete.setOnClickListener(new OnClickListener() {
-
-				@Override
-				public void onClick(View v) {
-
-					AlertDialog.Builder alertbox = new AlertDialog.Builder(ctx);
-					alertbox.setMessage(getString(R.string.ask_delete_photo));
-					alertbox.setTitle(R.string.carefully);
-					alertbox.setPositiveButton(getString(R.string.accept), new DialogInterface.OnClickListener()
-					{
-						@Override
-						public void onClick(DialogInterface dialog, int which)
-						{
-
-							if (!rss_folder.exists())
-							{
-								error_count++;
-							}
-							if (!rss_thums.exists())
-							{
-								error_count++;
-							}
-							if (!tmp_folder.exists())
-							{
-								error_count++;
-							}
-							if(error_count==3){
-
-								Commons.AlertLog(ctx, getString(R.string.no_photo_delete), "OK").show();
-								Log.i("Danh","Don't have folder!");
-							}else{
-								//Delete in database
-								pro_gress=ProgressDialog.show(ctx, "", getString(R.string.wait), true, false);
-								timerDelayRemoveDialog(2000,pro_gress);
-										/*boolean del = deletePhotoInDatabase();
-										if(del==true){
-											newGallery.clearAllPhoto();
-
-											Commons.AlertLog(ctx, "Successfully", "OK").show();
-										}else{
-
-											Commons.AlertLog(ctx, "Don't have photos to delete!", "OK").show();
-											Log.i("Danh","Don't have photo!");
-										}*/
-
-							}
-							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-								Intent mediaScanIntent = new Intent(
-										Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-								Uri contentUri = Uri.fromFile(getExternalStorageDirectory());
-								mediaScanIntent.setData(contentUri);
-								getActivity().sendBroadcast(mediaScanIntent);
-							} else {
-								getActivity().sendBroadcast(new Intent(
-										Intent.ACTION_MEDIA_MOUNTED,
-										Uri.parse("file://"
-												+ getExternalStorageDirectory())));
-							}
-						}
-					});
-					alertbox.setNegativeButton(getString(R.string.cancel), new DialogInterface.OnClickListener()
-					{
-						@Override
-						public void onClick(DialogInterface dialog, int which)
-						{
-
-						}
-					});
-
-					alertbox.show();
-				}
-
-			});
-		}catch (Exception e){}
-		txtMaxPhotoSize = (TextView) getView().findViewById(R.id.txtMaxFilesizeDownload);
-		txtMaxPhotoSize.setText(PhimpMe.MAX_FILESIZE_DOWNLOAD + "");
-		btnSettingsMaxFilesize = (ImageView) getView().findViewById(R.id.imgbtnSettingsMaxFilesize);
-		btnSettingsMaxFilesize.setColorFilter(color);
-		btnSettingsMaxFilesize.setOnClickListener(new OnClickListener()
-		{
-			@Override
-			public void onClick(View v) {
-				final CharSequence[] sizes = {"2 MB", "3 MB" , "5 MB", "10 MB"};
-				// Creating and Building the Dialog
-				final SharedPreferences settings = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-				int selectedSize = settings.getInt("radio_button_selected", 2);
-				Log.d("selected size", String.valueOf(selectedSize));
-				AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
-				builder.setTitle(getString(R.string.select_max_file_size));
-				builder.setSingleChoiceItems(sizes, selectedSize, new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int item) {
-						SharedPreferences.Editor editor = settings.edit();
-						PhimpMe.MAX_FILESIZE_DOWNLOAD = Integer.parseInt(sizes[item].subSequence(0, sizes[item].toString().indexOf(" ")).toString());
-						editor.putInt("max_filesize_download", PhimpMe.MAX_FILESIZE_DOWNLOAD);
-						editor.putInt("radio_button_selected", item);
-						editor.apply();
-						Log.d("item selected", String.valueOf(item));
-						txtMaxPhotoSize.setText(PhimpMe.MAX_FILESIZE_DOWNLOAD + "");
-						maxSizeDialog.dismiss();
-					}
-				});
-				maxSizeDialog = builder.create();
-				maxSizeDialog.show();
-			}
-		} );
-		/*
-		 * Danh - Add Active google admod
-		 */
-		//lytGoogleAdmod = (LinearLayout) getView().findViewById(R.id.linearSettingsGoogleAdmod);
-
-		LinearLayout.LayoutParams lpMargin_g = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-		lpMargin_g.setMargins(10, 0, 10, 0);
-
-		LinearLayout.LayoutParams lpLayoutMargin_g = new LinearLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
-		lpLayoutMargin_g.setMargins(0, 0, 0, 10);
-
-		/*
-		 * Active google admod
-		 */
-		/*
-		LinearLayout lGoogleAdmob = new LinearLayout(ctx);
-		lGoogleAdmob.setLayoutParams(lpLayoutMargin_g);
-		lGoogleAdmob.setGravity(Gravity.CENTER_VERTICAL);
-		lGoogleAdmob.setOrientation(LinearLayout.HORIZONTAL);
-
-		CheckBox chkGoogleAdmob = new CheckBox(ctx);
-		chkGoogleAdmob.setChecked(PhimpMe.FEEDS_GOOGLE_ADMOB);
-		chkGoogleAdmob.setOnCheckedChangeListener(new OnCheckedChangeListener()
-		{
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
-			{
-				PhimpMe.FEEDS_GOOGLE_ADMOB = isChecked;
-				FileOutputStream fOut;
-				try {
-					fOut = openFileOutput("google_admob.txt",MODE_WORLD_READABLE);
-					OutputStreamWriter osw = new OutputStreamWriter(fOut);
-
-					osw.write(""+PhimpMe.FEEDS_GOOGLE_ADMOB);
-
-					osw.flush();
-					osw.close();
-				} catch (FileNotFoundException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				if(isChecked==false){
-					Toast.makeText(ctx, "No Ads would be shown after you restart the application ", Toast.LENGTH_LONG).show();
-				}
-			}
-		});
-		lGoogleAdmob.addView(chkGoogleAdmob);
+    //Gallery
+    public static boolean gallery_delete = false;
+    //private GestureDetector gestureScanner;
+    //View.OnTouchListener gestureListener;
+    public static int width, height;
+    public final static int THEME_dark = 2;
 
 
 
-		TextView tvGoogleAdmob = new TextView(ctx);
-		tvGoogleAdmob.setText("Activate Advertising");
-		tvGoogleAdmob.setGravity(Gravity.CENTER_VERTICAL);
-		tvGoogleAdmob.setTypeface(null, 1);
-		lGoogleAdmob.addView(tvGoogleAdmob);
+
+    HomeScreenState currentScreen = HomeScreenState.GALLERY;
+
+    @SuppressWarnings("unused")
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+        ctx = this;
+
+        //set dark theme
+
+        if(Utility.getTheme(getApplicationContext()) == THEME_dark ) {
+        setTheme(R.style.AppTheme_Dark);}
 
 
 
-		lytGoogleAdmod.addView(lGoogleAdmob);
-		*/
-		/*
-		 * Danh - Add Local gallery
-		 */
-		lytLocalGallery = (LinearLayout) getView().findViewById(R.id.linearSettingsLocalGallery);
-
-		LinearLayout.LayoutParams lpMargin_ = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-		lpMargin_.setMargins(10, 0, 10, 0);
-
-		LinearLayout.LayoutParams lpLayoutMargin_ = new LinearLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
-		lpLayoutMargin_.setMargins(0, 0, 0, 10);
-
-		/*
-		 * Local Gallery
-		 */
-//		LinearLayout lLocalGallery = new LinearLayout(ctx);
-//		lLocalGallery.setLayoutParams(lpLayoutMargin_);
-//		lLocalGallery.setGravity(Gravity.CENTER_VERTICAL);
-//		lLocalGallery.setOrientation(LinearLayout.HORIZONTAL);
-
-		CheckBox chkLocalGallery = (CheckBox)getView().findViewById(R.id.checkbox_gallery);
-		chkLocalGallery.setChecked(PhimpMe.FEEDS_LOCAL_GALLERY);
-		chkLocalGallery.setOnCheckedChangeListener(new OnCheckedChangeListener()
-		{
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
-			{
-				PhimpMe.FEEDS_LOCAL_GALLERY = isChecked;
-				if(isChecked==true){
-					PhimpMe.check_download_local_gallery=true;
-				}
-				else
-					PhimpMe.check_download_local_gallery=false;
-			}
-		});
 
 
-//		ImageView imgLocalGallery = new ImageView(ctx);
-//		imgLocalGallery.setImageResource(R.drawable.icon_folder);
-//		imgLocalGallery.setLayoutParams(lpMargin_);
-//		lLocalGallery.addView(imgLocalGallery);
-
-//		TextView tvLocalGallery = new TextView(ctx);
-//		tvLocalGallery.setText("My Gallery");
-//		tvLocalGallery.setGravity(Gravity.CENTER_VERTICAL);
-//		tvLocalGallery.setTypeface(null, 1);
-//		lLocalGallery.addView(tvLocalGallery);
-
-//		lytLocalGallery.addView(lLocalGallery);
 
 
-	}
 
-    private void changeTheme() {
+        Log.d("thong", "PhimpMe - onCreate()");
+        // The following line triggers the initialization of ACRA
+        //ACRA.init((Application) ctx.getApplicationContext());
+        //Init PayPal library
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                initLibrary(ctx);
 
-        radiotDarkBtn = (RadioButton) getView().findViewById(R.id.radiotDarkBtn);
-        radiotLightBtn = (RadioButton)getView().findViewById(R.id.radiotLightBtn);
+            }
+        }).start();
 
-        if(Utility.getTheme(getApplicationContext()) == PhimpMe.THEME_dark) {
-            radiotLightBtn.setChecked(false);
-            radiotDarkBtn.setChecked(true);
+        camera_use = 0;
+        if (IdList == null) IdList = new ArrayList<Integer>();
+        Ask.on(this)
+                .forPermissions(Manifest.permission.ACCESS_FINE_LOCATION
+                        , Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        , Manifest.permission.CAMERA,
+                        Manifest.permission.READ_PHONE_STATE)
 
-        }else  {
+                .go();
+        setContentView(R.layout.main);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        //gestureScanner = new GestureDetector(this);
+        //Crash report
+        // Crittercism.init(getApplicationContext(), CRITTERCISM_APP_ID, serviceDisabled);
+        add_account_upload = false;
+        add_account_setting = false;
 
-            radiotDarkBtn.setChecked(false);
-            radiotLightBtn.setChecked(true);
+        cache = CacheStore.getInstance();
+        cachetask = new CacheTask();
+        String[] str = null;
+        cachetask.execute(str);
+
+        /*
+         * get window width, height
+         */
+        Display display = getWindowManager().getDefaultDisplay();
+        width = display.getWidth() / 3;
+        height = width;
+
+        File file0 = getBaseContext().getFileStreamPath("local_gallery.txt");
+        if (file0.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("local_gallery.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LOCAL_GALLERY = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
-        radiotDarkBtn.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
 
-                Utility.setTheme(getApplicationContext(), 2);
-                recreateActivity();
+        File file1 = getBaseContext().getFileStreamPath("flickr_public.txt");
+        if (file1.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("flickr_public.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_FLICKR_PUBLIC = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        });
+        }
 
-        radiotLightBtn.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
+        File file2 = getBaseContext().getFileStreamPath("flickr_recent.txt");
+        if (file2.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("flickr_recent.txt");
 
-                Utility.setTheme(getApplicationContext(), 1);
-                recreateActivity();
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_FLICKR_RECENT = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        });
+        }
+
+        File file3 = getBaseContext().getFileStreamPath("google_news.txt");
+        if (file3.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("google_news.txt");
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_GOOGLE_NEWS = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file4 = getBaseContext().getFileStreamPath("public_picasa.txt");
+        if (file4.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("public_picasa.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_GOOGLE_PICASA_PUBLIC = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file5 = getBaseContext().getFileStreamPath("yahoo_news.txt");
+        if (file5.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("yahoo_news.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_YAHOO_NEWS = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file6 = getBaseContext().getFileStreamPath("deviant_public.txt");
+        if (file6.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("deviant_public.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_DEVIANTART_PUBLIC = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file7 = getBaseContext().getFileStreamPath("flick_private.txt");
+        if (file7.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("flick_private.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_FLICKR_PRIVATE = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file8 = getBaseContext().getFileStreamPath("picasa_private.txt");
+        if (file8.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("picasa_private.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_GOOGLE_PICASA_PRIVATE = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file9 = getBaseContext().getFileStreamPath("deviant_private.txt");
+        if (file9.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("deviant_private.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_DEVIANTART_PRIVITE = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file10 = getBaseContext().getFileStreamPath("vk.txt");
+        if (file10.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("vk.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_VK = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file11 = getBaseContext().getFileStreamPath("facebook.txt");
+        if (file11.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("facebook.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_FACEBOOK_PRIVATE = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file12 = getBaseContext().getFileStreamPath("tumblr_private.txt");
+        if (file12.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("tumblr_private.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_TUMBLR_PRIVATE = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file13 = getBaseContext().getFileStreamPath("imgur_personal.txt");
+        if (file13.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("imgur_personal.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_IMGUR_PERSONAL = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        File file14 = getBaseContext().getFileStreamPath("sohu_personal.txt");
+        if (file14.exists()) {
+            try {
+                FileInputStream Rfile = openFileInput("sohu_personal.txt");
+
+                InputStreamReader einputreader = new InputStreamReader(Rfile);
+                BufferedReader ebuffreader = new BufferedReader(einputreader);
+                Boolean tmp = Boolean.valueOf(ebuffreader.readLine());
+                PhimpMe.FEEDS_LIST_SOHU_PERSONAL = tmp;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        
+        /*
+         * Export data
+         */
+        if (check_export = true) {
+            //exportDevicesInfomation();
+            //exportInstalledPakage();
+            //Intent intent = new Intent(this,CollectUserData.class);
+            //startService(intent);
+            //check_export = false;
+        }
+        TabSpec ts; // !?
+        View tbview;
+        Intent intent;
+     
+        /*
+         * Thong - Load preferences
+         */
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        MAX_DISPLAY_PHOTOS = settings.getInt("gallery_max_display_photos", getResources().getInteger(R.integer.gallery_max_display_photos));
+        MAX_FILESIZE_DOWNLOAD = settings.getInt("max_filesize_download", getResources().getInteger(R.integer.max_filesize_download));
+        FEEDS_LOCAL_GALLERY = settings.getBoolean(FEEDS_LOCAL_GALLERY_TAG, true);
+        /*FEEDS_LIST_FLICKR_PUBLIC = settings.getBoolean(FEEDS_LIST_FLICKR_PUBLIC_TAG, false);
+        FEEDS_LIST_FLICKR_RECENT = settings.getBoolean(FEEDS_LIST_FLICKR_RECENT_TAG, false);       
+        FEEDS_LIST_YAHOO_NEWS = settings.getBoolean(FEEDS_LIST_YAHOO_NEWS_TAG, false);       
+        FEEDS_LIST_GOOGLE_PICASA_PUBLIC = settings.getBoolean(FEEDS_LIST_GOOGLE_PICASA_PUBLIC_TAG, false);
+        FEEDS_LIST_GOOGLE_NEWS = settings.getBoolean(FEEDS_LIST_GOOGLE_NEWS_TAG, false);
+        FEEDS_LIST_VK = settings.getBoolean(FEEDS_LIST_VK_TAG, false);
+        FEEDS_LIST_FACEBOOK_PRIVATE = settings.getBoolean(FEEDS_LIST_FACEBOOK_PRIVATE_TAG, false);
+        FEEDS_LIST_FLICKR_PRIVATE = settings.getBoolean(FEEDS_LIST_FLICKR_PRIVATE_TAG, false);
+        FEEDS_LIST_GOOGLE_PICASA_PRIVATE= settings.getBoolean(FEEDS_LIST_GOOGLE_PICASA_PRIVATE_TAG, false);
+        FEEDS_LIST_TUMBLR_PRIVATE= settings.getBoolean(FEEDS_LIST_TUMBLR_PRIVATE_TAG, false);
+        FEEDS_LIST_DEVIANTART_PRIVITE= settings.getBoolean(FEEDS_LIST_DEVIANTART_PRIVITE_TAG, false);
+        FEEDS_LIST_DEVIANTART_PUBLIC= settings.getBoolean(FEEDS_LIST_DEVIANTART_PUBLIC_TAG, false);
+        FEEDS_LIST_GOOGLE_PICASA_PRIVATE= settings.getBoolean(FEEDS_LIST_GOOGLE_PICASA_PRIVATE_TAG, false);
+        FEEDS_LIST_TWITTER_PRIVATE= settings.getBoolean(FEEDS_LIST_TWITTER_PRIVATE_TAG, false);
+        FEEDS_LIST_KAIXIN_PRIVATE= settings.getBoolean(FEEDS_LIST_KAIXIN_PRIVATE_TAG, false);
+        FEEDS_LIST_IMGUR_PERSONAL= settings.getBoolean(FEEDS_LIST_IMGUR_PERSONAL_TAG, false);
+        FEEDS_LIST_MYSERVICES= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG, false);
+        FEEDS_LIST_IMGUR_PUBLIC= settings.getBoolean(FEEDS_LIST_IMGUR_PUBLIC_TAG, false);
+        FEEDS_LIST_500PX_PRIVATE=settings.getBoolean(FEEDS_LIST_500PX_PRIVATE_TAG, false);
+        FEEDS_LIST_500PX_PUBLIC= settings.getBoolean(FEEDS_LIST_500PX_PUBLIC_TAG, false);
+        FEEDS_LIST_SOHU_PERSONAL= settings.getBoolean(FEEDS_LIST_SOHU_PERSONAL_TAG, false);
+        FEEDS_LIST_MYSERVICES1= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG1, false);
+        FEEDS_LIST_MYSERVICES2= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG2, false);
+        FEEDS_LIST_MYSERVICES3= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG3, false);
+        FEEDS_LIST_MYSERVICES4= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG4, false);
+        FEEDS_LIST_MYSERVICES5= settings.getBoolean(FEDDS_LIST_MYSERVICES_TAG5, false);*/
+        /*
+         * Thong - Get data directory
+         */
+        try {
+            DataDirectory = new File(Commons.getDataDirectory(ctx).getAbsolutePath() + "/" + DATA_DIRECTORY_NAME);
+
+            if (!DataDirectory.exists()) {
+                if (!DataDirectory.mkdirs()) {
+                    Commons.AlertLog(ctx, "Cannot create Data Directory " + DataDirectory.getAbsolutePath(), "OK").show();
+                } else {
+                }
+            } else {
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(getApplicationContext(), "Error: " + e.toString(), Toast.LENGTH_LONG).show();
+        }
+        
+        /*
+         * Thong - Database file init
+         */
+        File folder = new File(DataDirectory + "/PhimpMe_Photo_Effect");
+        folder.mkdirs();
+
+        File folder_take_photo = new File(DataDirectory + "/take_photo");
+        folder_take_photo.mkdirs();
+
+        phimp_me_tmp = folder + "/tmp.jpg";
+        phimp_me_img_uri_temporary = Uri.fromFile(new File(phimp_me_tmp));
+        File database_file = getDatabasePath(DATABASE_NAME);
+        if (!database_file.exists()) {
+            AccountDBAdapter db = new AccountDBAdapter(ctx);
+            db.open();
+            db.close();
+
+            TumblrDBAdapter db2 = new TumblrDBAdapter(ctx);
+            db2.open();
+            db2.close();
+
+        	/* Clear memory */
+            db = null;
+            db2 = null;
+
+        }
+        
+        /*
+         * Thong - Initial Tab control
+         */
+
+        try {
+            mBottomNav = (BottomNavigationView) findViewById(R.id.navigation_view);
+        } catch (Exception e) {
+        }
+        mBottomNav.setOnNavigationItemSelectedListener(this);
+
+        mBottomNav.getMenu().getItem(0).setChecked(true);
+
+        // Initialising fragment container
+        if (findViewById(R.id.fragment_container) != null) {
+            newGallery frag = new newGallery();
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.fragment_container, frag)
+                    .commit();
+        }
+
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.tab_gallery:
+                if (currentScreen != HomeScreenState.GALLERY) {
+                    newGallery frag = new newGallery();
+                    getSupportFragmentManager().beginTransaction()
+                            .setCustomAnimations(R.anim.fragment_anim_fadein,R.anim.fragment_anim_fadeout)
+                            .replace(R.id.fragment_container, frag)
+                            .commit();
+                    currentScreen = HomeScreenState.GALLERY;
+                }
+                break;
+            case R.id.tab_map:
+                if (currentScreen != HomeScreenState.MAP) {
+                    MapFragment map = new MapFragment();
+                    getSupportFragmentManager().beginTransaction()
+                            .setCustomAnimations(R.anim.fragment_anim_fadein, R.anim.fragment_anim_fadeout)
+                            .replace(R.id.fragment_container, map)
+                            .commit();
+                    currentScreen = HomeScreenState.MAP;
+                }
+                break;
+            case R.id.tab_camera:
+                if (currentScreen != HomeScreenState.CAMERA) {
+
+                    Camera2 camFrag = new Camera2();
+                    getSupportFragmentManager().beginTransaction()
+                            .setCustomAnimations(R.anim.fragment_anim_fadein,R.anim.fragment_anim_fadeout)
+                            .replace(R.id.fragment_container, camFrag)
+                            .commit();
+                    currentScreen = HomeScreenState.CAMERA;
+                }
+                break;
+            case R.id.tab_upload:
+                if (currentScreen != HomeScreenState.UPLOAD) {
+                    Upload frag = new Upload();
+                    getSupportFragmentManager().beginTransaction()
+                            .setCustomAnimations(R.anim.fragment_anim_fadein,R.anim.fragment_anim_fadeout)
+                            .replace(R.id.fragment_container, frag)
+                            .commit();
+                    currentScreen = HomeScreenState.UPLOAD;
+                }
+                break;
+            case R.id.tab_settings:
+                if (currentScreen != HomeScreenState.SETTINGS) {
+                    Settings frag = new Settings();
+                    getSupportFragmentManager().beginTransaction()
+                            .setCustomAnimations(R.anim.fragment_anim_fadein,R.anim.fragment_anim_fadeout)
+                            .replace(R.id.fragment_container, frag)
+                            .commit();
+                    currentScreen = HomeScreenState.SETTINGS;
+                }
+                break;
+
+        }
+
+        return true;
+    }
+
+  /*  public Animation inFromRightAnimation() {
+        Animation inFromRight = new TranslateAnimation(
+        Animation.RELATIVE_TO_PARENT, +1.0f,
+        Animation.RELATIVE_TO_PARENT, 0.0f,
+        Animation.RELATIVE_TO_PARENT, 0.0f,
+        Animation.RELATIVE_TO_PARENT, 0.0f);
+        inFromRight.setDuration(500);
+        inFromRight.setInterpolator(new AccelerateInterpolator());
+        return inFromRight;
+    }*/
+
+    // navigation bar tabs
+//    private void setTabs() {
+//        addTab("", R.drawable.tab_icon_gallery_selector, newGallery.class);
+//        addTab("", R.drawable.tab_icon_map_selector, OpenStreetMap.class);
+//        addTab("", R.drawable.tab_icon_map_selector, GalleryMap.class);
+//        addTab("", R.drawable.tab_icon_camera_selector, Blank.class);
+//        addTab("", R.drawable.tab_icon_upload_selector, Upload.class);
+//        addTab("", R.drawable.tab_icon_settings_selector, Settings.class);
+//    }
+//
+//    private void addTab(String labelId, int drawableId, Class<?> c) {
+//        TabHost.TabSpec spec = mTabHost.newTabSpec("tab" + labelId);
+//        View tabIndicator = LayoutInflater.from(this).inflate(R.layout.tab_indicator, getTabWidget(), false);
+//        TextView title = (TextView) tabIndicator.findViewById(R.id.title);
+//        title.setText(labelId);
+//        ImageView icon = (ImageView) tabIndicator.findViewById(R.id.icon);
+//        icon.setImageResource(drawableId);
+//        spec.setIndicator(tabIndicator);
+//        Intent intent = new Intent(this, c);
+//        spec.setContent(intent);
+//        mTabHost.addTab(spec);
+//
+//
+//    }
+
+
+    enum HomeScreenState {
+        // todo: add as needed
+        GALLERY,
+        UPLOAD,
+        SETTINGS,
+        CAMERA,
+        MAP
+    }
+
+    public Animation outToLeftAnimation() {
+        Animation outtoLeft = new TranslateAnimation(
+                Animation.RELATIVE_TO_PARENT, 0.0f,
+                Animation.RELATIVE_TO_PARENT, -1.0f,
+                Animation.RELATIVE_TO_PARENT, 0.0f,
+                Animation.RELATIVE_TO_PARENT, 0.0f);
+        outtoLeft.setDuration(500);
+        outtoLeft.setInterpolator(new AccelerateInterpolator());
+        return outtoLeft;
+    }
+
+    // Show Tabs method
+    public static void showTabs() {
+        mBottomNav.setVisibility(ViewGroup.VISIBLE);
+    }
+
+    // Hide Tabs method
+    public static void hideTabs() {
+//        mBottomNav.setVisibility(ViewGroup.GONE);
     }
 
 
-    private class btnDeleteListener implements OnClickListener
-	{
-		private String id;
-		private String name;
-		private String service;
 
-		public btnDeleteListener(String id, String name, String service)
-		{
-			this.id = id;
-			this.name = name;
-			this.service = service;
-		}
+    @Override
+    protected void onPause() {
+        Log.d("thong", "Run PhimpMe.onPause()");
 
-		@Override
-		public void onClick(View v)
-		{
-			try
-			{
-				final String s = service;
-				final String _id = id;
+        super.onPause();
+        showTabs();
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        SharedPreferences.Editor editor = settings.edit();
+        editor.putInt("gallery_max_display_photos", MAX_DISPLAY_PHOTOS);
+        editor.putInt("max_filesize_download", MAX_FILESIZE_DOWNLOAD);
+        editor.putBoolean(FEEDS_LIST_YAHOO_NEWS_TAG, FEEDS_LIST_YAHOO_NEWS);
+        editor.putBoolean(FEEDS_LIST_FLICKR_PUBLIC_TAG, FEEDS_LIST_FLICKR_PUBLIC);
+        editor.putBoolean(FEEDS_LIST_FLICKR_RECENT_TAG, FEEDS_LIST_FLICKR_RECENT);
+        editor.putBoolean(FEEDS_LIST_GOOGLE_PICASA_PUBLIC_TAG, FEEDS_LIST_GOOGLE_PICASA_PUBLIC);
+        editor.putBoolean(FEEDS_LIST_GOOGLE_NEWS_TAG, FEEDS_LIST_GOOGLE_NEWS);
+        editor.putBoolean(FEEDS_LIST_VK_TAG, FEEDS_LIST_VK);
+        editor.putBoolean(FEEDS_LIST_FACEBOOK_PRIVATE_TAG, FEEDS_LIST_FACEBOOK_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_FLICKR_PRIVATE_TAG, FEEDS_LIST_FLICKR_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_GOOGLE_PICASA_PRIVATE_TAG, FEEDS_LIST_GOOGLE_PICASA_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_DEVIANTART_PRIVITE_TAG, FEEDS_LIST_DEVIANTART_PRIVITE);
+        editor.putBoolean(FEEDS_LIST_TUMBLR_PRIVATE_TAG, FEEDS_LIST_TUMBLR_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_TWITTER_PRIVATE_TAG, FEEDS_LIST_TWITTER_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_DEVIANTART_PUBLIC_TAG, FEEDS_LIST_DEVIANTART_PUBLIC);
+        editor.putBoolean(FEEDS_LIST_IMAGESHACK_PRIVITE_TAG, FEEDS_LIST_IMAGESHACK_PRIVITE);
+        editor.putBoolean(FEEDS_LIST_KAIXIN_PRIVATE_TAG, FEEDS_LIST_KAIXIN_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_IMGUR_PERSONAL_TAG, FEEDS_LIST_IMGUR_PERSONAL);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG, FEEDS_LIST_MYSERVICES);
+        editor.putBoolean(FEEDS_LIST_IMGUR_PUBLIC_TAG, FEEDS_LIST_IMGUR_PUBLIC);
+        editor.putBoolean(FEEDS_LIST_500PX_PRIVATE_TAG, FEEDS_LIST_500PX_PRIVATE);
+        editor.putBoolean(FEEDS_LIST_500PX_PUBLIC_TAG, FEEDS_LIST_500PX_PUBLIC);
+        editor.putBoolean(FEEDS_LIST_SOHU_PERSONAL_TAG, FEEDS_LIST_SOHU_PERSONAL);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG1, FEEDS_LIST_MYSERVICES1);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG2, FEEDS_LIST_MYSERVICES2);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG3, FEEDS_LIST_MYSERVICES3);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG4, FEEDS_LIST_MYSERVICES4);
+        editor.putBoolean(FEDDS_LIST_MYSERVICES_TAG5, FEEDS_LIST_MYSERVICES5);
 
-				AlertDialog.Builder cofirmbox = new AlertDialog.Builder(ctx);
-				cofirmbox.setMessage(getString(R.string.ask_delete_account) + "\n" + name + " (" + service + ")");
-				cofirmbox.setPositiveButton(getString(R.string.accept), new DialogInterface.OnClickListener()
-				{
-					@Override
-					public void onClick(DialogInterface dialog, int which)
-					{
-						AccountItem.removeAccount(ctx, _id);
+        // Commit the edits!
+        if (editor.commit()) {
+            Log.d("thong", "Commit success");
+        } else {
+            Log.d("thong", "Commit fail");
+        }
+    }
 
-						PhimpMe.checked_accounts.remove(_id);
+    @Override
+    public void onResume() {
+        //showTabs();
+        Log.e("PhimpMe", "Resume");
+        try {
+            super.onResume();
 
-						if (s.equals("facebook"))
-						{
-							FacebookItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("flickr"))
-						{
-							FlickrItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("picasa"))
-						{
-							PicasaItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("tumblr"))
-						{
-							TumblrItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("twitter"))
-						{
-							TwitterItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("drupal"))
-						{
-							DrupalItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("deviantart"))
-						{
-							DeviantArtItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("imageshack"))
-						{
-							ImageshackItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("qq"))
-						{
-							QQItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("vkontakte"))
-						{
-							VkItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("kaixin"))
-						{
-							KaixinDBItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("imgur"))
-						{
-							VkItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("500px"))
-						{
-							S500pxItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("sohu"))
-						{
-							SohuItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("wordpressdotcom"))
-						{
-							WordpressItem.removeAccount(ctx, _id);
-						}
-						if (s.equals("wordpress"))
-						{
-							WordpressItem.removeAccount(ctx, _id);
-						}
-						reloadAccountsList();
-						PhimpMe.add_account_upload = true;
-					}
-				});
-				cofirmbox.setNegativeButton(getString(R.string.cancel), new DialogInterface.OnClickListener()
-				{
-					@Override
-					public void onClick(DialogInterface dialog, int which)
-					{
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        if (gallery_delete) {
+            newGallery.update(PhimpMeGallery.num);
+        }
 
-					}
-				});
+    }
 
-				cofirmbox.show();
-			}
-			catch (Exception e)
-			{
+    @Override
+    public boolean onKeyDown(int keycode, KeyEvent event) {
+        if (keycode == KeyEvent.KEYCODE_BACK) {
+            AlertDialog.Builder alertbox = new AlertDialog.Builder(ctx);
+            alertbox.setMessage(getString(R.string.exit_message));
+            alertbox.setPositiveButton(getString(R.string.yes), new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    finish();
+                    System.exit(0);
+                }
+            });
+            alertbox.setNegativeButton(getString(R.string.cancel), new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    //Resume to current process
+                }
+            });
+            alertbox.create().show();
+            
+        }
+        return false;
+    }
 
-			}
-		}
-	}
+    /*public boolean onTouchEvent(MotionEvent me) {
+        return gestureScanner.onTouchEvent(me);
+    }*/
+    public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+        float dispX = e2.getX() - e1.getX();
+        float dispY = e2.getY() - e1.getY();
+        if (Math.abs(dispX) >= 200 && Math.abs(dispY) <= 100) {
+            // swipe ok
+            if (dispX > 0) {
+                // L-R swipe
+                //changeRtoL();
+            } else {
+                // R-L swipe            	
+                //changeLtoR();
 
-	// TODO: this may not be safe; was protected
-	@Override
-	public void onResume()
-	{
-		super.onResume();
-		PhimpMe.showTabs();
+            }
+        }
+        return true;
+    }
 
-		if (PhimpMe.add_account_setting)
-		{
-			reloadAccountsList();
-			PhimpMe.add_account_setting = false;
-		}
-		if (PhimpMe.IdList.size() == 5) {PhimpMe.IdList.clear();PhimpMe.IdList.add(0);}
-		PhimpMe.IdList.add(5);
-	}
+    // fixme: properly implement changeLtoR and changeRtoL
+    // Currently the above function is the only use of this
+    /*
+    private void changeLtoR() {
+        int curTab = mTabHost.getCurrentTab();
+        int nextTab = ((curTab + 1) % 4); // !?! (why mod 4)
+        mTabHost.setCurrentTab(nextTab);
+    }
 
-	class ViewHolder
-	{
-		public ImageView imgIcon;
-		public TextView txtName;
-		/*public ImageButton btnConfigure;*/
-		public ImageButton btnDelete;
-	}
+    private void changeRtoL() {
+        int curTab = mTabHost.getCurrentTab();
+        if (curTab != 0) {
+            int lastTab = ((curTab - 1) % 4);
+            mTabHost.setCurrentTab(lastTab);
+        }
 
-	private void reloadAccountsList()
-	{
-		ArrayList<AccountItem> accounts = AccountItem.getAllAccounts(ctx);
-
-		if (accounts.size() > 0)
-		{
-			lytAccounts.removeAllViews();
-			noaccounttv.setVisibility(View.GONE);
-
-			for (int i = 0; i < accounts.size(); i++)
-			{
-				AccountItem item = accounts.get(i);
-				String _id = item.getID();
-				String _name = item.getName();
-				String _service = item.getService();
-
-				LayoutInflater inflater = ((Activity) ctx).getLayoutInflater();
-				View view = inflater.inflate(R.layout.settings_account_item, null, true);
-
-				ViewHolder holder = new ViewHolder();
-
-				holder.imgIcon = (ImageView) view.findViewById(R.id.imgServiceIcon);
-				holder.txtName = (TextView) view.findViewById(R.id.txtAccountName);
-				holder.btnDelete = (ImageButton) view.findViewById(R.id.imgbtnDelete);
-
-				view.setTag(holder);
-
-				if (_service.equals("tumblr"))
-				{
-					holder.imgIcon.setImageResource(TumblrServices.icon);
-				}
-				else if (_service.equals("facebook"))
-				{
-					holder.imgIcon.setImageResource(FacebookServices.icon);
-				}
-				else if (_service.equals("flickr"))
-				{
-					holder.imgIcon.setImageResource(FlickrServices.icon);
-				}
-				else if (_service.equals("picasa"))
-				{
-					holder.imgIcon.setImageResource(PicasaServices.icon);
-				}
-				else if (_service.equals("twitter"))
-				{
-					holder.imgIcon.setImageResource(TwitterServices.icon);
-				}
-				else if (_service.equals("drupal"))
-				{
-					holder.imgIcon.setImageResource(DrupalServices.icon);
-				}
-
-				else if (_service.equals("deviantart"))
-				{
-					holder.imgIcon.setImageResource(DeviantArtService.icon);
-				}
-				else if (_service.equals("imageshack"))
-				{
-					holder.imgIcon.setImageResource(ImageshackServices.icon);
-				}
-				else if (_service.equals("qq"))
-				{
-					holder.imgIcon.setImageResource(QQServices.icon);
-				}
-				else if (_service.equals("vkontakte"))
-				{
-					holder.imgIcon.setImageResource(VKServices.icon);
-				}
-				else if (_service.equals("kaixin"))
-				{
-					holder.imgIcon.setImageResource(KaixinServices.icon);
-				}
-				else if (_service.equals("imgur"))
-				{
-					holder.imgIcon.setImageResource(ImgurServices.icon);
-				}
-				else if (_service.equals("500px"))
-				{
-					holder.imgIcon.setImageResource(S500pxService.icon);
-				}
-				else if (_service.equals("sohu"))
-				{
-					holder.imgIcon.setImageResource(SohuServices.icon);
-				}
-				else if (_service.equals("wordpressdotcom"))
-				{
-					holder.imgIcon.setImageResource(R.drawable.wordpressdotcom_icon);
-				}
-				else if (_service.equals("wordpress"))
-				{
-					holder.imgIcon.setImageResource(R.drawable.icon_wordpress);
-				}
-				else if (_service.equals("joomla"))
-				{
-					holder.imgIcon.setImageResource(R.drawable.joomla);
-				}
-				String acc_name = _name;
-
-				holder.txtName.setText(acc_name);
-				holder.btnDelete.setOnClickListener(new btnDeleteListener(_id, _name, _service));
-
-				lytAccounts.addView(view);
-			}
-		}else
-		{
-			lytAccounts.removeAllViews();
-			noaccounttv.setVisibility(View.VISIBLE);
-
-		}
-		accounts = null;
-	}
-
-
-	/*
-	 * Delete photo in database function
-	 * */
-	public void timerDelayRemoveDialog(long time, final Dialog d){
-		new Handler().postDelayed(new Runnable() {
-			public void run() {
-				boolean del = deletePhotoInDatabase();
-				if(del==true){
-					newGallery.clearAllPhoto();
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-						Intent mediaScanIntent = new Intent(
-								Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-						Uri contentUri = Uri.fromFile(getExternalStorageDirectory());
-						mediaScanIntent.setData(contentUri);
-						getActivity().sendBroadcast(mediaScanIntent);
-					} else {
-						getActivity().sendBroadcast(new Intent(
-								Intent.ACTION_MEDIA_MOUNTED,
-								Uri.parse("file://"
-										+ getExternalStorageDirectory())));
-					}
-					//remove deleted photo in upload list
-					Upload.uploadGridList.clear();
-					d.dismiss();
-					Commons.AlertLog(ctx, "Successfully", "OK").show();
-				}else{
-					d.dismiss();
-					Commons.AlertLog(ctx, "Don't have photos to delete!", "OK").show();
-					Log.i("Danh","Don't have photo!");
-				}
-			}
-		}, time);
-	}
-	@SuppressWarnings("static-access")
-	private boolean deletePhotoInDatabase(){
-		Log.d("Danh","Start Delete !");
-		//pro_gress = ProgressDialog.show(ctx, "Deleting...", "Delete PhimpMe's photos, please wait!");
-		int count=0;
-		try{
-
-			PhimpMe.cache.clearCache();
-			DownloadedPhotoDBItem itm = new DownloadedPhotoDBItem();
-			ArrayList<DownloadedPhotoDBItem> list_photo_delete = new ArrayList<DownloadedPhotoDBItem>();
-			list_photo_delete = itm.getAll(ctx);
-			Log.e("Setting-Delete","Number photo need delete : "+list_photo_delete.size());
-			if(list_photo_delete.size()==0){
-				count++;
-			}else{
-				for(int i=0; i<list_photo_delete.size(); i++){
-					itm.removeAccount(ctx, list_photo_delete.get(i).getID());
-					File f1 = new File(list_photo_delete.get(i).getFilePath());
-					File f2 = new File(list_photo_delete.get(i).getThumbPath());
-					Log.i("Setting-Delete", "FilePath :"+list_photo_delete.get(i).getFilePath());
-					Log.i("Setting-Delete", "ThumbPath :"+list_photo_delete.get(i).getThumbPath());
-					f1.delete();
-					f2.delete();
-				}
-			}
-			DownloadedPersonalPhotoDBItem personal_itm = new DownloadedPersonalPhotoDBItem();
-			ArrayList<DownloadedPersonalPhotoDBItem> personal_list_photo_delete = new ArrayList<DownloadedPersonalPhotoDBItem>();
-			personal_list_photo_delete = personal_itm.getAll(ctx);
-			if(personal_list_photo_delete.size()==0){
-				count++;
-			}else{
-				for(int i=0; i<personal_list_photo_delete.size(); i++){
-					itm.removeAccount(ctx, personal_list_photo_delete.get(i).getID());
-					File f1 = new File(personal_list_photo_delete.get(i).getFilePath());
-					File f2 = new File(personal_list_photo_delete.get(i).getThumbPath());
-					f1.delete();
-					f2.delete();
-				}
-			}
-			//Delete in /tmp
-			try{
-				String str[] = tmp_folder.list();
-				if(str.length==0){
-					count++;
-				}else{
-					for(int i=0; i<str.length; i++){
-						File f3 = new File(tmp_folder + "/" + str[i]);
-						f3.delete();
-					}
-				}
-			}catch(Exception e){
-			}
-
-			if(count==3){
-				return false;
-			}
-
-		}catch(Exception e){
-			return false;
-		}
-		return true;
-	}
-	/*@Override
-	public boolean onKeyDown(int keycode, KeyEvent event)
-    {
-		if (keycode == KeyEvent.KEYCODE_BACK){
-	    		AlertDialog.Builder alertbox = new AlertDialog.Builder(ctx);
-	            alertbox.setMessage(getString(R.string.exit_message));
-	            alertbox.setPositiveButton(getString(R.string.yes), new DialogInterface.OnClickListener()
-	            {
-	                @Override
-	                public void onClick(DialogInterface dialog, int which)
-	                {
-	                	Activity current = getParent();
-	                	current.finish();
-	                	//System.exit(0);
-	                }
-	            });
-	            alertbox.setNegativeButton(getString(R.string.cancel), new DialogInterface.OnClickListener()
-	            {
-	                @Override
-	                public void onClick(DialogInterface dialog, int which)
-	                {
-	                	//Resume to current process
-	                }
-	            });
-	            alertbox.create().show();
-	    		PhimpMe.IdList.remove(PhimpMe.IdList.size()-1);
-	    		PhimpMe.mTabHost.setCurrentTab(PhimpMe.IdList.get(PhimpMe.IdList.size()-1));
-	    	}
-	        //return super.onKeyDown(keycode, event);
-	    	return true;
+    }
+    */
+   /* public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (gestureScanner != null) {
+            if (gestureScanner.onTouchEvent(ev))
+                return true;
+        }
+        return super.dispatchTouchEvent(ev);
     }*/
 
-//	@Override
-//	public void onBackPressed(){
-//		PhimpMe.IdList.remove(PhimpMe.IdList.size()-1);
-////		PhimpMe.mTabHost.setCurrentTab(PhimpMe.IdList.get(PhimpMe.IdList.size()-1));
-//		PhimpMe.showTabs();
-//	}
+    public void initialize() {
+        int id;
+        final String[] columns = {MediaStore.Images.Thumbnails._ID};
+        final String[] data = {MediaStore.Images.Media.DATA};
+        final String orderBy = MediaStore.Images.Media._ID;
+        Cursor pathcursor = this.getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                data,
+                null,
+                null,
+                orderBy
+        );
+        if (pathcursor != null) {
+            int path_column_index = pathcursor
+                    .getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            int count = pathcursor.getCount();
+            int c = 0;
+            for (int i = 0; i < count; i++) {
 
+                pathcursor.moveToPosition(i);
+                String path = pathcursor.getString(path_column_index);
+                boolean check = cache.check(path);
+                if (check) {
+                    @SuppressWarnings("unused")
+                    int index = Integer.valueOf(PhimpMe.cache.getCacheId(path));
+                    @SuppressWarnings("unused")
+                    Bitmap bmp = PhimpMe.cache.getCachePath(path);
 
+                } else if (c <= 20) {
+                    Cursor cursor = this.getContentResolver().query(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            columns,
+                            MediaStore.Images.Media.DATA + " = " + "\"" + path + "\"",
+                            null,
+                            MediaStore.Images.Media._ID
+                    );
+                    if (cursor != null && cursor.getCount() > 0) {
+                        cursor.moveToPosition(0);
+                        id = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID));
+                        Bitmap bmp = MediaStore.Images.Thumbnails.getThumbnail(
+                                getApplicationContext().getContentResolver(), id,
+                                MediaStore.Images.Thumbnails.MICRO_KIND, null);
+                        PhimpMe.cache.saveCacheFile(path, bmp, id);
+                    } else id = -1;
 
-	private void recreateActivity() {
-		Intent i = getApplicationContext().getPackageManager()
-				.getLaunchIntentForPackage(getApplicationContext().getPackageName() );
-		i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK );
-		startActivity(i);
-	}
+                    c++;
+                }
+
+            }
+            newGallery.update_number++;
+        }
+    }
+
+    public static void stopThread() {
+        cachetask.onCancelled();
+        Log.d("PhimpMe", "Stop Cache Task");
+    }
+
+    public class CacheTask extends AsyncTask<String, Void, String> {
+        @Override
+        protected String doInBackground(String... urls) {
+            try {
+                Log.d("luong", "Run Cache Task");
+                initialize();
+            } catch (RuntimeException runex) {
+
+            }
+
+            return "";
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+        }
+
+        @Override
+        protected void onCancelled() {
+            // TODO Auto-generated method stub
+            super.onCancelled();
+
+        }
+    }
+
+    public void onTabChanged(String tabId) {
+        // TODO Auto-generated method stub
+
+    }
+
+    public boolean onTouch(View v, MotionEvent event) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    public void onGesture(GestureOverlayView overlay, MotionEvent event) {
+        // TODO Auto-generated method stub
+
+    }
+
+    public void onGestureCancelled(GestureOverlayView overlay, MotionEvent event) {
+        // TODO Auto-generated method stub
+
+    }
+
+    public static void initLibrary(Context context) {
+        try {
+            PayPal pp = PayPal.getInstance();
+            // If the library is already initialized, then we don't need to
+            // initialize it again.
+            if ((pp == null) || (!pp.isLibraryInitialized())) {
+                pp = null;
+
+                pp = PayPal.initWithAppID(context, "APP-80W284485P519543T", PayPal.ENV_SANDBOX);
+
+                // -- These are required settings.
+                //pp.setLanguage("de_DE");
+                pp.setLanguage("en_US");
+
+                pp.setFeesPayer(PayPal.FEEPAYER_EACHRECEIVER);
+                // Set to true if the transaction will require shipping.
+                pp.setShippingEnabled(true);
+
+                pp.setDynamicAmountCalculationEnabled(false);
+
+            }
+        } catch (IllegalStateException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+    private class FragmentAdapter extends FragmentStatePagerAdapter{
+
+        public FragmentAdapter(FragmentManager fm) {
+            super(fm);
+        }
+
+        @Override
+        public Fragment getItem(int position) {
+            switch (position){
+                case 0:
+                    return new newGallery();
+                case 3:
+                    return new MapFragment();
+                case 2:
+                    return new Camera2();
+                case 1:
+                    return new Upload();
+                default:
+                    return new Settings();
+            }
+        }
+
+        @Override
+        public int getCount() {
+            return 5;
+        }
+    }
 }

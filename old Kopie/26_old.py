@@ -93,8 +93,6 @@ def write_file(filename, content):
     with open(filename, 'w') as f:
         f.write(content)
 
-
-def format_instance_name(name, platform, instances):
     """
     Takes an instance name and formats it according to options specified in the instance's config
     :param name: the name of the instance

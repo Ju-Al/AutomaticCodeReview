@@ -1,5 +1,4 @@
 /**
-            if (entry.getValue().isEmpty() || accessNodeParent.isTransient() || accessNodeParent.isStatic()) {
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -85,7 +84,7 @@ public class BeanMembersShouldSerializeRule extends AbstractLombokAwareRule {
         for (Map.Entry<VariableNameDeclaration, List<NameOccurrence>> entry : vars.entrySet()) {
             VariableNameDeclaration decl = entry.getKey();
             AccessNode accessNodeParent = decl.getAccessNodeParent();
-            if (entry.getValue().isEmpty() || accessNodeParent.isTransient() || accessNodeParent.isStatic() 
+            if (entry.getValue().isEmpty() || accessNodeParent.isTransient() || accessNodeParent.isStatic()) {
                     || classHasLombok || hasIgnoredAnnotation((Annotatable) accessNodeParent)) {
                 continue;
             }

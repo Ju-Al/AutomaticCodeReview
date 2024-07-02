@@ -1,5 +1,4 @@
 <?php
-
 namespace Wallabag\CoreBundle\Command;
 
 use Doctrine\ORM\NoResultException;

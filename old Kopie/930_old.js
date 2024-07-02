@@ -1,5 +1,5 @@
 import { getAssetFromKV, mapRequestToAsset } from '@cloudflare/kv-asset-handler'
-    return await getAssetFromKV(event, options)import analytics from 'workers-google-analytics'
+import analytics from 'workers-google-analytics'
 import redirector from 'lilredirector'
 
 const docsConfig = require("../docs-config.js")
@@ -62,7 +62,7 @@ async function handleEvent(event) {
         bypassCache: false,
       }
     }
-    return getAssetFromKV(event, options)
+    return await getAssetFromKV(event, options)    return getAssetFromKV(event, options)
   } catch (e) {
     // if an error is thrown try to serve the asset at 404.html
     if (!DEBUG) {

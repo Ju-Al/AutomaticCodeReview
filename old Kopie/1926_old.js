@@ -1,13 +1,4 @@
 // The browser-side singleton corresponding to the [apostrophe-schemas](https://docs.apostrophecms.org/apostrophe/modules/apostrophe-schemas) module.
-        var $options = $field.find('option');
-        // Synthesize options from the choices in the schema, unless
-        // the frontend developer has chosen to do it for us
-        if (!$options.length) {
-          _.each(field.choices, function(choice) {
-            var $option = $('<option></option>');
-            $option.text(choice.label);
-            $option.attr('value', choice.value);
-            $field.append($option);
 
 apos.define('apostrophe-schemas', {
 
@@ -1297,7 +1288,15 @@ apos.define('apostrophe-schemas', {
     self.addFieldType({
       name: 'select',
       populate: function(data, name, $field, $el, field, callback) {
-        var choices;
+        var $options = $field.find('option');
+        // Synthesize options from the choices in the schema, unless
+        // the frontend developer has chosen to do it for us
+        if (!$options.length) {
+          _.each(field.choices, function(choice) {
+            var $option = $('<option></option>');
+            $option.text(choice.label);
+            $option.attr('value', choice.value);
+            $field.append($option);
         return async.series([
           getChoices,
           renderChoices

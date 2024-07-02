@@ -1,5 +1,4 @@
 /*
-	"github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 Copyright 2019 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +30,7 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/certutil"
 	corelisters "k8s.io/client-go/listers/core/v1"
 
-	v1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	"github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/jetstack/cert-manager/pkg/util/pki"
 )
 

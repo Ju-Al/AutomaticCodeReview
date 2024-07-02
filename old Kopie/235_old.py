@@ -1,7 +1,4 @@
 # Copyright 2019 Google LLC
-  if not os.environ.get('PYTHONUNBUFFERED'):
-    # Since sys.stdout is a C++ object, it's impossible to do
-    # sys.stdout.write = lambda...
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -141,7 +138,9 @@ def chrome_dsym_hints(binary):
 
 def disable_buffering():
   """Make this process and child processes stdout unbuffered."""
-  os.environ['PYTHONUNBUFFERED'] = 'x'
+  if not os.environ.get('PYTHONUNBUFFERED'):
+    # Since sys.stdout is a C++ object, it's impossible to do
+    # sys.stdout.write = lambda...
 
   if not isinstance(sys.stdout, LineBuffered):
     # Don't wrap sys.stdout if it is already wrapped.

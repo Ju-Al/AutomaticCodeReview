@@ -1,5 +1,4 @@
 // @flow
-  totalAmount: ?string,
 import React, { Component } from 'react';
 import { inject, observer } from 'mobx-react';
 import type BigNumber from 'bignumber.js';
@@ -18,7 +17,7 @@ type Props = {
   receiver: string,
   assets: Array<AssetToken>,
   assetsAmounts: Array<string>,
-  totalAmount: BigNumber,
+  totalAmount: ?string,
   transactionFee: ?string,
   amountToNaturalUnits: (amountWithFractions: string) => string,
   currencyUnit: string,

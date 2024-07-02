@@ -385,8 +385,6 @@ class NdIndexableMapping(param.Parameterized, Dimensional):
     def __str__(self):
         return repr(self)
 
-
-    def dim_values(self, dim):
         """
         Returns the set of values for a particular dimensions.
         """

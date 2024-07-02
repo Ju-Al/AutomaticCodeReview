@@ -1,17 +1,5 @@
 <?php
-     * @param int    $idFrom  Lowest id of rows to delete.
-     * @param int    $idTo    Highest id of rows to delete.
-    abstract protected function expirationCallback($select, $daysOld, $idFrom = null,
-        $idTo = null
-    );
 /**
-     * @param int $daysOld Age in days of an "expired" record.
-     * @param int $idFrom  Lowest id of rows to delete.
-     * @param int $idTo    Highest id of rows to delete.
-    public function deleteExpired($daysOld = 2, $idFrom = null, $idTo = null)
-        // Determine the expiration date:
-        $callback = function ($select) use ($daysOld, $idFrom, $idTo) {
-            $this->expirationCallback($select, $daysOld, $idFrom, $idTo);
  * Trait for tables that support expiration
  *
  * PHP version 7
@@ -60,10 +48,21 @@ trait ExpirationTrait
      *
      * @param Select $select  Select clause
      * @param int    $daysOld Age in days of an "expired" record.
+     * @param int    $idFrom  Lowest id of rows to delete.
+     * @param int    $idTo    Highest id of rows to delete.
      *
      * @return void
      */
-    abstract protected function expirationCallback($select, $daysOld);
+    abstract protected function expirationCallback($select, $daysOld, $idFrom = null,
+        $idTo = null
+     * @param int $daysOld Age in days of an "expired" record.
+     * @param int $idFrom  Lowest id of rows to delete.
+     * @param int $idTo    Highest id of rows to delete.
+    public function deleteExpired($daysOld = 2, $idFrom = null, $idTo = null)
+        // Determine the expiration date:
+        $callback = function ($select) use ($daysOld, $idFrom, $idTo) {
+            $this->expirationCallback($select, $daysOld, $idFrom, $idTo);
+    );
 
     /**
      * Delete expired records. Allows setting of 'from' and 'to' ID's so that rows

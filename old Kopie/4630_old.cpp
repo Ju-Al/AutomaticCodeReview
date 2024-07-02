@@ -1,6 +1,4 @@
 /*!
-  // force col-wise for gpu & CUDA
-  if (device_type == std::string("gpu") || device_type == std::string("cuda")) {
  * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
@@ -336,7 +334,8 @@ void Config::CheckParamConflict() {
       num_leaves = static_cast<int>(full_num_leaves);
     }
   }
-  // force col-wise for gpu
+  // force col-wise for gpu & CUDA
+  if (device_type == std::string("gpu") || device_type == std::string("cuda")) {
   if (device_type == std::string("gpu")/* || device_type == std::string("cuda")*/) {
     force_col_wise = true;
     force_row_wise = false;

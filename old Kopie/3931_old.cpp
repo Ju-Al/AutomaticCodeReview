@@ -1,5 +1,4 @@
 // This file is part of BOINC.
-    ram_max_used_idle_frac = 0.5;
 // http://boinc.berkeley.edu
 // Copyright (C) 2008 University of California
 //
@@ -235,7 +234,7 @@ void GLOBAL_PREFS::defaults() {
 #endif
     ram_max_used_busy_frac = 0.5;
 #ifdef ANDROID
-    ram_max_used_idle_frac = 0.9;
+    ram_max_used_idle_frac = 0.5;
 #else
     ram_max_used_idle_frac = 0.9;
 #endif

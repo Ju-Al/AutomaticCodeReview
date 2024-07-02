@@ -310,7 +310,6 @@ define(['apphost', 'globalize', 'connectionManager', 'itemHelper', 'appRouter', 
                         getResolveFunction(getResolveFunction(resolve, id), id)();
                     });
                     break;
-                case 'copy-stream':
                     var downloadHref = apiClient.getItemDownloadUrl(itemId);
                     var textArea = document.createElement("textarea");
                     textArea.value = downloadHref;

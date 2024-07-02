@@ -65,7 +65,6 @@ public class Tags {
       span.setStatus(Status.UNKNOWN);
     }
   };
-
   public static final BiConsumer<Map<String, EventAttributeValue>, HttpRequest>
       HTTP_REQUEST_EVENT =
       (map, req) -> {

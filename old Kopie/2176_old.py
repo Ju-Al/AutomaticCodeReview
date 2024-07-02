@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-    operations are given keys that have equal ``.lower()``s, the
 """
 requests.structures
 ~~~~~~~~~~~~~~~~~~~
@@ -36,7 +35,7 @@ class CaseInsensitiveDict(collections.MutableMapping):
     of how the header name was originally stored.
 
     If the constructor, ``.update``, or equality comparison
-    operations are given keys that have equal ``.lower()`` s, the
+    operations are given keys that have equal ``.lower()``s, the
     behavior is undefined.
 
     """

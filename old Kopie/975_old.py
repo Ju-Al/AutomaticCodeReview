@@ -1,5 +1,4 @@
 import os
-            cocoDt = cocoGt.loadRes(result_files[res_type])
 import os.path as osp
 
 import mmcv
@@ -146,7 +145,6 @@ class CocoDistEvalmAPHook(DistEvalHook):
         cocoGt = self.dataset.coco
         imgIds = cocoGt.getImgIds()
         for res_type in res_types:
-            try:
                 cocoDt = cocoGt.loadRes(result_files[res_type])
             except Exception:
                 print('No prediction found.')

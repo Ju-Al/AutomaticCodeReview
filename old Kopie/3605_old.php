@@ -1,6 +1,5 @@
 <?php
 
-        if (null !== $path && 0 === strncmp($path, '/', 1)) {
 declare(strict_types=1);
 
 /*
@@ -97,7 +96,7 @@ class RegisterPagesPass implements CompilerPassInterface
         $path = $attributes['path'] ?? null;
         $pathRegex = null;
 
-        if (\is_string($path) && 0 === strncmp($path, '/', 1)) {
+        if (null !== $path && 0 === strncmp($path, '/', 1)) {
             $compiledRoute = (new Route($path))->compile();
             $pathRegex = $compiledRoute->getRegex();
         }

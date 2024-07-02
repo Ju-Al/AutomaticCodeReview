@@ -1,6 +1,5 @@
 <?php
 
-            ->findByUrlAndUserId($this->url, $this->getLoggedInUserId());
 namespace Tests\Wallabag\CoreBundle\Controller;
 
 use Tests\Wallabag\CoreBundle\WallabagCoreTestCase;
@@ -360,7 +359,7 @@ class EntryControllerTest extends WallabagCoreTestCase
 
         $content = $em
             ->getRepository('WallabagCoreBundle:Entry')
-            ->find($content->getId());
+            ->findByUrlAndUserId($this->url, $this->getLoggedInUserId());
 
         $this->assertNotEmpty($content->getContent());
     }

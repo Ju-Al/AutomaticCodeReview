@@ -1010,8 +1010,6 @@ type validateDependenciesOpts struct {
 	sidecarConfig     map[string]*SidecarConfig
 	imageConfig       Image
 }
-
-type validateLoadBalancerTargetOpts struct {
 	mainContainerName string
 	routingRule       RoutingRule
 	sidecarConfig     map[string]*SidecarConfig

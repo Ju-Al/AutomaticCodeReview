@@ -1,5 +1,3 @@
-/**
- * @file
  * @brief [Travelling Salesman Problem]
  * (https://en.wikipedia.org/wiki/Travelling_salesman_problem) implementation
  *
@@ -108,6 +106,4 @@ int main() {
     std::vector<std::vector<int>> cities = {
         {0, 5, 10, 15}, {5, 0, 20, 30}, {10, 20, 0, 35}, {15, 30, 35, 0}};
     int V = cities.size();
-    std::cout << graph::TravellingSalesmanProblem(&cities, 0, V);
     return 0;
-}

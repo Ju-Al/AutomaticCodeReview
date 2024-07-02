@@ -57,7 +57,6 @@ class Factory
     }
 
     /**
-     * Factory for Alma driver.
      *
      * @param ServiceManager $sm Service manager.
      *

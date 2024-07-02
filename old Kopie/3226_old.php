@@ -1,6 +1,4 @@
 <?php
-				Dynamic_Selector::META_KEY         => Config::MODS_SINGLE_CONTENT_WIDTH,
-				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( Config::MODS_SINGLE_CONTENT_WIDTH ),
 /**
  * Style generator based on settings.
  *
@@ -687,12 +685,14 @@ class Frontend extends Generator {
 				Dynamic_Selector::META_SUFFIX      => '%',
 			],
 		];
+				Dynamic_Selector::META_KEY         => Config::MODS_SINGLE_CONTENT_WIDTH,
+				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( Config::MODS_SINGLE_CONTENT_WIDTH ),
 		// Single content width.
-		list( $context, $allowed_context ) = $this->get_cpt_context( [ 'post' ] );
+		$sidebar_content_width_meta        = $this->get_sidebar_content_width_meta( $context, $allowed_context );
 		$this->_subscribers['.neve-main > .single-post-container .nv-single-post-wrap.col'] = [
 			Config::CSS_PROP_MAX_WIDTH => [
-				Dynamic_Selector::META_KEY         => $this->get_sidebar_content_width_meta( $context, $allowed_context ),
-				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $this->get_sidebar_content_width_meta( $context, $allowed_context ) ),
+				Dynamic_Selector::META_KEY         => $sidebar_content_width_meta,
+				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $sidebar_content_width_meta ),
 				Dynamic_Selector::META_DEVICE_ONLY => Dynamic_Selector::DESKTOP,
 				Dynamic_Selector::META_SUFFIX      => '%',
 			],
@@ -700,8 +700,8 @@ class Frontend extends Generator {
 
 		$this->_subscribers['.single-post-container .alignfull > [class*="__inner-container"], .single-post-container .alignwide > [class*="__inner-container"]']                                 = [
 			Config::CSS_PROP_MAX_WIDTH => [
-				Dynamic_Selector::META_KEY           => $this->get_sidebar_content_width_meta( $context, $allowed_context ),
-				Dynamic_Selector::META_DEFAULT       => $this->sidebar_layout_width_default( $this->get_sidebar_content_width_meta( $context, $allowed_context ) ),
+				Dynamic_Selector::META_KEY           => $sidebar_content_width_meta,
+				Dynamic_Selector::META_DEFAULT       => $this->sidebar_layout_width_default( $sidebar_content_width_meta ),
 				Dynamic_Selector::META_IS_RESPONSIVE => true,
 				Dynamic_Selector::META_FILTER        => function ( $css_prop, $value, $meta, $device ) {
 					$width = Mods::to_json( Config::MODS_CONTAINER_WIDTH );
@@ -713,8 +713,8 @@ class Frontend extends Generator {
 		];
 		$this->_subscribers['.container-fluid.single-post-container .alignfull > [class*="__inner-container"], .container-fluid.single-post-container .alignwide > [class*="__inner-container"]'] = [
 			Config::CSS_PROP_MAX_WIDTH => [
-				Dynamic_Selector::META_KEY         => $this->get_sidebar_content_width_meta( $context, $allowed_context ),
-				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $this->get_sidebar_content_width_meta( $context, $allowed_context ) ),
+				Dynamic_Selector::META_KEY         => $sidebar_content_width_meta,
+				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $sidebar_content_width_meta ),
 				Dynamic_Selector::META_DEVICE_ONLY => Dynamic_Selector::DESKTOP,
 				Dynamic_Selector::META_FILTER      => function ( $css_prop, $value, $meta, $device ) {
 					return sprintf( 'max-width:calc(%s%% + %spx)', $value, Config::CONTENT_DEFAULT_PADDING / 2 );
@@ -724,8 +724,8 @@ class Frontend extends Generator {
 
 		$this->_subscribers['.neve-main > .single-post-container .nv-sidebar-wrap'] = [
 			Config::CSS_PROP_MAX_WIDTH => [
-				Dynamic_Selector::META_KEY         => $this->get_sidebar_content_width_meta( $context, $allowed_context ),
-				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $this->get_sidebar_content_width_meta( $context, $allowed_context ) ),
+				Dynamic_Selector::META_KEY         => $sidebar_content_width_meta,
+				Dynamic_Selector::META_DEFAULT     => $this->sidebar_layout_width_default( $sidebar_content_width_meta ),
 				Dynamic_Selector::META_DEVICE_ONLY => Dynamic_Selector::DESKTOP,
 				Dynamic_Selector::META_FILTER      => 'minus_100',
 				Dynamic_Selector::META_SUFFIX      => '%',

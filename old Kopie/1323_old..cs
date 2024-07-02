@@ -1,5 +1,4 @@
 ﻿namespace Nancy.ViewEngines.Nustache
-                    template.Render(model, writer, null);
 {
     using System;
     using System.Collections.Generic;
@@ -74,7 +73,7 @@
                     var writer =
                         new StreamWriter(stream);
 
-                    template.Render(model, writer, new TemplateLocator(name => this.GetPartial(renderContext, name, model)));
+                    template.Render(model, writer, null);
                 }
             };
         }

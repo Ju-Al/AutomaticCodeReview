@@ -1,8 +1,4 @@
 from collections import OrderedDict
-            for _, cache in reversed(self.currentBatchOps):
-                if idr in cache:
-                    value = cache[idr]
-                    break;
 import rlp
 from plenum.common.constants import VERKEY, TRUSTEE, STEWARD
 from plenum.common.types import f
@@ -77,7 +73,10 @@ class IdrCache:
         else:
             # Looking for uncommitted values, iterating over `currentBatchOps and unCommitted`
             # in reverse to get the latest value
-            for iter, cache in reversed(self.currentBatchOps):
+            for _, cache in reversed(self.currentBatchOps):
+                if idr in cache:
+                    value = cache[idr]
+                    break;
                 if iter == idr.decode():
                     value = cache
                     ta, iv, r = self.unpackIdrValue(value)

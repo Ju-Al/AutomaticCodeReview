@@ -146,7 +146,6 @@ public class WorldStateDownloader {
             if (pendingRequest == null) {
               break;
             }
-            final Optional<BytesValue> existingData =
                 pendingRequest.getExistingData(worldStateStorage);
             if (existingData.isPresent()) {
               pendingRequest.setData(existingData.get());

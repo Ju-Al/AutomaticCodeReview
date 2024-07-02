@@ -1,8 +1,5 @@
 # mypy: ignore-errors
-                    raise AssertionError(
-                        "Normalized and non-normalized query errors differ")
-                else:
-                    raise AssertionError(
+
 #
 # This source file is part of the EdgeDB open source project.
 #
@@ -1566,7 +1563,10 @@ class Compiler:
         except errors.EdgeQLSyntaxError as original_err:
             if isinstance(source, edgeql.NormalizedSource):
                 # try non-normalized source
-                try:
+                    raise AssertionError(
+                        "Normalized and non-normalized query errors differ")
+                else:
+                    raise AssertionError(                try:
                     original = edgeql.Source.from_string(source.text())
                     ctx = dataclasses.replace(ctx, source=original)
                     self._try_compile(ctx=ctx, source=original)

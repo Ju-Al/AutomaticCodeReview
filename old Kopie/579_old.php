@@ -400,7 +400,6 @@ class FileTree extends Widget
 		return $return;
 	}
 
-	/**
 	 * Return the extra parameters for picker url
 	 *
 	 * @param array $values

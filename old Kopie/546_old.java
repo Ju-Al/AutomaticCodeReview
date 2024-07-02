@@ -130,7 +130,6 @@ class SingularitySlaveAndRackManager {
     final int numDesiredInstances = taskRequest.getRequest().getInstancesSafe();
     double numOnRack = 0;
     double numOnSlave = 0;
-    double cleaningOnSlave = 0;
 
     Collection<SingularityTaskId> cleaningTasks = stateCache.getCleaningTasks();
 

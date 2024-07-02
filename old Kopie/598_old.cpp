@@ -454,8 +454,6 @@ ReaderProxy::ChangeConstIterator ReaderProxy::find_change(const SequenceNumber_t
         ? it
         : it->getSequenceNumber() == seq_num ? it : end;
 }
-
-bool ReaderProxy::are_there_gaps()
 {
     bool are_there_gaps = false;
 

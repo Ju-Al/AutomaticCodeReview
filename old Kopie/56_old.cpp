@@ -380,7 +380,6 @@ namespace amrex
 	mf.FillBoundary(scomp,ncomp,geom.periodicity(),cross);
     }
 
-
     void print_state(const MultiFab& mf, const IntVect& cell, const int n)
     {
 

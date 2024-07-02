@@ -1,6 +1,4 @@
 /***************************************************************************
-            result = Interface::Basic::Get().EventSaveGame();
-            break;
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -93,7 +91,8 @@ fheroes2::GameMode Dialog::FileOptions()
             }
         }
         else if ( le.MouseClickLeft( buttonSave.area() ) ) {
-            // Special case: since we show a window about file saving we don't want to display the current didloag anymore.
+            result = Interface::Basic::Get().EventSaveGame();
+            break;
             back.restore();
 
             return Interface::Basic::Get().EventSaveGame();

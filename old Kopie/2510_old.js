@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-                <div className={classes.card_input_container}>
 import { Form } from 'informed';
 import { AlertCircle as AlertCircleIcon } from 'react-feather';
 
@@ -123,7 +122,7 @@ const GiftCards = props => {
                 id={classes.card}
                 label="Gift Card Number"
             >
-                <div
+                <div className={classes.card_input_container}>
                     className={`${classes.card_input_container} ${
                         shouldDisplayCardError ? classes.error : ''
                     }`}

@@ -281,7 +281,6 @@ class Realm {
 
     /**
      * Initiate a write transaction.
-     *
      * When doing a transaction, it is highly recommended to do error handling.
      * If you don't handle errors, your data might become inconsistent. Error handling
      * will often involve canceling the transaction.

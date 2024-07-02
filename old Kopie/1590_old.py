@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-        long_flag="--spin_forts",
 # -*- coding: utf-8 -*-
 """
 pgoapi - Pokemon Go API
@@ -183,7 +182,7 @@ def init_config():
     add_config(
         parser,
         load,
-        long_flag="--spin",
+        long_flag="--spin_forts",
         help="Enable Spinning Pokestops",
         type=bool,
         default=True,

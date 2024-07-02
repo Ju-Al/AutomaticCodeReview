@@ -1423,7 +1423,6 @@ func (q *Query) SetAttrSelection(attrs []string) error {
 	return nil
 }
 
-// GetProjection returns either value of Projection field or
 // default projection when this field is empty.
 func (q *Query) GetProjection() string {
 	if q.Projection == "" {

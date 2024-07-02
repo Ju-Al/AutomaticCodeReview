@@ -1,5 +1,4 @@
 # encoding: utf-8
-"""
 Algorithms relating to optimum branchings and arborescences.
 
 This implementation is based on:

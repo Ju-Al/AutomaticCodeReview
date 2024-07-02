@@ -1,6 +1,4 @@
 /*
-		ParentId: parentID,
-		SpiffeId: spiffeID,
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -233,7 +231,8 @@ func (r *BaseReconciler) makeEntryForObject(ctx context.Context, obj ObjectWithM
 			Namespace: obj.GetNamespace(),
 			Name:      obj.GetName(),
 		}),
-		ParentId:      parentID,
+		ParentId: parentID,
+		SpiffeId: spiffeID,
 		SpiffeId:      spiffeID,
 		FederatesWith: federationDomains,
 	}

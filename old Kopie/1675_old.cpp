@@ -1,5 +1,4 @@
 /**
-    if (nodekey.size() == keylength || !nodekey.size())
  * @file node.cpp
  * @brief Classes for accessing local and remote nodes
  *
@@ -897,7 +896,7 @@ bool Node::applykey()
         attrstring = NULL;
     }
 
-    if (nodekeydata.size() == keylength || !nodekeydata.size())
+    if (nodekey.size() == keylength || !nodekey.size())
     {
         return false;
     }

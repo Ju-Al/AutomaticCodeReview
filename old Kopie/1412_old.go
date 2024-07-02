@@ -1,183 +1,129 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright The OpenTelemetry Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package cli
+package exact // import "go.opentelemetry.io/otel/sdk/metric/aggregator/exact"
 
 import (
-	"errors"
-	"testing"
+	"context"
+	"sync"
+	"time"
 
-	"github.com/aws/copilot-cli/internal/pkg/cli/mocks"
-	"github.com/aws/copilot-cli/internal/pkg/config"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/number"
+	export "go.opentelemetry.io/otel/sdk/export/metric"
+	"go.opentelemetry.io/otel/sdk/export/metric/aggregation"
+	"go.opentelemetry.io/otel/sdk/metric/aggregator"
 )
 
-func TestEnvUpgradeOpts_Validate(t *testing.T) {
-	testCases := map[string]struct {
-		given     func(ctrl *gomock.Controller) *envUpgradeOpts
-		wantedErr error
-	}{
-		"should not error if the environment exists and a name is provided": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockenvironmentStore(ctrl)
-				m.EXPECT().GetEnvironment("phonetool", "test").Return(nil, nil)
-
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-						name:    "test",
-					},
-					store: m,
-				}
-			},
-		},
-		"should throw a config.ErrNoSuchEnvironment if the environment is not found": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockenvironmentStore(ctrl)
-				m.EXPECT().GetEnvironment(gomock.Any(), gomock.Any()).Return(nil, &config.ErrNoSuchEnvironment{
-					ApplicationName: "phonetool",
-					EnvironmentName: "test",
-				})
-
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-						name:    "test",
-					},
-					store: m,
-				}
-			},
-			wantedErr: &config.ErrNoSuchEnvironment{
-				ApplicationName: "phonetool",
-				EnvironmentName: "test",
-			},
-		},
-		"should throw a wrapped error on unexpected config failure": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockenvironmentStore(ctrl)
-				m.EXPECT().GetEnvironment(gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
-
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-						name:    "test",
-					},
-					store: m,
-				}
-			},
-			wantedErr: errors.New("get environment test configuration from application phonetool: some error"),
-		},
-		"should not allow --all and --name": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-						name:    "test",
-						all:     true,
-					},
-				}
-			},
-			wantedErr: errors.New("cannot specify both --all and --name flags"),
-		},
+type (
+	// Aggregator aggregates events that form a distribution, keeping
+	// an array with the exact set of values.
+	Aggregator struct {
+		lock    sync.Mutex
+		samples aggregation.Samples
 	}
+)
 
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+var _ export.Aggregator = &Aggregator{}
+var _ aggregation.Points = &Aggregator{}
+var _ aggregation.Count = &Aggregator{}
 
-			opts := tc.given(ctrl)
-
-			err := opts.Validate()
-
-			if tc.wantedErr != nil {
-				require.EqualError(t, err, tc.wantedErr.Error())
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+// New returns a new exact aggregator, which aggregates recorded
+// measurements by storing them in an array.  This type uses a mutex
+// for Update() and SynchronizedMove() concurrency.
+func New(cnt int) []Aggregator {
+	return make([]Aggregator, cnt)
 }
 
-func TestEnvUpgradeOpts_Ask(t *testing.T) {
-	testCases := map[string]struct {
-		given func(ctrl *gomock.Controller) *envUpgradeOpts
+// Aggregation returns an interface for reading the state of this aggregator.
+func (c *Aggregator) Aggregation() aggregation.Aggregation {
+	return c
+}
 
-		wantedAppName string
-		wantedEnvName string
-		wantedErr     error
-	}{
-		"should prompt for application if not set": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockappEnvSelector(ctrl)
-				m.EXPECT().Application("In which application is your environment?", "").Return("phonetool", nil)
+// Kind returns aggregation.ExactKind.
+func (c *Aggregator) Kind() aggregation.Kind {
+	return aggregation.ExactKind
+}
 
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						name: "test",
-					},
-					sel: m,
-				}
-			},
-			wantedAppName: "phonetool",
-			wantedEnvName: "test",
-		},
-		"should not prompt for environment if --all is set": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockappEnvSelector(ctrl)
-				m.EXPECT().Application(gomock.Any(), gomock.Any()).Times(0)
-				m.EXPECT().Environment(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+// Count returns the number of values in the checkpoint.
+func (c *Aggregator) Count() (int64, error) {
+	return int64(len(c.samples)), nil
+}
 
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-						name:    "test",
-						all:     true,
-					},
-					sel: m,
-				}
-			},
-			wantedAppName: "phonetool",
-			wantedEnvName: "test",
-		},
-		"should prompt for environment if --all and --name is not provided": {
-			given: func(ctrl *gomock.Controller) *envUpgradeOpts {
-				m := mocks.NewMockappEnvSelector(ctrl)
-				m.EXPECT().Environment(
-					"Which environment do you want to upgrade?",
-					`Upgrades the AWS CloudFormation template for your environment
-to support latest Copilot features.`,
-					"phonetool").
-					Return("test", nil)
+// Points returns access to the raw data set.
+func (c *Aggregator) Points() (aggregation.Samples, error) {
+	return c.samples, nil
+}
 
-				return &envUpgradeOpts{
-					envUpgradeVars: envUpgradeVars{
-						appName: "phonetool",
-					},
-					sel: m,
-				}
-			},
-			wantedAppName: "phonetool",
-			wantedEnvName: "test",
-		},
+// SynchronizedMove saves the current state to oa and resets the current state to
+// the empty set, taking a lock to prevent concurrent Update() calls.
+func (c *Aggregator) SynchronizedMove(oa export.Aggregator, desc *metric.Descriptor) error {
+	o, _ := oa.(*Aggregator)
+
+	if oa != nil && o == nil {
+		return aggregator.NewInconsistentAggregatorError(c, oa)
 	}
 
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-			opts := tc.given(ctrl)
-
-			err := opts.Ask()
-
-			if tc.wantedErr != nil {
-				require.EqualError(t, err, tc.wantedErr.Error())
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.wantedAppName, opts.appName)
-				require.Equal(t, tc.wantedEnvName, opts.name)
-			}
-		})
+	if o != nil {
+		o.samples = c.samples
 	}
+	c.samples = nil
+
+	return nil
+}
+
+// Update adds the recorded measurement to the current data set.
+// Update takes a lock to prevent concurrent Update() and SynchronizedMove()
+// calls.
+func (c *Aggregator) Update(_ context.Context, number number.Number, desc *metric.Descriptor) error {
+	now := time.Now()
+	c.lock.Lock()
+	c.samples = append(c.samples, aggregation.Sample{
+		Number: number,
+		Time:   now,
+	})
+	c.lock.Unlock()
+
+	return nil
+}
+
+// Merge combines two data sets into one.
+func (c *Aggregator) Merge(oa export.Aggregator, desc *metric.Descriptor) error {
+	o, _ := oa.(*Aggregator)
+	if o == nil {
+		return aggregator.NewInconsistentAggregatorError(c, oa)
+	}
+
+	c.samples = combine(c.samples, o.samples)
+	return nil
+}
+
+func combine(a, b aggregation.Samples) aggregation.Samples {
+	result := make(aggregation.Samples, 0, len(a)+len(b))
+
+	for len(a) != 0 && len(b) != 0 {
+		if a[0].Time.Before(b[0].Time) {
+			result = append(result, a[0])
+			a = a[1:]
+		} else {
+			result = append(result, b[0])
+			b = b[1:]
+		}
+	}
+	result = append(result, a...)
+	result = append(result, b...)
+	return result
 }

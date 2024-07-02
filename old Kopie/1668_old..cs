@@ -135,7 +135,6 @@ namespace NLog.Targets
         protected override void InitializeTarget()
         {
             PauseLogging = false;
-            if (DetectConsoleAvailable)
             {
                 PauseLogging = !IsConsoleAvailable();
                 if (PauseLogging && LoggingConfiguration != null)

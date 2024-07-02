@@ -1,2122 +1,961 @@
-package main
-		ad := &darc.Darc{}
-		adPub := cothority.Suite.Point()
-		// Accept both plain-darcs, as well as "darc:...." darcs
-		adID, err := lib.StringToDarcID(c.String("admindarc"))
-		if err == nil {
-			adPubBuf, err := lib.StringToEd25519Buf(c.String("adminpub"))
+// Copyright 2015 Light Code Labs, LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-				return err
-			}
-			adPub = cothority.Suite.Point()
-			if err = adPub.UnmarshalBinary(adPubBuf); err != nil {
-				return errors.New("got an invalid admin public key: " + err.Error())
-			p, err := cl.GetProof(adID)
-				return errors.New("couldn't get proof for admin-darc: " + err.Error())
-			if err = p.Proof.Verify(id); err != nil {
-				return errors.New("proof for admin is wrong: " + err.Error())
-			_, adBuf, cid, _, err := p.Proof.KeyValue()
-			ad, err = darc.NewFromProtobuf(adBuf)
+// Package caddy implements the Caddy server manager.
+//
+// To use this package:
+//
+//   1. Set the AppName and AppVersion variables.
+//   2. Call LoadCaddyfile() to get the Caddyfile.
+//      Pass in the name of the server type (like "http").
+//      Make sure the server type's package is imported
+//      (import _ "github.com/mholt/caddy/caddyhttp").
+//   3. Call caddy.Start() to start Caddy. You get back
+//      an Instance, on which you can call Restart() to
+//      restart it or Stop() to stop it.
+//
+// You should call Wait() on your instance to wait for
+// all servers to quit before your process exits.
+package caddy
+
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/big"
-	"math/rand"
+	"log"
+	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/qantik/qrgo"
-	"go.dedis.ch/cothority/v3"
-	"go.dedis.ch/cothority/v3/byzcoin"
-	"go.dedis.ch/cothority/v3/byzcoin/bcadmin/clicontracts"
-	"go.dedis.ch/cothority/v3/byzcoin/bcadmin/lib"
-	"go.dedis.ch/cothority/v3/byzcoin/contracts"
-	"go.dedis.ch/cothority/v3/darc"
-	"go.dedis.ch/cothority/v3/darc/expression"
-	_ "go.dedis.ch/cothority/v3/personhood"
-	"go.dedis.ch/cothority/v3/skipchain"
-	"go.dedis.ch/kyber/v3/util/random"
-	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/app"
-	"go.dedis.ch/onet/v3/cfgpath"
-	"go.dedis.ch/onet/v3/log"
-	"go.dedis.ch/onet/v3/network"
-	"go.dedis.ch/protobuf"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/mholt/caddy/caddyfile"
 )
 
-func init() {
-	network.RegisterMessages(&darc.Darc{}, &darc.Identity{}, &darc.Signer{})
+// Configurable application parameters
+var (
+	// AppName is the name of the application.
+	AppName string
+
+	// AppVersion is the version of the application.
+	AppVersion string
+
+	// Quiet mode will not show any informative output on initialization.
+	Quiet bool
+
+	// PidFile is the path to the pidfile to create.
+	PidFile string
+
+	// GracefulTimeout is the maximum duration of a graceful shutdown.
+	GracefulTimeout time.Duration
+
+	// isUpgrade will be set to true if this process
+	// was started as part of an upgrade, where a parent
+	// Caddy process started this one.
+	isUpgrade = os.Getenv("CADDY__UPGRADE") == "1"
+
+	// started will be set to true when the first
+	// instance is started; it never gets set to
+	// false after that.
+	started bool
+
+	// mu protects the variables 'isUpgrade' and 'started'.
+	mu sync.Mutex
+)
+
+// Instance contains the state of servers created as a result of
+// calling Start and can be used to access or control those servers.
+type Instance struct {
+	// serverType is the name of the instance's server type
+	serverType string
+
+	// caddyfileInput is the input configuration text used for this process
+	caddyfileInput Input
+
+	// wg is used to wait for all servers to shut down
+	wg *sync.WaitGroup
+
+	// context is the context created for this instance.
+	context Context
+
+	// servers is the list of servers with their listeners.
+	servers []ServerListener
+
+	// these callbacks execute when certain events occur
+	onFirstStartup  []func() error // starting, not as part of a restart
+	onStartup       []func() error // starting, even as part of a restart
+	onRestart       []func() error // before restart commences
+	onShutdown      []func() error // stopping, even as part of a restart
+	onFinalShutdown []func() error // stopping, not as part of a restart
 }
 
-var cmds = cli.Commands{
-	{
-		Name:      "create",
-		Usage:     "create a ledger",
-		Aliases:   []string{"c"},
-		ArgsUsage: "[roster.toml]",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "roster, r",
-				Usage: "the roster of the cothority that will host the ledger",
-			},
-			cli.DurationFlag{
-				Name:  "interval, i",
-				Usage: "the block interval for this ledger",
-				Value: 5 * time.Second,
-			},
-		},
-		Action: create,
-	},
+// Servers returns the ServerListeners in i.
+func (i *Instance) Servers() []ServerListener { return i.servers }
 
-	{
-		Name:      "link",
-		Usage:     "create a BC config file that sets the specified roster, darc and identity",
-		Aliases:   []string{"login"},
-		ArgsUsage: "roster.toml [byzcoin id]",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "darc",
-				Usage: "the darc id to be saved (default to new empty darc)",
-			},
-			cli.StringFlag{
-				Name:  "identity, id",
-				Usage: "the identity to be saved (default to new default identity)",
-			},
-			cli.BoolFlag{
-				Name:  "silent, s",
-				Usage: "if set, the BC variable will not be updated with the newly created config file",
-			},
-		},
-		Action: link,
-	},
-
-	{
-		Name:      "latest",
-		Usage:     "show the latest block in the chain",
-		Aliases:   []string{"s"},
-		ArgsUsage: "[bc.cfg]",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:   "bc",
-				EnvVar: "BC",
-				Usage:  "the ByzCoin config to use",
-			},
-			cli.IntFlag{
-				Name:  "server",
-				Usage: "which server number from the roster to contact (default: 0)",
-				Value: 0,
-			},
-			cli.BoolFlag{
-				Name:  "update",
-				Usage: "update the ByzCoin config file with the fetched roster",
-			},
-		},
-		Action: latest,
-	},
-
-	{
-		Name:    "debug",
-		Usage:   "interact with byzcoin for debugging",
-		Aliases: []string{"d"},
-		Subcommands: cli.Commands{
-			{
-				Name:      "replay",
-				Usage:     "Replay a chain and check the global state is consistent",
-				Action:    debugReplay,
-				ArgsUsage: "URL",
-			},
-			{
-				Name:   "list",
-				Usage:  "Lists all byzcoin instances",
-				Action: debugList,
-				Flags: []cli.Flag{
-					cli.BoolFlag{
-						Name:  "verbose, v",
-						Usage: "print more information of the instances",
-					},
-				},
-				ArgsUsage: "(ip:port | group.toml)",
-			},
-			{
-				Name:  "dump",
-				Usage: "dumps a given byzcoin instance",
-				Flags: []cli.Flag{
-					cli.BoolFlag{
-						Name:  "verbose, v",
-						Usage: "print more information of the instances",
-					},
-				},
-				Action:    debugDump,
-				ArgsUsage: "ip:port byzcoin-id",
-			},
-			{
-				Name:      "remove",
-				Usage:     "removes a given byzcoin instance",
-				Action:    debugRemove,
-				ArgsUsage: "private.toml byzcoin-id",
-			},
-		},
-	},
-
-	{
-		Name:      "mint",
-		Usage:     "mint coins on account",
-		ArgsUsage: "bc-xxx.cfg key-xxx.cfg public-key #coins",
-		Action:    mint,
-	},
-
-	{
-		Name:    "roster",
-		Usage:   "change the roster of the ByzCoin",
-		Aliases: []string{"r"},
-		Subcommands: cli.Commands{
-			{
-				Name:      "add",
-				ArgsUsage: "bc-xxx.cfg key-xxx.cfg public.toml",
-				Usage:     "Add a new node to the roster",
-				Action:    rosterAdd,
-			},
-			{
-				Name:      "del",
-				ArgsUsage: "bc-xxx.cfg key-xxx.cfg public.toml",
-				Usage:     "Remove a node from the roster",
-				Action:    rosterDel,
-			},
-			{
-				Name:      "leader",
-				ArgsUsage: "bc-xxx.cfg key-xxx.cfg public.toml",
-				Usage:     "Set a specific node to be the leader",
-				Action:    rosterLeader,
-			},
-		},
-	},
-
-	{
-		Name:      "config",
-		Usage:     "update the config",
-		ArgsUsage: "bc-xxx.cfg key-xxx.cfg",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "interval",
-				Usage: "change the interval",
-			},
-			cli.IntFlag{
-				Name:  "blockSize",
-				Usage: "adjust the maximum block size",
-			},
-		},
-		Action: config,
-	},
-
-	{
-		Name:    "key",
-		Usage:   "generates a new keypair and prints the public key in the stdout",
-		Aliases: []string{"k"},
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "save",
-				Usage: "file in which the user wants to save the public key instead of printing it",
-			},
-			cli.StringFlag{
-				Name:  "print",
-				Usage: "print the private and public key",
-			},
-		},
-		Action: key,
-	},
-
-	{
-		Name:    "darc",
-		Usage:   "tool used to manage darcs",
-		Aliases: []string{"d"},
-		Subcommands: cli.Commands{
-			{
-				Name:   "show",
-				Usage:  "Show a DARC",
-				Action: darcShow,
-				Flags: []cli.Flag{
-					cli.StringFlag{
-						Name:   "bc",
-						EnvVar: "BC",
-						Usage:  "the ByzCoin config to use (required)",
-					},
-					cli.StringFlag{
-						Name:  "darc",
-						Usage: "the darc to show (admin darc by default)",
-					},
-				},
-			},
-			{
-				Name:   "cdesc",
-				Usage:  "Edit the description of a DARC",
-				Action: darcCdesc,
-				Flags: []cli.Flag{
-					cli.StringFlag{
-						Name:   "bc",
-						EnvVar: "BC",
-						Usage:  "the ByzCoin config to use (required)",
-					},
-					cli.StringFlag{
-						Name:  "darc",
-						Usage: "the id of the darc to edit (config admin darc by default)",
-					},
-					cli.StringFlag{
-						Name:  "desc",
-						Usage: "the new description of the darc (required)",
-					},
-				},
-			},
-			{
-				Name:   "add",
-				Usage:  "Add a new DARC with default rules.",
-				Action: darcAdd,
-				Flags: []cli.Flag{
-					cli.StringFlag{
-						Name:   "bc",
-						EnvVar: "BC",
-						Usage:  "the ByzCoin config to use (required)",
-					},
-					cli.StringFlag{
-						Name:  "sign, signer",
-						Usage: "public key which will sign the DARC spawn request (default: the ledger admin identity)",
-					},
-					cli.StringFlag{
-						Name:  "darc",
-						Usage: "DARC with the right to create a new DARC (default is the admin DARC)",
-					},
-					cli.StringFlag{
-						Name:  "owner",
-						Usage: "the identity who is allowed to sign and evolve it (default is a new key pair)",
-					},
-					cli.BoolFlag{
-						Name:  "unrestricted",
-						Usage: "add the invoke:evolve_unrestricted rule",
-					},
-					cli.StringFlag{
-						Name:  "out_id",
-						Usage: "output file for the darc id (optional)",
-					},
-					cli.StringFlag{
-						Name:  "out_key",
-						Usage: "output file for the darc key (optional)",
-					},
-					cli.StringFlag{
-						Name:  "desc",
-						Usage: "the description for the new DARC (default: random)",
-					},
-				},
-			},
-			{
-				Name:   "rule",
-				Usage:  "Edit DARC rules.",
-				Action: darcRule,
-				Flags: []cli.Flag{
-					cli.StringFlag{
-						Name:   "bc",
-						EnvVar: "BC",
-						Usage:  "the ByzCoin config to use (required)",
-					},
-					cli.StringFlag{
-						Name:  "darc",
-						Usage: "the DARC to update (default is the admin DARC)",
-					},
-					cli.StringFlag{
-						Name:  "sign",
-						Usage: "public key of the signing entity (default is the admin public key)",
-					},
-					cli.StringFlag{
-						Name:  "rule",
-						Usage: "the rule to be added, updated or deleted",
-					},
-					cli.StringFlag{
-						Name:  "identity",
-						Usage: "the identity of the signer who will be allowed to use the rule",
-					},
-					cli.BoolFlag{
-						Name:  "replace",
-						Usage: "if this rule already exists, replace it with this new one",
-					},
-					cli.BoolFlag{
-						Name:  "delete",
-						Usage: "delete the rule",
-					},
-				},
-			},
-		},
-	},
-
-	{
-		Name:    "qr",
-		Usage:   "generates a QRCode containing the description of the BC Config",
-		Aliases: []string{"qrcode"},
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:   "bc",
-				EnvVar: "BC",
-				Usage:  "the ByzCoin config to use (required)",
-			},
-			cli.BoolFlag{
-				Name:  "admin",
-				Usage: "If specified, the QR Code will contain the admin keypair",
-			},
-		},
-		Action: qrcode,
-	},
-
-	{
-		Name:  "info",
-		Usage: "displays infos about the BC config",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:   "bc",
-				EnvVar: "BC",
-				Usage:  "the ByzCoin config to use (required)",
-			},
-		},
-		Action: getInfo,
-	},
-
-	{
-		Name: "contract",
-		// Use space instead of tabs for correct formatting
-		Usage: "Provides cli interface for contracts",
-		// UsageText should be used instead, but its not working:
-		// see https://github.com/urfave/cli/issues/592
-		Description: fmt.Sprint(`
-   bcadmin contract CONTRACT { spawn  --bc <byzcoin config> 
-                                      [--<arg name> <arg value>, ...]
-                                      [--darc <darc id>] 
-                                      [--sign <pub key>] 
-                                      [--redirect],
-                               invoke <command>
-                                      --bc <byzcoin config>
-                                      --instid, i <instance ID>
-                                      [--<arg name> <arg value>, ...]
-                                      [--darc <darc id>] 
-                                      [--sign <pub key>],
-                               get    --bc <byzcoin config>
-                                      --instid, i <instance ID>,
-                               delete --bc <byzcoin config>
-                                      --instid, i <instance ID>
-                                      [--darc <darc id>] 
-                                      [--sign <pub key>]     
-                             }
-   CONTRAT   {value,deferred,config}`),
-		Subcommands: cli.Commands{
-			{
-				Name:  "value",
-				Usage: "Manipulate a value contract",
-				Subcommands: cli.Commands{
-					{
-						Name:   "spawn",
-						Usage:  "spawn a value contract",
-						Action: clicontracts.ValueSpawn,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "value",
-								Usage: "the value to save",
-							},
-							cli.StringFlag{
-								Name:  "darc",
-								Usage: "DARC with the right to spawn a value contract (default is the admin DARC)",
-							},
-							cli.StringFlag{
-								Name:  "sign",
-								Usage: "public key of the signing entity (default is the admin public key)",
-							},
-							cli.BoolFlag{
-								Name:  "redirect",
-								Usage: "redirects the transaction to stdout",
-							},
-						},
-					},
-					{
-						Name:  "invoke",
-						Usage: "invoke a value contract",
-						Subcommands: cli.Commands{
-							{
-								Name:   "update",
-								Usage:  "update the value of a value contract",
-								Action: clicontracts.ValueInvokeUpdate,
-								Flags: []cli.Flag{
-									cli.StringFlag{
-										Name:   "bc",
-										EnvVar: "BC",
-										Usage:  "the ByzCoin config to use (required)",
-									},
-									cli.StringFlag{
-										Name:  "value",
-										Usage: "the value to save",
-									},
-									cli.StringFlag{
-										Name:  "instid, i",
-										Usage: "the instance ID of the value contract",
-									},
-									cli.StringFlag{
-										Name:  "darc",
-										Usage: "DARC with the right to invoke.update a value contract (default is the admin DARC)",
-									},
-									cli.StringFlag{
-										Name:  "sign",
-										Usage: "public key of the signing entity (default is the admin public key)",
-									},
-								},
-							},
-						},
-					},
-					{
-						Name:   "get",
-						Usage:  "if the proof matches, get the content of the given value instance ID",
-						Action: clicontracts.ValueGet,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "instid, i",
-								Usage: "the instance id (required)",
-							},
-						},
-					},
-
-					{
-						Name:   "delete",
-						Usage:  "delete a value contract",
-						Action: clicontracts.ValueDelete,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "instid, i",
-								Usage: "the instance ID of the value contract",
-							},
-							cli.StringFlag{
-								Name:  "darc",
-								Usage: "DARC with the right to invoke.update a value contract (default is the admin DARC)",
-							},
-							cli.StringFlag{
-								Name:  "sign",
-								Usage: "public key of the signing entity (default is the admin public key)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Name:  "deferred",
-				Usage: "Manipulate a deferred contract",
-				Subcommands: cli.Commands{
-					{
-						Name:   "spawn",
-						Usage:  "spawn a deferred contract with the proposed transaction in stdin",
-						Action: clicontracts.DeferredSpawn,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "darc",
-								Usage: "DARC with the right to spawn a deferred contract (default is the admin DARC)",
-							},
-							cli.StringFlag{
-								Name:  "sign",
-								Usage: "public key of the signing entity (default is the admin public key)",
-							},
-						},
-					},
-					{
-						Name:  "invoke",
-						Usage: "invoke on a deferred contract ",
-						Subcommands: cli.Commands{
-							{
-								Name:   "addProof",
-								Usage:  "adds a signature and an identity on an instruction of the proposed transaction",
-								Action: clicontracts.DeferredInvokeAddProof,
-								Flags: []cli.Flag{
-									cli.StringFlag{
-										Name:   "bc",
-										EnvVar: "BC",
-										Usage:  "the ByzCoin config to use (required)",
-									},
-									cli.UintFlag{
-										Name:  "instrIdx",
-										Usage: "the instruction index of the transaction (starts from 0) (default is 0)",
-									},
-									cli.StringFlag{
-										Name:  "hash",
-										Usage: "the instruction hash that will be signed",
-									},
-									cli.StringFlag{
-										Name:  "instid, i",
-										Usage: "the instance ID of the deferred contract",
-									},
-									cli.StringFlag{
-										Name:  "darc",
-										Usage: "DARC with the right to invoke.addProof a deferred contract (default is the admin DARC)",
-									},
-									cli.StringFlag{
-										Name:  "sign",
-										Usage: "public key of the signing entity (default is the admin public key)",
-									},
-								},
-							},
-							{
-								Name:   "execProposedTx",
-								Usage:  "executes the proposed transaction if the instructions are correctly signed",
-								Action: clicontracts.ExecProposedTx,
-								Flags: []cli.Flag{
-									cli.StringFlag{
-										Name:   "bc",
-										EnvVar: "BC",
-										Usage:  "the ByzCoin config to use (required)",
-									},
-									cli.StringFlag{
-										Name:  "instid, i",
-										Usage: "the instance ID of the deferred contract",
-									},
-									cli.StringFlag{
-										Name:  "darc",
-										Usage: "DARC with the right to invoke.execProposedTx a deferred contract (default is the admin DARC)",
-									},
-									cli.StringFlag{
-										Name:  "sign",
-										Usage: "public key of the signing entity (default is the admin public key)",
-									},
-								},
-							},
-						},
-					},
-					{
-						Name:   "get",
-						Usage:  "if the proof matches, get the content of the given deferred instance ID",
-						Action: clicontracts.DeferredGet,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "instid, i",
-								Usage: "the instance id (required)",
-							},
-						},
-					},
-
-					{
-						Name:   "delete",
-						Usage:  "delete a deferred contract",
-						Action: clicontracts.DeferredDelete,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-							cli.StringFlag{
-								Name:  "instid, i",
-								Usage: "the instance ID of the value contract",
-							},
-							cli.StringFlag{
-								Name:  "darc",
-								Usage: "DARC with the right to invoke.update a value contract (default is the admin DARC)",
-							},
-							cli.StringFlag{
-								Name:  "sign",
-								Usage: "public key of the signing entity (default is the admin public key)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Name:  "config",
-				Usage: "Manipulate a config contract",
-				Subcommands: cli.Commands{
-					{
-						Name:  "invoke",
-						Usage: "invoke on a config contract ",
-						Subcommands: cli.Commands{
-							{
-								Name:   "updateConfig",
-								Usage:  "changes the roster's leader",
-								Action: clicontracts.ConfigInvokeUpdateConfig,
-								Flags: []cli.Flag{
-									cli.StringFlag{
-										Name:   "bc",
-										EnvVar: "BC",
-										Usage:  "the ByzCoin config to use (required)",
-									},
-									cli.StringFlag{
-										Name:  "sign",
-										Usage: "public key of the signing entity (default is the admin public key)",
-									},
-									cli.StringFlag{
-										Name:  "blockInterval",
-										Usage: "blockInterval, for example 2s (optional)",
-									},
-									cli.IntFlag{
-										Name:  "maxBlockSize",
-										Usage: "maxBlockSize (optional)",
-									},
-									cli.StringFlag{
-										Name:  "darcContractIDs",
-										Usage: "darcContractIDs separated by comas (optional)",
-									},
-									cli.BoolFlag{
-										Name:  "redirect",
-										Usage: "redirects the transaction to stdout",
-									},
-								},
-							},
-						},
-					},
-					{
-						Name:   "get",
-						Usage:  "displays the latest chain config",
-						Action: clicontracts.ConfigGet,
-						Flags: []cli.Flag{
-							cli.StringFlag{
-								Name:   "bc",
-								EnvVar: "BC",
-								Usage:  "the ByzCoin config to use (required)",
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-}
-
-var cliApp = cli.NewApp()
-
-// getDataPath is a function pointer so that tests can hook and modify this.
-var getDataPath = cfgpath.GetDataPath
-
-var gitTag = "dev"
-
-func init() {
-	cliApp.Name = "bcadmin"
-	cliApp.Usage = "Create ByzCoin ledgers and grant access to them."
-	cliApp.Version = gitTag
-	cliApp.Commands = cmds
-	cliApp.Flags = []cli.Flag{
-		cli.IntFlag{
-			Name:  "debug, d",
-			Value: 0,
-			Usage: "debug-level: 1 for terse, 5 for maximal",
-		},
-		cli.StringFlag{
-			Name:   "config, c",
-			EnvVar: "BC_CONFIG",
-			Value:  getDataPath(cliApp.Name),
-			Usage:  "path to configuration-directory",
-		},
-	}
-	cliApp.Before = func(c *cli.Context) error {
-		log.SetDebugVisible(c.Int("debug"))
-		lib.ConfigPath = c.String("config")
-		return nil
-	}
-}
-
-func main() {
-	rand.Seed(time.Now().Unix())
-	err := cliApp.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return
-}
-
-func create(c *cli.Context) error {
-	fn := c.String("roster")
-	if fn == "" {
-		fn = c.Args().First()
-		if fn == "" {
-			return errors.New("roster argument or --roster flag is required")
+// Stop stops all servers contained in i. It does NOT
+// execute shutdown callbacks.
+func (i *Instance) Stop() error {
+	// stop the servers
+	for _, s := range i.servers {
+		if gs, ok := s.server.(GracefulServer); ok {
+			if err := gs.Stop(); err != nil {
+				log.Printf("[ERROR] Stopping %s: %v", gs.Address(), err)
+			}
 		}
 	}
-	r, err := lib.ReadRoster(fn)
-	if err != nil {
-		return err
-	}
 
-	interval := c.Duration("interval")
-
-	owner := darc.NewSignerEd25519(nil, nil)
-
-	req, err := byzcoin.DefaultGenesisMsg(byzcoin.CurrentVersion, r, []string{"spawn:longTermSecret"}, owner.Identity())
-	if err != nil {
-		log.Error(err)
-		return err
+	// splice i out of instance list, causing it to be garbage-collected
+	instancesMu.Lock()
+	for j, other := range instances {
+		if other == i {
+			instances = append(instances[:j], instances[j+1:]...)
+			break
+		}
 	}
-	req.BlockInterval = interval
-
-	_, resp, err := byzcoin.NewLedger(req, false)
-	if err != nil {
-		return err
-	}
-
-	cfg := lib.Config{
-		ByzCoinID:     resp.Skipblock.SkipChainID(),
-		Roster:        *r,
-		AdminDarc:     req.GenesisDarc,
-		AdminIdentity: owner.Identity(),
-	}
-	fn, err = lib.SaveConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	err = lib.SaveKey(owner)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(c.App.Writer, "Created ByzCoin with ID %x.\n", cfg.ByzCoinID)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(c.App.Writer, "export BC=\"%v\"\n", fn)
-	if err != nil {
-		return err
-	}
-
-	// For the tests to use.
-	c.App.Metadata["BC"] = fn
+	instancesMu.Unlock()
 
 	return nil
 }
 
-func link(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return errors.New("please give the following args: roster.toml [byzcoin id]")
+// ShutdownCallbacks executes all the shutdown callbacks of i,
+// including ones that are scheduled only for the final shutdown
+// of i. An error returned from one does not stop execution of
+// the rest. All the non-nil errors will be returned.
+func (i *Instance) ShutdownCallbacks() []error {
+	var errs []error
+	for _, shutdownFunc := range i.onShutdown {
+		err := shutdownFunc()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
-	r, err := lib.ReadRoster(c.Args().First())
+	for _, finalShutdownFunc := range i.onFinalShutdown {
+		err := finalShutdownFunc()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
+// Restart replaces the servers in i with new servers created from
+// executing the newCaddyfile. Upon success, it returns the new
+// instance to replace i. Upon failure, i will not be replaced.
+func (i *Instance) Restart(newCaddyfile Input) (*Instance, error) {
+	log.Println("[INFO] Reloading")
+
+	i.wg.Add(1)
+	defer i.wg.Done()
+
+	// run restart callbacks
+	for _, fn := range i.onRestart {
+		err := fn()
+		if err != nil {
+			return i, err
+		}
+	}
+
+	if newCaddyfile == nil {
+		newCaddyfile = i.caddyfileInput
+	}
+
+	// Add file descriptors of all the sockets that are capable of it
+	restartFds := make(map[string]restartTriple)
+	for _, s := range i.servers {
+		gs, srvOk := s.server.(GracefulServer)
+		ln, lnOk := s.listener.(Listener)
+		pc, pcOk := s.packet.(PacketConn)
+		if srvOk {
+			if lnOk && pcOk {
+				restartFds[gs.Address()] = restartTriple{server: gs, listener: ln, packet: pc}
+				continue
+			}
+			if lnOk {
+				restartFds[gs.Address()] = restartTriple{server: gs, listener: ln}
+				continue
+			}
+			if pcOk {
+				restartFds[gs.Address()] = restartTriple{server: gs, packet: pc}
+				continue
+			}
+		}
+	}
+
+	// create new instance; if the restart fails, it is simply discarded
+	newInst := &Instance{serverType: newCaddyfile.ServerType(), wg: i.wg}
+
+	// attempt to start new instance
+	err := startWithListenerFds(newCaddyfile, newInst, restartFds)
+	if err != nil {
+		return i, err
+	}
+
+	// success! stop the old instance
+	for _, shutdownFunc := range i.onShutdown {
+		err = shutdownFunc()
+		if err != nil {
+			return i, err
+		}
+	}
+	err = i.Stop()
+	if err != nil {
+		return i, err
+	}
+
+	// Execute instantiation events
+	EmitEvent(InstanceStartupEvent, newInst)
+
+	log.Println("[INFO] Reloading complete")
+
+	return newInst, nil
+}
+
+// SaveServer adds s and its associated listener ln to the
+// internally-kept list of servers that is running. For
+// saved servers, graceful restarts will be provided.
+func (i *Instance) SaveServer(s Server, ln net.Listener) {
+	i.servers = append(i.servers, ServerListener{server: s, listener: ln})
+}
+
+// HasListenerWithAddress returns whether this package is
+// tracking a server using a listener with the address
+// addr.
+func HasListenerWithAddress(addr string) bool {
+	instancesMu.Lock()
+	defer instancesMu.Unlock()
+	for _, inst := range instances {
+		for _, sln := range inst.servers {
+			if listenerAddrEqual(sln.listener, addr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// listenerAddrEqual compares a listener's address with
+// addr. Extra care is taken to match addresses with an
+// empty hostname portion, as listeners tend to report
+// [::]:80, for example, when the matching address that
+// created the listener might be simply :80.
+func listenerAddrEqual(ln net.Listener, addr string) bool {
+	lnAddr := ln.Addr().String()
+	hostname, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return lnAddr == addr
+	}
+	if lnAddr == net.JoinHostPort("::", port) {
+		return true
+	}
+	if lnAddr == net.JoinHostPort("0.0.0.0", port) {
+		return true
+	}
+	return hostname != "" && lnAddr == addr
+}
+
+// TCPServer is a type that can listen and serve connections.
+// A TCPServer must associate with exactly zero or one net.Listeners.
+type TCPServer interface {
+	// Listen starts listening by creating a new listener
+	// and returning it. It does not start accepting
+	// connections. For UDP-only servers, this method
+	// can be a no-op that returns (nil, nil).
+	Listen() (net.Listener, error)
+
+	// Serve starts serving using the provided listener.
+	// Serve must start the server loop nearly immediately,
+	// or at least not return any errors before the server
+	// loop begins. Serve blocks indefinitely, or in other
+	// words, until the server is stopped. For UDP-only
+	// servers, this method can be a no-op that returns nil.
+	Serve(net.Listener) error
+}
+
+// UDPServer is a type that can listen and serve packets.
+// A UDPServer must associate with exactly zero or one net.PacketConns.
+type UDPServer interface {
+	// ListenPacket starts listening by creating a new packetconn
+	// and returning it. It does not start accepting connections.
+	// TCP-only servers may leave this method blank and return
+	// (nil, nil).
+	ListenPacket() (net.PacketConn, error)
+
+	// ServePacket starts serving using the provided packetconn.
+	// ServePacket must start the server loop nearly immediately,
+	// or at least not return any errors before the server
+	// loop begins. ServePacket blocks indefinitely, or in other
+	// words, until the server is stopped. For TCP-only servers,
+	// this method can be a no-op that returns nil.
+	ServePacket(net.PacketConn) error
+}
+
+// Server is a type that can listen and serve. It supports both
+// TCP and UDP, although the UDPServer interface can be used
+// for more than just UDP.
+//
+// If the server uses TCP, it should implement TCPServer completely.
+// If it uses UDP or some other protocol, it should implement
+// UDPServer completely. If it uses both, both interfaces should be
+// fully implemented. Any unimplemented methods should be made as
+// no-ops that simply return nil values.
+type Server interface {
+	TCPServer
+	UDPServer
+}
+
+// Stopper is a type that can stop serving. The stop
+// does not necessarily have to be graceful.
+type Stopper interface {
+	// Stop stops the server. It blocks until the
+	// server is completely stopped.
+	Stop() error
+}
+
+// GracefulServer is a Server and Stopper, the stopping
+// of which is graceful (whatever that means for the kind
+// of server being implemented). It must be able to return
+// the address it is configured to listen on so that its
+// listener can be paired with it upon graceful restarts.
+// The net.Listener that a GracefulServer creates must
+// implement the Listener interface for restarts to be
+// graceful (assuming the listener is for TCP).
+type GracefulServer interface {
+	Server
+	Stopper
+
+	// Address returns the address the server should
+	// listen on; it is used to pair the server to
+	// its listener during a graceful/zero-downtime
+	// restart. Thus when implementing this method,
+	// you must not access a listener to get the
+	// address; you must store the address the
+	// server is to serve on some other way.
+	Address() string
+}
+
+// Listener is a net.Listener with an underlying file descriptor.
+// A server's listener should implement this interface if it is
+// to support zero-downtime reloads.
+type Listener interface {
+	net.Listener
+	File() (*os.File, error)
+}
+
+// PacketConn is a net.PacketConn with an underlying file descriptor.
+// A server's packetconn should implement this interface if it is
+// to support zero-downtime reloads (in sofar this holds true for datagram
+// connections).
+type PacketConn interface {
+	net.PacketConn
+	File() (*os.File, error)
+}
+
+// AfterStartup is an interface that can be implemented
+// by a server type that wants to run some code after all
+// servers for the same Instance have started.
+type AfterStartup interface {
+	OnStartupComplete()
+}
+
+// LoadCaddyfile loads a Caddyfile by calling the plugged in
+// Caddyfile loader methods. An error is returned if more than
+// one loader returns a non-nil Caddyfile input. If no loaders
+// load a Caddyfile, the default loader is used. If no default
+// loader is registered or it returns nil, the server type's
+// default Caddyfile is loaded. If the server type does not
+// specify any default Caddyfile value, then an empty Caddyfile
+// is returned. Consequently, this function never returns a nil
+// value as long as there are no errors.
+func LoadCaddyfile(serverType string) (Input, error) {
+	// If we are finishing an upgrade, we must obtain the Caddyfile
+	// from our parent process, regardless of configured loaders.
+	if IsUpgrade() {
+		err := gob.NewDecoder(os.Stdin).Decode(&loadedGob)
+		if err != nil {
+			return nil, err
+		}
+		return loadedGob.Caddyfile, nil
+	}
+
+	// Ask plugged-in loaders for a Caddyfile
+	cdyfile, err := loadCaddyfileInput(serverType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Otherwise revert to default
+	if cdyfile == nil {
+		cdyfile = DefaultInput(serverType)
+	}
+
+	// Still nil? Geez.
+	if cdyfile == nil {
+		cdyfile = CaddyfileInput{ServerTypeName: serverType}
+	}
+
+	return cdyfile, nil
+}
+
+// Wait blocks until all of i's servers have stopped.
+func (i *Instance) Wait() {
+	i.wg.Wait()
+}
+
+// CaddyfileFromPipe loads the Caddyfile input from f if f is
+// not interactive input. f is assumed to be a pipe or stream,
+// such as os.Stdin. If f is not a pipe, no error is returned
+// but the Input value will be nil. An error is only returned
+// if there was an error reading the pipe, even if the length
+// of what was read is 0.
+func CaddyfileFromPipe(f *os.File, serverType string) (Input, error) {
+	fi, err := f.Stat()
+	if err == nil && fi.Mode()&os.ModeCharDevice == 0 {
+		// Note that a non-nil error is not a problem. Windows
+		// will not create a stdin if there is no pipe, which
+		// produces an error when calling Stat(). But Unix will
+		// make one either way, which is why we also check that
+		// bitmask.
+		// NOTE: Reading from stdin after this fails (e.g. for the let's encrypt email address) (OS X)
+		confBody, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+		return CaddyfileInput{
+			Contents:       confBody,
+			Filepath:       f.Name(),
+			ServerTypeName: serverType,
+		}, nil
+	}
+
+	// not having input from the pipe is not itself an error,
+	// just means no input to return.
+	return nil, nil
+}
+
+// Caddyfile returns the Caddyfile used to create i.
+func (i *Instance) Caddyfile() Input {
+	return i.caddyfileInput
+}
+
+// Start starts Caddy with the given Caddyfile.
+//
+// This function blocks until all the servers are listening.
+func Start(cdyfile Input) (*Instance, error) {
+	inst := &Instance{serverType: cdyfile.ServerType(), wg: new(sync.WaitGroup)}
+	err := startWithListenerFds(cdyfile, inst, nil)
+	if err != nil {
+		return inst, err
+	}
+	signalSuccessToParent()
+	if pidErr := writePidFile(); pidErr != nil {
+		log.Printf("[ERROR] Could not write pidfile: %v", pidErr)
+	}
+	return inst, nil
+}
+
+func startWithListenerFds(cdyfile Input, inst *Instance, restartFds map[string]restartTriple) error {
+	if cdyfile == nil {
+		cdyfile = CaddyfileInput{}
+	}
+
+	err := ValidateAndExecuteDirectives(cdyfile, inst, false)
 	if err != nil {
 		return err
 	}
 
-	scl := skipchain.NewClient()
-	if c.NArg() == 1 {
-		log.Info("Fetching all byzcoin-ids from the roster")
-		var scIDs []skipchain.SkipBlockID
-		for _, si := range r.List {
-			reply, err := scl.GetAllSkipChainIDs(si)
+	slist, err := inst.context.MakeServers()
+	if err != nil {
+		return err
+	}
+
+	// run startup callbacks
+	if !IsUpgrade() && restartFds == nil {
+		// first startup means not a restart or upgrade
+		for _, firstStartupFunc := range inst.onFirstStartup {
+			err = firstStartupFunc()
 			if err != nil {
-				log.Warn("Couldn't contact", si.Address, err)
-			} else {
-				scIDs = append(scIDs, reply.IDs...)
-				log.Infof("Got %d id(s) from %s", len(reply.IDs), si.Address)
+				return err
 			}
 		}
-		sort.Slice(scIDs, func(i, j int) bool {
-			return bytes.Compare(scIDs[i], scIDs[j]) < 0
-		})
-		for i := len(scIDs) - 1; i > 0; i-- {
-			if scIDs[i].Equal(scIDs[i-1]) {
-				scIDs = append(scIDs[0:i], scIDs[i+1:]...)
+	}
+	for _, startupFunc := range inst.onStartup {
+		err = startupFunc()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = startServers(slist, inst, restartFds)
+	if err != nil {
+		return err
+	}
+
+	instancesMu.Lock()
+	instances = append(instances, inst)
+	instancesMu.Unlock()
+
+	// run any AfterStartup callbacks if this is not
+	// part of a restart; then show file descriptor notice
+	if restartFds == nil {
+		for _, srvln := range inst.servers {
+			if srv, ok := srvln.server.(AfterStartup); ok {
+				srv.OnStartupComplete()
 			}
 		}
-		log.Info("All IDs available in this roster:")
-		for _, id := range scIDs {
-			log.Infof("%x", id[:])
-		}
-	} else {
-		id, err := hex.DecodeString(c.Args().Get(1))
-		if err != nil || len(id) != 32 {
-			return errors.New("second argument is not a valid ID")
-		}
-		var cl *byzcoin.Client
-		var cc *byzcoin.ChainConfig
-		for _, si := range r.List {
-			reply, err := scl.GetAllSkipChainIDs(si)
-			if err != nil {
-				log.Warn("Got error while asking", si.Address, "for skipchains")
-			}
-			found := false
-			for _, idc := range reply.IDs {
-				if idc.Equal(id) {
-					found = true
+		if !Quiet {
+			for _, srvln := range inst.servers {
+				if !IsLoopback(srvln.listener.Addr().String()) {
+					checkFdlimit()
 					break
+				// This can happen when only serving UDP or TCP
+				if srvln.listener != nil {
+					if !IsLoopback(srvln.listener.Addr().String()) {
+						checkFdlimit()
+						break
+					}
 				}
 			}
-			if found {
-				cl = byzcoin.NewClient(id, *onet.NewRoster([]*network.ServerIdentity{si}))
-				cc, err = cl.GetChainConfig()
-				if err != nil {
-					cl = nil
-					continue
+		}
+	}
+
+	mu.Lock()
+	started = true
+	mu.Unlock()
+
+	return nil
+}
+
+// ValidateAndExecuteDirectives will load the server blocks from cdyfile
+// by parsing it, then execute the directives configured by it and store
+// the resulting server blocks into inst. If justValidate is true, parse
+// callbacks will not be executed between directives, since the purpose
+// is only to check the input for valid syntax.
+func ValidateAndExecuteDirectives(cdyfile Input, inst *Instance, justValidate bool) error {
+	// If parsing only inst will be nil, create an instance for this function call only.
+	if justValidate {
+		inst = &Instance{serverType: cdyfile.ServerType(), wg: new(sync.WaitGroup)}
+	}
+
+	stypeName := cdyfile.ServerType()
+
+	stype, err := getServerType(stypeName)
+	if err != nil {
+		return err
+	}
+
+	inst.caddyfileInput = cdyfile
+
+	sblocks, err := loadServerBlocks(stypeName, cdyfile.Path(), bytes.NewReader(cdyfile.Body()))
+	if err != nil {
+		return err
+	}
+
+	inst.context = stype.NewContext()
+	if inst.context == nil {
+		return fmt.Errorf("server type %s produced a nil Context", stypeName)
+	}
+
+	sblocks, err = inst.context.InspectServerBlocks(cdyfile.Path(), sblocks)
+	if err != nil {
+		return err
+	}
+
+	return executeDirectives(inst, cdyfile.Path(), stype.Directives(), sblocks, justValidate)
+}
+
+func executeDirectives(inst *Instance, filename string,
+	directives []string, sblocks []caddyfile.ServerBlock, justValidate bool) error {
+	// map of server block ID to map of directive name to whatever.
+	storages := make(map[int]map[string]interface{})
+
+	// It is crucial that directives are executed in the proper order.
+	// We loop with the directives on the outer loop so we execute
+	// a directive for all server blocks before going to the next directive.
+	// This is important mainly due to the parsing callbacks (below).
+	for _, dir := range directives {
+		for i, sb := range sblocks {
+			var once sync.Once
+			if _, ok := storages[i]; !ok {
+				storages[i] = make(map[string]interface{})
+			}
+
+			for j, key := range sb.Keys {
+				// Execute directive if it is in the server block
+				if tokens, ok := sb.Tokens[dir]; ok {
+					controller := &Controller{
+						instance:  inst,
+						Key:       key,
+						Dispenser: caddyfile.NewDispenserTokens(filename, tokens),
+						OncePerServerBlock: func(f func() error) error {
+							var err error
+							once.Do(func() {
+								err = f()
+							})
+							return err
+						},
+						ServerBlockIndex:    i,
+						ServerBlockKeyIndex: j,
+						ServerBlockKeys:     sb.Keys,
+						ServerBlockStorage:  storages[i][dir],
+					}
+
+					setup, err := DirectiveAction(inst.serverType, dir)
+					if err != nil {
+						return err
+					}
+
+					err = setup(controller)
+					if err != nil {
+						return err
+					}
+
+					storages[i][dir] = controller.ServerBlockStorage // persist for this server block
 				}
-				cl.Roster = cc.Roster
-				break
-			}
-		}
-		if cl == nil {
-			return errors.New("didn't manage to find a node with a valid copy of the given skipchain-id")
-		}
-
-		newDarc := &darc.Darc{}
-
-		dstr := c.String("darc")
-		if dstr == "" {
-			log.Info("no darc given, will use an empty default one")
-		} else {
-
-			// Accept both plain-darcs, as well as "darc:...." darcs
-			darcID, err := lib.StringToDarcID(dstr)
-			if err != nil {
-				return errors.New("failed to parse darc: " + err.Error())
-			}
-
-			p, err := cl.GetProof(darcID)
-			if err != nil {
-				return errors.New("couldn't get proof for darc: " + err.Error())
-			}
-
-			err = p.Proof.Verify(id)
-			if err != nil {
-				return errors.New("proof for darc is wrong: " + err.Error())
-			}
-
-			_, darcBuf, cid, _, err := p.Proof.KeyValue()
-			if err != nil {
-				return errors.New("cannot get value for darc: " + err.Error())
-			}
-
-			if cid != byzcoin.ContractDarcID {
-				return errors.New("please give a darc-instance ID, not: " + cid)
-			}
-
-			newDarc, err = darc.NewFromProtobuf(darcBuf)
-			if err != nil {
-				return errors.New("invalid darc stored in byzcoin: " + err.Error())
 			}
 		}
 
-		identity := cothority.Suite.Point()
+		if !justValidate {
+			// See if there are any callbacks to execute after this directive
+			if allCallbacks, ok := parsingCallbacks[inst.serverType]; ok {
+				callbacks := allCallbacks[dir]
+				for _, callback := range callbacks {
+					if err := callback(inst.context); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
 
-		identityStr := c.String("identity")
-		if identityStr == "" {
-			log.Info("no identity provided, will use a default one")
-		} else {
-			identityBuf, err := lib.StringToEd25519Buf(identityStr)
+	return nil
+}
+
+func startServers(serverList []Server, inst *Instance, restartFds map[string]restartTriple) error {
+	errChan := make(chan error, len(serverList))
+
+	for _, s := range serverList {
+		var (
+			ln  net.Listener
+			pc  net.PacketConn
+			err error
+		)
+
+		// if performing an upgrade, obtain listener file descriptors
+		// from parent process
+		if IsUpgrade() {
+			if gs, ok := s.(GracefulServer); ok {
+				addr := gs.Address()
+				if fdIndex, ok := loadedGob.ListenerFds["tcp"+addr]; ok {
+					file := os.NewFile(fdIndex, "")
+					ln, err = net.FileListener(file)
+					if err != nil {
+						return err
+					}
+					err = file.Close()
+					if err != nil {
+						return err
+					}
+				}
+				if fdIndex, ok := loadedGob.ListenerFds["udp"+addr]; ok {
+					file := os.NewFile(fdIndex, "")
+					pc, err = net.FilePacketConn(file)
+					if err != nil {
+						return err
+					}
+					err = file.Close()
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		// If this is a reload and s is a GracefulServer,
+		// reuse the listener for a graceful restart.
+		if gs, ok := s.(GracefulServer); ok && restartFds != nil {
+			addr := gs.Address()
+			if old, ok := restartFds[addr]; ok {
+				// listener
+				if old.listener != nil {
+					file, err := old.listener.File()
+					if err != nil {
+						return err
+					}
+					ln, err = net.FileListener(file)
+					if err != nil {
+						return err
+					}
+					err = file.Close()
+					if err != nil {
+						return err
+					}
+				}
+				// packetconn
+				if old.packet != nil {
+					file, err := old.packet.File()
+					if err != nil {
+						return err
+					}
+					pc, err = net.FilePacketConn(file)
+					if err != nil {
+						return err
+					}
+					err = file.Close()
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		if ln == nil {
+			ln, err = s.Listen()
 			if err != nil {
 				return err
 			}
-
-			identity = cothority.Suite.Point()
-			err = identity.UnmarshalBinary(identityBuf)
-			if err != nil {
-				return errors.New("got an invalid identity: " + err.Error())
-			}
 		}
-
-		log.Infof("ByzCoin-config for %+x:\n"+
-			"\tRoster: %s\n"+
-			"\tBlockInterval: %s\n"+
-			"\tMacBlockSize: %d\n"+
-			"\tDarcContracts: %s",
-			id[:], cc.Roster.List, cc.BlockInterval, cc.MaxBlockSize, cc.DarcContractIDs)
-		filePath, err := lib.SaveConfig(lib.Config{
-			Roster:        cc.Roster,
-			ByzCoinID:     id,
-			AdminDarc:     *newDarc,
-			AdminIdentity: darc.NewIdentityEd25519(identity),
-		})
-		if err != nil {
-			return errors.New("while writing config-file: " + err.Error())
-		}
-		log.Info(fmt.Sprintf("Wrote config to \"%s\"", filePath))
-
-		if !c.Bool("silent") {
-			log.Info("updates the BC envvar")
-			os.Setenv("BC", filePath)
-		}
-	}
-	return nil
-}
-
-func latest(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		bcArg = c.Args().First()
-		if bcArg == "" {
-			return errors.New("--bc flag is required")
-		}
-	}
-
-	cfg, cl, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
-
-	// Allow the user to set the server number; useful when testing leader rotation.
-	cl.ServerNumber = c.Int("server")
-	if cl.ServerNumber > len(cl.Roster.List)-1 {
-		return errors.New("server index out of range")
-	}
-
-	_, err = fmt.Fprintf(c.App.Writer, "ByzCoinID: %x\n", cfg.ByzCoinID)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(c.App.Writer, "Admin DARC: %x\n", cfg.AdminDarc.GetBaseID())
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(c.App.Writer, "local roster:", fmtRoster(&cfg.Roster))
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(c.App.Writer, "contacting server:", cl.Roster.List[cl.ServerNumber])
-	if err != nil {
-		return err
-	}
-
-	// Find the latest block by asking for the Proof of the config instance.
-	p, err := cl.GetProof(byzcoin.ConfigInstanceID.Slice())
-	if err != nil {
-		return err
-	}
-
-	err = p.Proof.Verify(cfg.ByzCoinID)
-	if err != nil {
-		return err
-	}
-
-	sb := p.Proof.Latest
-	_, err = fmt.Fprintf(c.App.Writer, "Last block:\n\tIndex: %d\n\tBlockMaxHeight: %d\n\tBackLinks: %d\n\tRoster: %s\n\n",
-		sb.Index, sb.Height, len(sb.BackLinkIDs), fmtRoster(sb.Roster))
-	if err != nil {
-		return err
-	}
-
-	if c.Bool("update") {
-		cfg.Roster = *sb.Roster
-		var fn string
-		fn, err = lib.SaveConfig(cfg)
-		if err == nil {
-			_, err = fmt.Fprintln(c.App.Writer, "updated config file:", fn)
+		if pc == nil {
+			pc, err = s.ListenPacket()
 			if err != nil {
 				return err
 			}
 		}
-	}
-
-	return err
-}
-
-func fmtRoster(r *onet.Roster) string {
-	var roster []string
-	for _, s := range r.List {
-		if s.URL != "" {
-			roster = append(roster, fmt.Sprintf("%v (url: %v)", string(s.Address), s.URL))
-		} else {
-			roster = append(roster, string(s.Address))
-		}
-	}
-	return strings.Join(roster, ", ")
-}
-
-func getBcKey(c *cli.Context) (cfg lib.Config, cl *byzcoin.Client, signer *darc.Signer,
-	proof byzcoin.Proof, chainCfg byzcoin.ChainConfig, err error) {
-	if c.NArg() < 2 {
-		err = errors.New("please give the following arguments: bc-xxx.cfg key-xxx.cfg")
-		return
-	}
-	cfg, cl, err = lib.LoadConfig(c.Args().First())
-	if err != nil {
-		err = errors.New("couldn't load config file: " + err.Error())
-		return
-	}
-	signer, err = lib.LoadSigner(c.Args().Get(1))
-	if err != nil {
-		err = errors.New("couldn't load key-xxx.cfg: " + err.Error())
-		return
-	}
-
-	log.Lvl2("Getting latest chainConfig")
-	pr, err := cl.GetProof(byzcoin.ConfigInstanceID.Slice())
-	if err != nil {
-		err = errors.New("couldn't get proof for chainConfig: " + err.Error())
-		return
-	}
-	proof = pr.Proof
-
-	_, value, _, _, err := proof.KeyValue()
-	if err != nil {
-		err = errors.New("couldn't get value out of proof: " + err.Error())
-		return
-	}
-	err = protobuf.DecodeWithConstructors(value, &chainCfg, network.DefaultConstructors(cothority.Suite))
-	if err != nil {
-		err = errors.New("couldn't decode chainConfig: " + err.Error())
-		return
-	}
-	return
-}
-
-func getBcKeyPub(c *cli.Context) (cfg lib.Config, cl *byzcoin.Client, signer *darc.Signer,
-	proof byzcoin.Proof, chainCfg byzcoin.ChainConfig, pub *network.ServerIdentity, err error) {
-	cfg, cl, signer, proof, chainCfg, err = getBcKey(c)
-	if err != nil {
-		return
-	}
-
-	fn := c.Args().Get(2)
-	if fn == "" {
-		err = errors.New("no TOML file provided")
-		return
-	}
-	f, err := os.Open(fn)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	group, err := app.ReadGroupDescToml(f)
-	if err != nil {
-		err = fmt.Errorf("couldn't open %v: %v", fn, err.Error())
-		return
-	}
-	if len(group.Roster.List) != 1 {
-		err = errors.New("the TOML file should have exactly one entry")
-		return
-	}
-	pub = group.Roster.List[0]
-
-	return
-}
-
-func updateConfig(cl *byzcoin.Client, signer *darc.Signer, chainConfig byzcoin.ChainConfig) error {
-	counters, err := cl.GetSignerCounters(signer.Identity().String())
-	if err != nil {
-		return errors.New("couldn't get counters: " + err.Error())
-	}
-	counters.Counters[0]++
-	ccBuf, err := protobuf.Encode(&chainConfig)
-	if err != nil {
-		return errors.New("couldn't encode chainConfig: " + err.Error())
-	}
-	ctx := byzcoin.ClientTransaction{
-		Instructions: byzcoin.Instructions{{
-			InstanceID: byzcoin.ConfigInstanceID,
-			Invoke: &byzcoin.Invoke{
-				ContractID: byzcoin.ContractConfigID,
-				Command:    "update_config",
-				Args:       byzcoin.Arguments{{Name: "config", Value: ccBuf}},
-			},
-			SignerCounter: counters.Counters,
-		}},
-	}
-
-	err = ctx.FillSignersAndSignWith(*signer)
-	if err != nil {
-		return errors.New("couldn't sign the clientTransaction: " + err.Error())
-	}
-
-	log.Lvl1("Sending new roster to byzcoin")
-	_, err = cl.AddTransactionAndWait(ctx, 10)
-	if err != nil {
-		return errors.New("client transaction wasn't accepted: " + err.Error())
-	}
-	return nil
-}
-
-func config(c *cli.Context) error {
-	_, cl, signer, _, chainConfig, err := getBcKey(c)
-	if err != nil {
-		return err
-	}
-
-	if interval := c.String("interval"); interval != "" {
-		dur, err := time.ParseDuration(interval)
-		if err != nil {
-			return errors.New("couldn't parse interval: " + err.Error())
-		}
-		chainConfig.BlockInterval = dur
-	}
-	if blockSize := c.Int("blockSize"); blockSize > 0 {
-		if blockSize < 16000 && blockSize > 8e6 {
-			return errors.New("new blocksize out of bounds: must be between 16e3 and 8e6")
-		}
-		chainConfig.MaxBlockSize = blockSize
-	}
-
-	err = updateConfig(cl, signer, chainConfig)
-	if err != nil {
-		return err
-	}
-
-	log.Lvl1("Updated configuration")
-
-	return nil
-}
-
-func mint(c *cli.Context) error {
-	if c.NArg() < 4 {
-		return errors.New("please give the following arguments: bc-xxx.cfg key-xxx.cfg pubkey coins")
-	}
-	cfg, cl, signer, _, _, err := getBcKey(c)
-	if err != nil {
-		return err
-	}
-
-	pubBuf, err := hex.DecodeString(c.Args().Get(2))
-	if err != nil {
-		return err
-	}
-
-	h := sha256.New()
-	h.Write([]byte(contracts.ContractCoinID))
-	h.Write(pubBuf)
-	account := byzcoin.NewInstanceID(h.Sum(nil))
-
-	coins, err := strconv.ParseUint(c.Args().Get(3), 10, 64)
-	if err != nil {
-		return err
-	}
-	coinsBuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(coinsBuf, coins)
-
-	cReply, err := cl.GetSignerCounters(signer.Identity().String())
-	if err != nil {
-		return err
-	}
-	counters := cReply.Counters
-
-	p, err := cl.GetProof(account.Slice())
-	if err != nil {
-		return err
-	}
-	if !p.Proof.InclusionProof.Match(account.Slice()) {
-		log.Info("Creating darc and coin")
-		pub := cothority.Suite.Point()
-		err = pub.UnmarshalBinary(pubBuf)
-		if err != nil {
-			return err
-		}
-		pubI := darc.NewIdentityEd25519(pub)
-		rules := darc.NewRules()
-		err = rules.AddRule(darc.Action("spawn:coin"), expression.Expr(signer.Identity().String()))
-		if err != nil {
-			return err
-		}
-		err = rules.AddRule(darc.Action("invoke:coin.transfer"), expression.Expr(pubI.String()))
-		if err != nil {
-			return err
-		}
-		err = rules.AddRule(darc.Action("invoke:coin.mint"), expression.Expr(signer.Identity().String()))
-		if err != nil {
-			return err
-		}
-		d := darc.NewDarc(rules, []byte("new coin for mba"))
-		dBuf, err := d.ToProto()
-		if err != nil {
-			return err
-		}
-
-		log.Info("Creating darc for coin")
-		counters[0]++
-		ctx := byzcoin.ClientTransaction{
-			Instructions: byzcoin.Instructions{{
-				InstanceID: byzcoin.NewInstanceID(cfg.AdminDarc.GetBaseID()),
-				Spawn: &byzcoin.Spawn{
-					ContractID: byzcoin.ContractDarcID,
-					Args: byzcoin.Arguments{{
-						Name:  "darc",
-						Value: dBuf,
-					}},
-				},
-				SignerCounter: counters,
-			}},
-		}
-		err = ctx.FillSignersAndSignWith(*signer)
-		if err != nil {
-			return err
-		}
-		_, err = cl.AddTransactionAndWait(ctx, 10)
-		if err != nil {
-			return err
-		}
-
-		log.Info("Creating coin")
-		counters[0]++
-		ctx = byzcoin.ClientTransaction{
-			Instructions: byzcoin.Instructions{{
-				InstanceID: byzcoin.NewInstanceID(d.GetBaseID()),
-				Spawn: &byzcoin.Spawn{
-					ContractID: contracts.ContractCoinID,
-					Args: byzcoin.Arguments{
-						{
-							Name:  "type",
-							Value: contracts.CoinName.Slice(),
-						},
-						{
-							Name:  "coinID",
-							Value: pubBuf,
-						},
-					},
-				},
-				SignerCounter: counters,
-			}},
-		}
-		err = ctx.FillSignersAndSignWith(*signer)
-		if err != nil {
-			return err
-		}
-		_, err = cl.AddTransactionAndWait(ctx, 10)
-		if err != nil {
-			return err
-		}
-	}
-
-	log.Info("Minting coin")
-	counters[0]++
-	ctx := byzcoin.ClientTransaction{
-		Instructions: byzcoin.Instructions{{
-			InstanceID: account,
-			Invoke: &byzcoin.Invoke{
-				ContractID: contracts.ContractCoinID,
-				Command:    "mint",
-				Args: byzcoin.Arguments{{
-					Name:  "coins",
-					Value: coinsBuf,
-				}},
-			},
-			SignerCounter: counters,
-		}},
-	}
-	err = ctx.FillSignersAndSignWith(*signer)
-	if err != nil {
-		return err
-	}
-	_, err = cl.AddTransactionAndWait(ctx, 10)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Account %x created and filled with %d coins", account[:], coins)
-	return nil
-}
-
-func rosterAdd(c *cli.Context) error {
-	if c.NArg() < 3 {
-		return errors.New("please give the following arguments: bc-xxx.cfg key-xxx.cfg newServer.toml")
-	}
-	_, cl, signer, _, chainConfig, pub, err := getBcKeyPub(c)
-	if err != nil {
-		return err
-	}
-
-	old := chainConfig.Roster
-	if i, _ := old.Search(pub.ID); i >= 0 {
-		return errors.New("new node is already in roster")
-	}
-	log.Lvl2("Old roster is:", old.List)
-	chainConfig.Roster = *old.Concat(pub)
-	log.Lvl2("New roster is:", chainConfig.Roster.List)
-
-	err = updateConfig(cl, signer, chainConfig)
-	if err != nil {
-		return err
-	}
-	log.Lvl1("New roster is now active")
-	return nil
-}
-
-func rosterDel(c *cli.Context) error {
-	if c.NArg() < 3 {
-		return errors.New("please give the following arguments: bc-xxx.cfg key-xxx.cfg serverToDelete.toml")
-	}
-	_, cl, signer, _, chainConfig, pub, err := getBcKeyPub(c)
-	if err != nil {
-		return err
-	}
-
-	old := chainConfig.Roster
-	i, _ := old.Search(pub.ID)
-	switch {
-	case i < 0:
-		return errors.New("node to delete is not in roster")
-	case i == 0:
-		return errors.New("cannot delete leader from roster")
-	}
-	log.Lvl2("Old roster is:", old.List)
-	list := append(old.List[0:i], old.List[i+1:]...)
-	chainConfig.Roster = *onet.NewRoster(list)
-	log.Lvl2("New roster is:", chainConfig.Roster.List)
-
-	err = updateConfig(cl, signer, chainConfig)
-	if err != nil {
-		return err
-	}
-	log.Lvl1("New roster is now active")
-	return nil
-}
-
-func rosterLeader(c *cli.Context) error {
-	if c.NArg() < 3 {
-		return errors.New("please give the following arguments: bc-xxx.cfg key-xxx.cfg newLeader.toml")
-	}
-	_, cl, signer, _, chainConfig, pub, err := getBcKeyPub(c)
-	if err != nil {
-		return err
-	}
-
-	old := chainConfig.Roster
-	i, _ := old.Search(pub.ID)
-	switch {
-	case i < 0:
-		return errors.New("new leader is not in roster")
-	case i == 0:
-		return errors.New("new node is already leader")
-	}
-	log.Lvl2("Old roster is:", old.List)
-	list := []*network.ServerIdentity(old.List)
-	list[0], list[i] = list[i], list[0]
-	chainConfig.Roster = *onet.NewRoster(list)
-	log.Lvl2("New roster is:", chainConfig.Roster.List)
-
-	// Do it twice to make sure the new roster is active - there is an issue ;)
-	err = updateConfig(cl, signer, chainConfig)
-	if err != nil {
-		return err
-	}
-	err = updateConfig(cl, signer, chainConfig)
-	if err != nil {
-		return err
-	}
-	log.Lvl1("New roster is now active")
-	return nil
-}
-
-func key(c *cli.Context) error {
-	if f := c.String("print"); f != "" {
-		sig, err := lib.LoadSigner(f)
-		if err != nil {
-			return errors.New("couldn't load signer: " + err.Error())
-		}
-		log.Infof("Private: %s\nPublic: %s", sig.Ed25519.Secret, sig.Ed25519.Point)
-		return nil
-	}
-	newSigner := darc.NewSignerEd25519(nil, nil)
-	err := lib.SaveKey(newSigner)
-	if err != nil {
-		return err
-	}
-
-	var fo io.Writer
-
-	save := c.String("save")
-	if save == "" {
-		fo = os.Stdout
-	} else {
-		file, err := os.Create(save)
-		if err != nil {
-			return err
-		}
-		fo = file
-		defer func() {
-			err := file.Close()
-			if err != nil {
-				log.Error(err)
-			}
-		}()
-	}
-	_, err = fmt.Fprintln(fo, newSigner.Identity().String())
-	return err
-}
-
-func darcShow(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
-	}
-
-	cfg, cl, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
-
-	dstr := c.String("darc")
-	if dstr == "" {
-		dstr = cfg.AdminDarc.GetIdentityString()
-	}
-
-	d, err := lib.GetDarcByString(cl, dstr)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(c.App.Writer, d.String())
-	return err
-}
-
-func debugReplay(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return errors.New("please give the following arguments: url [bcID]")
-	}
-	if c.NArg() == 1 {
-		err := debugList(c)
-		if err != nil {
-			return err
-		}
-
-		log.Info("Please provide one of the following byzcoin ID as the second argument")
-		return nil
-	}
-
-	r := &onet.Roster{List: []*network.ServerIdentity{{
-		URL: c.Args().First(),
-		// valid server identity must have a public so we create a fake one
-		// as we are only interested in the URL.
-		Public: cothority.Suite.Point().Base(),
-	}}}
-	if r == nil {
-		return errors.New("couldn't create roster")
-	}
-	bcID, err := hex.DecodeString(c.Args().Get(1))
-	if err != nil {
-		return err
-	}
-
-	local := onet.NewLocalTest(cothority.Suite)
-	defer local.CloseAll()
-	servers := local.GenServers(1)
-	s := servers[0].Service(byzcoin.ServiceName).(*byzcoin.Service)
-
-	cl := skipchain.NewClient()
-	stack := []*skipchain.SkipBlock{}
-	cb := func(ro *onet.Roster, sib skipchain.SkipBlockID) (*skipchain.SkipBlock, error) {
-		if len(stack) > 0 {
-			// Use the blocks stored locally if possible ..
-			sb := stack[0]
-			stack = stack[1:]
 
-			// .. but only if it matches.
-			if sb.Hash.Equal(sib) {
-				return sb, nil
-			}
-		}
+		inst.wg.Add(2)
+		go func(s Server, ln net.Listener, pc net.PacketConn, inst *Instance) {
+			defer inst.wg.Done()
 
-		// Try to get more than a block at once to speed up the process.
-		blocks, err := cl.GetUpdateChainLevel(ro, sib, 1, 50)
-		if err != nil {
-			log.Info("An error occurred when getting the chain. Trying a single block.")
-			// In the worst case, it fetches only the requested block.
-			return cl.GetSingleBlock(ro, sib)
-		}
-
-		stack = blocks[1:]
-		return blocks[0], nil
-	}
-
-	log.Info("Replaying blocks")
-	_, err = s.ReplayState(bcID, r, cb)
-	if err != nil {
-		return err
-	}
-	log.Info("Successfully checked and replayed all blocks.")
-
-	return err
-}
-
-// "cDesc" stands for Change Description. This function allows one to edit the
-// description of a darc.
-func darcCdesc(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
-	}
-
-	desc := c.String("desc")
-	if desc == "" {
-		return errors.New("--desc flag is required")
-	}
-	if len(desc) > 1024 {
-		return errors.New("descriptions longer than 1024 characters are not allowed")
-	}
-
-	cfg, cl, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
-
-	dstr := c.String("dstr")
-	if dstr == "" {
-		dstr = cfg.AdminDarc.GetIdentityString()
-	}
-
-	d, err := lib.GetDarcByString(cl, dstr)
-	if err != nil {
-		return err
-	}
-
-	d2 := d.Copy()
-	err = d2.EvolveFrom(d)
-	if err != nil {
-		return err
-	}
-
-	d2.Description = []byte(desc)
-	d2Buf, err := d2.ToProto()
-	if err != nil {
-		return err
-	}
-
-	var signer *darc.Signer
-
-	sstr := c.String("sign")
-	if sstr == "" {
-		signer, err = lib.LoadKey(cfg.AdminIdentity)
-	} else {
-		signer, err = lib.LoadKeyFromString(sstr)
-	}
-	if err != nil {
-		return err
-	}
-
-	counters, err := cl.GetSignerCounters(signer.Identity().String())
-
-	invoke := byzcoin.Invoke{
-		ContractID: byzcoin.ContractDarcID,
-		Command:    "evolve",
-		Args: []byzcoin.Argument{
-			{
-				Name:  "darc",
-				Value: d2Buf,
-			},
-		},
-	}
-
-	ctx := byzcoin.ClientTransaction{
-		Instructions: []byzcoin.Instruction{
-			{
-				InstanceID:    byzcoin.NewInstanceID(d2.GetBaseID()),
-				Invoke:        &invoke,
-				SignerCounter: []uint64{counters.Counters[0] + 1},
-			},
-		},
-	}
-	err = ctx.FillSignersAndSignWith(*signer)
-	if err != nil {
-		return err
-	}
-
-	_, err = cl.AddTransactionAndWait(ctx, 10)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func debugList(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return errors.New("please give (ip:port | group.toml) as argument")
-	}
+			go func() {
+				errChan <- s.Serve(ln)
+				defer inst.wg.Done()
+			}()
+			errChan <- s.ServePacket(pc)
+		}(s, ln, pc, inst)
 
-	var urls []string
-	if f, err := os.Open(c.Args().First()); err == nil {
-		defer f.Close()
-		group, err := app.ReadGroupDescToml(f)
-		if err != nil {
-			return err
-		}
-		for _, si := range group.Roster.List {
-			if si.URL != "" {
-				urls = append(urls, si.URL)
-			} else {
-				p, err := strconv.Atoi(si.Address.Port())
-				if err != nil {
-					return err
-				}
-				urls = append(urls, fmt.Sprintf("http://%s:%d", si.Address.Host(), p+1))
-			}
-		}
-	} else {
-		urls = []string{c.Args().First()}
+		inst.servers = append(inst.servers, ServerListener{server: s, listener: ln, packet: pc})
 	}
 
-	for _, url := range urls {
-		log.Info("Contacting ", url)
-		resp, err := byzcoin.Debug(url, nil)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-		sort.SliceStable(resp.Byzcoins, func(i, j int) bool {
-			var iData byzcoin.DataHeader
-			var jData byzcoin.DataHeader
-			err := protobuf.Decode(resp.Byzcoins[i].Genesis.Data, &iData)
-			if err != nil {
-				return false
-			}
-			err = protobuf.Decode(resp.Byzcoins[j].Genesis.Data, &jData)
-			if err != nil {
-				return false
-			}
-			return iData.Timestamp > jData.Timestamp
-		})
-		for _, rb := range resp.Byzcoins {
-			log.Infof("ByzCoinID %x has", rb.ByzCoinID)
-			headerGenesis := byzcoin.DataHeader{}
-			headerLatest := byzcoin.DataHeader{}
-			err := protobuf.Decode(rb.Genesis.Data, &headerGenesis)
-			if err != nil {
-				log.Error(err)
+	// Log errors that may be returned from Serve() calls,
+	// these errors should only be occurring in the server loop.
+	go func() {
+		for err := range errChan {
+			if err == nil {
 				continue
 			}
-			err = protobuf.Decode(rb.Latest.Data, &headerLatest)
-			if err != nil {
-				log.Error(err)
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				// this error is normal when closing the listener
 				continue
 			}
-			log.Infof("\tBlocks: %d\n\tFrom %s to %s\tBlock hash: %x",
-				rb.Latest.Index,
-				time.Unix(headerGenesis.Timestamp/1e9, 0),
-				time.Unix(headerLatest.Timestamp/1e9, 0),
-				rb.Latest.Hash[:])
-			if c.Bool("verbose") {
-				log.Infof("\tRoster: %s\n\tGenesis block header: %+v\n\tLatest block header: %+v",
-					rb.Latest.Roster.List,
-					rb.Genesis.SkipBlockFix,
-					rb.Latest.SkipBlockFix)
-			}
-			log.Info()
+			log.Println(err)
 		}
-	}
+	}()
+
 	return nil
 }
 
-func debugDump(c *cli.Context) error {
-	if c.NArg() < 2 {
-		return errors.New("please give the following arguments: ip:port byzcoin-id")
+func getServerType(serverType string) (ServerType, error) {
+	stype, ok := serverTypes[serverType]
+	if ok {
+		return stype, nil
 	}
-
-	bcidBuf, err := hex.DecodeString(c.Args().Get(1))
-	if err != nil {
-		log.Error(err)
-		return err
+	if len(serverTypes) == 0 {
+		return ServerType{}, fmt.Errorf("no server types plugged in")
 	}
-	bcid := skipchain.SkipBlockID(bcidBuf)
-	resp, err := byzcoin.Debug(c.Args().First(), &bcid)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	sort.SliceStable(resp.Dump, func(i, j int) bool {
-		return bytes.Compare(resp.Dump[i].Key, resp.Dump[j].Key) < 0
-	})
-	for _, inst := range resp.Dump {
-		log.Infof("%x / %d: %s", inst.Key, inst.State.Version, string(inst.State.ContractID))
-		if c.Bool("verbose") {
-			switch inst.State.ContractID {
-			case byzcoin.ContractDarcID:
-				d, err := darc.NewFromProtobuf(inst.State.Value)
-				if err != nil {
-					log.Warn("Didn't recognize as a darc instance")
-				}
-				log.Infof("\tDesc: %s, Rules:", string(d.Description))
-				for _, r := range d.Rules.List {
-					log.Infof("\tAction: %s - Expression: %s", r.Action, r.Expr)
-				}
+	if serverType == "" {
+		if len(serverTypes) == 1 {
+			for _, stype := range serverTypes {
+				return stype, nil
 			}
 		}
+		return ServerType{}, fmt.Errorf("multiple server types available; must choose one")
 	}
+	return ServerType{}, fmt.Errorf("unknown server type '%s'", serverType)
+}
 
+func loadServerBlocks(serverType, filename string, input io.Reader) ([]caddyfile.ServerBlock, error) {
+	validDirectives := ValidDirectives(serverType)
+	serverBlocks, err := caddyfile.Parse(filename, input, validDirectives)
+	if err != nil {
+		return nil, err
+	}
+	if len(serverBlocks) == 0 && serverTypes[serverType].DefaultInput != nil {
+		newInput := serverTypes[serverType].DefaultInput()
+		serverBlocks, err = caddyfile.Parse(newInput.Path(),
+			bytes.NewReader(newInput.Body()), validDirectives)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return serverBlocks, nil
+}
+
+// Stop stops ALL servers. It blocks until they are all stopped.
+// It does NOT execute shutdown callbacks, and it deletes all
+// instances after stopping is completed. Do not re-use any
+// references to old instances after calling Stop.
+func Stop() error {
+	// This awkward for loop is to avoid a deadlock since
+	// inst.Stop() also acquires the instancesMu lock.
+	for {
+		instancesMu.Lock()
+		if len(instances) == 0 {
+			break
+		}
+		inst := instances[0]
+		instancesMu.Unlock()
+		if err := inst.Stop(); err != nil {
+			log.Printf("[ERROR] Stopping %s: %v", inst.serverType, err)
+		}
+	}
 	return nil
 }
 
-func debugRemove(c *cli.Context) error {
-	if c.NArg() < 2 {
-		return errors.New("please give the following arguments: private.toml byzcoin-id")
-	}
-
-	ccfg, err := app.LoadCothority(c.Args().First())
+// IsLoopback returns true if the hostname of addr looks
+// explicitly like a common local hostname. addr must only
+// be a host or a host:port combination.
+func IsLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return err
+		host = addr // happens if the addr is just a hostname
 	}
-	si, err := ccfg.GetServerIdentity()
-	if err != nil {
-		return err
-	}
-	bcidBuf, err := hex.DecodeString(c.Args().Get(1))
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	bcid := skipchain.SkipBlockID(bcidBuf)
-	err = byzcoin.DebugRemove(si, bcid)
-	if err != nil {
-		return err
-	}
-	log.Infof("Successfully removed ByzCoinID %x from %s", bcid, si.Address)
-	return nil
+	return host == "localhost" ||
+		strings.Trim(host, "[]") == "::1" ||
+		strings.HasPrefix(host, "127.")
 }
 
-func darcAdd(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
+// IsInternal returns true if the IP of addr
+// belongs to a private network IP range. addr must only
+// be an IP or an IP:port combination.
+// Loopback addresses are considered false.
+func IsInternal(addr string) bool {
+	privateNetworks := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"fc00::/7",
 	}
 
-	cfg, cl, err := lib.LoadConfig(bcArg)
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return err
+		host = addr // happens if the addr is just a hostname, missing port
+		// if we encounter an error, the brackets need to be stripped
+		// because SplitHostPort didn't do it for us
+		host = strings.Trim(host, "[]")
 	}
-
-	dstr := c.String("darc")
-	if dstr == "" {
-		dstr = cfg.AdminDarc.GetIdentityString()
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
 	}
-	dSpawn, err := lib.GetDarcByString(cl, dstr)
-	if err != nil {
-		return err
-	}
-
-	var signer *darc.Signer
-
-	sstr := c.String("sign")
-	if sstr == "" {
-		signer, err = lib.LoadKey(cfg.AdminIdentity)
-	} else {
-		signer, err = lib.LoadKeyFromString(sstr)
-	}
-	if err != nil {
-		return err
-	}
-
-	var identity darc.Identity
-	var newSigner *darc.Signer
-
-	owner := c.String("owner")
-	if owner != "" {
-		identity, err = darc.ParseIdentity(owner)
-		if err != nil {
-			return err
-		}
-	} else {
-		s := darc.NewSignerEd25519(nil, nil)
-		err = lib.SaveKey(s)
-		if err != nil {
-			return err
-		}
-		identity = s.Identity()
-		newSigner = &s
-	}
-
-	var desc []byte
-	if c.String("desc") == "" {
-		desc = []byte(randString(10))
-	} else {
-		if len(c.String("desc")) > 1024 {
-			return errors.New("descriptions longer than 1024 characters are not allowed")
-		}
-		desc = []byte(c.String("desc"))
-	}
-
-	rules := darc.InitRulesWith([]darc.Identity{identity}, []darc.Identity{identity}, "invoke:"+byzcoin.ContractDarcID+".evolve")
-	if c.Bool("unrestricted") {
-		err = rules.AddRule("invoke:"+byzcoin.ContractDarcID+".evolve_unrestricted", expression.Expr(identity.String()))
-		if err != nil {
-			return err
+	for _, privateNetwork := range privateNetworks {
+		_, ipnet, _ := net.ParseCIDR(privateNetwork)
+		if ipnet.Contains(ip) {
+			return true
 		}
 	}
-	d := darc.NewDarc(rules, desc)
-
-	dBuf, err := d.ToProto()
-	if err != nil {
-		return err
-	}
-
-	instID := byzcoin.NewInstanceID(dSpawn.GetBaseID())
-
-	counters, err := cl.GetSignerCounters(signer.Identity().String())
-
-	spawn := byzcoin.Spawn{
-		ContractID: byzcoin.ContractDarcID,
-		Args: []byzcoin.Argument{
-			{
-				Name:  "darc",
-				Value: dBuf,
-			},
-		},
-	}
-
-	ctx := byzcoin.ClientTransaction{
-		Instructions: []byzcoin.Instruction{
-			{
-				InstanceID:    instID,
-				Spawn:         &spawn,
-				SignerCounter: []uint64{counters.Counters[0] + 1},
-			},
-		},
-	}
-	err = ctx.FillSignersAndSignWith(*signer)
-	if err != nil {
-		return err
-	}
-
-	_, err = cl.AddTransactionAndWait(ctx, 10)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(c.App.Writer, d.String())
-	if err != nil {
-		return err
-	}
-
-	// Saving ID in special file
-	output := c.String("out_id")
-	if output != "" {
-		err = ioutil.WriteFile(output, []byte(d.GetIdentityString()), 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Saving key in special file
-	output = c.String("out_key")
-	if newSigner != nil && output != "" {
-		err = ioutil.WriteFile(output, []byte(newSigner.Identity().String()), 0600)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return false
 }
 
-func darcRule(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
-	}
-
-	cfg, cl, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
-
-	dstr := c.String("darc")
-	if dstr == "" {
-		dstr = cfg.AdminDarc.GetIdentityString()
-	}
-	d, err := lib.GetDarcByString(cl, dstr)
-	if err != nil {
-		return err
-	}
-
-	var signer *darc.Signer
-
-	sstr := c.String("sign")
-	if sstr == "" {
-		signer, err = lib.LoadKey(cfg.AdminIdentity)
-	} else {
-		signer, err = lib.LoadKeyFromString(sstr)
-	}
-	if err != nil {
-		return err
-	}
-
-	action := c.String("rule")
-	if action == "" {
-		return errors.New("--rule flag is required")
-	}
-
-	identity := c.String("identity")
-	if identity == "" {
-		if !c.Bool("delete") {
-			return errors.New("--identity flag is required")
-		}
-	}
-
-	d2 := d.Copy()
-	err = d2.EvolveFrom(d)
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case c.Bool("delete"):
-		err = d2.Rules.DeleteRules(darc.Action(action))
-	case c.Bool("replace"):
-		err = d2.Rules.UpdateRule(darc.Action(action), []byte(identity))
-	default:
-		err = d2.Rules.AddRule(darc.Action(action), []byte(identity))
-	}
-
-	if err != nil {
-		return err
-	}
-
-	d2Buf, err := d2.ToProto()
-	if err != nil {
-		return err
-	}
-
-	counters, err := cl.GetSignerCounters(signer.Identity().String())
-
-	invoke := byzcoin.Invoke{
-		ContractID: byzcoin.ContractDarcID,
-		Command:    "evolve_unrestricted",
-		Args: []byzcoin.Argument{
-			{
-				Name:  "darc",
-				Value: d2Buf,
-			},
-		},
-	}
-
-	ctx := byzcoin.ClientTransaction{
-		Instructions: []byzcoin.Instruction{
-			{
-				InstanceID:    byzcoin.NewInstanceID(d2.GetBaseID()),
-				Invoke:        &invoke,
-				SignerCounter: []uint64{counters.Counters[0] + 1},
-			},
-		},
-	}
-	err = ctx.FillSignersAndSignWith(*signer)
-	if err != nil {
-		return err
-	}
-
-	_, err = cl.AddTransactionAndWait(ctx, 10)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// Started returns true if at least one instance has been
+// started by this package. It never gets reset to false
+// once it is set to true.
+func Started() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return started
 }
 
-func qrcode(c *cli.Context) error {
-	type pair struct {
-		Priv string
-		Pub  string
-	}
-	type baseconfig struct {
-		ByzCoinID skipchain.SkipBlockID
-	}
-
-	type adminconfig struct {
-		ByzCoinID skipchain.SkipBlockID
-		Admin     pair
-	}
-
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
-	}
-
-	cfg, _, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
-
-	var toWrite []byte
-
-	if c.Bool("admin") {
-		signer, err := lib.LoadKey(cfg.AdminIdentity)
-		if err != nil {
-			return err
-		}
-
-		priv, err := signer.GetPrivate()
-		if err != nil {
-			return err
-		}
-
-		toWrite, err = json.Marshal(adminconfig{
-			ByzCoinID: cfg.ByzCoinID,
-			Admin: pair{
-				Priv: priv.String(),
-				Pub:  signer.Identity().String(),
-			},
-		})
-	} else {
-		toWrite, err = json.Marshal(baseconfig{
-			ByzCoinID: cfg.ByzCoinID,
-		})
-	}
-
-	if err != nil {
-		return err
-	}
-
-	qr, err := qrgo.NewQR(string(toWrite))
-	if err != nil {
-		return err
-	}
-
-	qr.OutputTerminal()
-
-	return nil
+// CaddyfileInput represents a Caddyfile as input
+// and is simply a convenient way to implement
+// the Input interface.
+type CaddyfileInput struct {
+	Filepath       string
+	Contents       []byte
+	ServerTypeName string
 }
 
-func getInfo(c *cli.Context) error {
-	bcArg := c.String("bc")
-	if bcArg == "" {
-		return errors.New("--bc flag is required")
-	}
+// Body returns c.Contents.
+func (c CaddyfileInput) Body() []byte { return c.Contents }
 
-	cfg, _, err := lib.LoadConfig(bcArg)
-	if err != nil {
-		return err
-	}
+// Path returns c.Filepath.
+func (c CaddyfileInput) Path() string { return c.Filepath }
 
-	log.Infof("BC configuration:\n"+
-		"\tCongig path: %s\n"+
-		"\tRoster: %s\n"+
-		"\tByzCoinID: %x\n"+
-		"\tDarc Base ID: %x\n"+
-		"\tIdentity: %s\n",
-		bcArg, cfg.Roster.List, cfg.ByzCoinID, cfg.AdminDarc.GetBaseID(), cfg.AdminIdentity.String())
+// ServerType returns c.ServerType.
+func (c CaddyfileInput) ServerType() string { return c.ServerTypeName }
 
-	return nil
+// Input represents a Caddyfile; its contents and file path
+// (which should include the file name at the end of the path).
+// If path does not apply (e.g. piped input) you may use
+// any understandable value. The path is mainly used for logging,
+// error messages, and debugging.
+type Input interface {
+	// Gets the Caddyfile contents
+	Body() []byte
+
+	// Gets the path to the origin file
+	Path() string
+
+	// The type of server this input is intended for
+	ServerType() string
 }
 
-type configPrivate struct {
-	Owner darc.Signer
-}
-
-func randString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	bigN := big.NewInt(int64(len(letters)))
-	b := make([]byte, n)
-	r := random.New()
-	for i := range b {
-		x := int(random.Int(bigN, r).Int64())
-		b[i] = letters[x]
+// DefaultInput returns the default Caddyfile input
+// to use when it is otherwise empty or missing.
+// It uses the default host and port (depends on
+// host, e.g. localhost is 2015, otherwise 443) and
+// root.
+func DefaultInput(serverType string) Input {
+	if _, ok := serverTypes[serverType]; !ok {
+		return nil
 	}
-	return string(b)
+	if serverTypes[serverType].DefaultInput == nil {
+		return nil
+	}
+	return serverTypes[serverType].DefaultInput()
 }
 
-func init() { network.RegisterMessages(&configPrivate{}) }
+// writePidFile writes the process ID to the file at PidFile.
+// It does nothing if PidFile is not set.
+func writePidFile() error {
+	if PidFile == "" {
+		return nil
+	}
+	pid := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	return ioutil.WriteFile(PidFile, pid, 0644)
+}
+
+type restartTriple struct {
+	server   GracefulServer
+	listener Listener
+	packet   PacketConn
+}
+
+var (
+	// instances is the list of running Instances.
+	instances []*Instance
+
+	// instancesMu protects instances.
+	instancesMu sync.Mutex
+)
+
+var (
+	// DefaultConfigFile is the name of the configuration file that is loaded
+	// by default if no other file is specified.
+	DefaultConfigFile = "Caddyfile"
+)
+
+// CtxKey is a value type for use with context.WithValue.
+type CtxKey string

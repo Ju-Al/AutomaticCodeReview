@@ -1,5 +1,4 @@
 // @flow
-
 import React, { Component } from 'react';
 import { intlShape, FormattedMessage, FormattedHTMLMessage } from 'react-intl';
 import vjf from 'mobx-react-form/lib/validators/VJF';
@@ -201,7 +200,7 @@ export default class DelegationStepsConfirmationDialog extends Component<Props> 
             labelDisabled
           />
         </div>
-        {oversaturationPercentage > 0 && (
+
           <OversaturationText
             oversaturationPercentage={oversaturationPercentage.toFixed()}
           />

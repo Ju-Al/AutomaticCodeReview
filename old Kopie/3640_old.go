@@ -674,7 +674,6 @@ func (s *server) readStream(ctx context.Context, tx *transaction, send func(*spa
 	return nil
 }
 
-func (s *server) buildResultSetMetaData(ri rowIter) (*spannerpb.ResultSetMetadata, error) {
 	// Build the result set metadata.
 	rsm := &spannerpb.ResultSetMetadata{
 		RowType: &spannerpb.StructType{},

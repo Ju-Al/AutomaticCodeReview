@@ -55,7 +55,6 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister):
     """
     MIRRORS_SOURCE = "https://archive.apache.org/dist/jmeter/binaries/"
     JMETER_DOWNLOAD_LINK = "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-{version}.zip"
-    PLUGINS_MANAGER = 'https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-manager/0.8/jmeter-plugins-manager-0.8.jar'
     CMDRUNNER = 'http://search.maven.org/remotecontent?filepath=kg/apc/cmdrunner/2.0/cmdrunner-2.0.jar'
     PLUGINS = ["jpgc-casutg", "jpgc-dummy", "jpgc-ffw", "jpgc-fifo", "jpgc-functions",
                "jpgc-json", "jpgc-perfmon", "jpgc-prmctl", "jpgc-tst"]

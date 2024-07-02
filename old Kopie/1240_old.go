@@ -1,7 +1,5 @@
 package ddevapp
 
-	status := GetRouterStatus()
-	badRouter := "\nThe router is not currently running. Your sites are likely inaccessible at this time.\nTry running 'ddev start' on a site to recreate the router."
 import (
 	"bytes"
 	"fmt"
@@ -145,7 +143,7 @@ func RenderRouterStatus() string {
 	case "exited":
 		fallthrough
 	default:
-		renderedStatus = color.RedString(status) + badRouter + ":" + logOutput
+		renderedStatus = color.RedString(status) + badRouter
 	}
 	return fmt.Sprintf("\nDDEV ROUTER STATUS: %v", renderedStatus)
 }

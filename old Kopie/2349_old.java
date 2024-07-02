@@ -1,5 +1,4 @@
 /*
-    this.partitions = copyList(toCopy.partitions, PartitionFieldSummary::copy);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -146,7 +145,7 @@ public class GenericManifestFile
     this.existingRowsCount = toCopy.existingRowsCount;
     this.deletedFilesCount = toCopy.deletedFilesCount;
     this.deletedRowsCount = toCopy.deletedRowsCount;
-    if (toCopy.partitions != null) {
+    this.partitions = copyList(toCopy.partitions, PartitionFieldSummary::copy);
       this.partitions = copyList(toCopy.partitions(), PartitionFieldSummary::copy)
           .toArray(new PartitionFieldSummary[0]);
     } else {

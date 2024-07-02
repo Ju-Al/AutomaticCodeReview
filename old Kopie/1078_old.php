@@ -1,5 +1,4 @@
 <?php
-
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 
 if ( ! class_exists( 'WooThemes_Sensei_Email_Teacher_Completed_Lesson' ) ) :

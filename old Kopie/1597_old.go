@@ -559,8 +559,6 @@ func (k *KeybaseServiceBase) ResolveImplicitTeamByID(
 	}
 	return res.Name, nil
 }
-
-func (k *KeybaseServiceBase) checkForRevokedVerifyingKey(
 	ctx context.Context, currUserInfo UserInfo, kid keybase1.KID) (
 	newUserInfo UserInfo, exists bool, err error) {
 	k.log.CDebugf(ctx, "Checking merkle info for user %s, revoked key %s",

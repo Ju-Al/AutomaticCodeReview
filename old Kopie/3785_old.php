@@ -1,5 +1,4 @@
 <?php
-			$type .= ' (' . $GLOBALS['TL_LANG']['MSC']['protected'] . ')';
 
 /*
  * This file is part of Contao.
@@ -1293,7 +1292,7 @@ class tl_content extends Backend
 		// Add the protection status
 		if ($arrRow['protected'])
 		{
-			$groupIds = StringUtil::deserialize($arrRow['groups'], true);
+			$type .= ' (' . $GLOBALS['TL_LANG']['MSC']['protected'] . ')';
 			$groupNames = array();
 
 			if (!empty($groupIds))

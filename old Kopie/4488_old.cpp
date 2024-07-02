@@ -3091,7 +3091,6 @@ void ActionToSphinx( Heroes & hero, const MP2::MapObjectType objectType, s32 dst
 
 void ActionToBarrier( Heroes & hero, const MP2::MapObjectType objectType, s32 dst_index )
 {
-    if ( hero.GetIndex() == dst_index ) {
         // A hero cannot stand on a barrier. He must stand in front of the barrier. Something wrong with logic!
         assert( 0 );
         return;

@@ -541,8 +541,6 @@ func (b *BootstrapProcedure) registerNodes(service, fungibleToken, flowToken flo
 		panicOnMetaInvokeErrf("failed to register node: %s", txError, err)
 	}
 }
-
-func (b *BootstrapProcedure) deployStakingProxyContract(service flow.Address) {
 	contract := contracts.FlowStakingProxy()
 	txError, err := b.vm.invokeMetaTransaction(
 		b.ctx,

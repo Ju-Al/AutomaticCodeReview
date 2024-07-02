@@ -1,5 +1,4 @@
 // Package storagetest provides utilities to assist in testing caddytls.Storage
-// implementations.
 package storagetest
 
 import (

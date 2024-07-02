@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-  return untrusted_runner_pb2.ProcessTestcaseResponse(
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -102,7 +101,7 @@ def process_testcase(request, _):
       list(request.arguments), request.testcase_path, request.output_path,
       request.timeout)
 
-  return untrusted_runner_pb2.EngineReproduceResult(
+  return untrusted_runner_pb2.ProcessTestcaseResponse(
       return_code=result.return_code,
       time_executed=result.time_executed,
       output=result.output)

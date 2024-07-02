@@ -68,7 +68,6 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 	c.expect(false, from, to, explicitPort)
 }
 
-func (c *Checker) ExpectNoneWithError(from ConnectionSource, to ConnectionTarget, ErrorStr string, explicitPort ...uint16) {
 	c.expect(false, from, to, explicitPort, ExpectWithError(ErrorStr))
 }
 

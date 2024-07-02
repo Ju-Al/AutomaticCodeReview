@@ -1,6 +1,4 @@
 module Pod
-          base = host.split('.')[-2] || host
-          base += '-' + path.gsub(/.git$/, '').gsub(/^\//, '').
   # Manages all the sources known to the running CocoaPods Instance.
   #
   class SourcesManager
@@ -424,7 +422,8 @@ module Pod
       #
       def name_for_url(url)
         base_from_host_and_path = lambda do |host, path|
-          if host.nil?
+          base = host.split('.')[-2] || host
+          base += '-' + path.gsub(/.git$/, '').gsub(/^\//, '').
             base = ''
           else
             base = host.split('.')[-2] || host

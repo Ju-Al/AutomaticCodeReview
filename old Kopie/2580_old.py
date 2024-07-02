@@ -1,7 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding: utf-8 -*-
-    coords = np.vstack([a.positions for a in args])
-    u = Universe(top, coords[None, :, :],
-
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -1501,7 +1498,8 @@ def Merge(*args):
                    residue_segindex=segidx)
 
     # Create and populate a universe
-    try:
+
+    coords = np.vstack([a.positions for a in args])
         coords = np.vstack([a.positions for a in args])
         u = Universe(top, coords[None, :, :],
                  format=MDAnalysis.coordinates.memory.MemoryReader)

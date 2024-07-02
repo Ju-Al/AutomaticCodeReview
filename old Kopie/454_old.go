@@ -1,5 +1,4 @@
 package controller
-			domainCfg.HTTP01 = &v1alpha1.ACMECertificateHTTP01Config{Ingress: ing.Name}
 
 import (
 	"context"
@@ -186,7 +185,6 @@ func (c *Controller) setIssuerSpecificConfig(crt *v1alpha1.Certificate, issuer v
 		}
 		switch challengeType {
 		case "http01":
-			editInPlace, ok := ingAnnotations[editInPlaceAnnotation]
 			// If annotation isn't present, or it's set to true, edit the existing ingress
 			if ok && editInPlace == "true" {
 				domainCfg.HTTP01 = &v1alpha1.ACMECertificateHTTP01Config{Ingress: ing.Name}

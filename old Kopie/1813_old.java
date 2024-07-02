@@ -1,8 +1,4 @@
 /*
-  protected void throwIfStopped() throws CancellationException {
-  private boolean rewardBeneficiary(
-      final Wei blockReward) {
-    if (blockReward.isZero()) {
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -249,7 +245,10 @@ public abstract class AbstractBlockCreator<C> implements AsyncBlockCreator {
     return isCancelled.get();
   }
 
-  private void throwIfStopped() throws CancellationException {
+  private boolean rewardBeneficiary(
+      final Wei blockReward) {
+    if (blockReward.isZero()) {
+  protected void throwIfStopped() throws CancellationException {
     if (isCancelled.get()) {
       throw new CancellationException();
     }

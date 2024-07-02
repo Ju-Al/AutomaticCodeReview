@@ -1,5 +1,4 @@
 /*
-  if (listenSocket_ >= 0) {
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
@@ -1325,7 +1324,7 @@ TNonblockingIOThread::~TNonblockingIOThread() {
     ownEventBase_ = false;
   }
 
-  if (listenSocket_ >= 0 && listenSocket_ != THRIFT_INVALID_SOCKET) {
+  if (listenSocket_ >= 0) {
     if (0 != ::THRIFT_CLOSESOCKET(listenSocket_)) {
       GlobalOutput.perror("TNonblockingIOThread listenSocket_ close(): ", THRIFT_GET_SOCKET_ERROR);
     }

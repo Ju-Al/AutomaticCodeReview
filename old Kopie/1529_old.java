@@ -1,5 +1,5 @@
 /*
-  V5("3.10.0", 5, V4);
+      new Message.ProtocolEncoder(ProtocolVersion.V5);
  * Copyright DataStax, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,86 +16,294 @@
  */
 package com.datastax.driver.core;
 
-import com.datastax.driver.core.exceptions.DriverInternalError;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
-import java.util.Map;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
-/** Versions of the native protocol supported by the driver. */
-public enum ProtocolVersion {
-  V1("1.2.0", 1, null),
-  V2("2.0.0", 2, V1),
-  V3("2.1.0", 3, V2),
-  V4("2.2.0", 4, V3),
-  V5("3.10.0", 5, V4),
-  V6("4.0.0", 6, V5);
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.embedded.EmbeddedChannel;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
-  /** The most recent protocol version supported by the driver. */
-  public static final ProtocolVersion NEWEST_SUPPORTED = V5;
+public class SegmentBuilderTest {
 
-  /** The most recent beta protocol version supported by the driver. */
-  public static final ProtocolVersion NEWEST_BETA = V6;
+  private static final Message.ProtocolEncoder REQUEST_ENCODER =
+      new Message.ProtocolEncoder(ProtocolVersion.V6);
 
-  private final VersionNumber minCassandraVersion;
+  // The constant names denote the total encoded size, including the frame header
+  private static final Message.Request _38B_REQUEST = new Requests.Query("SELECT * FROM table");
+  private static final Message.Request _51B_REQUEST =
+      new Requests.Query("SELECT * FROM table WHERE id = 1");
+  private static final Message.Request _1KB_REQUEST =
+      new Requests.Query(
+          "SELECT * FROM table WHERE id = ?",
+          new Requests.QueryProtocolOptions(
+              Message.Request.Type.QUERY,
+              ConsistencyLevel.ONE,
+              new ByteBuffer[] {ByteBuffer.allocate(967)},
+              Collections.<String, ByteBuffer>emptyMap(),
+              false,
+              -1,
+              null,
+              ConsistencyLevel.SERIAL,
+              Long.MIN_VALUE,
+              Integer.MIN_VALUE),
+          false);
 
-  private final int asInt;
+  private static final EmbeddedChannel MOCK_CHANNEL = new EmbeddedChannel();
+  private static final ChannelHandlerContext CONTEXT = Mockito.mock(ChannelHandlerContext.class);
 
-  private final ProtocolVersion lowerSupported;
-
-  private ProtocolVersion(String minCassandraVersion, int asInt, ProtocolVersion lowerSupported) {
-    this.minCassandraVersion = VersionNumber.parse(minCassandraVersion);
-    this.asInt = asInt;
-    this.lowerSupported = lowerSupported;
+  @BeforeClass(groups = "unit")
+  public static void setup() {
+    // This is the only method called by our test implementation
+    when(CONTEXT.newPromise())
+        .thenAnswer(
+            new Answer<ChannelPromise>() {
+              @Override
+              public ChannelPromise answer(InvocationOnMock invocation) {
+                return MOCK_CHANNEL.newPromise();
+              }
+            });
   }
 
-  VersionNumber minCassandraVersion() {
-    return minCassandraVersion;
+  @Test(groups = "unit")
+  public void should_concatenate_frames_when_under_limit() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
+
+    ChannelPromise requestPromise1 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise1);
+    ChannelPromise requestPromise2 = newPromise();
+    builder.addRequest(_51B_REQUEST, requestPromise2);
+    // Nothing produced yet since we would still have room for more frames
+    assertThat(builder.segments).isEmpty();
+
+    builder.flush();
+    assertThat(builder.segments).hasSize(1);
+    assertThat(builder.segmentPromises).hasSize(1);
+    Segment segment = builder.segments.get(0);
+    assertThat(segment.getPayload().readableBytes()).isEqualTo(38 + 51);
+    assertThat(segment.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise = builder.segmentPromises.get(0);
+    assertForwards(segmentPromise, requestPromise1, requestPromise2);
   }
 
-  DriverInternalError unsupported() {
-    return new DriverInternalError("Unsupported protocol version " + this);
+  @Test(groups = "unit")
+  public void should_start_new_segment_when_over_limit() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
+
+    ChannelPromise requestPromise1 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise1);
+    ChannelPromise requestPromise2 = newPromise();
+    builder.addRequest(_51B_REQUEST, requestPromise2);
+    ChannelPromise requestPromise3 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise3);
+    // Adding the 3rd frame brings the total size over 100, so a first segment should be emitted
+    // with the first two messages:
+    assertThat(builder.segments).hasSize(1);
+
+    ChannelPromise requestPromise4 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise4);
+    builder.flush();
+    assertThat(builder.segments).hasSize(2);
+
+    Segment segment1 = builder.segments.get(0);
+    assertThat(segment1.getPayload().readableBytes()).isEqualTo(38 + 51);
+    assertThat(segment1.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise1 = builder.segmentPromises.get(0);
+    assertForwards(segmentPromise1, requestPromise1, requestPromise2);
+    Segment segment2 = builder.segments.get(1);
+    assertThat(segment2.getPayload().readableBytes()).isEqualTo(38 + 38);
+    assertThat(segment2.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise2 = builder.segmentPromises.get(1);
+    assertForwards(segmentPromise2, requestPromise3, requestPromise4);
   }
 
-  /**
-   * Returns the version as an integer.
-   *
-   * @return the integer representation.
-   */
-  public int toInt() {
-    return asInt;
+  @Test(groups = "unit")
+  public void should_start_new_segment_when_at_limit() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 38 + 51);
+
+    ChannelPromise requestPromise1 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise1);
+    ChannelPromise requestPromise2 = newPromise();
+    builder.addRequest(_51B_REQUEST, requestPromise2);
+    ChannelPromise requestPromise3 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise3);
+    assertThat(builder.segments).hasSize(1);
+
+    ChannelPromise requestPromise4 = newPromise();
+    builder.addRequest(_51B_REQUEST, requestPromise4);
+    builder.flush();
+    assertThat(builder.segments).hasSize(2);
+
+    Segment segment1 = builder.segments.get(0);
+    assertThat(segment1.getPayload().readableBytes()).isEqualTo(38 + 51);
+    assertThat(segment1.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise1 = builder.segmentPromises.get(0);
+    assertForwards(segmentPromise1, requestPromise1, requestPromise2);
+    Segment segment2 = builder.segments.get(1);
+    assertThat(segment2.getPayload().readableBytes()).isEqualTo(38 + 51);
+    assertThat(segment2.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise2 = builder.segmentPromises.get(1);
+    assertForwards(segmentPromise2, requestPromise3, requestPromise4);
   }
 
-  /**
-   * Returns the highest supported version that is lower than this version. Returns {@code null} if
-   * there isn't such a version.
-   *
-   * @return the highest supported version that is lower than this version.
-   */
-  public ProtocolVersion getLowerSupported() {
-    return lowerSupported;
-  }
+  @Test(groups = "unit")
+  public void should_split_large_frame() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
 
-  private static final Map<Integer, ProtocolVersion> INT_TO_VERSION;
+    ChannelPromise parentPromise = newPromise();
+    builder.addRequest(_1KB_REQUEST, parentPromise);
 
-  static {
-    Builder<Integer, ProtocolVersion> builder = ImmutableMap.builder();
-    for (ProtocolVersion version : values()) {
-      builder.put(version.asInt, version);
+    assertThat(builder.segments).hasSize(11);
+    assertThat(builder.segmentPromises).hasSize(11);
+    for (int i = 0; i < 11; i++) {
+      Segment slice = builder.segments.get(i);
+      assertThat(slice.getPayload().readableBytes()).isEqualTo(i == 10 ? 24 : 100);
+      assertThat(slice.isSelfContained()).isFalse();
     }
-    INT_TO_VERSION = builder.build();
   }
 
-  /**
-   * Returns the value matching an integer version.
-   *
-   * @param i the version as an integer.
-   * @return the matching enum value.
-   * @throws IllegalArgumentException if the argument doesn't match any known version.
-   */
-  public static ProtocolVersion fromInt(int i) {
-    ProtocolVersion version = INT_TO_VERSION.get(i);
-    if (version == null)
-      throw new IllegalArgumentException("No protocol version matching integer version " + i);
-    return version;
+  @Test(groups = "unit")
+  public void should_succeed_parent_write_if_all_slices_successful() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
+
+    ChannelPromise parentPromise = newPromise();
+    builder.addRequest(_1KB_REQUEST, parentPromise);
+
+    assertThat(builder.segments).hasSize(11);
+    assertThat(builder.segmentPromises).hasSize(11);
+
+    for (int i = 0; i < 11; i++) {
+      assertThat(parentPromise.isDone()).isFalse();
+      builder.segmentPromises.get(i).setSuccess();
+    }
+
+    assertThat(parentPromise.isDone()).isTrue();
+  }
+
+  @Test(groups = "unit")
+  public void should_fail_parent_write_if_any_slice_fails() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
+
+    ChannelPromise parentPromise = newPromise();
+    builder.addRequest(_1KB_REQUEST, parentPromise);
+
+    assertThat(builder.segments).hasSize(11);
+
+    // Complete a few slices successfully
+    for (int i = 0; i < 5; i++) {
+      builder.segmentPromises.get(i).setSuccess();
+    }
+    assertThat(parentPromise.isDone()).isFalse();
+
+    // Fail a slice, the parent should fail immediately
+    Exception mockException = new Exception("test");
+    builder.segmentPromises.get(5).setFailure(mockException);
+    assertThat(parentPromise.isDone()).isTrue();
+    assertThat(parentPromise.cause()).isEqualTo(mockException);
+
+    // The remaining slices should have been cancelled
+    for (int i = 6; i < 11; i++) {
+      assertThat(builder.segmentPromises.get(i).isCancelled()).isTrue();
+    }
+  }
+
+  @Test(groups = "unit")
+  public void should_split_large_frame_when_exact_multiple() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 256);
+
+    ChannelPromise parentPromise = newPromise();
+    builder.addRequest(_1KB_REQUEST, parentPromise);
+
+    assertThat(builder.segments).hasSize(4);
+    assertThat(builder.segmentPromises).hasSize(4);
+    for (int i = 0; i < 4; i++) {
+      Segment slice = builder.segments.get(i);
+      assertThat(slice.getPayload().readableBytes()).isEqualTo(256);
+      assertThat(slice.isSelfContained()).isFalse();
+    }
+  }
+
+  @Test(groups = "unit")
+  public void should_mix_small_frames_and_large_frames() {
+    TestSegmentBuilder builder = new TestSegmentBuilder(CONTEXT, 100);
+
+    ChannelPromise requestPromise1 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise1);
+    ChannelPromise requestPromise2 = newPromise();
+    builder.addRequest(_51B_REQUEST, requestPromise2);
+
+    // Large frame: process immediately, does not impact accumulated small frames
+    ChannelPromise requestPromise3 = newPromise();
+    builder.addRequest(_1KB_REQUEST, requestPromise3);
+    assertThat(builder.segments).hasSize(11);
+
+    // Another small frames bring us above the limit
+    ChannelPromise requestPromise4 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise4);
+    assertThat(builder.segments).hasSize(12);
+
+    // One last frame and finish
+    ChannelPromise requestPromise5 = newPromise();
+    builder.addRequest(_38B_REQUEST, requestPromise5);
+    builder.flush();
+    assertThat(builder.segments).hasSize(13);
+    assertThat(builder.segmentPromises).hasSize(13);
+
+    for (int i = 0; i < 11; i++) {
+      Segment slice = builder.segments.get(i);
+      assertThat(slice.getPayload().readableBytes()).isEqualTo(i == 10 ? 24 : 100);
+      assertThat(slice.isSelfContained()).isFalse();
+    }
+
+    Segment smallMessages1 = builder.segments.get(11);
+    assertThat(smallMessages1.getPayload().readableBytes()).isEqualTo(38 + 51);
+    assertThat(smallMessages1.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise1 = builder.segmentPromises.get(11);
+    assertForwards(segmentPromise1, requestPromise1, requestPromise2);
+    Segment smallMessages2 = builder.segments.get(12);
+    assertThat(smallMessages2.getPayload().readableBytes()).isEqualTo(38 + 38);
+    assertThat(smallMessages2.isSelfContained()).isTrue();
+    ChannelPromise segmentPromise2 = builder.segmentPromises.get(12);
+    assertForwards(segmentPromise2, requestPromise4, requestPromise5);
+  }
+
+  private static ChannelPromise newPromise() {
+    return MOCK_CHANNEL.newPromise();
+  }
+
+  private void assertForwards(ChannelPromise segmentPromise, ChannelPromise... requestPromises) {
+    for (ChannelPromise requestPromise : requestPromises) {
+      assertThat(requestPromise.isDone()).isFalse();
+    }
+    segmentPromise.setSuccess();
+    for (ChannelPromise requestPromise : requestPromises) {
+      assertThat(requestPromise.isSuccess()).isTrue();
+    }
+  }
+
+  // Test implementation that simply stores segments and promises in the order they were produced.
+  static class TestSegmentBuilder extends SegmentBuilder {
+
+    List<Segment> segments = new ArrayList<Segment>();
+    List<ChannelPromise> segmentPromises = new ArrayList<ChannelPromise>();
+
+    TestSegmentBuilder(ChannelHandlerContext context, int maxPayloadLength) {
+      super(context, ByteBufAllocator.DEFAULT, REQUEST_ENCODER, maxPayloadLength);
+    }
+
+    @Override
+    protected void processSegment(Segment segment, ChannelPromise segmentPromise) {
+      segments.add(segment);
+      segmentPromises.add(segmentPromise);
+    }
   }
 }

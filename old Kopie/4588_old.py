@@ -1,8 +1,4 @@
 """
-    """Returns a new graph that contains only the edges that exist in
-    The node sets of H and G must be the same.
-
-       A NetworkX graph.  G and H must have the same node sets.
 Operations on graphs including union, intersection, difference.
 """
 import networkx as nx
@@ -141,7 +137,10 @@ def disjoint_union(G, H):
 
 
 def intersection(G, H):
-    """Returns a new graph that contains only the nodes and the edges that exist in
+    The node sets of H and G must be the same.
+
+       A NetworkX graph.  G and H must have the same node sets.
+    """Returns a new graph that contains only the edges that exist in
     both G and H.
 
     Parameters

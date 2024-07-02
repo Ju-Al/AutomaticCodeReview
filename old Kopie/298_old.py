@@ -1346,8 +1346,6 @@ class SovrinCli(PlenumCli):
             else:
                 self._printNoClaimFoundMsg()
             return True
-
-    def _change_current_key_req(self, matchedVars):
         if matchedVars.get('change_ckey') == changeKeyCmd.id:
             if not self.canMakeSovrinRequest:
                 return True

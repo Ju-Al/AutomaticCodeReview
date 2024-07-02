@@ -1,100 +1,101 @@
-ActiveAdmin.register Flag do
-  config.filters = false
+require 'rails_helper'
+RSpec.describe 'Admin Flags', type: :system do
+  let!(:flag) { create(:flag, project_submission: project_submission) }
+  let(:user) { create(:user, admin: true) }
+  let(:project_submission) { create(:project_submission, lesson: lesson, user: submission_owner) }
+  let(:lesson) { create(:lesson, is_project: true, accepts_submission: true) }
+  let(:submission_owner) { create(:user, username: 'Simon Bell', email: 'simon@example.com', password: 'pa55word') }
 
-  actions :all, except: %i[destroy new edit]
+  before do
+    sign_in(user)
+    visit admin_flags_path
 
-  menu priority: 2
-  config.batch_actions = false
-
-  permit_params :status, :taken_action
-
-  scope :active, default: true
-  scope :resolved
-
-  member_action :ban_flagged_user, method: :post
-  member_action :dismiss, method: :post
-  member_action :remove_project_submission, method: :post
-
-  index do
-    selectable_column
-    id_column
-
-    column :reason
-    column :status
-    column :taken_action
-  end
-
-  show do |flag|
-    attributes_table do
-      row :flagger
-      row :reason
-      row :submission_ower do
-        flag.project_submission.user.username
-      end
-      row :lesson do
-        link_to(
-          flag.project_submission.lesson.title,
-          path_course_lesson_path(
-            flag.project_submission.lesson.path,
-            flag.project_submission.lesson.course,
-            flag.project_submission.lesson
-          ),
-          target: '_blank'
-        )
-      end
-      row :repo_url do
-        link_to flag.project_submission.repo_url, flag.project_submission.repo_url, target: '_blank'
-      end
-      row :live_preview_url do
-        link_to flag.project_submission.live_preview_url, flag.project_submission.live_preview_url, target: '_blank'
-      end
-      row :status
-      row :taken_action
-      row :created_at
-      row :number_of_times_flagger_has_had_a_dismissed_flag do
-        flag.flagger.dismissed_flags.size
-      end
-      row :project_submission_flag_count do
-        flags = Flag.where(project_submission: flag.project_submission)
-        active = flags.count { |r| r.status == 'active' }
-        resolved = flags.count { |r| r.status == 'resolved' }
-        "#{flags.count} (#{active} active, #{resolved} resolved)"
-      end
-
-      render 'flag_actions', flag: flag
+    within("#flag_#{flag.id}") do
+      find('a.resource_id_link').click
     end
   end
 
-  controller do
-    def ban_flagged_user
-      result = Admin::Flags::BanUser.call(current_user, flag: resource)
-
-      if result.success?
-        redirect_to resource_path(resource), notice: 'Success: User has been banned.'
-      else
-        redirect_to resource_path(resource), notice: 'Failure: Unable to ban user, please check logs.'
+  context 'when handling the flag by dismissing it' do
+    before do
+      page.accept_confirm do
+        find(:test_id, 'dismiss-flag-btn').click
       end
     end
 
-    def dismiss
-      result = Admin::Flags::Dismiss.call(current_user, flag: resource)
+    it 'lets the admin know the flag has been successfully dismissed' do
+      expect(page).to have_current_path(admin_flag_path(flag))
+      expect(page).to have_content('Success: Flag has been dismissed.')
+    end
 
-      if result.success?
-        redirect_to resource_path(resource), notice: 'Success: Flag has been dismissed.'
-      else
-        redirect_to resource_path(resource), notice: 'Failure: Unable to dismiss flag, please check logs.'
+    it 'disables the flag action buttons' do
+      expect(find(:test_id, 'dismiss-flag-btn')).to be_disabled
+      expect(find(:test_id, 'remove-submission-btn')).to be_disabled
+      expect(find(:test_id, 'ban-user-btn')).to be_disabled
+    end
+  end
+
+  context 'when handling the flag by removing the submission' do
+    before do
+      page.accept_confirm do
+        find(:test_id, 'remove-submission-btn').click
       end
     end
 
-    def remove_project_submission
-      redirect_to admin_flags_path, notice: 'Success: Submission has been removed.'
-      resource.project_submission.destroy
+    it 'lets the admin know the submission has been successfully removed' do
+      expect(page).to have_current_path(admin_flags_path)
+      expect(page).to have_content('Success: Submission has been removed.')
+    end
 
-      if result.success?
-        resource.project_submission.discard
-        redirect_to admin_flags_path, notice: 'Success: Submission has been removed.'
-      else
-        redirect_to admin_flags_path, notice: 'Failure: Unable to remove project, please check logs.'
+    it 'removes the submission from the lesson page' do
+      visit path_course_lesson_path(lesson.course.path, lesson.course, lesson)
+
+      within(:test_id, 'submissions-list') do
+        expect(page).not_to have_content(submission_owner.username)
+      end
+    end
+
+    it 'shows the flag in the resolved list' do
+      visit '/admin/flags?scope=resolved'
+
+      expect(page).to have_content(flag.id)
+    end
+  end
+
+  context 'when handling the flag by banning the submission owner' do
+    before do
+      page.accept_confirm do
+        find(:test_id, 'ban-user-btn').click
+      end
+    end
+
+    it 'lets the admin know the user has been successfully banned' do
+      expect(page).to have_current_path(admin_flag_path(flag))
+      expect(page).to have_content('Success: User has been banned.')
+    end
+
+    it 'disables the flag action buttons' do
+      expect(find(:test_id, 'dismiss-flag-btn')).to be_disabled
+      expect(find(:test_id, 'remove-submission-btn')).to be_disabled
+      expect(find(:test_id, 'ban-user-btn')).to be_disabled
+    end
+
+    it 'removes the submission from the lesson' do
+      visit path_course_lesson_path(lesson.course.path, lesson.course, lesson)
+
+      within(:test_id, 'submissions-list') do
+        expect(page).not_to have_content(submission_owner.username)
+      end
+    end
+
+    it 'prohibits the banned user from logging in again' do
+      using_session('the_banned_user') do
+        visit new_user_session_path
+        find(:test_id, 'email-field').fill_in(with: submission_owner.email)
+        find(:test_id, 'password-field').fill_in(with: submission_owner.password)
+        find(:test_id, 'submit-btn').click
+
+        expect(page).to have_current_path(new_user_session_path)
+        expect(find(:test_id, 'flash')).to have_text('Your user account has been banned')
       end
     end
   end

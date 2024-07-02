@@ -38,7 +38,6 @@ class Sensei_Usage_Tracking_Data {
 		);
 	}
 
-	/**
 	 * Get the number of courses that have a video set.
 	 *
 	 * @since 1.9.20

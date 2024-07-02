@@ -77,7 +77,6 @@ class Plugin {
 
 			Deactivation_Intent::load( new Deactivation_Intent_Render( $this->template_path . '/deactivation-intent' ), $this->options_api, $this->options );
 		}
-
 		$woocommerce = Plugins\Ecommerce\WC_Factory::create();
 		$woocommerce->init();
 	}

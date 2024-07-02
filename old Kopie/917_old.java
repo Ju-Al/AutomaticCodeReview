@@ -1,6 +1,4 @@
 /*
-        .returns("city=Topeka\n"
-            + "city=San Francisco\n")
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -384,7 +382,8 @@ public class GeodeBookstoreTest extends AbstractGeodeTest {
     calciteAssert()
         .query("select primaryAddress['city'] as city from geode.BookCustomer limit 2")
         .returnsCount(2)
-        .returns("city=TOPEKA\n"
+        .returns("city=Topeka\n"
+            + "city=San Francisco\n")
             + "city=SAN FRANCISCO\n")
         .explainContains("PLAN=GeodeToEnumerableConverter\n"
             + "  GeodeProject(city=[ITEM($3, 'city')])\n"

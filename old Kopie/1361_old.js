@@ -231,7 +231,6 @@ class Realm {
      * @returns {true} if compaction succeeds.
      */
     compact() {}
-
     /**
      * If the Realm is a partially synchronized Realm, fetch and synchronize the objects
      * of a given object type that match the given query (in string format).

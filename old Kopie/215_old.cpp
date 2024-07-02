@@ -3259,7 +3259,6 @@ void GenerateSitRepMessage::Execute(const ScriptingContext& context) const {
         }
     }
 
-    raw_sitrep_template = raw_sitrep_template && m_affiliation == AFFIL_SELF;
 
     // whom to send to?
     std::set<int> recipient_empire_ids;

@@ -799,7 +799,6 @@ class File(BaseType):
 
     typestr = 'file'
 
-    def transform(self, value):
         if not value:
             return None
         value = os.path.expanduser(value)

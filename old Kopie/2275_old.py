@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -350,7 +349,7 @@ class _ImmutableBase(object):
     #  cache lookup if the class is reused (as in ag._derived_class(...)).
     __new__ = object.__new__
 
-def check_pbc_and_unwrap(function):
+
     """Decorator to raise ValueError when both 'pbc' and 'unwrap' are set to True.
     """
     @functools.wraps(function)

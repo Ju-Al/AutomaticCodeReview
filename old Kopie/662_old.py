@@ -405,8 +405,6 @@ class LayerSampler(NodeFlowSampler):
             self._neighbor_type))
         nflows = [NodeFlow(self.g, hdl) for hdl in handles]
         return nflows
-
-
 class EdgeSampler(object):
     '''Base class that generates NodeFlows for link prediction.
 

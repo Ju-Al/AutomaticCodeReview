@@ -491,8 +491,6 @@ bool ServerFSM::EstablishPlayer(const PlayerConnectionPtr& player_connection,
 
     return client_type != Networking::INVALID_CLIENT_TYPE;
 }
-
-std::string ServerFSM::GetAutoSaveFileName() {
     std::string subdir = GetGalaxySetupData().GetGameUID();
     boost::filesystem::path autosave_dir_path = GetServerSaveDir() / (subdir.empty() ? "auto" : subdir);
     const auto& extension = MP_SAVE_FILE_EXTENSION;

@@ -86,7 +86,6 @@ type Props = {
   onStopEditing: Function,
   onCancelEditing: Function,
   onResyncWallet: Function,
-  onRecoveryPhraseVerify: Function,
   nameValidator: Function,
   activeField: ?string,
   isSubmitting: boolean,

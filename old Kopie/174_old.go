@@ -214,9 +214,6 @@ func (graph *BuildGraph) linkDependencies(fromTarget, toTarget *BuildTarget) {
 			graph.addPendingRevDep(fromTarget.Label, label, toTarget)
 		}
 	}
-}
-
-// checkArchitectureCompatibility checks that two targets have compatible architectures. It panics if they don't.
 func checkArchitectureCompatibility(from, to *BuildTarget) {
 	if from.Label.Arch != "" && to.Label.Arch != "" && from.Label.Arch != to.Label.Arch {
 		panic(fmt.Sprintf("%s requires a dependency on %s, but it's not available for that architecture", from.Label, to.Label.toArch("")))

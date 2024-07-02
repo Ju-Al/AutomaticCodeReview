@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	svcFlagShort  = "s"
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -97,7 +96,7 @@ const (
 	nameFlagShort = "n"
 	appFlagShort  = "a"
 	envFlagShort  = "e"
-	wkldFlagShort = "w"
+	svcFlagShort  = "s"
 	typeFlagShort = "t"
 
 	dockerFileFlagShort        = "d"

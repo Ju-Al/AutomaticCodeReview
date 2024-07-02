@@ -1,5 +1,4 @@
 // Copyright (c) 2017 Tigera, Inc. All rights reserved.
-				ns_out, err := clientset.CoreV1().Namespaces().Update(ns_in)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +85,7 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 					panic(err)
 				}
 				ns_in.ObjectMeta.Labels["maturity"] = changeTo[ii]
-				ns_out, _ := clientset.CoreV1().Namespaces().Update(ns_in)
+				ns_out, err := clientset.CoreV1().Namespaces().Update(ns_in)
 				log.WithField("ns_out", ns_out).Debug("Updated namespace")
 			}
 		}

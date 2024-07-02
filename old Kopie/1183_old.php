@@ -1,5 +1,4 @@
 <?php
-	// This is kinda simple!
 
 /**
  * This file handles tasks related to personal messages. It performs all
@@ -1012,6 +1011,7 @@ function loadPMs($pm_options, $id_member)
 					'deleted_by' => 0,
 					'sort' => $pm_options['sort_by_query'],
 					'pm_member' => $pm_options['folder'] == 'sent' ? 'pmr.id_member' : 'pm.id_member_from',
+	// This is kinda simple!
 					'pmsg' => isset($pm_options['pmsg']) ? (int) $pm_options['pmsg'] : 0,
 				)
 			);

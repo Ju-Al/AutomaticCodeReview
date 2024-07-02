@@ -87,7 +87,6 @@ record_type events::bro_conn_log_layout() {
   return const_bro_conn_log_slices[0]->layout();
 }
 
-slice_list events::copy(slice_list xs) {
   slice_list result;
   result.reserve(xs.size());
   for (auto& x : xs)

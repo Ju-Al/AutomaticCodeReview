@@ -1,126 +1,78 @@
-package svid
+package telemetry
 
-func (r *rotator) rotateSVID(ctx context.Context) error {
 import (
-	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"net/url"
-	"path"
+	"io"
 	"time"
 
-	"github.com/imkira/go-observer"
-	"github.com/spiffe/spire/pkg/common/telemetry"
-	"github.com/spiffe/spire/pkg/common/util"
+	"github.com/armon/go-metrics"
 )
 
-type Rotator interface {
-	Initialize(ctx context.Context) error
-	Run(ctx context.Context) error
+type Label = metrics.Label
+type Sink = metrics.MetricSink
 
-	State() State
-	Subscribe() observer.Stream
+type Metrics interface {
+	// A Gauge should retain the last value it is set to
+	SetGauge(key []string, val float32)
+	SetGaugeWithLabels(key []string, val float32, labels []Label)
+
+	// Should emit a Key/Value pair for each call
+	EmitKey(key []string, val float32)
+
+	// Counters should accumulate values
+	IncrCounter(key []string, val float32)
+	IncrCounterWithLabels(key []string, val float32, labels []Label)
+
+	// Samples are for timing information, where quantiles are used
+	AddSample(key []string, val float32)
+	AddSampleWithLabels(key []string, val float32, labels []Label)
+
+	// A convenience function for measuring elapsed time with a single line
+	MeasureSince(key []string, start time.Time)
+	MeasureSinceWithLabels(key []string, start time.Time, labels []Label)
 }
 
-type rotator struct {
-	c *RotatorConfig
+type MetricsConfig struct {
+	Logger      io.Writer
+	ServiceName string
+	Sinks       []Sink
+}
 
-	state observer.Property
+type MetricsImpl struct {
+	*metrics.Metrics
 
-	hooks struct {
-		now func() time.Time
+	inmemSignal *metrics.InmemSignal
+}
+
+var _ Metrics = (*MetricsImpl)(nil)
+
+// NewMetrics returns a Metric implementation
+func NewMetrics(c *MetricsConfig) *MetricsImpl {
+	// Always create an in-memory sink
+	interval := 1 * time.Second
+	//interval := 1 * time.Second
+	retention := 1 * time.Hour
+	inmemSink := metrics.NewInmemSink(interval, retention)
+
+	// Allow the in-memory sink to be signaled, printing stats to the log
+	inmemSignal := metrics.NewInmemSignal(inmemSink, metrics.DefaultSignal, c.Logger)
+
+	// Although New returns an error type, there is no codepath for non-nil
+	// error and the implementation is currently no-fail.
+	sinks := metrics.FanoutSink{inmemSink}
+	sinks = append(sinks, c.Sinks...)
+
+	conf := metrics.DefaultConfig(c.ServiceName)
+	conf.EnableHostname = true
+	conf.EnableHostnameLabel = true
+	//conf.ProfileInterval = time.Minute
+	m, _ := metrics.New(conf, sinks)
+
+	return &MetricsImpl{
+		Metrics:     m,
+		inmemSignal: inmemSignal,
 	}
 }
 
-type State struct {
-	SVID []*x509.Certificate
-	Key  *ecdsa.PrivateKey
-}
-
-// Start generates a new SVID and then starts the rotator.
-func (r *rotator) Initialize(ctx context.Context) error {
-	return r.rotateSVID(ctx)
-}
-
-func (r *rotator) State() State {
-	return r.state.Value().(State)
-}
-
-func (r *rotator) Subscribe() observer.Stream {
-	return r.state.Observe()
-}
-
-// Run starts a ticker which monitors the server SVID
-// for expiration and rotates the SVID as necessary.
-func (r *rotator) Run(ctx context.Context) error {
-	t := time.NewTicker(r.c.Interval)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			r.c.Log.Debug("Stopping SVID rotator")
-			return nil
-		case <-t.C:
-			if r.shouldRotate() {
-				if err := r.rotateSVID(ctx); err != nil {
-					r.c.Log.Errorf("Could not rotate server SVID: %v", err)
-				}
-			}
-		}
-	}
-}
-
-// shouldRotate returns a boolean informing the caller of whether or not the
-// SVID should be rotated.
-func (r *rotator) shouldRotate() bool {
-	s := r.state.Value().(State)
-
-	if len(s.SVID) == 0 {
-		return true
-	}
-
-	ttl := s.SVID[0].NotAfter.Sub(r.hooks.now())
-	watermark := s.SVID[0].NotAfter.Sub(s.SVID[0].NotBefore) / 2
-
-	return (ttl < watermark)
-}
-
-// rotateSVID cuts a new server SVID from the CA plugin and installs
-// it on the endpoints struct. Also updates the CA certificates.
-func (r *rotator) rotateSVID(ctx context.Context) (err error) {
-	defer telemetry.CountCall(r.c.Metrics, &err, "rotate", "svid")()
-	r.c.Log.Debug("Rotating server SVID")
-
-	id := &url.URL{
-		Scheme: "spiffe",
-		Host:   r.c.TrustDomain.Host,
-		Path:   path.Join("spire", "server"),
-	}
-
-	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	if err != nil {
-		return err
-	}
-
-	csr, err := util.MakeCSR(key, id.String())
-	if err != nil {
-		return err
-	}
-
-	// Sign the CSR
-	svid, err := r.c.ServerCA.SignX509SVID(ctx, csr, 0)
-	if err != nil {
-		return err
-	}
-
-	s := State{
-		SVID: svid,
-		Key:  key,
-	}
-
-	r.state.Update(s)
-	return nil
+func (t *MetricsImpl) Stop() {
+	t.inmemSignal.Stop()
 }

@@ -693,7 +693,6 @@ namespace model {
       return result;
     }
 
-    bool SizingSystem_Impl::setOccupantDiversity(boost::optional<double> occupantDiversity) {
       bool result(false);
       if (occupantDiversity) {
         result = setDouble(OS_Sizing_SystemFields::OccupantDiversity, occupantDiversity.get());

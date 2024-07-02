@@ -1,5 +1,4 @@
 #
-    cpp_iterator_cname = None
 #   Parse tree nodes for expressions
 #
 
@@ -2662,7 +2661,7 @@ class IteratorNode(ExprNode):
     type = py_object_type
     iter_func_ptr = None
     counter_cname = None
-    cpp_sequence_cname = None
+    cpp_iterator_cname = None
     cpp_attribute_op = "."
     reversed = False      # currently only used for list/tuple types (see Optimize.py)
     is_async = False

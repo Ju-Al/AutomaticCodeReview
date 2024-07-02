@@ -1,5 +1,4 @@
 # -------------------------------------------------------------------------
-                 db_version_info):
 #                     The CodeChecker Infrastructure
 #   This file is distributed under the University of Illinois Open Source
 #   License. See LICENSE.TXT for details.
@@ -90,7 +89,7 @@ class ThriftRequestHandler():
                  checker_md_docs,
                  checker_md_docs_map,
                  suppress_handler,
-                 db_version_info,
+                 db_version_info):
                  version):
 
         self.__checker_md_docs = checker_md_docs

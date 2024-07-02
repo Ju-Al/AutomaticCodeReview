@@ -1,5 +1,4 @@
 import { Magento2 } from '../../../RestApi';
-    const accountInfo = getAccountInformation(checkout);
 import BrowserPersistence from '../../../util/simplePersistence';
 import { closeDrawer } from '../app';
 import { clearCartId, createCart } from '../cart';
@@ -301,7 +300,7 @@ export const submitOrder = () =>
 
 export const createAccount = history => async (dispatch, getState) => {
     const { checkout } = getState();
-
+    const accountInfo = getAccountInformation(checkout);
     const {
         email,
         firstname: firstName,

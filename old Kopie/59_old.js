@@ -21,8 +21,6 @@ const cloneRepository = async function (options, progress) {
 
   const { directory, template } = options;
 
-  const latestStableVersion = await runtimes.getLatestStableVersion();
-
   const wolkenkitUrl = `https://docs.wolkenkit.io/${latestStableVersion}/getting-started/installing-wolkenkit/verifying-system-requirements/`
 
   const matches = template.match(/^((?:git:|ssh:|https:\/\/|git@[\w.]+)[\w.@:/~_-]+(?:\.git)?\/?)(?:#([a-zA-Z0-9/.\-_]+))?$/);

@@ -1,5 +1,4 @@
 /*
-    TServerSocket sock2("this.is.truly.an.unrecognizable.address.", m_serverPort);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
@@ -41,7 +40,7 @@ BOOST_AUTO_TEST_CASE( test_bind_to_address )
     accepted->close();
     sock1.close();
 
-    std::cout << "An error message from getaddrinfo on the console is expected:" << std::endl;
+    TServerSocket sock2("this.is.truly.an.unrecognizable.address.", m_serverPort);
     TServerSocket sock2("257.258.259.260", m_serverPort);
     BOOST_CHECK_THROW(sock2.listen(), TTransportException);
     sock2.close();

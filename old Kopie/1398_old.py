@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-      use_radamsa_mutator_plugin(extra_env)):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1705,7 +1704,7 @@ def pick_strategies(strategy_pool, fuzzer_path, corpus_directory,
     fuzzing_strategies.append(strategy.MUTATOR_PLUGIN_STRATEGY.name)
 
   if (strategy_pool.do_strategy(strategy.MUTATOR_PLUGIN_RADAMSA_STRATEGY) and
-      use_radamsa_mutator_plugin(extra_env)
+      use_radamsa_mutator_plugin(extra_env)):
      ) and not fuzzing_strategies.contains(
          strategy.MUTATOR_PLUGIN_STRATEGY.name):
     fuzzing_strategies.append(strategy.MUTATOR_PLUGIN_RADAMSA_STRATEGY.name)

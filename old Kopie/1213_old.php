@@ -1,6 +1,4 @@
 <?php
-        if ($ticket->setStatus($status, $_REQUEST['comments'])) {
-        $errors['err'] = __('Error updating ticket status');
 /*********************************************************************
     ajax.tickets.php
 
@@ -801,7 +799,8 @@ class TicketsAjaxAPI extends AjaxController {
             }
         }
 
-        if (!$errors && $ticket->setStatus($status, $_REQUEST['comments'])) {
+        $errors['err'] = __('Error updating ticket status');
+        if ($ticket->setStatus($status, $_REQUEST['comments'])) {
             $_SESSION['::sysmsgs']['msg'] = sprintf(
                     __('Successfully updated status to %s'),
                     $status->getName());

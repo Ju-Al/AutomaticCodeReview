@@ -1,6 +1,4 @@
 #include <QApplication>
-    if (bgPixmap.isNull())
-        painter->fillRect(boundingRect(), QColor(0, 0, 100));
 #include <QGraphicsSceneMouseEvent>
 #include <math.h>
 #include "deckview.h"
@@ -148,7 +146,8 @@ void DeckViewCardContainer::paint(QPainter *painter, const QStyleOptionGraphicsI
 {
     qreal totalTextWidth = getCardTypeTextWidth();
     
-    if (bgPixmap.isNull()) {
+    if (bgPixmap.isNull())
+        painter->fillRect(boundingRect(), QColor(0, 0, 100));
         //painter->fillRect(boundingRect(), QColor(70, 50, 100));
 
         QLinearGradient grad1(0, 0, 1, 0);

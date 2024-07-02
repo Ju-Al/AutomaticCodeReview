@@ -45,7 +45,6 @@ module Bolt
     end
     private :parse
 
-    def features
       if @inventory
         @inventory.features(self)
       else

@@ -394,7 +394,6 @@ module Pod
       validate_url(spec.documentation_url) if spec.documentation_url
     end
 
-    # Performs validations related to the `source` -> `http` attribute (if exists)
     #
     def validate_source_url(spec)
       return if spec.source.nil? || spec.source[:http].nil?

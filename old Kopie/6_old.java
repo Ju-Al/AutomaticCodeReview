@@ -1,5 +1,4 @@
 /*
-    return Optional.of(new Writer(table, lazyConf(), format));
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -93,7 +92,7 @@ public class IcebergSource implements DataSourceV2, ReadSupport, WriteSupport, D
           .toUpperCase(Locale.ENGLISH));
     }
 
-    String dataLocation = options.get(TableProperties.WRITE_NEW_DATA_LOCATION)
+    return Optional.of(new Writer(table, lazyConf(), format));
         .orElse(table.properties().getOrDefault(
             TableProperties.WRITE_NEW_DATA_LOCATION,
             new Path(new Path(table.location()), "data").toString()));

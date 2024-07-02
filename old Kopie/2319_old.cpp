@@ -355,9 +355,6 @@ tagint utils::tnumeric(const char *file, int line, const char *str,
   }
 
   return ATOTAGINT(str);
-}
-
-/* ----------------------------------------------------------------------
    compute bounds implied by numeric str with a possible wildcard asterisk
 ------------------------------------------------------------------------- */
 void utils::bounds(const char *file, int line, char *str,

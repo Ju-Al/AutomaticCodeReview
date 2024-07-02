@@ -1,5 +1,4 @@
 const t = require('../test-lib/test.js');
-const assert = require('assert');
 const cuid = require('cuid');
 
 describe('Utils', function() {

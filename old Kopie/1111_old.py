@@ -110,7 +110,6 @@ class AflConfig(object):
         config.additional_afl_arguments, constants.DICT_FLAG, remove=False)
 
     config.use_default_dict(target_path)
-
     # Correct the dictionary if needed.
     if config.dict_path:
       dictionary_manager.correct_dictionary(config.dict_path)

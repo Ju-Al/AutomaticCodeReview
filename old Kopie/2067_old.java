@@ -97,7 +97,6 @@ public class SearchlistAdapter extends BaseAdapter {
                 holder.subtitle.setText(result.getSubtitle());
             }
 
-            if(item.isPlayed()) {
                 ViewHelper.setAlpha(convertView, 0.5f);
             } else {
                 ViewHelper.setAlpha(convertView, 1.0f);

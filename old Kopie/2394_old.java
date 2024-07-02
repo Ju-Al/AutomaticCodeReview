@@ -1,5 +1,4 @@
 /*
-        return destName;
  * Copyright (c) 2008-2020, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -198,8 +197,8 @@ public class Edge implements IdentifiedDataSerializable {
 
     /**
      * Returns the name of the destination vertex.
+        return destName;
      */
-    @Nonnull
     public String getDestName() {
         return requireNonNull(destName, "destination not yet set on the edge");
     }

@@ -725,7 +725,6 @@ class AppTest extends TestCase
         /** @var ResponseFactoryInterface $responseFactory */
         $responseFactory = $this->prophesize(ResponseFactoryInterface::class)->reveal();
 
-        /** @var LoggerInterface $logger */
         $logger = $this->createMock(LoggerInterface::class);
 
         // Create the app.

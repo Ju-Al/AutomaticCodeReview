@@ -1,12 +1,4 @@
 /**
-      'If this is provided then everything else will be ignored. \nWhen the applicationId is provided it means that the ' + 
-    .option('-m --home-page <home-page>', $('the URL to the application homepage'))
-    .option('-b --available', $('indicates if the application will be available to other tenants'))
-    .option('-i --identifier-uris <identifier-uris>', $('the comma-delimitied URIs that identify the application'))
-    .option('-r --reply-urls <reply-urls>', $('the comma-delimitied application reply urls'))
-    .option('--key-value <key-value>', $('the value for the key credentials associated with the application that will be valid for one year by default'))
-    .option('--key-type <key-type>', $('the type of the key credentials associated with the application. Acceptable values are AsymmetricX509Cert, Password and Symmetric'))
-    .option('--key-usage <key-usage>', $('the usage of the key credentials associated with the application. Acceptable values are Sign and Verify'))
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,6 +93,14 @@ exports.init = function (cli) {
   adSP.command('create')
     .description($('Create Active Directory service principal.'))
     .option('-a --applicationId <applicationId>', $('The application Id for which service principal needs to be created. ' +
+      'If this is provided then everything else will be ignored. \nWhen the applicationId is provided it means that the ' + 
+    .option('-m --home-page <home-page>', $('the URL to the application homepage'))
+    .option('-b --available', $('indicates if the application will be available to other tenants'))
+    .option('-i --identifier-uris <identifier-uris>', $('the comma-delimitied URIs that identify the application'))
+    .option('-r --reply-urls <reply-urls>', $('the comma-delimitied application reply urls'))
+    .option('--key-value <key-value>', $('the value for the key credentials associated with the application that will be valid for one year by default'))
+    .option('--key-type <key-type>', $('the type of the key credentials associated with the application. Acceptable values are AsymmetricX509Cert, Password and Symmetric'))
+    .option('--key-usage <key-usage>', $('the usage of the key credentials associated with the application. Acceptable values are Sign and Verify'))
       'If this is provided then everything else will be ignored. 
 When the applicationId is provided it means that the ' +
       'application was already created and it needs to be used to create the service principal.'))

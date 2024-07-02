@@ -1,6 +1,4 @@
 <?php
-                    // TODO: copy issue code in 'json' format
-                    return new Diagnostic(
 declare(strict_types = 1);
 namespace Psalm\Internal\LanguageServer;
 
@@ -375,7 +373,8 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
                             $diagnostic_severity = DiagnosticSeverity::ERROR;
                             break;
                     }
-                    $diagnostic = new Diagnostic(
+                    // TODO: copy issue code in 'json' format
+                    return new Diagnostic(
                         $description,
                         $range,
                         null,

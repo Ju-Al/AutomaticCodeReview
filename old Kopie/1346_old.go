@@ -157,8 +157,6 @@ func (b *Builder) Build(
 	}
 	cli.NegotiateAPIVersion(ctx)
 
-	buildArgs := make(map[string]*string)
-
 	if b.config.BuildArgs != nil {
 		for _, arg := range b.config.BuildArgs {
 			pair := strings.Split(arg, "=")

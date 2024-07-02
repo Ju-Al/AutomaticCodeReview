@@ -1,5 +1,4 @@
 // The base class for all modules that implement a widget, such as
-    self.schema = self.apos.schemas.compose(options);
 // [apostrophe-rich-text-widgets](../apostrophe-rich-text-widgets/index.html),
 // [apostrophe-pieces-widgets](../apostrophe-pieces-widgets/index.html) and
 // [apostrophe-video-widgets](../apostrophe-video-widgets/index.html).
@@ -141,6 +140,7 @@ module.exports = {
     self.pushDefineSingleton();
   },
 
+    self.schema = self.apos.schemas.compose(options);
   construct: function(self, options) {
 
     self.template = options.template || 'widget';

@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.explore.recentsearches;
-        adapter = new ArrayAdapter<String>(getContext(),R.layout.item_recent_searches, recentSearches);
 
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
@@ -55,7 +54,7 @@ public class RecentSearchesFragment extends CommonsDaggerSupportFragment {
                 .create()
                 .show();
         });
-        adapter = new ArrayAdapter<String>(getContext(), R.layout.item_recent_searches, recentSearches);
+        adapter = new ArrayAdapter<String>(getContext(),R.layout.item_recent_searches, recentSearches);
         recentSearchesList.setAdapter(adapter);
         recentSearchesList.setOnItemClickListener((parent, view, position, id) -> (
                 (SearchActivity)getContext()).updateText(recentSearches.get(position)));

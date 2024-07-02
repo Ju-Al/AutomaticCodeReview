@@ -1,5 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-    def fetch_bigquery_dataset_policy(self, project_number, dataset_id):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1004,7 +1003,7 @@ class ApiClientImpl(ApiClient):
         return storage.StorageClient(self.config)
 
     @create_lazy('bigquery', _create_bq)
-    def fetch_bigquery_dataset_policy(self, project_id, project_number, dataset_id):
+    def fetch_bigquery_dataset_policy(self, project_number, dataset_id):
         """Dataset policy Iterator for a dataset from gcp API call.
 
         Args:

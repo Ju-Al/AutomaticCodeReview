@@ -1,7 +1,4 @@
 <?php
-		$unique_id     = md5( $url . $this->minify_key );
-		$filename      = preg_replace( '/\.(css)$/', '-' . $unique_id . '.css', ltrim( rocket_realpath( $parsed_url['path'] ), '/' ) );
-		$minify_url    = $this->get_minify_url( $filename, $url );
 namespace WP_Rocket\Engine\Optimization\Minify\CSS;
 
 use WP_Rocket\Dependencies\Minify as Minifier;
@@ -138,7 +135,9 @@ class Minify extends AbstractCSSOptimization implements ProcessorInterface {
 			$url = rocket_add_url_protocol( $url );
 		}
 
-		$filename      = ltrim( rocket_realpath( $parsed_url['path'] ), '/' );
+		$unique_id     = md5( $url . $this->minify_key );
+		$minify_url    = $this->get_minify_url( $filename, $url );
+		$filename      = preg_replace( '/\.(css)$/', '-' . $unique_id . '.css', ltrim( rocket_realpath( $parsed_url['path'] ), '/' ) );
 		$minified_file = rawurldecode( $this->minify_base_path . $filename );
 		$minify_url    = $this->get_minify_url( $filename, $url ) . '?ver=' . rocket_direct_filesystem()->mtime( $minified_file );
 

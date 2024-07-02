@@ -147,7 +147,6 @@ func NewVerificationCollector(tracer module.Tracer, registerer prometheus.Regist
 		Help:      "total number of chunk data packs requested by fetcher engine",
 	})
 
-	maxChunkDataPackRequestAttempt := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name:      "max_chunk_data_pack_request_attempt_times",
 		Namespace: namespaceVerification,
 		Subsystem: subsystemRequesterEngine,

@@ -1,5 +1,4 @@
 module ReactComponents
-          complete_exercise: Exercism::Routes.complete_api_solution_url(solution.uuid)
   module Student
     class SolutionSummary < ReactComponent
       initialize_with :solution
@@ -36,7 +35,7 @@ module ReactComponents
           community_solutions: "#",
           learn_more_about_mentoring_article: "#",
           mentoring_info: "#",
-          complete_exercise: Exercism::Routes.complete_api_solution_url(solution.uuid),
+          complete_exercise: Exercism::Routes.complete_api_solution_url(solution.uuid)
           share_mentoring: "https://some.link/we/need/to-decide-on",
           request_mentoring: "#"
         }

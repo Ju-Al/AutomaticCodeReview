@@ -1,1050 +1,870 @@
-"""
-Supplies MultiDimensionalMapping and NdMapping which are multi-dimensional
-map types. The former class only allows indexing whereas the latter
-also enables slicing over multiple dimension ranges.
-"""
+# vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-from itertools import cycle
-from operator import itemgetter
-import numpy as np
+# Copyright 2016-2018 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+#
+# This file is part of qutebrowser.
+#
+# qutebrowser is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qutebrowser is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-import param
+"""Wrapper over our (QtWebKit) WebView."""
 
-from . import util
-from .dimension import OrderedDict, Dimension, Dimensioned, ViewableElement, asdim
-from .util import (unique_iterator, sanitize_identifier, dimension_sort,
-                   basestring, wrap_tuple, process_ellipses, get_ndmapping_label)
+import re
+import functools
+import xml.etree.ElementTree
 
-class item_check(object):
-    """
-    Context manager to allow creating NdMapping types without
-    performing the usual item_checks, providing significant
-    speedups when there are a lot of items. Should only be
-    used when both keys and values are guaranteed to be the
-    right type, as is the case for many internal operations.
-    """
+from PyQt5.QtCore import pyqtSlot, Qt, QUrl, QPoint, QTimer, QSizeF, QSize
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWebKitWidgets import QWebPage, QWebFrame
+from PyQt5.QtWebKit import QWebSettings
+from PyQt5.QtPrintSupport import QPrinter
 
-    def __init__(self, enabled):
-        self.enabled = enabled
-
-    def __enter__(self):
-        self._enabled = MultiDimensionalMapping._check_items
-        MultiDimensionalMapping._check_items = self.enabled
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        MultiDimensionalMapping._check_items = self._enabled
-
-
-class sorted_context(object):
-    """
-    Context manager to temporarily disable sorting on NdMapping
-    types. Retains the current sort order, which can be useful as
-    an optimization on NdMapping instances where sort=True but the
-    items are already known to have been sorted.
-    """
-
-    def __init__(self, enabled):
-        self.enabled = enabled
-
-    def __enter__(self):
-        self._enabled = MultiDimensionalMapping.sort
-        MultiDimensionalMapping.sort = self.enabled
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        MultiDimensionalMapping.sort = self._enabled
+from qutebrowser.browser import browsertab, shared
+from qutebrowser.browser.webkit import (webview, tabhistory, webkitelem,
+                                        webkitsettings)
+from qutebrowser.utils import qtutils, usertypes, utils, log, debug
+from qutebrowser.qt import sip
 
 
+class WebKitAction(browsertab.AbstractAction):
 
-class MultiDimensionalMapping(Dimensioned):
-    """
-    An MultiDimensionalMapping is a Dimensioned mapping (like a
-    dictionary or array) that uses fixed-length multidimensional
-    keys. This behaves like a sparse N-dimensional array that does not
-    require a dense sampling over the multidimensional space.
+    """QtWebKit implementations related to web actions."""
 
-    If the underlying value for each (key, value) pair also supports
-    indexing (such as a dictionary, array, or list), fully qualified
-    (deep) indexing may be used from the top level, with the first N
-    dimensions of the index selecting a particular Dimensioned object
-    and the remaining dimensions indexing into that object.
+    action_class = QWebPage
+    action_base = QWebPage.WebAction
 
-    For instance, for a MultiDimensionalMapping with dimensions "Year"
-    and "Month" and underlying values that are 2D floating-point
-    arrays indexed by (r,c), a 2D array may be indexed with x[2000,3]
-    and a single floating-point number may be indexed as
-    x[2000,3,1,9].
+    def exit_fullscreen(self):
+        raise browsertab.UnsupportedOperationError
 
-    In practice, this class is typically only used as an abstract base
-    class, because the NdMapping subclass extends it with a range of
-    useful slicing methods for selecting subsets of the data. Even so,
-    keeping the slicing support separate from the indexing and data
-    storage methods helps make both classes easier to understand.
-    """
+    def save_page(self):
+        """Save the current page."""
+        raise browsertab.UnsupportedOperationError
 
-    group = param.String(default='MultiDimensionalMapping', constant=True)
-
-    kdims = param.List(default=[Dimension("Default")], constant=True)
-
-    vdims = param.List(default=[], bounds=(0, 0), constant=True)
-
-    sort = param.Boolean(default=True, doc="""
-        Whether the items should be sorted in the constructor.""")
-
-    data_type = None          # Optional type checking of elements
-    _deep_indexable = False
-    _check_items = True
-
-    def __init__(self, initial_items=None, kdims=None, **params):
-        if isinstance(initial_items, MultiDimensionalMapping):
-            params = dict(util.get_param_values(initial_items), **dict(params))
-        if kdims is not None:
-            params['kdims'] = kdims
-        super(MultiDimensionalMapping, self).__init__(OrderedDict(), **dict(params))
-        if type(initial_items) is dict and not self.sort:
-            raise ValueError('If sort=False the data must define a fixed '
-                             'ordering, please supply a list of items or '
-                             'an OrderedDict, not a regular dictionary.')
-
-        self._next_ind = 0
-        self._check_key_type = True
-
-        if initial_items is None: initial_items = []
-        if isinstance(initial_items, tuple):
-            self._add_item(initial_items[0], initial_items[1])
-        elif not self._check_items:
-            if isinstance(initial_items, dict):
-                initial_items = initial_items.items()
-            elif isinstance(initial_items, MultiDimensionalMapping):
-                initial_items = initial_items.data.items()
-            self.data = OrderedDict((k if isinstance(k, tuple) else (k,), v)
-                                    for k, v in initial_items)
-            if self.sort:
-                self._resort()
-        elif initial_items is not None:
-            self.update(OrderedDict(initial_items))
+    def show_source(self, pygments=False):
+        self._show_source_pygments()
 
 
-    def _item_check(self, dim_vals, data):
+class WebKitPrinting(browsertab.AbstractPrinting):
+
+    """QtWebKit implementations related to printing."""
+
+    def check_pdf_support(self):
+        pass
+
+    def check_printer_support(self):
+        pass
+
+    def check_preview_support(self):
+        pass
+
+    def to_pdf(self, filename):
+        printer = QPrinter()
+        printer.setOutputFileName(filename)
+        self.to_printer(printer)
+
+    def to_printer(self, printer, callback=None):
+        self._widget.print(printer)
+        # Can't find out whether there was an error...
+        if callback is not None:
+            callback(True)
+
+
+class WebKitSearch(browsertab.AbstractSearch):
+
+    """QtWebKit implementations related to searching on the page."""
+
+    def __init__(self, tab, parent=None):
+        super().__init__(tab, parent)
+        self._flags = QWebPage.FindFlags(0)
+
+    def _call_cb(self, callback, found, text, flags, caller):
+        """Call the given callback if it's non-None.
+
+        Delays the call via a QTimer so the website is re-rendered in between.
+
+        Args:
+            callback: What to call
+            found: If the text was found
+            text: The text searched for
+            flags: The flags searched with
+            caller: Name of the caller.
         """
-        Applies optional checks to individual data elements before
-        they are inserted ensuring that they are of a certain
-        type. Subclassed may implement further element restrictions.
-        """
-        if not self._check_items:
+        found_text = 'found' if found else "didn't find"
+        # Removing FindWrapsAroundDocument to get the same logging as with
+        # QtWebEngine
+        debug_flags = debug.qflags_key(
+            QWebPage, flags & ~QWebPage.FindWrapsAroundDocument,
+            klass=QWebPage.FindFlag)
+        if debug_flags != '0x0000':
+            flag_text = 'with flags {}'.format(debug_flags)
+        else:
+            flag_text = ''
+        log.webview.debug(' '.join([caller, found_text, text, flag_text])
+                          .strip())
+        if callback is not None:
+            QTimer.singleShot(0, functools.partial(callback, found))
+
+        self.finished.emit(found)
+
+    def clear(self):
+        if self.search_displayed:
+            self.cleared.emit()
+        self.search_displayed = False
+        # We first clear the marked text, then the highlights
+        self._widget.findText('')
+        self._widget.findText('', QWebPage.HighlightAllOccurrences)
+
+    def search(self, text, *, ignore_case=usertypes.IgnoreCase.never,
+               reverse=False, result_cb=None):
+        # Don't go to next entry on duplicate search
+        if self.text == text and self.search_displayed:
+            log.webview.debug("Ignoring duplicate search request"
+                              " for {}".format(text))
             return
-        elif self.data_type is not None and not isinstance(data, self.data_type):
-            if isinstance(self.data_type, tuple):
-                data_type = tuple(dt.__name__ for dt in self.data_type)
-            else:
-                data_type = self.data_type.__name__
-            raise TypeError('{slf} does not accept {data} type, data elements have '
-                            'to be a {restr}.'.format(slf=type(self).__name__,
-                                                      data=type(data).__name__,
-                                                      restr=data_type))
-        elif not len(dim_vals) == self.ndims:
-            raise KeyError('The data contains keys of length %d, but the kdims '
-                           'only declare %d dimensions. Ensure that the number '
-                           'of kdims match the length of the keys in your data.'
-                           % (len(dim_vals), self.ndims))
 
+        # Clear old search results, this is done automatically on QtWebEngine.
+        self.clear()
 
-    def _add_item(self, dim_vals, data, sort=True, update=True):
-        """
-        Adds item to the data, applying dimension types and ensuring
-        key conforms to Dimension type and values.
-        """
-        sort = sort and self.sort
-        if not isinstance(dim_vals, tuple):
-            dim_vals = (dim_vals,)
+        self.text = text
+        self.search_displayed = True
+        self._flags = QWebPage.FindWrapsAroundDocument
+        if self._is_case_sensitive(ignore_case):
+            self._flags |= QWebPage.FindCaseSensitively
+        if reverse:
+            self._flags |= QWebPage.FindBackward
+        # We actually search *twice* - once to highlight everything, then again
+        # to get a mark so we can navigate.
+        found = self._widget.findText(text, self._flags)
+        self._widget.findText(text,
+                              self._flags | QWebPage.HighlightAllOccurrences)
+        self._call_cb(result_cb, found, text, self._flags, 'search')
 
-        self._item_check(dim_vals, data)
+    def next_result(self, *, result_cb=None):
+        self.search_displayed = True
+        found = self._widget.findText(self.text, self._flags)
+        self._call_cb(result_cb, found, self.text, self._flags, 'next_result')
 
-        # Apply dimension types
-        dim_types = zip([kd.type for kd in self.kdims], dim_vals)
-        dim_vals = tuple(v if None in [t, v] else t(v) for t, v in dim_types)
-        valid_vals = zip(self.kdims, dim_vals)
-
-        for dim, val in valid_vals:
-            if dim.values and val is not None and val not in dim.values:
-                raise KeyError('%s dimension value %s not in'
-                               ' specified dimension values.' % (dim, repr(val)))
-
-        # Updates nested data structures rather than simply overriding them.
-        if (update and (dim_vals in self.data)
-            and isinstance(self.data[dim_vals], (MultiDimensionalMapping, OrderedDict))):
-            self.data[dim_vals].update(data)
+    def prev_result(self, *, result_cb=None):
+        self.search_displayed = True
+        # The int() here makes sure we get a copy of the flags.
+        flags = QWebPage.FindFlags(int(self._flags))
+        if flags & QWebPage.FindBackward:
+            flags &= ~QWebPage.FindBackward
         else:
-            self.data[dim_vals] = data
-
-        if sort:
-            self._resort()
-
-
-    def _apply_key_type(self, keys):
-        """
-        If a type is specified by the corresponding key dimension,
-        this method applies the type to the supplied key.
-        """
-        typed_key = ()
-        for dim, key in zip(self.kdims, keys):
-            key_type = dim.type
-            if key_type is None:
-                typed_key += (key,)
-            elif isinstance(key, slice):
-                sl_vals = [key.start, key.stop, key.step]
-                typed_key += (slice(*[key_type(el) if el is not None else None
-                                      for el in sl_vals]),)
-            elif key is Ellipsis:
-                typed_key += (key,)
-            elif isinstance(key, list):
-                typed_key += ([key_type(k) for k in key],)
-            else:
-                typed_key += (key_type(key),)
-        return typed_key
+            flags |= QWebPage.FindBackward
+        found = self._widget.findText(self.text, flags)
+        self._call_cb(result_cb, found, self.text, flags, 'prev_result')
 
 
-    def _split_index(self, key):
-        """
-        Partitions key into key and deep dimension groups. If only key
-        indices are supplied, the data is indexed with an empty tuple.
-        Keys with indices than there are dimensions will be padded.
-        """
-        if not isinstance(key, tuple):
-            key = (key,)
-        elif key == ():
-            return (), ()
+class WebKitCaret(browsertab.AbstractCaret):
 
-        if key[0] is Ellipsis:
-            num_pad = self.ndims - len(key) + 1
-            key = (slice(None),) * num_pad + key[1:]
-        elif len(key) < self.ndims:
-            num_pad = self.ndims - len(key)
-            key = key + (slice(None),) * num_pad
+    """QtWebKit implementations related to moving the cursor/selection."""
 
-        map_slice = key[:self.ndims]
-        if self._check_key_type:
-            map_slice = self._apply_key_type(map_slice)
-        if len(key) == self.ndims:
-            return map_slice, ()
+    @pyqtSlot(usertypes.KeyMode)
+    def _on_mode_entered(self, mode):
+        if mode != usertypes.KeyMode.caret:
+            return
+
+        self.selection_enabled = self._widget.hasSelection()
+        self.selection_toggled.emit(self.selection_enabled)
+        settings = self._widget.settings()
+        settings.setAttribute(QWebSettings.CaretBrowsingEnabled, True)
+
+        if self._widget.isVisible():
+            # Sometimes the caret isn't immediately visible, but unfocusing
+            # and refocusing it fixes that.
+            self._widget.clearFocus()
+            self._widget.setFocus(Qt.OtherFocusReason)
+
+            # Move the caret to the first element in the viewport if there
+            # isn't any text which is already selected.
+            #
+            # Note: We can't use hasSelection() here, as that's always
+            # true in caret mode.
+            if not self.selection_enabled:
+                self._widget.page().currentFrame().evaluateJavaScript(
+                    utils.read_file('javascript/position_caret.js'))
+
+    @pyqtSlot(usertypes.KeyMode)
+    def _on_mode_left(self, _mode):
+        settings = self._widget.settings()
+        if settings.testAttribute(QWebSettings.CaretBrowsingEnabled):
+            if self.selection_enabled and self._widget.hasSelection():
+                # Remove selection if it exists
+                self._widget.triggerPageAction(QWebPage.MoveToNextChar)
+            settings.setAttribute(QWebSettings.CaretBrowsingEnabled, False)
+            self.selection_enabled = False
+
+    def move_to_next_line(self, count=1):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToNextLine
         else:
-            return map_slice, key[self.ndims:]
+            act = QWebPage.SelectNextLine
+        for _ in range(count):
+            self._widget.triggerPageAction(act)
 
-
-    def _dataslice(self, data, indices):
-        """
-        Returns slice of data element if the item is deep
-        indexable. Warns if attempting to slice an object that has not
-        been declared deep indexable.
-        """
-        if self._deep_indexable and isinstance(data, Dimensioned) and indices:
-            return data[indices]
-        elif len(indices) > 0:
-            self.param.warning('Cannot index into data element, extra data'
-                               ' indices ignored.')
-        return data
-
-
-    def _resort(self):
-        self.data = OrderedDict(dimension_sort(self.data, self.kdims, self.vdims,
-                                               range(self.ndims)))
-
-
-    def clone(self, data=None, shared_data=True, *args, **overrides):
-        """Clones the object, overriding data and parameters.
-
-        Args:
-            data: New data replacing the existing data
-            shared_data (bool, optional): Whether to use existing data
-            new_type (optional): Type to cast object to
-            link (bool, optional): Whether clone should be linked
-                Determines whether Streams and Links attached to
-                original object will be inherited.
-            *args: Additional arguments to pass to constructor
-            **overrides: New keyword arguments to pass to constructor
-
-        Returns:
-            Cloned object
-        """
-        with item_check(not shared_data and self._check_items):
-            return super(MultiDimensionalMapping, self).clone(data, shared_data,
-                                                              *args, **overrides)
-
-
-    def groupby(self, dimensions, container_type=None, group_type=None, **kwargs):
-        """Groups object by one or more dimensions
-
-        Applies groupby operation over the specified dimensions
-        returning an object of type container_type (expected to be
-        dictionary-like) containing the groups.
-
-        Args:
-            dimensions: Dimension(s) to group by
-            container_type: Type to cast group container to
-            group_type: Type to cast each group to
-            dynamic: Whether to return a DynamicMap
-            **kwargs: Keyword arguments to pass to each group
-
-        Returns:
-            Returns object of supplied container_type containing the
-            groups. If dynamic=True returns a DynamicMap instead.
-        """
-        if self.ndims == 1:
-            self.param.warning('Cannot split Map with only one dimension.')
-            return self
-        elif not isinstance(dimensions, list):
-            dimensions = [dimensions]
-        container_type = container_type if container_type else type(self)
-        group_type = group_type if group_type else type(self)
-        dimensions = [self.get_dimension(d, strict=True) for d in dimensions]
-        with item_check(False):
-            sort = kwargs.pop('sort', self.sort)
-            return util.ndmapping_groupby(self, dimensions, container_type,
-                                          group_type, sort=sort, **kwargs)
-
-
-    def add_dimension(self, dimension, dim_pos, dim_val, vdim=False, **kwargs):
-        """Adds a dimension and its values to the object
-
-        Requires the dimension name or object, the desired position in
-        the key dimensions and a key value scalar or sequence of the
-        same length as the existing keys.
-
-        Args:
-            dimension: Dimension or dimension spec to add
-            dim_pos (int) Integer index to insert dimension at
-            dim_val (scalar or ndarray): Dimension value(s) to add
-            vdim: Disabled, this type does not have value dimensions
-            **kwargs: Keyword arguments passed to the cloned element
-
-        Returns:
-            Cloned object containing the new dimension
-        """
-        dimension = asdim(dimension)
-
-        if dimension in self.dimensions():
-            raise Exception('{dim} dimension already defined'.format(dim=dimension.name))
-
-        if vdim and self._deep_indexable:
-            raise Exception('Cannot add value dimension to object that is deep indexable')
-
-        if vdim:
-            dims = self.vdims[:]
-            dims.insert(dim_pos, dimension)
-            dimensions = dict(vdims=dims)
-            dim_pos += self.ndims
+    def move_to_prev_line(self, count=1):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToPreviousLine
         else:
-            dims = self.kdims[:]
-            dims.insert(dim_pos, dimension)
-            dimensions = dict(kdims=dims)
+            act = QWebPage.SelectPreviousLine
+        for _ in range(count):
+            self._widget.triggerPageAction(act)
 
-        if isinstance(dim_val, basestring) or not hasattr(dim_val, '__iter__'):
-            dim_val = cycle([dim_val])
+    def move_to_next_char(self, count=1):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToNextChar
         else:
-            if not len(dim_val) == len(self):
-                raise ValueError("Added dimension values must be same length"
-                                 "as existing keys.")
+            act = QWebPage.SelectNextChar
+        for _ in range(count):
+            self._widget.triggerPageAction(act)
 
-        items = OrderedDict()
-        for dval, (key, val) in zip(dim_val, self.data.items()):
-            if vdim:
-                new_val = list(val)
-                new_val.insert(dim_pos, dval)
-                items[key] = tuple(new_val)
-            else:
-                new_key = list(key)
-                new_key.insert(dim_pos, dval)
-                items[tuple(new_key)] = val
-
-        return self.clone(items, **dict(dimensions, **kwargs))
-
-
-    def drop_dimension(self, dimensions):
-        """Drops dimension(s) from keys
-
-        Args:
-            dimensions: Dimension(s) to drop
-
-        Returns:
-            Clone of object with with dropped dimension(s)
-        """
-        dimensions = [dimensions] if np.isscalar(dimensions) else dimensions
-        dims = [d for d in self.kdims if d not in dimensions]
-        dim_inds = [self.get_dimension_index(d) for d in dims]
-        key_getter = itemgetter(*dim_inds)
-        return self.clone([(key_getter(k), v) for k, v in self.data.items()],
-                          kdims=dims)
-
-
-    def dimension_values(self, dimension, expanded=True, flat=True):
-        """Return the values along the requested dimension.
-
-        Args:
-            dimension: The dimension to return values for
-            expanded (bool, optional): Whether to expand values
-                Whether to return the expanded values, behavior depends
-                on the type of data:
-                  * Columnar: If false returns unique values
-                  * Geometry: If false returns scalar values per geometry
-                  * Gridded: If false returns 1D coordinates
-            flat (bool, optional): Whether to flatten array
-
-        Returns:
-            NumPy array of values along the requested dimension
-        """
-        dimension = self.get_dimension(dimension, strict=True)
-        if dimension in self.kdims:
-            return np.array([k[self.get_dimension_index(dimension)] for k in self.data.keys()])
-        if dimension in self.dimensions():
-            values = [el.dimension_values(dimension, expanded, flat) for el in self
-                      if dimension in el.dimensions()]
-            vals = np.concatenate(values)
-            return vals if expanded else util.unique_array(vals)
+    def move_to_prev_char(self, count=1):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToPreviousChar
         else:
-            return super(MultiDimensionalMapping, self).dimension_values(dimension, expanded, flat)
+            act = QWebPage.SelectPreviousChar
+        for _ in range(count):
+            self._widget.triggerPageAction(act)
 
-
-    def reindex(self, kdims=[], force=False):
-        """Reindexes object dropping static or supplied kdims
-
-        Creates a new object with a reordered or reduced set of key
-        dimensions. By default drops all non-varying key dimensions.
-
-        Reducing the number of key dimensions will discard information
-        from the keys. All data values are accessible in the newly
-        created object as the new labels must be sufficient to address
-        each value uniquely.
-
-        Args:
-            kdims (optional): New list of key dimensions after reindexing
-            force (bool, optional): Whether to drop non-unique items
-
-        Returns:
-            Reindexed object
-        """
-        old_kdims = [d.name for d in self.kdims]
-        if not isinstance(kdims, list):
-            kdims = [kdims]
-        elif not len(kdims):
-            kdims = [d for d in old_kdims
-                     if not len(set(self.dimension_values(d))) == 1]
-        indices = [self.get_dimension_index(el) for el in kdims]
-
-        keys = [tuple(k[i] for i in indices) for k in self.data.keys()]
-        reindexed_items = OrderedDict(
-            (k, v) for (k, v) in zip(keys, self.data.values()))
-        reduced_dims = set([d.name for d in self.kdims]).difference(kdims)
-        dimensions = [self.get_dimension(d) for d in kdims
-                      if d not in reduced_dims]
-
-        if len(set(keys)) != len(keys) and not force:
-            raise Exception("Given dimension labels not sufficient"
-                            "to address all values uniquely")
-
-        if len(keys):
-            cdims = {self.get_dimension(d): self.dimension_values(d)[0] for d in reduced_dims}
+    def move_to_end_of_word(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToNextWord]
+            if utils.is_windows:  # pragma: no cover
+                act.append(QWebPage.MoveToPreviousChar)
         else:
-            cdims = {}
-        with item_check(indices == sorted(indices)):
-            return self.clone(reindexed_items, kdims=dimensions,
-                              cdims=cdims)
+            act = [QWebPage.SelectNextWord]
+            if utils.is_windows:  # pragma: no cover
+                act.append(QWebPage.SelectPreviousChar)
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
 
-
-    @property
-    def last(self):
-        "Returns the item highest data item along the map dimensions."
-        return list(self.data.values())[-1] if len(self) else None
-
-
-    @property
-    def last_key(self):
-        "Returns the last key value."
-        return list(self.keys())[-1] if len(self) else None
-
-
-    @property
-    def info(self):
-        """
-        Prints information about the Dimensioned object, including the
-        number and type of objects contained within it and information
-        about its dimensions.
-        """
-        if (len(self.values()) > 0):
-            info_str = self.__class__.__name__ +\
-                       " containing %d items of type %s\n" % (len(self.keys()),
-                                                              type(self.values()[0]).__name__)
+    def move_to_next_word(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToNextWord]
+            if not utils.is_windows:  # pragma: no branch
+                act.append(QWebPage.MoveToNextChar)
         else:
-            info_str = self.__class__.__name__ + " containing no items\n"
-        info_str += ('-' * (len(info_str)-1)) + "\n\n"
-        aliases = {v: k for k, v in self._dim_aliases.items()}
-        for group in self._dim_groups:
-            dimensions = getattr(self, group)
-            if dimensions:
-                group = aliases[group].split('_')[0]
-                info_str += '%s Dimensions: \n' % group.capitalize()
-            for d in dimensions:
-                dmin, dmax = self.range(d.name)
-                if d.value_format:
-                    dmin, dmax = d.value_format(dmin), d.value_format(dmax)
-                info_str += '\t %s: %s...%s \n' % (d.pprint_label, dmin, dmax)
+            act = [QWebPage.SelectNextWord]
+            if not utils.is_windows:  # pragma: no branch
+                act.append(QWebPage.SelectNextChar)
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
 
-
-    def update(self, other):
-        """Merges other item with this object
-
-        Args:
-            other: Object containing items to merge into this object
-                Must be a dictionary or NdMapping type
-        """
-        if isinstance(other, NdMapping):
-            dims = [d for d in other.kdims if d not in self.kdims]
-            if len(dims) == other.ndims:
-                raise KeyError("Cannot update with NdMapping that has"
-                               " a different set of key dimensions.")
-            elif dims:
-                other = other.drop_dimension(dims)
-            other = other.data
-        for key, data in other.items():
-            self._add_item(key, data, sort=False)
-        if self.sort:
-            self._resort()
-
-
-    def keys(self):
-        " Returns the keys of all the elements."
-        if self.ndims == 1:
-            return [k[0] for k in self.data.keys()]
+    def move_to_prev_word(self, count=1):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToPreviousWord
         else:
-            return list(self.data.keys())
+            act = QWebPage.SelectPreviousWord
+        for _ in range(count):
+            self._widget.triggerPageAction(act)
 
+    def move_to_start_of_line(self):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToStartOfLine
+        else:
+            act = QWebPage.SelectStartOfLine
+        self._widget.triggerPageAction(act)
 
-    def values(self):
-        "Returns the values of all the elements."
-        return list(self.data.values())
+    def move_to_end_of_line(self):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToEndOfLine
+        else:
+            act = QWebPage.SelectEndOfLine
+        self._widget.triggerPageAction(act)
 
+    def move_to_start_of_next_block(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToNextLine,
+                   QWebPage.MoveToStartOfBlock]
+        else:
+            act = [QWebPage.SelectNextLine,
+                   QWebPage.SelectStartOfBlock]
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
 
-    def items(self):
-        "Returns all elements as a list in (key,value) format."
-        return list(zip(list(self.keys()), list(self.values())))
+    def move_to_start_of_prev_block(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToPreviousLine,
+                   QWebPage.MoveToStartOfBlock]
+        else:
+            act = [QWebPage.SelectPreviousLine,
+                   QWebPage.SelectStartOfBlock]
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
 
+    def move_to_end_of_next_block(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToNextLine,
+                   QWebPage.MoveToEndOfBlock]
+        else:
+            act = [QWebPage.SelectNextLine,
+                   QWebPage.SelectEndOfBlock]
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
 
-    def get(self, key, default=None):
-        "Standard get semantics for all mapping types"
+    def move_to_end_of_prev_block(self, count=1):
+        if not self.selection_enabled:
+            act = [QWebPage.MoveToPreviousLine, QWebPage.MoveToEndOfBlock]
+        else:
+            act = [QWebPage.SelectPreviousLine, QWebPage.SelectEndOfBlock]
+        for _ in range(count):
+            for a in act:
+                self._widget.triggerPageAction(a)
+
+    def move_to_start_of_document(self):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToStartOfDocument
+        else:
+            act = QWebPage.SelectStartOfDocument
+        self._widget.triggerPageAction(act)
+
+    def move_to_end_of_document(self):
+        if not self.selection_enabled:
+            act = QWebPage.MoveToEndOfDocument
+        else:
+            act = QWebPage.SelectEndOfDocument
+        self._widget.triggerPageAction(act)
+
+    def toggle_selection(self):
+        self.selection_enabled = not self.selection_enabled
+        self.selection_toggled.emit(self.selection_enabled)
+
+    def drop_selection(self):
+        self._widget.triggerPageAction(QWebPage.MoveToNextChar)
+
+    def selection(self, callback):
+        callback(self._widget.selectedText())
+
+        self._tab.run_js_async("""{
+            let sel = window.getSelection();
+            sel.setBaseAndExtent(
+                sel.extentNode, sel.extentOffset, sel.baseNode,
+                sel.baseOffset
+            );
+        }""")
+
+    def _follow_selected(self, *, tab=False):
+        if QWebSettings.globalSettings().testAttribute(
+                QWebSettings.JavascriptEnabled):
+            if tab:
+                self._tab.data.override_target = usertypes.ClickTarget.tab
+            self._tab.run_js_async("""
+                const aElm = document.activeElement;
+                if (window.getSelection().anchorNode) {
+                    window.getSelection().anchorNode.parentNode.click();
+                } else if (aElm && aElm !== document.body) {
+                    aElm.click();
+                }
+            """)
+        else:
+            selection = self._widget.selectedHtml()
+            if not selection:
+                # Getting here may mean we crashed, but we can't do anything
+                # about that until this commit is released:
+                # https://github.com/annulen/webkit/commit/0e75f3272d149bc64899c161f150eb341a2417af
+                # TODO find a way to check if something is focused
+                self._follow_enter(tab)
+                return
+            try:
+                selected_element = xml.etree.ElementTree.fromstring(
+                    '<html>{}</html>'.format(selection)).find('a')
+            except xml.etree.ElementTree.ParseError:
+                raise browsertab.WebTabError('Could not parse selected '
+                                             'element!')
+
+            if selected_element is not None:
+                try:
+                    url = selected_element.attrib['href']
+                except KeyError:
+                    raise browsertab.WebTabError('Anchor element without '
+                                                 'href!')
+                url = self._tab.url().resolved(QUrl(url))
+                if tab:
+                    self._tab.new_tab_requested.emit(url)
+                else:
+                    self._tab.load_url(url)
+
+    def follow_selected(self, *, tab=False):
         try:
-            if key is None:
-                return None
-            return self[key]
-        except KeyError:
-            return default
+            self._follow_selected(tab=tab)
+        finally:
+            self.follow_selected_done.emit()
 
 
-    def pop(self, key, default=None):
-        "Standard pop semantics for all mapping types"
-        if not isinstance(key, tuple): key = (key,)
-        return self.data.pop(key, default)
+class WebKitZoom(browsertab.AbstractZoom):
+
+    """QtWebKit implementations related to zooming."""
+
+    def _set_factor_internal(self, factor):
+        self._widget.setZoomFactor(factor)
 
 
-    def __getitem__(self, key):
-        """
-        Allows multi-dimensional indexing in the order of the
-        specified key dimensions, passing any additional indices to
-        the data elements.
-        """
-        if key in [Ellipsis, ()]:
-            return self
-        map_slice, data_slice = self._split_index(key)
-        return self._dataslice(self.data[map_slice], data_slice)
+class WebKitScroller(browsertab.AbstractScroller):
 
+    """QtWebKit implementations related to scrolling."""
 
-    def __setitem__(self, key, value):
-        "Adds item to mapping"
-        self._add_item(key, value, update=False)
+    # FIXME:qtwebengine When to use the main frame, when the current one?
 
+    def pos_px(self):
+        return self._widget.page().mainFrame().scrollPosition()
 
-    def __str__(self):
-        return repr(self)
+    def pos_perc(self):
+        return self._widget.scroll_pos
 
+    def to_point(self, point):
+        self._widget.page().mainFrame().setScrollPosition(point)
 
-    def __iter__(self):
-        "Iterates over mapping values"
-        return iter(self.values())
+    def to_anchor(self, name):
+        self._widget.page().mainFrame().scrollToAnchor(name)
 
+    def delta(self, x=0, y=0):
+        qtutils.check_overflow(x, 'int')
+        qtutils.check_overflow(y, 'int')
+        self._widget.page().mainFrame().scroll(x, y)
 
-    def __contains__(self, key):
-        if self.ndims == 1:
-            return key in self.data.keys()
+    def delta_page(self, x=0.0, y=0.0):
+        if y.is_integer():
+            y = int(y)
+            if y == 0:
+                pass
+            elif y < 0:
+                self.page_up(count=-y)
+            elif y > 0:
+                self.page_down(count=y)
+            y = 0
+        if x == 0 and y == 0:
+            return
+        size = self._widget.page().mainFrame().geometry()
+        self.delta(x * size.width(), y * size.height())
+
+    def to_perc(self, x=None, y=None):
+        if x is None and y == 0:
+            self.top()
+        elif x is None and y == 100:
+            self.bottom()
         else:
-            return key in self.keys()
+            for val, orientation in [(x, Qt.Horizontal), (y, Qt.Vertical)]:
+                if val is not None:
+                    frame = self._widget.page().mainFrame()
+                    maximum = frame.scrollBarMaximum(orientation)
+                    if maximum == 0:
+                        continue
+                    pos = int(maximum * val / 100)
+                    pos = qtutils.check_overflow(pos, 'int', fatal=False)
+                    frame.setScrollBarValue(orientation, pos)
+
+    def _key_press(self, key, count=1, getter_name=None, direction=None):
+        frame = self._widget.page().mainFrame()
+        getter = None if getter_name is None else getattr(frame, getter_name)
+
+        # FIXME:qtwebengine needed?
+        # self._widget.setFocus()
+
+        for _ in range(min(count, 5000)):
+            # Abort scrolling if the minimum/maximum was reached.
+            if (getter is not None and
+                    frame.scrollBarValue(direction) == getter(direction)):
+                return
+            self._tab.fake_key_press(key)
+
+    def up(self, count=1):
+        self._key_press(Qt.Key_Up, count, 'scrollBarMinimum', Qt.Vertical)
+
+    def down(self, count=1):
+        self._key_press(Qt.Key_Down, count, 'scrollBarMaximum', Qt.Vertical)
+
+    def left(self, count=1):
+        self._key_press(Qt.Key_Left, count, 'scrollBarMinimum', Qt.Horizontal)
+
+    def right(self, count=1):
+        self._key_press(Qt.Key_Right, count, 'scrollBarMaximum', Qt.Horizontal)
+
+    def top(self):
+        self._key_press(Qt.Key_Home)
+
+    def bottom(self):
+        self._key_press(Qt.Key_End)
+
+    def page_up(self, count=1):
+        self._key_press(Qt.Key_PageUp, count, 'scrollBarMinimum', Qt.Vertical)
+
+    def page_down(self, count=1):
+        self._key_press(Qt.Key_PageDown, count, 'scrollBarMaximum',
+                        Qt.Vertical)
+
+    def at_top(self):
+        return self.pos_px().y() == 0
+
+    def at_bottom(self):
+        frame = self._widget.page().currentFrame()
+        return self.pos_px().y() >= frame.scrollBarMaximum(Qt.Vertical)
+
+
+class WebKitHistoryPrivate(browsertab.AbstractHistoryPrivate):
+
+    """History-related methods which are not part of the extension API."""
+
+    def serialize(self):
+        return qtutils.serialize(self._history)
+
+    def deserialize(self, data):
+        qtutils.deserialize(data, self._history)
+
+    def load_items(self, items):
+        if items:
+            self._tab.before_load_started.emit(items[-1].url)
+
+        stream, _data, user_data = tabhistory.serialize(items)
+        qtutils.deserialize_stream(stream, self._history)
+        for i, data in enumerate(user_data):
+            self._history.itemAt(i).setUserData(data)
+        cur_data = self._history.currentItem().userData()
+        if cur_data is not None:
+            if 'zoom' in cur_data:
+                self._tab.zoom.set_factor(cur_data['zoom'])
+            if ('scroll-pos' in cur_data and
+                    self._tab.scroller.pos_px() == QPoint(0, 0)):
+                QTimer.singleShot(0, functools.partial(
+                    self._tab.scroller.to_point, cur_data['scroll-pos']))
+
+
+class WebKitHistory(browsertab.AbstractHistory):
+
+    """QtWebKit implementations related to page history."""
+
+    def __init__(self, tab):
+        super().__init__(tab)
+        self.private_api = WebKitHistoryPrivate(tab)
 
     def __len__(self):
-        return len(self.data)
+        return len(self._history)
 
-    ######################
-    #    Deprecations    #
-    ######################
+    def __iter__(self):
+        return iter(self._history.items())
 
-    def table(self, datatype=None, **kwargs):
-        """
-        Deprecated method to convert an MultiDimensionalMapping of
-        Elements to a Table.
-        """
-        self.param.warning("The table method is deprecated and should no "
-                           "longer be used. If using a HoloMap use "
-                           "HoloMap.collapse() instead to return a Dataset.")
+    def current_idx(self):
+        return self._history.currentItemIndex()
 
-        from .data.interface import Interface
-        from ..element.tabular import Table
-        new_data = [(key, value.table(datatype=datatype, **kwargs))
-                    for key, value in self.data.items()]
-        tables = self.clone(new_data)
-        return Interface.concatenate(tables, new_type=Table)
+    def can_go_back(self):
+        return self._history.canGoBack()
 
+    def can_go_forward(self):
+        return self._history.canGoForward()
 
-    def dframe(self):
-        """
-        Deprecated method to convert a MultiDimensionalMapping to
-        a pandas DataFrame. Conversion to a dataframe now only
-        supported by specific subclasses such as UniformNdMapping
-        types.
-        """
-        self.param.warning("The MultiDimensionalMapping.dframe method is "
-                           "deprecated and should no longer be used. "
-                           "Use a more specific subclass which does support "
-                           "the dframe method instead, e.g. a HoloMap.")
-        try:
-            import pandas
-        except ImportError:
-            raise Exception("Cannot build a DataFrame without the pandas library.")
-        labels = self.dimensions('key', True) + [self.group]
-        return pandas.DataFrame(
-            [dict(zip(labels, k + (v,))) for (k, v) in self.data.items()])
+    def _item_at(self, i):
+        return self._history.itemAt(i)
+
+    def _go_to_item(self, item):
+        self._tab.before_load_started.emit(item.url())
+        self._history.goToItem(item)
 
 
+class WebKitElements(browsertab.AbstractElements):
 
-class NdMapping(MultiDimensionalMapping):
-    """
-    NdMapping supports the same indexing semantics as
-    MultiDimensionalMapping but also supports slicing semantics.
+    """QtWebKit implemementations related to elements on the page."""
 
-    Slicing semantics on an NdMapping is dependent on the ordering
-    semantics of the keys. As MultiDimensionalMapping sort the keys, a
-    slice on an NdMapping is effectively a way of filtering out the
-    keys that are outside the slice range.
-    """
+    def find_css(self, selector, callback, error_cb, *, only_visible=False):
+        utils.unused(error_cb)
+        mainframe = self._widget.page().mainFrame()
+        if mainframe is None:
+            raise browsertab.WebTabError("No frame focused!")
 
-    group = param.String(default='NdMapping', constant=True)
+        elems = []
+        frames = webkitelem.get_child_frames(mainframe)
+        for f in frames:
+            for elem in f.findAllElements(selector):
+                elems.append(webkitelem.WebKitElement(elem, tab=self._tab))
 
-    def __getitem__(self, indexslice):
-        """
-        Allows slicing operations along the key and data
-        dimensions. If no data slice is supplied it will return all
-        data elements, otherwise it will return the requested slice of
-        the data.
-        """
-        if isinstance(indexslice, np.ndarray) and indexslice.dtype.kind == 'b':
-            if not len(indexslice) == len(self):
-                raise IndexError("Boolean index must match length of sliced object")
-            selection = zip(indexslice, self.data.items())
-            return self.clone([item for c, item in selection if c])
-        elif indexslice == () and not self.kdims:
-            return self.data[()]
-        elif indexslice in [Ellipsis, ()]:
-            return self
-        elif any(Ellipsis is sl for sl in wrap_tuple(indexslice)):
-            indexslice = process_ellipses(self, indexslice)
+        if only_visible:
+            # pylint: disable=protected-access
+            elems = [e for e in elems if e._is_visible(mainframe)]
+            # pylint: enable=protected-access
 
-        map_slice, data_slice = self._split_index(indexslice)
-        map_slice = self._transform_indices(map_slice)
-        map_slice = self._expand_slice(map_slice)
+        callback(elems)
 
-        if all(not (isinstance(el, (slice, set, list, tuple)) or callable(el))
-               for el in map_slice):
-            return self._dataslice(self.data[map_slice], data_slice)
-        else:
-            conditions = self._generate_conditions(map_slice)
-            items = self.data.items()
-            for cidx, (condition, dim) in enumerate(zip(conditions, self.kdims)):
-                values = dim.values
-                items = [(k, v) for k, v in items
-                         if condition(values.index(k[cidx])
-                                      if values else k[cidx])]
-            sliced_items = []
-            for k, v in items:
-                val_slice = self._dataslice(v, data_slice)
-                if val_slice or isinstance(val_slice, tuple):
-                    sliced_items.append((k, val_slice))
-            if len(sliced_items) == 0:
-                raise KeyError('No items within specified slice.')
-            with item_check(False):
-                return self.clone(sliced_items)
-
-
-    def _expand_slice(self, indices):
-        """
-        Expands slices containing steps into a list.
-        """
-        keys = list(self.data.keys())
-        expanded = []
-        for idx, ind in enumerate(indices):
-            if isinstance(ind, slice) and ind.step is not None:
-                dim_ind = slice(ind.start, ind.stop)
-                if dim_ind == slice(None):
-                    condition = self._all_condition()
-                elif dim_ind.start is None:
-                    condition = self._upto_condition(dim_ind)
-                elif dim_ind.stop is None:
-                    condition = self._from_condition(dim_ind)
-                else:
-                    condition = self._range_condition(dim_ind)
-                dim_vals = unique_iterator(k[idx] for k in keys)
-                expanded.append(set([k for k in dim_vals if condition(k)][::int(ind.step)]))
+    def find_id(self, elem_id, callback):
+        def find_id_cb(elems):
+            """Call the real callback with the found elements."""
+            if not elems:
+                callback(None)
             else:
-                expanded.append(ind)
-        return tuple(expanded)
+                callback(elems[0])
 
+        # Escape non-alphanumeric characters in the selector
+        # https://www.w3.org/TR/CSS2/syndata.html#value-def-identifier
+        elem_id = re.sub(r'[^a-zA-Z0-9_-]', r'\\\g<0>', elem_id)
+        self.find_css('#' + elem_id, find_id_cb, error_cb=lambda exc: None)
 
-    def _transform_indices(self, indices):
-        """
-        Identity function here but subclasses can implement transforms
-        of the dimension indices from one coordinate system to another.
-        """
-        return indices
-
-
-    def _generate_conditions(self, map_slice):
-        """
-        Generates filter conditions used for slicing the data structure.
-        """
-        conditions = []
-        for dim, dim_slice in zip(self.kdims, map_slice):
-            if isinstance(dim_slice, slice):
-                start, stop = dim_slice.start, dim_slice.stop
-                if dim.values:
-                    values = dim.values
-                    dim_slice = slice(None if start is None else values.index(start),
-                                      None if stop is None else values.index(stop))
-                if dim_slice == slice(None):
-                    conditions.append(self._all_condition())
-                elif start is None:
-                    conditions.append(self._upto_condition(dim_slice))
-                elif stop is None:
-                    conditions.append(self._from_condition(dim_slice))
-                else:
-                    conditions.append(self._range_condition(dim_slice))
-            elif isinstance(dim_slice, (set, list)):
-                if dim.values:
-                    dim_slice = [dim.values.index(dim_val)
-                                 for dim_val in dim_slice]
-                conditions.append(self._values_condition(dim_slice))
-            elif dim_slice is Ellipsis:
-                conditions.append(self._all_condition())
-            elif callable(dim_slice):
-                conditions.append(dim_slice)
-            elif isinstance(dim_slice, (tuple)):
-                raise IndexError("Keys may only be selected with sets or lists, not tuples.")
-            else:
-                if dim.values:
-                    dim_slice = dim.values.index(dim_slice)
-                conditions.append(self._value_condition(dim_slice))
-        return conditions
-
-
-    def _value_condition(self, value):
-        return lambda x: x == value
-
-
-    def _values_condition(self, values):
-        return lambda x: x in values
-
-
-    def _range_condition(self, slice):
-        if slice.step is None:
-            lmbd = lambda x: slice.start <= x < slice.stop
-        else:
-            lmbd = lambda x: slice.start <= x < slice.stop and not (
-                (x-slice.start) % slice.step)
-        return lmbd
-
-
-    def _upto_condition(self, slice):
-        if slice.step is None:
-            lmbd = lambda x: x < slice.stop
-        else:
-            lmbd = lambda x: x < slice.stop and not (x % slice.step)
-        return lmbd
-
-
-    def _from_condition(self, slice):
-        if slice.step is None:
-            lmbd = lambda x: x >= slice.start
-        else:
-            lmbd = lambda x: x >= slice.start and ((x-slice.start) % slice.step)
-        return lmbd
-
-    def _all_condition(self):
-        return lambda x: True
-
-
-class UniformNdMapping(NdMapping):
-    """
-    A UniformNdMapping is a map of Dimensioned objects and is itself
-    indexed over a number of specified dimensions. The dimension may
-    be a spatial dimension (i.e., a ZStack), time (specifying a frame
-    sequence) or any other combination of Dimensions.
-
-    UniformNdMapping objects can be sliced, sampled, reduced, overlaid
-    and split along its and its containing Element's dimensions.
-    Subclasses should implement the appropriate slicing, sampling and
-    reduction methods for their Dimensioned type.
-    """
-
-    data_type = (ViewableElement, NdMapping)
-
-    __abstract = True
-    _deep_indexable = True
-    _auxiliary_component = False
-
-    def __init__(self, initial_items=None, kdims=None, group=None, label=None, **params):
-        self._type = None
-        self._group_check, self.group = None, group
-        self._label_check, self.label = None, label
-        super(UniformNdMapping, self).__init__(initial_items, kdims=kdims, **params)
-
-    def clone(self, data=None, shared_data=True, new_type=None, link=True,
-              *args, **overrides):
-        """Clones the object, overriding data and parameters.
-
-        Args:
-            data: New data replacing the existing data
-            shared_data (bool, optional): Whether to use existing data
-            new_type (optional): Type to cast object to
-            link (bool, optional): Whether clone should be linked
-                Determines whether Streams and Links attached to
-                original object will be inherited.
-            *args: Additional arguments to pass to constructor
-            **overrides: New keyword arguments to pass to constructor
-
-        Returns:
-            Cloned object
-        """
-        settings = dict(self.param.get_param_values())
-        if settings.get('group', None) != self._group:
-            settings.pop('group')
-        if settings.get('label', None) != self._label:
-            settings.pop('label')
-        if new_type is None:
-            clone_type = self.__class__
-        else:
-            clone_type = new_type
-            new_params = new_type.param.objects()
-            settings = {k: v for k, v in settings.items()
-                      if k in new_params}
-        settings = dict(settings, **overrides)
-        if 'id' not in settings and new_type in [type(self), None]:
-            settings['id'] = self.id
-
-        if data is None and shared_data:
-            data = self.data
-            if link:
-                settings['plot_id'] = self._plot_id
-        # Apply name mangling for __ attribute
-        pos_args = getattr(self, '_' + type(self).__name__ + '__pos_params', [])
-        with item_check(not shared_data and self._check_items):
-            return clone_type(data, *args, **{k:v for k,v in settings.items()
-                                              if k not in pos_args})
-
-
-    def collapse(self, dimensions=None, function=None, spreadfn=None, **kwargs):
-        """Concatenates and aggregates along supplied dimensions
-
-        Useful to collapse stacks of objects into a single object,
-        e.g. to average a stack of Images or Curves.
-
-        Args:
-            dimensions: Dimension(s) to collapse
-                Defaults to all key dimensions
-            function: Aggregation function to apply, e.g. numpy.mean
-            spreadfn: Secondary reduction to compute value spread
-                Useful for computing a confidence interval, spread, or
-                standard deviation.
-            **kwargs: Keyword arguments passed to the aggregation function
-
-        Returns:
-            Returns the collapsed element or HoloMap of collapsed
-            elements
-        """
-        from .data import concat
-        if not dimensions:
-            dimensions = self.kdims
-        if not isinstance(dimensions, list): dimensions = [dimensions]
-        if self.ndims > 1 and len(dimensions) != self.ndims:
-            groups = self.groupby([dim for dim in self.kdims
-                                   if dim not in dimensions])
-
-        elif all(d in self.kdims for d in dimensions):
-            groups = UniformNdMapping([(0, self)], ['tmp'])
-        else:
-            raise KeyError("Supplied dimensions not found.")
-
-        collapsed = groups.clone(shared_data=False)
-        for key, group in groups.items():
-            last = group.values()[-1]
-            if isinstance(last, UniformNdMapping):
-                group_data = OrderedDict([
-                    (k, v.collapse()) for k, v in group.items()
-                ])
-                group = group.clone(group_data)
-            if hasattr(group.values()[-1], 'interface'):
-                group_data = concat(group)
-                if function:
-                    agg = group_data.aggregate(group.last.kdims, function, spreadfn, **kwargs)
-                    group_data = group.type(agg)
-            else:
-                group_data = [el.data for el in group]
-                args = (group_data, function, group.last.kdims)
-                data = group.type.collapse_data(*args, **kwargs)
-                group_data = group.last.clone(data)
-            collapsed[key] = group_data
-        return collapsed if self.ndims-len(dimensions) else collapsed.last
-
-
-    def dframe(self, dimensions=None, multi_index=False):
-        """Convert dimension values to DataFrame.
-
-        Returns a pandas dataframe of columns along each dimension,
-        either completely flat or indexed by key dimensions.
-
-        Args:
-            dimensions: Dimensions to return as columns
-            multi_index: Convert key dimensions to (multi-)index
-
-        Returns:
-            DataFrame of columns corresponding to each dimension
-        """
-        import pandas as pd
-        if dimensions is None:
-            outer_dimensions = self.kdims
-            inner_dimensions = None
-        else:
-            outer_dimensions = [self.get_dimension(d) for d in dimensions
-                                if d in self.kdims]
-            inner_dimensions = [d for d in dimensions
-                                if d not in outer_dimensions]
-        inds = [(d, self.get_dimension_index(d)) for d in outer_dimensions]
-
-        dframes = []
-        for key, element in self.data.items():
-            df = element.dframe(inner_dimensions, multi_index)
-            names = [d.name for d in outer_dimensions]
-            key_dims = [(d.name, key[i]) for d, i in inds]
-            if multi_index:
-                length = len(df)
-                indexes = [[v]*length for _, v in key_dims]
-                if df.index.names != [None]:
-                    indexes += [df.index]
-                    names += list(df.index.names)
-                df = df.set_index(indexes)
-                df.index.names = names
-            else:
-                for dim, val in key_dims:
-                    dimn = 1
-                    while dim in df:
-                        dim = dim+'_%d' % dimn
-                        if dim in df:
-                            dimn += 1
-                    df.insert(0, dim, val)
-            dframes.append(df)
-        return pd.concat(dframes)
-
-
-    @property
-    def group(self):
-        "Group inherited from items"
-        if self._group:
-            return self._group
-        group =  get_ndmapping_label(self, 'group') if len(self) else None
-        if group is None:
-            return type(self).__name__
-        return group
-
-
-    @group.setter
-    def group(self, group):
-        if group is not None and not sanitize_identifier.allowable(group):
-            raise ValueError("Supplied group %s contains invalid "
-                             "characters." % self.group)
-        self._group = group
-
-
-    @property
-    def label(self):
-        "Label inherited from items"
-        if self._label:
-            return self._label
-        else:
-            if len(self):
-                label = get_ndmapping_label(self, 'label')
-                return '' if label is None else label
-            else:
-                return ''
-
-
-    @label.setter
-    def label(self, label):
-        if label is not None and not sanitize_identifier.allowable(label):
-            raise ValueError("Supplied group %s contains invalid "
-                             "characters." % self.group)
-        self._label = label
-
-    @property
-    def type(self):
-        "The type of elements stored in the mapping."
-        if self._type is None and len(self):
-            self._type = self.values()[0].__class__
-        return self._type
-
-
-    @property
-    def empty_element(self):
-        return self.type(None)
-
-
-    def _item_check(self, dim_vals, data):
-        if not self._check_items:
+    def find_focused(self, callback):
+        frame = self._widget.page().currentFrame()
+        if frame is None:
+            callback(None)
             return
-        elif self.type is not None and (type(data) != self.type):
-            raise AssertionError("%s must only contain one type of object, not both %s and %s." %
-                                 (self.__class__.__name__, type(data).__name__, self.type.__name__))
-        super(UniformNdMapping, self)._item_check(dim_vals, data)
+
+        elem = frame.findFirstElement('*:focus')
+        if elem.isNull():
+            callback(None)
+        else:
+            callback(webkitelem.WebKitElement(elem, tab=self._tab))
+
+    def find_at_pos(self, pos, callback):
+        assert pos.x() >= 0
+        assert pos.y() >= 0
+        frame = self._widget.page().frameAt(pos)
+        if frame is None:
+            # This happens when we click inside the webview, but not actually
+            # on the QWebPage - for example when clicking the scrollbar
+            # sometimes.
+            log.webview.debug("Hit test at {} but frame is None!".format(pos))
+            callback(None)
+            return
+
+        # You'd think we have to subtract frame.geometry().topLeft() from the
+        # position, but it seems QWebFrame::hitTestContent wants a position
+        # relative to the QWebView, not to the frame. This makes no sense to
+        # me, but it works this way.
+        hitresult = frame.hitTestContent(pos)
+        if hitresult.isNull():
+            # For some reason, the whole hit result can be null sometimes (e.g.
+            # on doodle menu links).
+            log.webview.debug("Hit test result is null!")
+            callback(None)
+            return
+
+        try:
+            elem = webkitelem.WebKitElement(hitresult.element(), tab=self._tab)
+        except webkitelem.IsNullError:
+            # For some reason, the hit result element can be a null element
+            # sometimes (e.g. when clicking the timetable fields on
+            # http://www.sbb.ch/ ).
+            log.webview.debug("Hit test result element is null!")
+            callback(None)
+            return
+
+        callback(elem)
 
 
-    def __mul__(self, other, reverse=False):
-        from .overlay import Overlay
-        if isinstance(other, type(self)):
-            if self.kdims != other.kdims:
-                raise KeyError("Can only overlay two %ss with "
-                               "non-matching key dimensions."
-                               % type(self).__name__)
-            items = []
-            self_keys = list(self.data.keys())
-            other_keys = list(other.data.keys())
-            for key in util.unique_iterator(self_keys+other_keys):
-                self_el = self.data.get(key)
-                other_el = other.data.get(key)
-                if self_el is None:
-                    item = [other_el]
-                elif other_el is None:
-                    item = [self_el]
-                elif reverse:
-                    item = [other_el, self_el]
-                else:
-                    item = [self_el, other_el]
-                items.append((key, Overlay(item)))
-            return self.clone(items)
+class WebKitAudio(browsertab.AbstractAudio):
 
-        overlayed_items = [(k, other * el if reverse else el * other)
-                           for k, el in self.items()]
-        return self.clone(overlayed_items)
+    """Dummy handling of audio status for QtWebKit."""
+
+    def set_muted(self, muted: bool, override: bool = False) -> None:
+        raise browsertab.WebTabError('Muting is not supported on QtWebKit!')
+
+    def is_muted(self):
+        return False
+
+    def is_recently_audible(self):
+        return False
 
 
-    def __rmul__(self, other):
-        return self.__mul__(other, reverse=True)
+class WebKitTabPrivate(browsertab.AbstractTabPrivate):
+
+    """QtWebKit-related methods which aren't part of the public API."""
+
+    def networkaccessmanager(self):
+        return self._widget.page().networkAccessManager()
+
+    def user_agent(self):
+        page = self._widget.page()
+        return page.userAgentForUrl(self._tab.url())
+
+    def clear_ssl_errors(self):
+        self.networkaccessmanager().clear_all_ssl_errors()
+
+    def event_target(self):
+        return self._widget
+
+    def shutdown(self):
+        self._widget.shutdown()
+
+
+class WebKitTab(browsertab.AbstractTab):
+
+    """A QtWebKit tab in the browser."""
+
+    def __init__(self, *, win_id, mode_manager, private, parent=None):
+        super().__init__(win_id=win_id, private=private, parent=parent)
+        widget = webview.WebView(win_id=win_id, tab_id=self.tab_id,
+                                 private=private, tab=self)
+        if private:
+            self._make_private(widget)
+        self.history = WebKitHistory(tab=self)
+        self.scroller = WebKitScroller(tab=self, parent=self)
+        self.caret = WebKitCaret(mode_manager=mode_manager,
+                                 tab=self, parent=self)
+        self.zoom = WebKitZoom(tab=self, parent=self)
+        self.search = WebKitSearch(tab=self, parent=self)
+        self.printing = WebKitPrinting(tab=self)
+        self.elements = WebKitElements(tab=self)
+        self.action = WebKitAction(tab=self)
+        self.audio = WebKitAudio(tab=self, parent=self)
+        self.private_api = WebKitTabPrivate(mode_manager=mode_manager,
+                                            tab=self)
+        # We're assigning settings in _set_widget
+        self.settings = webkitsettings.WebKitSettings(settings=None)
+        self._set_widget(widget)
+        self._connect_signals()
+        self.backend = usertypes.Backend.QtWebKit
+
+    def _install_event_filter(self):
+        self._widget.installEventFilter(self._mouse_event_filter)
+
+    def _make_private(self, widget):
+        settings = widget.settings()
+        settings.setAttribute(QWebSettings.PrivateBrowsingEnabled, True)
+
+    def load_url(self, url, *, emit_before_load_started=True):
+        self._load_url_prepare(
+            url, emit_before_load_started=emit_before_load_started)
+        self._widget.load(url)
+
+    def url(self, *, requested=False):
+        frame = self._widget.page().mainFrame()
+        if requested:
+            return frame.requestedUrl()
+        else:
+            return frame.url()
+
+    def dump_async(self, callback, *, plain=False):
+        frame = self._widget.page().mainFrame()
+        if plain:
+            callback(frame.toPlainText())
+        else:
+            callback(frame.toHtml())
+
+    def run_js_async(self, code, callback=None, *, world=None):
+        if world is not None and world != usertypes.JsWorld.jseval:
+            log.webview.warning("Ignoring world ID {}".format(world))
+        document_element = self._widget.page().mainFrame().documentElement()
+        result = document_element.evaluateJavaScript(code)
+        if callback is not None:
+            callback(result)
+
+    def icon(self):
+        return self._widget.icon()
+
+    def reload(self, *, force=False):
+        if force:
+            action = QWebPage.ReloadAndBypassCache
+        else:
+            action = QWebPage.Reload
+        self._widget.triggerPageAction(action)
+
+    def stop(self):
+        self._widget.stop()
+
+    def title(self):
+        return self._widget.title()
+
+    @pyqtSlot()
+    def _on_history_trigger(self):
+        url = self.url()
+        requested_url = self.url(requested=True)
+        self.history_item_triggered.emit(url, requested_url, self.title())
+
+    def set_html(self, html, base_url=QUrl()):
+        self._widget.setHtml(html, base_url)
+
+    @pyqtSlot()
+    def _on_load_started(self):
+        super()._on_load_started()
+        nam = self._widget.page().networkAccessManager()
+        nam.netrc_used = False
+        # Make sure the icon is cleared when navigating to a page without one.
+        self.icon_changed.emit(QIcon())
+
+    @pyqtSlot()
+    def _on_frame_load_finished(self):
+        """Make sure we emit an appropriate status when loading finished.
+
+        While Qt has a bool "ok" attribute for loadFinished, it always is True
+        when using error pages... See
+        https://github.com/qutebrowser/qutebrowser/issues/84
+        """
+        self._on_load_finished(not self._widget.page().error_occurred)
+
+    @pyqtSlot()
+    def _on_webkit_icon_changed(self):
+        """Emit iconChanged with a QIcon like QWebEngineView does."""
+        if sip.isdeleted(self._widget):
+            log.webview.debug("Got _on_webkit_icon_changed for deleted view!")
+            return
+        self.icon_changed.emit(self._widget.icon())
+
+    @pyqtSlot(QWebFrame)
+    def _on_frame_created(self, frame):
+        """Connect the contentsSizeChanged signal of each frame."""
+        # FIXME:qtwebengine those could theoretically regress:
+        # https://github.com/qutebrowser/qutebrowser/issues/152
+        # https://github.com/qutebrowser/qutebrowser/issues/263
+        frame.contentsSizeChanged.connect(self._on_contents_size_changed)
+
+    @pyqtSlot(QSize)
+    def _on_contents_size_changed(self, size):
+        self.contents_size_changed.emit(QSizeF(size))
+
+    @pyqtSlot(usertypes.NavigationRequest)
+    def _on_navigation_request(self, navigation):
+        super()._on_navigation_request(navigation)
+        if not navigation.accepted:
+            return
+
+        log.webview.debug("target {} override {}".format(
+            self.data.open_target, self.data.override_target))
+
+        if self.data.override_target is not None:
+            target = self.data.override_target
+            self.data.override_target = None
+        else:
+            target = self.data.open_target
+
+        if (navigation.navigation_type == navigation.Type.link_clicked and
+                target != usertypes.ClickTarget.normal):
+            tab = shared.get_tab(self.win_id, target)
+            tab.load_url(navigation.url)
+            self.data.open_target = usertypes.ClickTarget.normal
+            navigation.accepted = False
+
+        if navigation.is_main_frame:
+            self.settings.update_for_url(navigation.url)
+
+    @pyqtSlot()
+    def _on_ssl_errors(self):
+        self._has_ssl_errors = True
+
+    def _connect_signals(self):
+        view = self._widget
+        page = view.page()
+        frame = page.mainFrame()
+        page.windowCloseRequested.connect(self.window_close_requested)
+        page.linkHovered.connect(self.link_hovered)
+        page.loadProgress.connect(self._on_load_progress)
+        frame.loadStarted.connect(self._on_load_started)
+        view.scroll_pos_changed.connect(self.scroller.perc_changed)
+        view.titleChanged.connect(self.title_changed)
+        view.urlChanged.connect(self._on_url_changed)
+        view.shutting_down.connect(self.shutting_down)
+        page.networkAccessManager().sslErrors.connect(self._on_ssl_errors)
+        frame.loadFinished.connect(self._on_frame_load_finished)
+        view.iconChanged.connect(self._on_webkit_icon_changed)
+        page.frameCreated.connect(self._on_frame_created)
+        frame.contentsSizeChanged.connect(self._on_contents_size_changed)
+        frame.initialLayoutCompleted.connect(self._on_history_trigger)
+        page.navigation_request.connect(self._on_navigation_request)

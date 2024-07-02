@@ -1,10 +1,4 @@
 require 'travis/build/addons/deploy/conditions'
-            def install(edge = config[:edge])
-              edge = config[:edge]
-              if edge.respond_to? :fetch
-                src = edge.fetch(:source, 'travis-ci/dpl')
-                branch = edge.fetch(:branch, 'master')
-                build_gem_locally_from(src, branch)
 require 'travis/build/addons/deploy/config'
 
 module Travis
@@ -140,7 +134,12 @@ module Travis
               end
             end
 
-            def install
+            def install(edge = config[:edge])
+              edge = config[:edge]
+              if edge.respond_to? :fetch
+                src = edge.fetch(:source, 'travis-ci/dpl')
+                branch = edge.fetch(:branch, 'master')
+                build_gem_locally_from(src, branch)
               sh.if "$(rvm use $(travis_internal_ruby) do ruby -e \"puts RUBY_VERSION\") = 1.9*" do
                 cmd(dpl_install_command(true), echo: false, assert: !allow_failure, timing: true)
               end

@@ -7934,7 +7934,6 @@ void MegaApiImpl::startUpload(bool startFirst, const char *localPath, MegaNode *
         transfer->setParentHandle(parent->getHandle());
     }
 
-    if (targetUser)
     {
         transfer->setParentPath(targetUser); //TODO: copy?
     }

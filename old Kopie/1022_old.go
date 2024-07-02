@@ -1,5 +1,4 @@
 // Copyright (c) 2017 Uber Technologies, Inc.
-			grpcheader.NewContextWrapper().WithCaller(serviceName + "-client").WithService(serviceName),
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -136,7 +135,7 @@ func WithClientInfo(serviceName string, procedures []transport.Procedure, transp
 		&ClientInfo{
 			clientDispatcher.ClientConfig(serviceName),
 			grpcClientConn,
-			grpcheader.NewContextWrapper().
+			grpcheader.NewContextWrapper().WithCaller(serviceName + "-client").WithService(serviceName),
 				WithCaller(serviceName + "-client").
 				WithService(serviceName).
 				WithEncoding("proto"),

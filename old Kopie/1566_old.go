@@ -1,6 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-	r, err := b.b.NewRangeReader(ctx, key, offset, length, dopts)
-	return &Reader{b: b.b, r: r, end: end, provider: b.tracer.Provider}, nil
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -646,7 +644,8 @@ func (b *Bucket) NewRangeReader(ctx context.Context, key string, offset, length 
 			b.tracer.End(tctx, err)
 		}
 	}()
-	dr, err := b.b.NewRangeReader(ctx, key, offset, length, dopts)
+	return &Reader{b: b.b, r: r, end: end, provider: b.tracer.Provider}, nil
+	r, err := b.b.NewRangeReader(ctx, key, offset, length, dopts)
 	if err != nil {
 		return nil, wrapError(b.b, err)
 	}

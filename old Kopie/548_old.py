@@ -1,229 +1,150 @@
-import json
-    attr_key, value = parse_attr_txn(txn)
-    hashed_value = hash_of(value) if value else ''
-from hashlib import sha256
-from common.serializers.serialization import domain_state_serializer
-from plenum.common.constants import RAW, ENC, HASH, TXN_TIME, TXN_TYPE, TARGET_NYM, DATA, NAME, VERSION, ORIGIN
-from plenum.common.types import f
-from indy_common.serialization import attrib_raw_data_serializer
-from indy_common.constants import ATTRIB, GET_ATTR, REF, SIGNATURE_TYPE
+# vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-MARKER_ATTR = "\01"
-MARKER_SCHEMA = "\02"
-MARKER_CLAIM_DEF = "\03"
-LAST_SEQ_NO = "lsn"
-VALUE = "val"
-LAST_UPDATE_TIME = "lut"
+# Copyright 2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+#
+# This file is part of qutebrowser.
+#
+# qutebrowser is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qutebrowser is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qutebrowser.  If not, see <http://www.gnu.org/licenses/>.
 
-ALL_ATR_KEYS = [RAW, ENC, HASH]
+"""Simple history which gets written to disk."""
 
+import time
+import itertools
 
-def make_state_path_for_nym(did) -> bytes:
-    # TODO: This is duplicated in plenum.DimainRequestHandler
-    return sha256(did.encode()).digest()
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWebKit import QWebHistoryInterface
 
-
-def make_state_path_for_attr(did, attr_name, attr_is_hash=False) -> bytes:
-    nameHash = sha256(attr_name.encode()).hexdigest() if not attr_is_hash else attr_name
-    return "{DID}:{MARKER}:{ATTR_NAME}"\
-        .format(DID=did,
-                MARKER=MARKER_ATTR,
-                ATTR_NAME=nameHash).encode()
-
-
-def make_state_path_for_schema(authors_did, schema_name, schema_version) -> bytes:
-    return "{DID}:{MARKER}:{SCHEMA_NAME}:{SCHEMA_VERSION}" \
-        .format(DID=authors_did,
-                MARKER=MARKER_SCHEMA,
-                SCHEMA_NAME=schema_name,
-                SCHEMA_VERSION=schema_version).encode()
+from qutebrowser.utils import utils, objreg, standarddir
+from qutebrowser.config import config
+from qutebrowser.misc import lineparser
 
 
-def make_state_path_for_claim_def(authors_did, schema_seq_no, signature_type) -> bytes:
-    return "{DID}:{MARKER}:{SIGNATURE_TYPE}:{SCHEMA_SEQ_NO}" \
-        .format(DID=authors_did,
-                MARKER=MARKER_CLAIM_DEF,
-                SIGNATURE_TYPE=signature_type,
-                SCHEMA_SEQ_NO=schema_seq_no).encode()
+class HistoryEntry:
 
+    """A single entry in the web history.
 
-def prepare_nym_for_state(txn):
-    # TODO: this is semi-duplicated in plenum.DomainRequestHandler
-    data = txn.get(DATA)
-    parsed = domain_state_serializer.deserialize(data)
-    parsed.pop(TARGET_NYM, None)
-    value = domain_state_serializer.serialize(parsed)
-    nym = txn[TARGET_NYM]
-    key = make_state_path_for_nym(nym)
-    return key, value
-
-
-def prepare_get_nym_for_state(txn):
-    data = txn.get(DATA)
-    value = None
-    if data is not None:
-        parsed = domain_state_serializer.deserialize(data)
-        parsed.pop(TARGET_NYM, None)
-        value = domain_state_serializer.serialize(parsed)
-    nym = txn[TARGET_NYM]
-    key = make_state_path_for_nym(nym)
-    return key, value
-
-
-def prepare_attr_for_state(txn):
+    Attributes:
+        atime: The time the page was accessed.
+        url: The URL which was accessed as string
     """
-    Make key(path)-value pair for state from ATTRIB or GET_ATTR
-    :return: state path, state value, value for attribute store
+
+    def __init__(self, atime, url):
+        self.atime = float(atime)
+        self.url = url
+
+    def __repr__(self):
+        return utils.get_repr(self, constructor=True, atime=self.atime,
+                              url=self.url)
+
+    def __str__(self):
+        return '{} {}'.format(int(self.atime), self.url)
+
+    @classmethod
+    def from_str(cls, s):
+        """Get a history based on a 'TIME URL' string."""
+        return cls(*s.split(' ', maxsplit=1))
+
+
+class WebHistory(QWebHistoryInterface):
+
+    """A QWebHistoryInterface which supports being written to disk.
+
+    Attributes:
+        _lineparser: The AppendLineParser used to save the history.
+        _old_urls: A set of URLs read from the on-disk history.
+        _new_history: A list of HistoryEntry items of the current session.
+        _saved_count: How many HistoryEntries have been written to disk.
+        _old_hit: How many times an URL was found in _old_urls.
+        _old_miss: How many times an URL was not found in _old_urls.
     """
-    assert txn[TXN_TYPE] in {ATTRIB, GET_ATTR}
-    nym = txn[TARGET_NYM]
-    attr_type, attr_key, value = parse_attr_txn(txn)
-    if attr_type == ENC:
-        hashed_value = attr_key
-    else:
-        hashed_value = hash_of(value) if value else ''
-    seq_no = txn[f.SEQ_NO.nm]
-    txn_time = txn[TXN_TIME]
-    value_bytes = encode_state_value(hashed_value, seq_no, txn_time)
-    path = make_state_path_for_attr(nym, attr_key,
-                                    attr_type == HASH or attr_type == ENC)
-    return attr_type, path, value, hashed_value, value_bytes
+
+    item_added = pyqtSignal(HistoryEntry)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._lineparser = lineparser.AppendLineParser(
+            standarddir.data(), 'history', parent=self)
+        self._old_urls = {}
+        with self._lineparser.open():
+            for line in self._lineparser:
+                atime, url = line.rstrip().split(maxsplit=1)
+                # This de-duplicates history entries; only the latest
+                # entry for each URL is kept. If you want to keep
+                # information about previous hits change the items in
+                # old_urls to be lists or change HistoryEntry to have a
+                # list of atimes.
+                self._old_urls[url] = HistoryEntry(atime, url)
+        self._new_history = []
+        self._saved_count = 0
+        self._old_hit = 0
+        self._old_miss = 0
+        objreg.get('save-manager').add_saveable(
+            'history', self.save, self.item_added)
+
+    def __repr__(self):
+        return utils.get_repr(self, new_length=len(self._new_history))
+
+    def __getitem__(self, key):
+        return self._new_history[key]
+
+    def __iter__(self):
+        return itertools.chain(self._old_urls.values(),
+                               iter(self._new_history))
+
+    def get_recent(self):
+        """Get the most recent history entries."""
+        old = self._lineparser.get_recent()
+        return old + [str(e) for e in self._new_history]
+
+    def save(self):
+        """Save the history to disk."""
+        new = (str(e) for e in self._new_history[self._saved_count:])
+        self._lineparser.new_data = new
+        self._lineparser.save()
+        self._saved_count = len(self._new_history)
+
+    def addHistoryEntry(self, url_string):
+        """Called by WebKit when an URL should be added to the history.
+
+        Args:
+            url_string: An url as string to add to the history.
+        """
+        if not config.get('general', 'private-browsing'):
+            entry = HistoryEntry(time.time(), url_string)
+            self._new_history.append(entry)
+            self._old_urls[url_string] = entry
+            self.item_added.emit(entry)
+
+    def historyContains(self, url_string):
+        """Called by WebKit to determine if an URL is contained in the history.
+
+        Args:
+            url_string: The URL (as string) to check for.
+
+        Return:
+            True if the url is in the history, False otherwise.
+        """
+        if url_string in self._old_urls:
+            self._old_hit += 1
+            return True
+        else:
+            self._old_miss += 1
+            return url_string in (entry.url for entry in self._new_history)
 
 
-def prepare_claim_def_for_state(txn):
-    origin = txn.get(f.IDENTIFIER.nm)
-    schema_seq_no = txn.get(REF)
-    if schema_seq_no is None:
-        raise ValueError("'{}' field is absent, "
-                         "but it must contain schema seq no".format(REF))
-    data = txn.get(DATA)
-    if data is None:
-        raise ValueError("'{}' field is absent, "
-                         "but it must contain components of keys"
-                         .format(DATA))
-    signature_type = txn.get(SIGNATURE_TYPE, 'CL')
-    path = make_state_path_for_claim_def(origin, schema_seq_no, signature_type)
-    seq_no = txn[f.SEQ_NO.nm]
-    txn_time = txn[TXN_TIME]
-    value_bytes = encode_state_value(data, seq_no, txn_time)
-    return path, value_bytes
-
-
-def prepare_get_claim_def_for_state(txn):
-    origin = txn.get(ORIGIN)
-    schema_seq_no = txn.get(REF)
-    if schema_seq_no is None:
-        raise ValueError("'{}' field is absent, "
-                         "but it must contain schema seq no".format(REF))
-
-    signature_type = txn.get(SIGNATURE_TYPE, 'CL')
-    path = make_state_path_for_claim_def(origin, schema_seq_no, signature_type)
-    seq_no = txn[f.SEQ_NO.nm]
-
-    value_bytes = None
-    data = txn.get(DATA)
-    if data is not None:
-        txn_time = txn[TXN_TIME]
-        value_bytes = encode_state_value(data, seq_no, txn_time)
-    return path, value_bytes
-
-
-def prepare_schema_for_state(txn):
-    origin = txn.get(f.IDENTIFIER.nm)
-    data = txn.get(DATA)
-    schema_name = data.pop(NAME)
-    schema_version = data.pop(VERSION)
-    path = make_state_path_for_schema(origin, schema_name, schema_version)
-    seq_no = txn[f.SEQ_NO.nm]
-    txn_time = txn[TXN_TIME]
-    value_bytes = encode_state_value(data, seq_no, txn_time)
-    return path, value_bytes
-
-
-def prepare_get_schema_for_state(txn):
-    origin = txn.get(TARGET_NYM)
-    data = txn[DATA].copy()
-    schema_name = data.pop(NAME)
-    schema_version = data.pop(VERSION)
-    path = make_state_path_for_schema(origin, schema_name, schema_version)
-    value_bytes = None
-    if len(data) != 0:
-        seq_no = txn[f.SEQ_NO.nm]
-        txn_time = txn[TXN_TIME]
-        value_bytes = encode_state_value(data, seq_no, txn_time)
-    return path, value_bytes
-
-
-def encode_state_value(value, seqNo, txnTime):
-    return domain_state_serializer.serialize({
-        LAST_SEQ_NO: seqNo,
-        LAST_UPDATE_TIME: txnTime,
-        VALUE: value
-    })
-
-
-def decode_state_value(ecnoded_value):
-    decoded = domain_state_serializer.deserialize(ecnoded_value)
-    value = decoded.get(VALUE)
-    last_seq_no = decoded.get(LAST_SEQ_NO)
-    last_update_time = decoded.get(LAST_UPDATE_TIME)
-    return value, last_seq_no, last_update_time
-
-
-def hash_of(text) -> str:
-    if not isinstance(text, (str, bytes)):
-        text = domain_state_serializer.serialize(text)
-    if not isinstance(text, bytes):
-        text = text.encode()
-    return sha256(text).hexdigest()
-
-
-def parse_attr_txn(txn):
-    attr_type, attr = _extract_attr_typed_value(txn)
-
-    if attr_type == RAW:
-        data = attrib_raw_data_serializer.deserialize(attr)
-        # To exclude user-side formatting issues
-        re_raw = attrib_raw_data_serializer.serialize(data,
-                                                      toBytes=False)
-        key, _ = data.popitem()
-        return attr_type, key, re_raw
-    if attr_type == ENC:
-        return attr_type, hash_of(attr), attr
-    if attr_type == HASH:
-        return attr_type, attr, None
-
-
-def prepare_get_attr_for_state(txn):
-    nym = txn[TARGET_NYM]
-    attr_type, attr_key = _extract_attr_typed_value(txn)
-    data = txn.get(DATA)
-    if data:
-        txn = txn.copy()
-        data = txn.pop(DATA)
-        txn[attr_type] = data
-        return prepare_attr_for_state(txn)
-
-    if attr_type == ENC:
-        attr_key = hash_of(attr_key)
-
-    path = make_state_path_for_attr(nym, attr_key,
-                                    attr_type == HASH or attr_type == ENC)
-    return attr_type, path, None, None, None
-
-
-def _extract_attr_typed_value(txn):
-    """
-    ATTR and GET_ATTR can have one of 'raw', 'enc' and 'hash' fields.
-    This method checks which of them presents and return it's name
-    and value in it.
-    """
-    existing_keys = [key for key in ALL_ATR_KEYS if key in txn]
-    if len(existing_keys) == 0:
-        raise ValueError("ATTR should have one of the following fields: {}"
-                         .format(ALL_ATR_KEYS))
-    if len(existing_keys) > 1:
-        raise ValueError("ATTR should have only one of the following fields: {}"
-                         .format(ALL_ATR_KEYS))
-    existing_key = existing_keys[0]
-    return existing_key, txn[existing_key]
+def init():
+    """Initialize the web history."""
+    history = WebHistory()
+    objreg.register('web-history', history)
+    QWebHistoryInterface.setDefaultInterface(history)

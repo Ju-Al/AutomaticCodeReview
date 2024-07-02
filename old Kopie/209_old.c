@@ -1,15 +1,4 @@
 // Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-			status_change_end(target, SC_FREEZE, INVALID_TIMER);
-			status_change_end(target, SC_SLEEP, INVALID_TIMER);
-			status_change_end(target, SC_DC_WINKCHARM, INVALID_TIMER);
-			status_change_end(target, SC_CONFUSION, INVALID_TIMER);
-			status_change_end(target, SC_TRICKDEAD, INVALID_TIMER);
-			status_change_end(target, SC_HIDING, INVALID_TIMER);
-			status_change_end(target, SC_CLOAKING, INVALID_TIMER);
-			status_change_end(target, SC_CHASEWALK, INVALID_TIMER);
-			status_change_end(target, SC_CAMOUFLAGE, INVALID_TIMER);
-			status_change_end(target, SC__INVISIBILITY, INVALID_TIMER);
-			status_change_end(target, SC_DEEP_SLEEP, INVALID_TIMER);
 // See the LICENSE file
 // Portions Copyright (c) Athena Dev Teams
 
@@ -1176,8 +1165,18 @@ int status_damage(struct block_list *src,struct block_list *target,int64 in_hp, 
 
 	if( hp && !(flag&1) ) {
 		if( sc ) {
+			status_change_end(target, SC_FREEZE, INVALID_TIMER);
+			status_change_end(target, SC_SLEEP, INVALID_TIMER);
+			status_change_end(target, SC_DC_WINKCHARM, INVALID_TIMER);
+			status_change_end(target, SC_CONFUSION, INVALID_TIMER);
+			status_change_end(target, SC_TRICKDEAD, INVALID_TIMER);
+			status_change_end(target, SC_HIDING, INVALID_TIMER);
+			status_change_end(target, SC_CLOAKING, INVALID_TIMER);
+			status_change_end(target, SC_CHASEWALK, INVALID_TIMER);
+			status_change_end(target, SC_CAMOUFLAGE, INVALID_TIMER);
+			status_change_end(target, SC__INVISIBILITY, INVALID_TIMER);
+			status_change_end(target, SC_DEEP_SLEEP, INVALID_TIMER);
 			struct status_change_entry *sce;
-
 			if((sce = sc->data[SC_DEVOTION]) && src && battle_config.devotion_reflect_damage) {
 				struct block_list *d_bl = map_id2bl(sce->val1);
 

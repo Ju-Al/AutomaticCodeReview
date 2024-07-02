@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sonm-io/core/blockchain"
-	"github.com/sonm-io/core/blockchain/market"
 	"github.com/sonm-io/core/proto"
 	"github.com/sonm-io/core/util"
 )

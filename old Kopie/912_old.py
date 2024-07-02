@@ -1,16 +1,4 @@
 # Copyright 2019 Google LLC
-      crash_result = _run_libfuzzer_testcase(testcase, testcase_file_path)
-      if (not crash_result or \
-          crash_result.is_security_issue() !=
-          initial_crash_result.is_security_issue() or
-          crash_result.get_type() != initial_crash_result.get_type() or
-          crash_result.get_state() != initial_crash_result.get_state()):
-            'Skipped needed {options_env_var} option: {option_name}'.format(
-        continue
-
-      logs.log(
-          'Removed unneeded {options_env_var} option: {option_name}'.format(
-              options_env_var=options_env_var, option_name=option_name))
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1272,6 +1260,18 @@ def do_libfuzzer_minimization(testcase, testcase_file_path):
     if not options:
       continue
 
+      crash_result = _run_libfuzzer_testcase(testcase, testcase_file_path)
+      if (not crash_result or \
+          crash_result.is_security_issue() !=
+          initial_crash_result.is_security_issue() or
+          crash_result.get_type() != initial_crash_result.get_type() or
+          crash_result.get_state() != initial_crash_result.get_state()):
+            'Skipped needed {options_env_var} option: {option_name}'.format(
+        continue
+
+      logs.log(
+          'Removed unneeded {options_env_var} option: {option_name}'.format(
+              options_env_var=options_env_var, option_name=option_name))
     minimized_options = options.copy()
     for option_name, option_var in six.iteritems(options):
       minimized_options.pop(option_name)

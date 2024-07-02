@@ -1,5 +1,4 @@
 /**
- * NNStreamer OpenCV Custom Filter Example: Average
  * Copyright (C) 2018 Sangjung Woo <sangjung.woo@samsung.com>
  *
  * LICENSE: LGPL-2.1

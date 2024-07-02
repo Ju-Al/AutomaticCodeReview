@@ -515,7 +515,6 @@ class Combine extends Abstract_JS_Optimization {
 			'styles: \' #custom-menu-',
 			'function svc_center_',
 			'#svc_carousel2_container_',
-			'$("#myCarousel',
 			'advads.move',
 			'elementid',
 			'advads_has_ads',

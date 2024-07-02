@@ -137,7 +137,6 @@ func (agent *ecsAgent) capabilities() []*ecs.Attribute {
 			})
 		}
 	}
-	if agent.cfg.OverrideAWSLogsExecutionRole {
 		capabilities = appendNameOnlyAttribute(capabilities, attributePrefix+"execution-role-awslogs")
 	}
 

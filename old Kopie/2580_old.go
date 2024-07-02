@@ -1,8 +1,4 @@
 // Package nfpm implements the Pipe interface providing nFPM bindings.
-			"Builds": binaries,
-			"ID":     fpm.ID,
-			"Format": format,
-			"Files":  contents,
 package nfpm
 
 import (
@@ -317,7 +313,10 @@ func create(ctx *context.Context, fpm config.NFPM, format, arch string, binaries
 		Goarch: binaries[0].Goarch,
 		Goarm:  binaries[0].Goarm,
 		Extra: map[string]interface{}{
-			artifact.ExtraBuilds: binaries,
+			"Builds": binaries,
+			"ID":     fpm.ID,
+			"Format": format,
+			"Files":  contents,
 			artifact.ExtraID:     fpm.ID,
 			artifact.ExtraFormat: format,
 			"Files":              contents,

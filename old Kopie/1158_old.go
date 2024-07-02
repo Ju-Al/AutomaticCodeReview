@@ -1,5 +1,4 @@
 /*
-	contents += fmt.Sprintf(tabtabtab+"throw new thrift.TProtocolError(thrift.TProtocolErrorType.UNKNOWN, \"Invalid value '$value' for enum '%s'\");", enum.Name)
  * Copyright 2017 Workiva
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -595,6 +594,7 @@ func (g *Generator) generateEnumUsingEnums(enum *parser.Enum) string {
 ", field.Name)
 	}
 	contents += "}\n\n"
+	contents += fmt.Sprintf(tabtabtab+"throw new thrift.TProtocolError(thrift.TProtocolErrorType.UNKNOWN, \"Invalid value '$value' for enum '%s'\");", enum.Name)
 
 	contents += fmt.Sprintf("int serialize%s(%s variant) {
 ", enum.Name, enum.Name)

@@ -1,6 +1,4 @@
 <?php
-				$update_course = Sensei_WC::course_update( $lesson_course_id );
-				$is_preview    = Sensei_Utils::is_preview_lesson( $post->ID );
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 } // End if().
@@ -764,7 +762,8 @@ class Sensei_Main {
 				// Check for WC purchase
 				$lesson_course_id = get_post_meta( $post->ID, '_lesson_course', true );
 
-				if ( method_exists( 'Sensei_WC', 'course_update' ) ) {
+				$update_course = Sensei_WC::course_update( $lesson_course_id );
+				$is_preview    = Sensei_Utils::is_preview_lesson( $post->ID );
 					Sensei_WC::course_update( $post->ID );
 				}
 				$is_preview = Sensei_Utils::is_preview_lesson( $post->ID );

@@ -348,8 +348,6 @@ public class HiveCatalog extends BaseMetastoreCatalog implements Closeable, Supp
   protected boolean isValidIdentifier(TableIdentifier tableIdentifier) {
     return tableIdentifier.namespace().levels().length == 1;
   }
-
-  private TableIdentifier removeCatalogName(TableIdentifier to) {
     if (isValidIdentifier(to)) {
       return to;
     }

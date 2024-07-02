@@ -1,6 +1,4 @@
 /**
-					"INSERT INTO `%s` (`time`, `char_msg`,`account_id`,`char_id`,`char_num`,`name`,`str`,`agi`,`vit`,`int`,`dex`,`luk`,`hair`,`hair_color`)"
-					charlog_db, "make new char", sd->account_id, char_id, slot, esc_name, str, agi, vit, int_, dex, luk, hair_style, hair_color))
  * This file is part of Hercules.
  * http://herc.ws - http://github.com/HerculesWS/Hercules
  *
@@ -1623,7 +1621,8 @@ int char_make_new_char_sql(struct char_session_data *sd, const char *name_, int 
 	// Validation success, log result
 	if (chr->enable_logs) {
 		if (SQL_ERROR == SQL->Query(inter->sql_handle,
-					"INSERT INTO `%s` (`time`, `char_msg`, `account_id`, `char_id`, `char_num`, `class`, `name`, `str`, `agi`, `vit`, `int`, `dex`, `luk`, `hair`, `hair_color`)"
+					charlog_db, "make new char", sd->account_id, char_id, slot, esc_name, str, agi, vit, int_, dex, luk, hair_style, hair_color))
+					"INSERT INTO `%s` (`time`, `char_msg`,`account_id`,`char_id`,`char_num`,`name`,`str`,`agi`,`vit`,`int`,`dex`,`luk`,`hair`,`hair_color`)"
 					"VALUES (NOW(), '%s', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d')",
 					charlog_db, "make new char", sd->account_id, char_id, slot, starting_job, esc_name, str, agi, vit, int_, dex, luk, hair_style, hair_color))
 			Sql_ShowDebug(inter->sql_handle);

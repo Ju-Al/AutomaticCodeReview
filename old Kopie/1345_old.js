@@ -83,7 +83,6 @@ class ExpandedContainer extends Component {
     const disableEnvSettings =
       !envPresetState.isLoaded || !envConfig.isEnvPresetEnabled;
 
-    const es2015Enabled =
       presetState["babel-preset-es2015"].isEnabled &&
       !envConfig.isEnvPresetEnabled;
     const showSpecOption = !loose && es2015Enabled;

@@ -1,9 +1,4 @@
 /**
-void OnDemandCache::remove(
-    const OrderingGateCache::BatchesSetType &remove_batches) {
-    for (const auto &removed_batch : remove_batches) {
-      batches.erase(removed_batch);
-    };
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,7 +18,11 @@ void OnDemandCache::addToBack(
   circ_buffer.back().insert(batches.begin(), batches.end());
 }
 
-void OnDemandCache::remove(const OrderingGateCache::HashesSetType &hashes) {
+void OnDemandCache::remove(
+    for (const auto &removed_batch : remove_batches) {
+      batches.erase(removed_batch);
+    };
+    const OrderingGateCache::BatchesSetType &remove_batches) {
   std::unique_lock<std::shared_timed_mutex> lock(mutex_);
   for (auto &batches : circ_buffer) {
     for (auto it = batches.begin(); it != batches.end();) {

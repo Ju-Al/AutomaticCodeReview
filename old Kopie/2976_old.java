@@ -80,7 +80,6 @@ public final class AsyncExecuteRequest {
         return isFullDuplex;
     }
 
-    /**
      * @return the SDK HTTP execution attributes associated with this request
      */
     public SdkHttpExecutionAttributes sdkHttpExecutionAttributes() {

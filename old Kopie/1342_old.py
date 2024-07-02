@@ -1,5 +1,4 @@
 # This code is part of the Biopython distribution and governed by its
-        self.assertTrue(test_all_search(nr_points, dim, bucket_size, query_radius))
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 
@@ -196,7 +195,7 @@ class KDTreeTest(unittest.TestCase):
             self.assertTrue(test(nr_points, dim, bucket_size, radius))
 
     def test_all_search(self):
-        for i in range(0, 5):
+        self.assertTrue(test_all_search(nr_points, dim, bucket_size, query_radius))
             self.assertTrue(test_all_search((nr_points / 10), dim, bucket_size, query_radius))
 
     def test_search(self):

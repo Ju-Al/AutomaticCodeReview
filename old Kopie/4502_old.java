@@ -1,10 +1,5 @@
 package de.danoeh.antennapod.core.preferences;
 
-    public static int getFeedFilter() {
-        String value = prefs.getString(PREF_FILTER_FEED, "" + FEED_FILTER_NONE);
-        return Integer.parseInt(value);
-    public static void setFeedFilter(String value) {
-                .putString(PREF_FILTER_FEED, value)
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
@@ -1050,7 +1045,11 @@ public class UserPreferences {
                 .apply();
     }
 
-    public static SubscriptionsFilter getSubscriptionsFilter() {
+    public static int getFeedFilter() {
+        String value = prefs.getString(PREF_FILTER_FEED, "" + FEED_FILTER_NONE);
+    public static void setFeedFilter(String value) {
+                .putString(PREF_FILTER_FEED, value)
+        return Integer.parseInt(value);
         String value = prefs.getString(PREF_FILTER_FEED, "");
         return new SubscriptionsFilter(value);
     }

@@ -1,8 +1,4 @@
 /*jslint browser: true */
-  } else if (e.data.scrollX) {
-    let frameOffset = document.getElementById("frame").getBoundingClientRect().top;
-    let toolbarHeight = document.getElementById("toolbar").clientHeight;
-    window.scrollTo(0, frameOffset + e.data.scrollY - toolbarHeight);
 
 
 let loaded = false,
@@ -21,7 +17,10 @@ window.onmessage = function(e) {
     if (loaded) {
       doResize();
     }
-  } else if (e.data.clipWidth) {
+  } else if (e.data.scrollX) {
+    let frameOffset = document.getElementById("frame").getBoundingClientRect().top;
+    let toolbarHeight = document.getElementById("toolbar").clientHeight;
+    window.scrollTo(0, frameOffset + e.data.scrollY - toolbarHeight);
     window.scrollTo(0, 0);
     let frameOffset = document.getElementById("frame").getBoundingClientRect().top,
       toolbarHeight = document.getElementById("toolbar").clientHeight,

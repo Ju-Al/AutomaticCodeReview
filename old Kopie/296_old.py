@@ -1,5 +1,4 @@
 # coding=utf-8
-                widgets.append(module.get_widget())
 """
 Copyright 2015 BlazeMeter Inc.
 
@@ -130,7 +129,7 @@ class ConsoleStatusReporter(Reporter, AggregatorListener):
             modules += self.engine.provisioning.executors
         for module in modules:
             if isinstance(module, WidgetProvider):
-                widget = module.get_widget()
+                widgets.append(module.get_widget())
                 widgets.append(widget)
                 if isinstance(widget, SidebarWidget):
                     self.sidebar_widgets.append(widget)

@@ -1,8 +1,4 @@
 import operator
-        'staking_deposit_asset',
-        'staking_receive_asset',
-        'staking_remove_asset',
-        'receive',
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -421,7 +417,10 @@ class HistoryBaseEntry:
 @dataclass(init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False)
 class StakingEvent:
     event_type: Literal[
-        'get reward',
+        'staking_deposit_asset',
+        'staking_receive_asset',
+        'staking_remove_asset',
+        'receive',
         'stake asset',
         'receive staked asset',
         'unstake asset',

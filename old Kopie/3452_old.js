@@ -61,7 +61,6 @@ const idpData = function (configureCallback) {
         configureCallback("ldap");
       },
     },
-    {
       id: "oidc",
       label: "OpenID Connect",
       icon: "/ldap.svg", // Or use identicons

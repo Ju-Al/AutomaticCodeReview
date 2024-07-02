@@ -1,8 +1,4 @@
 /**
-      : iroha_instance_(std::make_shared<IrohaInstance>(
-            mst_support, block_store_path, kToriiPort, dbname)),
-        command_client_("127.0.0.1", kToriiPort),
-        query_client_("127.0.0.1", kToriiPort),
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -83,7 +79,10 @@ namespace integration_framework {
       milliseconds proposal_waiting,
       milliseconds block_waiting,
       milliseconds tx_response_waiting)
-      : torii_port_(getNextPort<kDefaultToriiPort>()),
+      : iroha_instance_(std::make_shared<IrohaInstance>(
+            mst_support, block_store_path, kToriiPort, dbname)),
+        command_client_("127.0.0.1", kToriiPort),
+        query_client_("127.0.0.1", kToriiPort),
         internal_port_(getNextPort<kDefaultInternalPort>()),
         iroha_instance_(std::make_shared<IrohaInstance>(mst_support,
                                                         block_store_path,

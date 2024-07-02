@@ -1,14 +1,4 @@
 /*
-    Map<KeyExtent,List<Range>> tablets = binnedRanges.get(location);
-    if (tablets == null) {
-      tablets = new HashMap<>();
-      binnedRanges.put(location, tablets);
-    }
-    List<Range> tabletsRanges = tablets.get(ke);
-    if (tabletsRanges == null) {
-      tabletsRanges = new ArrayList<>();
-      tablets.put(ke, tabletsRanges);
-    }
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -740,7 +730,16 @@ public class TabletLocatorImpl extends TabletLocator {
 
   protected static void addRange(Map<String,Map<KeyExtent,List<Range>>> binnedRanges,
       String location, KeyExtent ke, Range range) {
-    Map<KeyExtent,List<Range>> tablets =
+    Map<KeyExtent,List<Range>> tablets = binnedRanges.get(location);
+    if (tablets == null) {
+      tablets = new HashMap<>();
+      binnedRanges.put(location, tablets);
+    List<Range> tabletsRanges = tablets.get(ke);
+    if (tabletsRanges == null) {
+      tabletsRanges = new ArrayList<>();
+      tablets.put(ke, tabletsRanges);
+    }
+    }
         binnedRanges.computeIfAbsent(location, k -> new HashMap<>());
 
     List<Range> tabletsRanges = tablets.computeIfAbsent(ke, k -> new ArrayList<>());

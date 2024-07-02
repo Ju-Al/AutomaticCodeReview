@@ -1,8 +1,4 @@
 /**
-  YacHash hash;
-  PeersNumberType number_of_peers;
-  YacBlockStorage storage = YacBlockStorage(
-      YacHash(iroha::consensus::Round{1, 1}, "proposal", "commit"), 4);
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,7 +18,10 @@ static logger::Logger log_ = logger::testLog("YacBlockStorage");
 
 class YacBlockStorageTest : public ::testing::Test {
  public:
-  PeersNumberType number_of_peers = 6;
+  YacHash hash;
+  PeersNumberType number_of_peers;
+  YacBlockStorage storage = YacBlockStorage(
+      YacHash(iroha::consensus::Round{1, 1}, "proposal", "commit"), 4);
   PeersNumberType supermajority = number_of_peers - number_of_peers / 5;
   YacHash hash = YacHash(iroha::consensus::Round{1, 1}, "proposal", "commit");
   YacBlockStorage storage = YacBlockStorage(hash, number_of_peers);

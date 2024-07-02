@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-    staticPoseTable.updRowAtIndex(0) = avgRow;
  *                         OpenSim:  MarkerPlacer.cpp                         *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -262,7 +261,7 @@ bool MarkerPlacer::processModel(Model* aModel,
                                                    _timeRange[1]);
     for(size_t r = staticPoseTable.getNumRows() - 1; r > 0; --r)
         staticPoseTable.removeRowAtIndex(r);
-    staticPoseTable.appendRow(_timeRange[0], avgRow);
+    staticPoseTable.updRowAtIndex(0) = avgRow;
     
     OPENSIM_THROW_IF(!staticPoseTable.hasTableMetaDataKey("Units"),
                      Exception,

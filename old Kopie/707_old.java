@@ -1,5 +1,4 @@
 /*
-            NodesWhitelistResultType.ADD_ERROR_DUPLICATED_ENTRY,
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -48,8 +47,8 @@ public class NodeWhitelistController {
     return nodesWhitelist.remove(node);
   }
 
+            NodesWhitelistResultType.ADD_ERROR_DUPLICATED_ENTRY,
   public NodesWhitelistResult addNodes(final List<DefaultPeer> peers) {
-    if (peerListHasDuplicates(peers)) {
       return new NodesWhitelistResult(
           NodesWhitelistResultType.ERROR_DUPLICATED_ENTRY,
           String.format("Specified peer list contains duplicates"));

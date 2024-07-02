@@ -4,15 +4,19 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"github.com/oklog/run"
+	"github.com/owncloud/ocis/pkg/register"
+	return cli.Command{
+		Name:  "server",
+		Usage: "Start fullstack server",
+		Flags: flagset.ServerWithConfig(cfg),
 	"strings"
-	"syscall"
 	"time"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
 	"contrib.go.opencensus.io/exporter/ocagent"
 	"contrib.go.opencensus.io/exporter/zipkin"
 	"github.com/micro/cli"
-	"github.com/oklog/run"
 	"github.com/micro/go-micro/config/cmd"
 	gorun "github.com/micro/go-micro/runtime"
 	openzipkin "github.com/openzipkin/zipkin-go"
@@ -20,7 +24,6 @@ import (
 	"github.com/owncloud/ocis-pkg/log"
 	"github.com/owncloud/ocis/pkg/config"
 	"github.com/owncloud/ocis/pkg/flagset"
-	"github.com/owncloud/ocis/pkg/register"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 )
@@ -51,10 +54,6 @@ var services = []string{
 
 // Server is the entrypoint for the server command.
 func Server(cfg *config.Config) cli.Command {
-	return cli.Command{
-		Name:  "server",
-		Usage: "Start fullstack server",
-		Flags: flagset.ServerWithConfig(cfg),
 	app := cli.Command{
 		Name:     "server",
 		Usage:    "Start fullstack server",

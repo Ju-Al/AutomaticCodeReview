@@ -1,13 +1,4 @@
 /*
-		certMgrCRD = map[string]string{
-			"url":       "testdata/enable_api_group_versions/cert-manager.yaml",
-			"namespace": "cert-manager",
-		}
-
-		client, extensionsClient, err = kube.GetClusterClient() // Currently we ignore the API extensions client
-		Expect(err).NotTo(HaveOccurred())
-		err = installCRD(ctx, certMgrCRD["url"], certMgrCRD["namespace"])
-		cmd := exec.CommandContext(ctx, "kubectl", "delete", "namespace", "music-system")
 Copyright the Velero contributors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -60,8 +51,16 @@ var _ = Describe("[APIGroup] Velero tests with various CRD API group versions", 
 	BeforeEach(func() {
 		resource = "rockbands"
 		group = "music.example.io"
+		certMgrCRD = map[string]string{
+			"url":       "testdata/enable_api_group_versions/cert-manager.yaml",
+			"namespace": "cert-manager",
+		}
 
-		client, extensionsClient, err = kube.GetClusterClient()
+		client, extensionsClient, err = kube.GetClusterClient() // Currently we ignore the API extensions client
+		Expect(err).NotTo(HaveOccurred())
+
+		cmd := exec.CommandContext(ctx, "kubectl", "delete", "namespace", "music-system")
+		err = installCRD(ctx, certMgrCRD["url"], certMgrCRD["namespace"])
 		Expect(err).NotTo(HaveOccurred())
 
 		uuidgen, err = uuid.NewRandom()

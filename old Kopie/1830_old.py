@@ -1,8 +1,4 @@
 """Library information."""
-    dll_path = [os.path.abspath(x) for x in dll_path]
-        if search_path is list:
-            dll_path = dll_path + search_path
-        else:
 from __future__ import absolute_import
 import sys
 import os
@@ -52,8 +48,11 @@ def find_lib_path(name=None, search_path=None, optional=False):
 
     dll_path.append(install_lib_dir)
 
+    dll_path = [os.path.abspath(x) for x in dll_path]
     if search_path is not None:
-        if isinstance(search_path, (list, tuple, set)):
+        if search_path is list:
+            dll_path = dll_path + search_path
+        else:
             dll_path = dll_path + list(search_path)
         elif isinstance(search_path, str):
             dll_path.append(search_path)

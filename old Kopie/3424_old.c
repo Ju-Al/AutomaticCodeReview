@@ -1,5 +1,4 @@
 /* Copyright (C) 2000-2012 by George Williams */
-    if ( (lparen = strchr(filename,'('))!=NULL && strchr(lparen,')')!=NULL ) {
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -2570,6 +2569,7 @@ static FOND *PickFOND(FOND *fondlist,char *filename,char **name, int *style) {
     uint8 stylesused[96];
     char **names;
     FOND **fonds, *fond;
+    if ( (lparen = strchr(filename,'('))!=NULL && strchr(lparen,')')!=NULL ) {
     int *styles;
     int cnt, which;
     char *pt, *lparen;

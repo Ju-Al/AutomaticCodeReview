@@ -1,5 +1,4 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-    uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, &nHashed);
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2015-2017 The Bitcoin Unlimited developers
 // Distributed under the MIT software license, see the accompanying
@@ -1255,8 +1254,8 @@ bool TransactionSignatureChecker::CheckSig(const vector<unsigned char>& vchSigIn
         return false;
     int nHashType = vchSig.back();
     vchSig.pop_back();
+    uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, &nHashed);
 
-    uint256 sighash;
     size_t nHashed = 0;
     // If BCC sighash is possible, check the bit, otherwise ignore the bit.  This is needed because
     // the bit is undefined (can be any value) before the fork. See block 264084 tx 102

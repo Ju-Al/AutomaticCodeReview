@@ -86,7 +86,6 @@ namespace Microsoft.Health.Fhir.Core.Features.Conformance
                         Reference = $"http://hl7.org/fhir/StructureDefinition/{resourceType}",
                     },
                 };
-                if (!_modelInfoProvider.Version.Equals(FhirSpecification.Stu3))
                 {
                     var supportedProfiles = _supportedProfiles.GetSupportedProfiles(resourceType);
                     if (supportedProfiles != null)

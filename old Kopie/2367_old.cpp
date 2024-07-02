@@ -1,5 +1,4 @@
 /* ----------------------------------------------------------------------
-      langextra[i][3] = inertia[i][0]*gamma1*omega[i][0] +
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    http://lammps.sandia.gov, Sandia National Laboratories
    Steve Plimpton, sjplimp@sandia.gov
@@ -992,7 +991,7 @@ void FixRigid::apply_langevin_thermostat()
 
       gamma1 = -1.0 / t_period / ftm2v;
       gamma2 = tsqrt * sqrt(24.0*boltz/t_period/dt/mvv2e) / ftm2v;
-
+      langextra[i][3] = inertia[i][0]*gamma1*omega[i][0] +
       // convert omega from space frame to body frame
 
       wbody[0] = omega[i][0]*ex_space[i][0] + omega[i][1]*ex_space[i][1] +

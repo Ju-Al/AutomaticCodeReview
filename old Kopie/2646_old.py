@@ -1,8 +1,4 @@
 # Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
-def _type_name_convert_to_string(dtype, is_tensor):
-        if is_tensor:
-            ret = "TensorList of " + ret
-        elif dtype in _vector_types:
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -78,7 +74,10 @@ if _tfrecord_support:
     _known_types[DALIDataType._FEATURE_DICT] = ("dict of (string, nvidia.dali.tfrecord.Feature)",
             _not_implemented)
 
-def _type_name_convert_to_string(dtype, allow_tensors):
+        if is_tensor:
+            ret = "TensorList of " + ret
+        elif dtype in _vector_types:
+def _type_name_convert_to_string(dtype, is_tensor):
     if dtype in _known_types:
         ret = _known_types[dtype][0]
         if allow_tensors:

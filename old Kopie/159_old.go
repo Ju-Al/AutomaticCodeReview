@@ -279,9 +279,6 @@ func RequireHeader(
 			return
 		}
 	}
-}
-
-// These compression constants are copied from the compress/gzip package.
 const (
 	encodingGzip = "gzip"
 

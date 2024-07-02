@@ -1,5 +1,4 @@
 # coding: utf-8
-def test_find_random_open_port(cluster):
 """Tests for lightgbm.dask module"""
 
 import inspect
@@ -447,7 +446,7 @@ def test_classifier_pred_contrib(output, task, cluster):
                 assert len(np.unique(preds_with_contrib[:, base_value_col]) == 1)
 
 
-def test_group_workers_by_host():
+def test_find_random_open_port(cluster):
     hosts = [f'0.0.0.{i}' for i in range(2)]
     workers = [f'tcp://{host}:{p}' for p in range(2) for host in hosts]
     expected = {

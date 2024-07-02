@@ -1,5 +1,4 @@
 /***************************************************************************
-void Interface::Basic::EventGameInfo( void ) const
  *   Copyright (C) 2012 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -309,7 +308,7 @@ void Interface::Basic::EventPuzzleMaps( void ) const
     world.GetKingdom( Settings::Get().CurrentColor() ).PuzzleMaps().ShowMapsDialog();
 }
 
-fheroes2::GameMode Interface::Basic::EventGameInfo() const
+void Interface::Basic::EventGameInfo( void ) const
 {
     if ( Settings::Get().isCampaignGameType() ) {
         fheroes2::Display & display = fheroes2::Display::instance();

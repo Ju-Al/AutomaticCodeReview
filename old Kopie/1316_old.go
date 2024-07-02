@@ -18,43 +18,65 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package transport
+package yarpc_test
 
-import "go.uber.org/zap/zapcore"
+import (
+	"context"
+	"testing"
 
-// RequestFeatures are features that the client implements.
-//
-// By setting a feature, the client signifies that it can handle certain
-// features, and the server can choose how to proceed. If the feature is
-// used, the server will return a corresponding signal on ResponseFeatures.
-//
-// This is needed for backwards compatibility.
-type RequestFeatures struct {
-	// AcceptResponseError indicates that the client can handle both
-	// a response body and error at the same time.
-	AcceptResponseError bool
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/api/encoding"
+	"go.uber.org/yarpc/api/transport"
+	pkgencoding "go.uber.org/yarpc/pkg/encoding"
+)
+
+func TestCallOptionsWriteToRequest(t *testing.T) {
+	outboundCall := encoding.NewOutboundCall(
+		pkgencoding.FromOptions(
+			[]yarpc.CallOption{
+				yarpc.WithShardKey("foo"),
+				yarpc.WithRoutingKey("bar"),
+				yarpc.WithRoutingDelegate("baz"),
+			},
+		)...,
+	)
+	request := &transport.Request{}
+	_, err := outboundCall.WriteToRequest(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Equal(t, "foo", request.ShardKey)
+	assert.Equal(t, "bar", request.RoutingKey)
+	assert.Equal(t, "baz", request.RoutingDelegate)
 }
 
-// MarshalLogObject implements zap.ObjectMarshaler.
-func (f RequestFeatures) MarshalLogObject(objectEncoder zapcore.ObjectEncoder) error {
-	objectEncoder.AddBool("acceptResponseError", f.AcceptResponseError)
-	return nil
-}
-
-// ResponseFeatures are features that were applied on the server.
-//
-// The server can only use features that were signaled from RequestFeatures.
-// If the feature is used, the server must indicate so on ResponseFeatures.
-//
-// This is needed for backwards compatibility.
-type ResponseFeatures struct {
-	// AcceptResponseError indicates that the client can handle both
-	// a response body and error at the same time.
-	AcceptResponseError bool
-}
-
-// MarshalLogObject implements zap.ObjectMarshaler.
-func (f ResponseFeatures) MarshalLogObject(objectEncoder zapcore.ObjectEncoder) error {
-	objectEncoder.AddBool("acceptResponseError", f.AcceptResponseError)
-	return nil
+func TestCallFromContext(t *testing.T) {
+	ctx, inboundCall := encoding.NewInboundCall(context.Background())
+	err := inboundCall.ReadFromRequest(
+		&transport.Request{
+			Caller:          "foo",
+			Service:         "bar",
+			Encoding:        transport.Encoding("baz"),
+			Procedure:       "hello",
+			Headers:         transport.NewHeaders().With("foo", "bar"),
+			ShardKey:        "one",
+			RoutingKey:      "two",
+			RoutingDelegate: "three",
+				AcceptResponseError: true,
+			},
+		},
+	)
+	assert.NoError(t, err)
+	call := yarpc.CallFromContext(ctx)
+	assert.Equal(t, "foo", call.Caller())
+	assert.Equal(t, "bar", call.Service())
+	assert.Equal(t, transport.Encoding("baz"), call.Encoding())
+	assert.Equal(t, "hello", call.Procedure())
+	assert.Equal(t, "bar", call.Header("foo"))
+	assert.Equal(t, []string{"foo"}, call.HeaderNames())
+	assert.Equal(t, "one", call.ShardKey())
+	assert.Equal(t, "two", call.RoutingKey())
+	assert.Equal(t, "three", call.RoutingDelegate())
+	assert.Equal(t, transport.RequestFeatures{
+		AcceptResponseError: true,
+	}, call.Features())
 }

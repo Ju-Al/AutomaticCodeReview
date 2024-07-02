@@ -1,18 +1,4 @@
 /*
-     * Returns a supplier of processors for a vertex which, for each received
-     * item, emits the result of applying the given mapping function to it. The
-     * mapping function receives another parameter, a context object which Jet
-     * will create using the supplied {@code contextFactory} for each key.
-     * <p>
-     * Unlike {@link #mapUsingContextP} (without the "{@code Keyed}" part),
-     * this method creates separate context object for each key. A context
-     * object, once created, is stored until the end of the job, so watch your
-     * number of keys.
-     * If the mapping result is {@code null}, the vertex emits nothing.
-     * Therefore it can be used to implement filtering semantics as well.
-     * This vertex saves the state to snapshot so the context objects will
-     * survive a job restart.
-     *  @param <T> type of the input item
  * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -823,7 +809,20 @@ public final class Processors {
     }
 
     /**
-     * Returns a supplier of processors for a vertex that performs a rolling
+     * Returns a supplier of processors for a vertex which, for each received
+     * item, emits the result of applying the given mapping function to it. The
+     * mapping function receives another parameter, a context object which Jet
+     * will create using the supplied {@code contextFactory} for each key.
+     * <p>
+     * Unlike {@link #mapUsingContextP} (without the "{@code Keyed}" part),
+     * this method creates separate context object for each key. A context
+     * object, once created, is stored until the end of the job, so watch your
+     * If the mapping result is {@code null}, the vertex emits nothing.
+     * Therefore it can be used to implement filtering semantics as well.
+     * This vertex saves the state to snapshot so the context objects will
+     * survive a job restart.
+     *  @param <T> type of the input item
+     * number of keys.
      * aggregation. Every time it receives an item, it passes is to the
      * accumulator and then calls the `export` primitive to emit the current
      * state of aggregation.

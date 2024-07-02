@@ -42,7 +42,6 @@ public class VarValidator implements TypedValidator<VarType> {
             return;
         }
         variableDeclarator.ifPresent(vd -> {
-            if(vd.getType().isArrayType()){
                 reporter.report(vd, "\"var\" cannot have extra array brackets.");
             }
             Optional<Node> variableDeclarationExpr = vd.getParentNode();

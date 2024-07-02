@@ -1,6 +1,4 @@
 using System;
-        // Alpharatio can't handle dots in the searchstr
-        protected override string GetSearchTerm(TorznabQuery query) => query.GetQueryString().Replace(".", " ");
 using Jackett.Common.Indexers.Abstract;
 using Jackett.Common.Models;
 using Jackett.Common.Services.Interfaces;
@@ -61,7 +59,8 @@ namespace Jackett.Common.Indexers
             AddCategoryMapping(30, TorznabCatType.Other, "Misc");
         }
 
-        protected override string GetSearchTerm(TorznabQuery query)
+        // Alpharatio can't handle dots in the searchstr
+        protected override string GetSearchTerm(TorznabQuery query) => query.GetQueryString().Replace(".", " ");
         {
             // Ignore season search without episode. Alpharatio doesn't support it.
             if (String.IsNullOrEmpty(query.Episode))

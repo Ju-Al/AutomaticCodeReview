@@ -1,8 +1,7 @@
-# remove_command.py
-    aliases = ('remove', 'erase') + tuple(nevra_forms.keys())
-# Remove CLI command.
+# autoremove.py
+# Autoremove CLI command.
 #
-# Copyright (C) 2012-2016 Red Hat, Inc.
+# Copyright (C) 2014-2016 Red Hat, Inc.
 #
 # This copyrighted material is made available to anyone wishing to use,
 # modify, copy, or redistribute it subject to the terms and conditions of
@@ -22,105 +21,56 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from dnf.cli import commands
-from dnf.i18n import _
 from dnf.cli.option_parser import OptionParser
+from dnf.i18n import _
 
-import argparse
-import hawkey
 import dnf.exceptions
+import hawkey
 import logging
 
 logger = logging.getLogger("dnf")
 
 
-class RemoveCommand(commands.Command):
-    """Remove command."""
+class AutoremoveCommand(commands.Command):
 
-    nevra_forms = {'remove-n': hawkey.FORM_NAME,
-                   'remove-na': hawkey.FORM_NA,
-                   'remove-nevra': hawkey.FORM_NEVRA,
-                   'erase-n': hawkey.FORM_NAME,
-                   'erase-na': hawkey.FORM_NA,
-                   'erase-nevra': hawkey.FORM_NEVRA}
+    nevra_forms = {'autoremove-n': hawkey.FORM_NAME,
+                   'autoremove-na': hawkey.FORM_NA,
+                   'autoremove-nevra': hawkey.FORM_NEVRA}
 
-    aliases = ('remove', 'erase', 'r', 'e', 'rm') + tuple(nevra_forms.keys())
-    summary = _('remove a package or packages from your system')
+    aliases = ('autoremove',) + tuple(nevra_forms.keys())
+    summary = _('remove all unneeded packages that were originally installed '
+                'as dependencies')
 
     @staticmethod
     def set_argparser(parser):
-        mgroup = parser.add_mutually_exclusive_group()
-        mgroup.add_argument('--duplicates', action='store_true',
-                            dest='duplicated',
-                            help=_('remove duplicated packages'))
-        mgroup.add_argument('--duplicated', action='store_true',
-                            help=argparse.SUPPRESS)
-        mgroup.add_argument('--oldinstallonly', action='store_true',
-                            help=_(
-                                'remove installonly packages over the limit'))
         parser.add_argument('packages', nargs='*', help=_('Package to remove'),
                             action=OptionParser.ParseSpecGroupFileCallback,
                             metavar=_('PACKAGE'))
 
     def configure(self):
         demands = self.cli.demands
-        demands.allow_erasing = True
-        # disable all available repos to delete whole dependency tree
-        # instead of replacing removable package with available packages
-        demands.available_repos = False
         demands.resolving = True
         demands.root_user = True
         demands.sack_activation = True
 
+        if any([self.opts.grp_specs, self.opts.pkg_specs, self.opts.filenames]):
+            self.base.conf.clean_requirements_on_remove = True
+            demands.allow_erasing = True
+            # disable all available repos to delete whole dependency tree
+            # instead of replacing removable package with available packages
+            demands.available_repos = False
+        else:
+            demands.available_repos = True
+            demands.fresh_metadata = False
+
     def run(self):
+        if any([self.opts.grp_specs, self.opts.pkg_specs, self.opts.filenames]):
+            forms = [self.nevra_forms[command] for command in self.opts.command
+                     if command in list(self.nevra_forms.keys())]
 
-        forms = [self.nevra_forms[command] for command in self.opts.command
-                 if command in list(self.nevra_forms.keys())]
-
-        # local pkgs not supported in erase command
-        self.opts.pkg_specs += self.opts.filenames
-        done = False
-
-        if self.opts.duplicated:
-            q = self.base.sack.query()
-            instonly = self.base._get_installonly_query(q.installed())
-            dups = q.duplicated().difference(instonly).latest(-1)
-            if dups:
-                for pkg in dups:
-                    self.base.package_remove(pkg)
-            else:
-                raise dnf.exceptions.Error(
-                    _('No duplicated packages found for removal.'))
-            return
-        if self.opts.oldinstallonly:
-            q = self.base.sack.query()
-            instonly = self.base._get_installonly_query(q.installed()).latest(
-                - self.base.conf.installonly_limit)
-            if instonly:
-                for pkg in instonly:
-                    self.base.package_remove(pkg)
-            else:
-                raise dnf.exceptions.Error(
-                    _('No old installonly packages found for removal.'))
-            return
-
-        # Remove groups.
-        if self.opts.grp_specs and forms:
-            for grp_spec in self.opts.grp_specs:
-                msg = _('Not a valid form: %s')
-                logger.warning(msg, self.base.output.term.bold(grp_spec))
-        elif self.opts.grp_specs:
-            self.base.read_comps(arch_filter=True)
-            if self.base.env_group_remove(self.opts.grp_specs):
-                done = True
-
-        for pkg_spec in self.opts.pkg_specs:
-            try:
-                self.base.remove(pkg_spec, forms=forms)
-            except dnf.exceptions.MarkingError:
-                logger.info(_('No match for argument: %s'),
-                                      pkg_spec)
-            else:
-                done = True
-
-        if not done:
-            raise dnf.exceptions.Error(_('No packages marked for removal.'))
+            self.base.autoremove(forms,
+                                 self.opts.pkg_specs,
+                                 self.opts.grp_specs,
+                                 self.opts.filenames)
+        else:
+            self.base.autoremove()

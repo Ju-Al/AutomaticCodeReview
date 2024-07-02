@@ -1,57 +1,5 @@
 """Copyright 2008 Orbitz WorldWide
 
-  if settings.REMOTE_PREFETCH_DATA:
-    matching_nodes = [node for node in STORE.find(pathExpr, startTime, endTime, local=True)]
-
-    # inflight_requests is only present if at least one remote store
-    # has been queried
-    if 'inflight_requests' in requestContext:
-      fetches = requestContext['inflight_requests']
-    else:
-      fetches = {}
-
-    def result_queue_generator():
-      for node in matching_nodes:
-        if node.is_leaf:
-          yield (node.path, node.fetch(startTime, endTime, now, requestContext))
-
-      log.info(
-        'render.datalib.fetchData:: result_queue_generator got {count} fetches'
-        .format(count=len(fetches)),
-      )
-      for key, fetch in fetches.iteritems():
-        log.info(
-          'render.datalib.fetchData:: getting results of {host}'
-          .format(host=key),
-        )
-
-        if isinstance(fetch, FetchInProgress):
-          fetch = fetch.waitForResults()
-
-        if fetch is None:
-          log.info('render.datalib.fetchData:: fetch is None')
-          continue
-
-        for result in fetch:
-          if result['pathExpression'] == pathExpr:
-            yield (
-              result['path'],
-              (
-                (result['start'], result['end'], result['step']),
-                result['values'],
-              ),
-            )
-
-    result_queue = result_queue_generator()
-  else:
-    matching_nodes = [node for node in STORE.find(pathExpr, startTime, endTime, local=requestContext['localOnly'])]
-    result_queue = [
-      (node.path, node.fetch(startTime, endTime, now, requestContext))
-      for node in matching_nodes
-      if node.is_leaf
-    ]
-
-  log.info("render.datalib.fetchData :: starting to merge")
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -161,7 +109,58 @@ class TimeSeries(list):
 
 @logtime()
 def _fetchData(pathExpr, startTime, endTime, now, requestContext, seriesList):
-  matching_nodes = STORE.find(
+  if settings.REMOTE_PREFETCH_DATA:
+    matching_nodes = [node for node in STORE.find(pathExpr, startTime, endTime, local=True)]
+
+    # inflight_requests is only present if at least one remote store
+    # has been queried
+    if 'inflight_requests' in requestContext:
+      fetches = requestContext['inflight_requests']
+    else:
+      fetches = {}
+
+    def result_queue_generator():
+      for node in matching_nodes:
+        if node.is_leaf:
+          yield (node.path, node.fetch(startTime, endTime, now, requestContext))
+
+      log.info(
+        'render.datalib.fetchData:: result_queue_generator got {count} fetches'
+        .format(count=len(fetches)),
+      )
+      for key, fetch in fetches.iteritems():
+        log.info(
+          'render.datalib.fetchData:: getting results of {host}'
+          .format(host=key),
+        )
+
+        if isinstance(fetch, FetchInProgress):
+          fetch = fetch.waitForResults()
+
+        if fetch is None:
+          log.info('render.datalib.fetchData:: fetch is None')
+          continue
+
+        for result in fetch:
+          if result['pathExpression'] == pathExpr:
+            yield (
+              result['path'],
+              (
+                (result['start'], result['end'], result['step']),
+                result['values'],
+              ),
+            )
+
+    result_queue = result_queue_generator()
+  else:
+    matching_nodes = [node for node in STORE.find(pathExpr, startTime, endTime, local=requestContext['localOnly'])]
+    result_queue = [
+      (node.path, node.fetch(startTime, endTime, now, requestContext))
+      for node in matching_nodes
+      if node.is_leaf
+    ]
+
+  log.info("render.datalib.fetchData :: starting to merge")
     pathExpr, startTime, endTime,
     local=requestContext['localOnly'],
     headers=requestContext['forwardHeaders'],

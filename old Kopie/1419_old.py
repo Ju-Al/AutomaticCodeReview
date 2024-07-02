@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        from MDAnalysis.lib.distances import transform_StoR, transform_RtoS
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -356,7 +355,7 @@ class _TestTriclinicDistances(TestCase):
 
     def test_distarray(self):
         from MDAnalysis.lib.distances import distance_array
-        from MDAnalysis.lib.distances import transform_StoR
+        from MDAnalysis.lib.distances import transform_StoR, transform_RtoS
 
         R_mol1 = transform_StoR(self.S_mol1, self.box, backend=self.backend)
         R_mol2 = transform_StoR(self.S_mol2, self.box, backend=self.backend)

@@ -948,9 +948,6 @@ func (e *ETCD) listSnapshots(ctx context.Context, snapshotDir string) ([]snapsho
 	}
 
 	return snapshots, nil
-}
-
-// updateConfigMap
 func updateConfigMap(data map[string]string, snapshotFiles []snapshotFile) error {
 	for _, v := range snapshotFiles {
 		b, err := json.Marshal(v)

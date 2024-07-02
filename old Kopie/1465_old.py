@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-            for user in users_with_translations_counts(None, Q(id__in=self), limit=100)
 from __future__ import absolute_import, division, unicode_literals
 
 import hashlib
@@ -2660,7 +2659,7 @@ class TranslationQuerySet(models.QuerySet):
              'gravatar_url': user.gravatar_url(88),
              'translation_count': user.translations_count,
              'role': user.user_role}
-            for user in users_with_translations_counts(
+            for user in users_with_translations_counts(None, Q(id__in=self), limit=100)
                 None, Q(id__in=self),
                 limit=100,
                 all_users=True

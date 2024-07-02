@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-            aid, name, x, y, z, atom_type, resid, resname, charge = a.split()
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -198,7 +197,6 @@ class MOL2Reader(base.ReaderBase):
 
         coords = np.zeros((self.n_atoms, 3), dtype=np.float32)
         for i, a in enumerate(atom_lines):
-            try:
                 aid, name, x, y, z, atom_type, resid, resname, charge = a.split()
             except ValueError:
                 aid, name, x, y, z, atom_type, resid, resname, charge, _ = a.split()

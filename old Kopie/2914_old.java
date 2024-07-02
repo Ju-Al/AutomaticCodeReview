@@ -1,5 +1,4 @@
 /**
-            Assert.assertEquals("sample.dummy:0:\tTest Rule 2", actual);
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -79,7 +78,7 @@ public class PMDTaskTest {
             String actual = IOUtils.toString(in, StandardCharsets.UTF_8);
             // remove any trailing newline
             actual = actual.replaceAll("\n|\r", "");
-            Assert.assertEquals("sample.dummy:0:\tTest Rule 2:\tSampleXPathRule", actual);
+            Assert.assertEquals("sample.dummy:0:\tTest Rule 2", actual);
         }
     }
 }

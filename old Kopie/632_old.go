@@ -1,5 +1,4 @@
 package approvals
-
 import (
 	"fmt"
 	"math/rand"

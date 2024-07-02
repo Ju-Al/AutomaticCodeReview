@@ -43,7 +43,6 @@ type staticUpstream struct {
 		Interval time.Duration
 		Timeout  time.Duration
 		Host     string
-		Port     int
 	}
 	WithoutPathPrefix  string
 	IgnoredSubPaths    []string

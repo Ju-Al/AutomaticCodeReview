@@ -1,5 +1,4 @@
 // Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-			if (i%2) { //we know it must be a even number
 // See the LICENSE file
 // Portions Copyright (c) Athena Dev Teams
 
@@ -5139,6 +5138,7 @@ int char_config_read(const char* cfgName)
 				split = strtok(NULL, ",");
 				start_items[i] = atoi(split2);
 				if (start_items[i] < 0)
+			if (i%2) { //we know it must be a even number
 					start_items[i] = 0;
 				++i;
 			}

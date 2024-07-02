@@ -1,438 +1,558 @@
-package com.fsck.k9.activity.compose;
+/*
+import org.apache.accumulo.tserver.replication.AccumuloReplicaSystem.ReplicationStats;
+import org.apache.accumulo.tserver.replication.AccumuloReplicaSystem.WalClientExecReturn;
+import org.apache.accumulo.tserver.replication.AccumuloReplicaSystem.WalReplication;
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.accumulo.tserver.replication;
 
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
-import java.io.File;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-
-import android.annotation.TargetApi;
-import android.app.Activity;
-import android.app.LoaderManager;
-import android.content.ClipData;
-import android.content.Context;
-import android.content.Intent;
-import android.content.Loader;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
-
-import com.fsck.k9.Account;
-import com.fsck.k9.activity.compose.ComposeCryptoStatus.AttachErrorState;
-import com.fsck.k9.activity.loader.AttachmentContentLoader;
-import com.fsck.k9.activity.loader.AttachmentInfoLoader;
-import com.fsck.k9.activity.misc.Attachment;
-import com.fsck.k9.activity.misc.Attachment.LoadingState;
-import com.fsck.k9.helper.Utility;
-import com.fsck.k9.mailstore.AttachmentViewInfo;
-import com.fsck.k9.mailstore.MessageViewInfo;
-
-
-public class AttachmentPresenter {
-    private static final String STATE_KEY_ATTACHMENTS = "com.fsck.k9.activity.MessageCompose.attachments";
-    private static final String STATE_KEY_WAITING_FOR_ATTACHMENTS = "waitingForAttachments";
-    private static final String STATE_KEY_NEXT_LOADER_ID = "nextLoaderId";
-
-    private static final String LOADER_ARG_ATTACHMENT = "attachment";
-    private static final int LOADER_ID_MASK = 1 << 6;
-    private static final int MAX_TOTAL_LOADERS = LOADER_ID_MASK - 1;
-    private static final int REQUEST_CODE_ATTACHMENT_URI = 1;
-
-
-    // injected state
-    private final Context context;
-    private final AttachmentMvpView attachmentMvpView;
-    private final Account account;
-    private final LoaderManager loaderManager;
-    private final AttachmentsChangedListener listener;
-
-    // persistent state
-    private LinkedHashMap<Uri, Attachment> attachments;
-    private int nextLoaderId = 0;
-    private WaitingAction actionToPerformAfterWaiting = WaitingAction.NONE;
-
-
-    public AttachmentPresenter(Context context, AttachmentMvpView attachmentMvpView, Account account, LoaderManager loaderManager,
-                               AttachmentsChangedListener listener) {
-        this.context = context;
-        this.attachmentMvpView = attachmentMvpView;
-        this.account = account;
-        this.loaderManager = loaderManager;
-        this.listener = listener;
-
-        attachments = new LinkedHashMap<>();
-    }
-
-    public void onSaveInstanceState(Bundle outState) {
-        outState.putString(STATE_KEY_WAITING_FOR_ATTACHMENTS, actionToPerformAfterWaiting.name());
-        outState.putParcelableArrayList(STATE_KEY_ATTACHMENTS, createAttachmentListWithoutResizing());
-        outState.putInt(STATE_KEY_NEXT_LOADER_ID, nextLoaderId);
-    }
-
-    public void onRestoreInstanceState(Bundle savedInstanceState) {
-        actionToPerformAfterWaiting = WaitingAction.valueOf(
-                savedInstanceState.getString(STATE_KEY_WAITING_FOR_ATTACHMENTS));
-        nextLoaderId = savedInstanceState.getInt(STATE_KEY_NEXT_LOADER_ID);
-
-        ArrayList<Attachment> attachmentList = savedInstanceState.getParcelableArrayList(STATE_KEY_ATTACHMENTS);
-        // noinspection ConstantConditions, we know this is set in onSaveInstanceState
-        for (Attachment attachment : attachmentList) {
-            attachments.put(attachment.uri, attachment);
-            attachmentMvpView.addAttachmentView(attachment);
-
-            if (attachment.state == LoadingState.URI_ONLY) {
-                initAttachmentInfoLoader(attachment);
-            } else if (attachment.state == LoadingState.METADATA) {
-                initAttachmentContentLoader(attachment);
-            }
-        }
-    }
-
-    public boolean checkOkForSendingOrDraftSaving() {
-        if (actionToPerformAfterWaiting != WaitingAction.NONE) {
-            return true;
-        }
-
-        if (hasLoadingAttachments()) {
-            actionToPerformAfterWaiting = WaitingAction.SEND;
-            attachmentMvpView.showWaitingForAttachmentDialog(actionToPerformAfterWaiting);
-            return true;
-        }
-
-        return false;
-    }
-
-    private boolean hasLoadingAttachments() {
-        for (Attachment attachment : attachments.values()) {
-            Loader loader = loaderManager.getLoader(attachment.loaderId);
-            if (loader != null && loader.isStarted()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public ArrayList<Attachment> createAttachmentListWithoutResizing(){
-        ArrayList<Attachment> result = new ArrayList<>();
-        for (Attachment attachment : attachments.values()) {
-            result.add(attachment);
-        }
-        return result;
-    }
-
-    public ArrayList<Attachment> createAttachmentList() {
-        ArrayList<Attachment> result = new ArrayList<>();
-        for (Attachment attachment : attachments.values()) {
-            if(account.getResizeEnabled() && !attachment.overrideDefault && Utility.isImage(context, attachment.uri)){
-                float factor = 1.0f / account.getResizeFactor();
-                String newFilename = "";
-                long size = 0;
-                if(factor != 1.0f) {
-                    newFilename = Utility.getResizedImageFile(context, attachment.uri, factor);
-                    size = (new File(newFilename)).length();
-                }
-                if(!newFilename.equals("")) {
-                    Attachment newAttachment = attachment.createResizedCopy(newFilename, size);
-                    result.add(newAttachment);
-                } else {
-                    result.add(attachment);
-                }
-            } else if(attachment.overrideDefault && Utility.isImage(context, attachment.uri)){
-                float factor = attachment.resizeFactor;
-                String newFilename = "";
-                long size = 0;
-                if(factor != 1.0f) {
-                    newFilename = Utility.getResizedImageFile(context, attachment.uri, factor);
-                    size = (new File(newFilename)).length();
-                }
-                if(!newFilename.equals("")) {
-                    Attachment newAttachment = attachment.createResizedCopy(newFilename, size);
-                    result.add(newAttachment);
-                } else {
-                    result.add(attachment);
-                }
-            } else {
-                result.add(attachment);
-            }
-        }
-        return result;
-    }
-
-    public void onClickAddAttachment(RecipientPresenter recipientPresenter) {
-        AttachErrorState maybeAttachErrorState =
-                recipientPresenter.getCurrentCryptoStatus().getAttachErrorStateOrNull();
-        if (maybeAttachErrorState != null) {
-            recipientPresenter.showPgpAttachError(maybeAttachErrorState);
-            return;
-        }
-
-        attachmentMvpView.showPickAttachmentDialog(REQUEST_CODE_ATTACHMENT_URI);
-    }
-
-    private void addAttachment(Uri uri) {
-        addAttachment(uri, null);
-    }
-
-    private void addAttachment(AttachmentViewInfo attachmentViewInfo) {
-        if (attachments.containsKey(attachmentViewInfo.internalUri)) {
-            throw new IllegalStateException("Received the same attachmentViewInfo twice!");
-        }
-
-        int loaderId = getNextFreeLoaderId();
-        Attachment attachment = Attachment.createAttachment(
-                attachmentViewInfo.internalUri, loaderId, attachmentViewInfo.mimeType);
-        attachment = attachment.deriveWithMetadataLoaded(
-                attachmentViewInfo.mimeType, attachmentViewInfo.displayName, attachmentViewInfo.size);
-
-        addAttachmentAndStartLoader(attachment);
-    }
-
-    public void addAttachment(Uri uri, String contentType) {
-        if (attachments.containsKey(uri)) {
-            return;
-        }
-
-        int loaderId = getNextFreeLoaderId();
-        Attachment attachment = Attachment.createAttachment(uri, loaderId, contentType);
-
-        addAttachmentAndStartLoader(attachment);
-    }
-
-    public boolean loadNonInlineAttachments(MessageViewInfo messageViewInfo) {
-        boolean allPartsAvailable = true;
-
-        for (AttachmentViewInfo attachmentViewInfo : messageViewInfo.attachments) {
-            if (attachmentViewInfo.inlineAttachment) {
-                continue;
-            }
-            if (!attachmentViewInfo.isContentAvailable) {
-                allPartsAvailable = false;
-                continue;
-            }
-            addAttachment(attachmentViewInfo);
-        }
-
-        return allPartsAvailable;
-    }
-
-    public void processMessageToForward(MessageViewInfo messageViewInfo) {
-        boolean isMissingParts = !loadNonInlineAttachments(messageViewInfo);
-        if (isMissingParts) {
-            attachmentMvpView.showMissingAttachmentsPartialMessageWarning();
-        }
-    }
-
-    private void addAttachmentAndStartLoader(Attachment attachment) {
-        attachments.put(attachment.uri, attachment);
-        listener.onAttachmentAdded();
-        attachmentMvpView.addAttachmentView(attachment);
-
-        if (attachment.state == LoadingState.URI_ONLY) {
-            initAttachmentInfoLoader(attachment);
-        } else if (attachment.state == LoadingState.METADATA) {
-            initAttachmentContentLoader(attachment);
-        } else {
-            throw new IllegalStateException("Attachment can only be added in URI_ONLY or METADATA state!");
-        }
-    }
-
-    private void initAttachmentInfoLoader(Attachment attachment) {
-        if (attachment.state != LoadingState.URI_ONLY) {
-            throw new IllegalStateException("initAttachmentInfoLoader can only be called for URI_ONLY state!");
-        }
-
-        Bundle bundle = new Bundle();
-        bundle.putParcelable(LOADER_ARG_ATTACHMENT, attachment.uri);
-        loaderManager.initLoader(attachment.loaderId, bundle, mAttachmentInfoLoaderCallback);
-    }
-
-    private void initAttachmentContentLoader(Attachment attachment) {
-        if (attachment.state != LoadingState.METADATA) {
-            throw new IllegalStateException("initAttachmentContentLoader can only be called for METADATA state!");
-        }
-
-        Bundle bundle = new Bundle();
-        bundle.putParcelable(LOADER_ARG_ATTACHMENT, attachment.uri);
-        loaderManager.initLoader(attachment.loaderId, bundle, mAttachmentContentLoaderCallback);
-    }
-
-    private int getNextFreeLoaderId() {
-        if (nextLoaderId >= MAX_TOTAL_LOADERS) {
-            throw new AssertionError("more than " + MAX_TOTAL_LOADERS + " attachments? hum.");
-        }
-        return LOADER_ID_MASK | nextLoaderId++;
-    }
-
-    private LoaderManager.LoaderCallbacks<Attachment> mAttachmentInfoLoaderCallback =
-            new LoaderManager.LoaderCallbacks<Attachment>() {
-                @Override
-                public Loader<Attachment> onCreateLoader(int id, Bundle args) {
-                    Uri uri = args.getParcelable(LOADER_ARG_ATTACHMENT);
-                    return new AttachmentInfoLoader(context, attachments.get(uri));
-                }
-
-                @Override
-                public void onLoadFinished(Loader<Attachment> loader, Attachment attachment) {
-                    int loaderId = loader.getId();
-                    loaderManager.destroyLoader(loaderId);
-
-                    if (!attachments.containsKey(attachment.uri)) {
-                        return;
-                    }
-
-                    attachmentMvpView.updateAttachmentView(attachment);
-                    attachments.put(attachment.uri, attachment);
-                    initAttachmentContentLoader(attachment);
-                }
-
-                @Override
-                public void onLoaderReset(Loader<Attachment> loader) {
-                    // nothing to do
-                }
-            };
-
-    private LoaderManager.LoaderCallbacks<Attachment> mAttachmentContentLoaderCallback =
-            new LoaderManager.LoaderCallbacks<Attachment>() {
-                @Override
-                public Loader<Attachment> onCreateLoader(int id, Bundle args) {
-                    Uri uri = args.getParcelable(LOADER_ARG_ATTACHMENT);
-                    return new AttachmentContentLoader(context, attachments.get(uri));
-                }
-
-                @Override
-                public void onLoadFinished(Loader<Attachment> loader, Attachment attachment) {
-                    int loaderId = loader.getId();
-                    loaderManager.destroyLoader(loaderId);
-
-                    if (!attachments.containsKey(attachment.uri)) {
-                        return;
-                    }
-
-                    if (attachment.state == Attachment.LoadingState.COMPLETE) {
-                        attachmentMvpView.updateAttachmentView(attachment);
-                        attachments.put(attachment.uri, attachment);
-                    } else {
-                        attachments.remove(attachment.uri);
-                        attachmentMvpView.removeAttachmentView(attachment);
-                    }
-
-                    postPerformStalledAction();
-                }
-
-                @Override
-                public void onLoaderReset(Loader<Attachment> loader) {
-                    // nothing to do
-                }
-            };
-
-    private void postPerformStalledAction() {
-        new Handler().post(new Runnable() {
-            @Override
-            public void run() {
-                performStalledAction();
-            }
-        });
-    }
-
-    private void performStalledAction() {
-        attachmentMvpView.dismissWaitingForAttachmentDialog();
-
-        WaitingAction waitingFor = actionToPerformAfterWaiting;
-        actionToPerformAfterWaiting = WaitingAction.NONE;
-
-        switch (waitingFor) {
-            case SEND: {
-                attachmentMvpView.performSendAfterChecks();
-                break;
-            }
-            case SAVE: {
-                attachmentMvpView.performSaveAfterChecks();
-                break;
-            }
-        }
-    }
-
-    @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
-    private void addAttachmentsFromResultIntent(Intent data) {
-        // TODO draftNeedsSaving = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            ClipData clipData = data.getClipData();
-            if (clipData != null) {
-                for (int i = 0, end = clipData.getItemCount(); i < end; i++) {
-                    Uri uri = clipData.getItemAt(i).getUri();
-                    if (uri != null) {
-                        addAttachment(uri);
-                    }
-                }
-                return;
-            }
-        }
-
-        Uri uri = data.getData();
-        if (uri != null) {
-            addAttachment(uri);
-        }
-    }
-
-    public void attachmentProgressDialogCancelled() {
-        actionToPerformAfterWaiting = WaitingAction.NONE;
-    }
-
-    public void onClickRemoveAttachment(Uri uri) {
-        Attachment attachment = attachments.get(uri);
-
-        loaderManager.destroyLoader(attachment.loaderId);
-
-        attachmentMvpView.removeAttachmentView(attachment);
-        attachments.remove(uri);
-        listener.onAttachmentRemoved();
-    }
-
-    public void updateAttachmentsList(Attachment attachment){
-        Attachment originalAttachment = attachments.get(attachment.uri);
-        originalAttachment.updateResizeInfo(attachment.resizeFactor, attachment.overrideDefault);
-        Log.d("ATTACH","Yes : " + attachments.size());
-    }
-
-    public void onActivityResult(int resultCode, int requestCode, Intent data) {
-        if (requestCode != REQUEST_CODE_ATTACHMENT_URI) {
-            throw new AssertionError("onActivityResult must only be called for our request code");
-        }
-        if (resultCode != Activity.RESULT_OK) {
-            return;
-        }
-
-        if (data == null) {
-            return;
-        }
-        addAttachmentsFromResultIntent(data);
-    }
-
-    public enum WaitingAction {
-        NONE,
-        SEND,
-        SAVE
-    }
-
-    public interface AttachmentMvpView {
-        void showWaitingForAttachmentDialog(WaitingAction waitingAction);
-        void dismissWaitingForAttachmentDialog();
-        void showPickAttachmentDialog(int requestCode);
-
-        void addAttachmentView(Attachment attachment);
-        void removeAttachmentView(Attachment attachment);
-        void updateAttachmentView(Attachment attachment);
-
-        // TODO these should not really be here :\
-        void performSendAfterChecks();
-        void performSaveAfterChecks();
-
-        void showMissingAttachmentsPartialMessageWarning();
-    }
-
-    public interface AttachmentsChangedListener {
-        void onAttachmentAdded();
-        void onAttachmentRemoved();
-    }
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import org.apache.accumulo.core.conf.AccumuloConfiguration;
+import org.apache.accumulo.core.conf.ConfigurationCopy;
+import org.apache.accumulo.core.conf.Property;
+import org.apache.accumulo.core.data.Mutation;
+import org.apache.accumulo.core.data.TableId;
+import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.replication.ReplicationTarget;
+import org.apache.accumulo.core.replication.thrift.ReplicationServicer.Client;
+import org.apache.accumulo.core.replication.thrift.WalEdits;
+import org.apache.accumulo.core.securityImpl.thrift.TCredentials;
+import org.apache.accumulo.server.data.ServerMutation;
+import org.apache.accumulo.server.replication.proto.Replication.Status;
+import org.apache.accumulo.tserver.logger.LogEvents;
+import org.apache.accumulo.tserver.logger.LogFileKey;
+import org.apache.accumulo.tserver.logger.LogFileValue;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.junit.Test;
+
+@SuppressWarnings("deprecation")
+public class AccumuloReplicaSystemTest {
+
+  @Test
+  @Deprecated
+  public void onlyChooseMutationsForDesiredTableWithOpenStatus() throws Exception {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(baos);
+
+    LogFileKey key = new LogFileKey();
+    LogFileValue value = new LogFileValue();
+
+    // What is seq used for?
+    key.seq = 1L;
+
+    /*
+     * Disclaimer: the following series of LogFileKey and LogFileValue pairs have *no* bearing
+     * whatsoever in reality regarding what these entries would actually look like in a WAL. They
+     * are solely for testing that each LogEvents is handled, order is not important.
+     */
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("1"), null, null);
+    key.tabletId = 1;
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("2"), null, null);
+    key.tabletId = 2;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.OPEN;
+    key.tabletId = LogFileKey.VERSION;
+    key.tserverSession = "foobar";
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("badrow")));
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.COMPACTION_START;
+    key.tabletId = 2;
+    key.filename = "/accumulo/tables/1/t-000001/A000001.rf";
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("1"), null, null);
+    key.tabletId = 3;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.COMPACTION_FINISH;
+    key.tabletId = 6;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.tabletId = 3;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    dos.close();
+
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ars.setConf(conf);
+
+    Status status =
+        Status.newBuilder().setBegin(0).setEnd(0).setInfiniteEnd(true).setClosed(false).build();
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(baos.toByteArray()));
+    WalReplication repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, Long.MAX_VALUE, new HashSet<>());
+
+    // We stopped because we got to the end of the file
+    assertEquals(9, repl.entriesConsumed);
+    assertEquals(2, repl.walEdits.getEditsSize());
+    assertEquals(2, repl.sizeInRecords);
+    assertNotEquals(0, repl.sizeInBytes);
+  }
+
+  @Test
+  @Deprecated
+  public void onlyChooseMutationsForDesiredTableWithClosedStatus() throws Exception {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(baos);
+
+    LogFileKey key = new LogFileKey();
+    LogFileValue value = new LogFileValue();
+
+    // What is seq used for?
+    key.seq = 1L;
+
+    /*
+     * Disclaimer: the following series of LogFileKey and LogFileValue pairs have *no* bearing
+     * whatsoever in reality regarding what these entries would actually look like in a WAL. They
+     * are solely for testing that each LogEvents is handled, order is not important.
+     */
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("1"), null, null);
+    key.tabletId = 1;
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("2"), null, null);
+    key.tabletId = 2;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.OPEN;
+    key.tabletId = LogFileKey.VERSION;
+    key.tserverSession = "foobar";
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("badrow")));
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.COMPACTION_START;
+    key.tabletId = 2;
+    key.filename = "/accumulo/tables/1/t-000001/A000001.rf";
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("1"), null, null);
+    key.tabletId = 3;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.event = LogEvents.COMPACTION_FINISH;
+    key.tabletId = 6;
+    value.mutations = Collections.emptyList();
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.tabletId = 3;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    dos.close();
+
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ars.setConf(conf);
+
+    // Setting the file to be closed with the infinite end implies that we need to bump the begin up
+    // to Long.MAX_VALUE
+    // If it were still open, more data could be appended that we need to process
+    Status status =
+        Status.newBuilder().setBegin(0).setEnd(0).setInfiniteEnd(true).setClosed(true).build();
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(baos.toByteArray()));
+    WalReplication repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, Long.MAX_VALUE, new HashSet<>());
+
+    // We stopped because we got to the end of the file
+    assertEquals(Long.MAX_VALUE, repl.entriesConsumed);
+    assertEquals(2, repl.walEdits.getEditsSize());
+    assertEquals(2, repl.sizeInRecords);
+    assertNotEquals(0, repl.sizeInBytes);
+  }
+
+  @Test
+  @Deprecated
+  public void mutationsNotReReplicatedToPeers() throws Exception {
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    ars.setConf(conf);
+
+    LogFileValue value = new LogFileValue();
+    value.mutations = new ArrayList<>();
+
+    Mutation m = new Mutation("row");
+    m.put("", "", new Value());
+    value.mutations.add(m);
+
+    m = new Mutation("row2");
+    m.put("", "", new Value());
+    m.addReplicationSource("peer");
+    value.mutations.add(m);
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream out = new DataOutputStream(baos);
+
+    // Replicate our 2 mutations to "peer", from tableid 1 to tableid 1
+    ars.writeValueAvoidingReplicationCycles(out, value,
+        new ReplicationTarget("peer", "1", TableId.of("1")));
+
+    out.close();
+
+    ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+    DataInputStream in = new DataInputStream(bais);
+
+    int numMutations = in.readInt();
+    assertEquals(1, numMutations);
+
+    m = new Mutation();
+    m.readFields(in);
+
+    assertEquals("row", new String(m.getRow()));
+    assertEquals(1, m.getReplicationSources().size());
+    assertTrue("Expected source cluster to be listed in mutation replication source",
+        m.getReplicationSources().contains("source"));
+  }
+
+  @Test
+  @Deprecated
+  public void endOfFileExceptionOnClosedWalImpliesFullyReplicated() throws Exception {
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ars.setConf(conf);
+
+    // Setting the file to be closed with the infinite end implies that we need to bump the begin up
+    // to Long.MAX_VALUE
+    // If it were still open, more data could be appended that we need to process
+    Status status =
+        Status.newBuilder().setBegin(100).setEnd(0).setInfiniteEnd(true).setClosed(true).build();
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(new byte[0]));
+    WalReplication repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, Long.MAX_VALUE, new HashSet<>());
+
+    // We stopped because we got to the end of the file
+    assertEquals(Long.MAX_VALUE, repl.entriesConsumed);
+    assertEquals(0, repl.walEdits.getEditsSize());
+    assertEquals(0, repl.sizeInRecords);
+    assertEquals(0, repl.sizeInBytes);
+  }
+
+  @Test
+  @Deprecated
+  public void endOfFileExceptionOnOpenWalImpliesMoreReplication() throws Exception {
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ars.setConf(conf);
+
+    // Setting the file to be closed with the infinite end implies that we need to bump the begin up
+    // to Long.MAX_VALUE
+    // If it were still open, more data could be appended that we need to process
+    Status status =
+        Status.newBuilder().setBegin(100).setEnd(0).setInfiniteEnd(true).setClosed(false).build();
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(new byte[0]));
+    WalReplication repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, Long.MAX_VALUE, new HashSet<>());
+
+    // We stopped because we got to the end of the file
+    assertEquals(0, repl.entriesConsumed);
+    assertEquals(0, repl.walEdits.getEditsSize());
+    assertEquals(0, repl.sizeInRecords);
+    assertEquals(0, repl.sizeInBytes);
+  }
+
+  @Test
+  @Deprecated
+  public void restartInFileKnowsAboutPreviousTableDefines() throws Exception {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(baos);
+
+    LogFileKey key = new LogFileKey();
+    LogFileValue value = new LogFileValue();
+
+    // What is seq used for?
+    key.seq = 1L;
+
+    /*
+     * Disclaimer: the following series of LogFileKey and LogFileValue pairs have *no* bearing
+     * whatsoever in reality regarding what these entries would actually look like in a WAL. They
+     * are solely for testing that each LogEvents is handled, order is not important.
+     */
+    key.event = LogEvents.DEFINE_TABLET;
+    key.tablet = new KeyExtent(TableId.of("1"), null, null);
+    key.tabletId = 1;
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    key.tablet = null;
+    key.event = LogEvents.MUTATION;
+    key.tabletId = 1;
+    key.filename = "/accumulo/wals/tserver+port/" + UUID.randomUUID();
+    value.mutations = Arrays.asList(new ServerMutation(new Text("row")));
+
+    key.write(dos);
+    value.write(dos);
+
+    dos.close();
+
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_NAME.getKey(), "source");
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ars.setConf(conf);
+
+    Status status =
+        Status.newBuilder().setBegin(0).setEnd(0).setInfiniteEnd(true).setClosed(false).build();
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(baos.toByteArray()));
+
+    HashSet<Integer> tids = new HashSet<>();
+
+    // Only consume the first mutation, not the second
+    WalReplication repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, 1L, tids);
+
+    // We stopped because we got to the end of the file
+    assertEquals(2, repl.entriesConsumed);
+    assertEquals(1, repl.walEdits.getEditsSize());
+    assertEquals(1, repl.sizeInRecords);
+    assertNotEquals(0, repl.sizeInBytes);
+
+    status = Status.newBuilder(status).setBegin(2).build();
+
+    // Consume the rest of the mutations
+    repl = ars.getWalEdits(new ReplicationTarget("peer", "1", TableId.of("1")), dis,
+        new Path("/accumulo/wals/tserver+port/wal"), status, 1L, tids);
+
+    // We stopped because we got to the end of the file
+    assertEquals(1, repl.entriesConsumed);
+    assertEquals(1, repl.walEdits.getEditsSize());
+    assertEquals(1, repl.sizeInRecords);
+    assertNotEquals(0, repl.sizeInBytes);
+  }
+
+  @Test
+  @Deprecated
+  public void dontSendEmptyDataToPeer() throws Exception {
+    Client replClient = createMock(Client.class);
+    AccumuloReplicaSystem ars = createMock(AccumuloReplicaSystem.class);
+    WalEdits edits = new WalEdits(Collections.emptyList());
+    WalReplication walReplication = new WalReplication(edits, 0, 0, 0);
+
+    ReplicationTarget target = new ReplicationTarget("peer", "2", TableId.of("1"));
+    DataInputStream input = null;
+    Path p = new Path("/accumulo/wals/tserver+port/" + UUID.randomUUID());
+    Status status = null;
+    long sizeLimit = Long.MAX_VALUE;
+    String remoteTableId = target.getRemoteIdentifier();
+    TCredentials tcreds = null;
+    Set<Integer> tids = new HashSet<>();
+
+    WalClientExecReturn walClientExec = new WalClientExecReturn(ars, target, input, p, status,
+        sizeLimit, remoteTableId, tcreds, tids);
+
+    expect(ars.getWalEdits(target, input, p, status, sizeLimit, tids)).andReturn(walReplication);
+
+    replay(replClient, ars);
+
+    ReplicationStats stats = walClientExec.execute(replClient);
+
+    verify(replClient, ars);
+
+    assertEquals(new ReplicationStats(0L, 0L, 0L), stats);
+  }
+
+  @Test
+  @Deprecated
+  public void consumedButNotSentDataShouldBeRecorded() throws Exception {
+    Client replClient = createMock(Client.class);
+    AccumuloReplicaSystem ars = createMock(AccumuloReplicaSystem.class);
+    WalEdits edits = new WalEdits(Collections.emptyList());
+    WalReplication walReplication = new WalReplication(edits, 0, 5, 0);
+
+    ReplicationTarget target = new ReplicationTarget("peer", "2", TableId.of("1"));
+    DataInputStream input = null;
+    Path p = new Path("/accumulo/wals/tserver+port/" + UUID.randomUUID());
+    Status status = null;
+    long sizeLimit = Long.MAX_VALUE;
+    String remoteTableId = target.getRemoteIdentifier();
+    TCredentials tcreds = null;
+    Set<Integer> tids = new HashSet<>();
+
+    WalClientExecReturn walClientExec = new WalClientExecReturn(ars, target, input, p, status,
+        sizeLimit, remoteTableId, tcreds, tids);
+
+    expect(ars.getWalEdits(target, input, p, status, sizeLimit, tids)).andReturn(walReplication);
+
+    replay(replClient, ars);
+
+    ReplicationStats stats = walClientExec.execute(replClient);
+
+    verify(replClient, ars);
+
+    assertEquals(new ReplicationStats(0L, 0L, 5L), stats);
+  }
+
+  @Test
+  @Deprecated
+  public void testUserPassword() {
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ReplicationTarget target = new ReplicationTarget("peer", "peer_table", TableId.of("1"));
+    String user = "user", password = "password";
+
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_PEER_USER.getKey() + target.getPeerName(), user);
+    confMap.put(Property.REPLICATION_PEER_PASSWORD.getKey() + target.getPeerName(), password);
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    assertEquals(user, ars.getPrincipal(conf, target));
+    assertEquals(password, ars.getPassword(conf, target));
+  }
+
+  @Test
+  @Deprecated
+  public void testUserKeytab() {
+    AccumuloReplicaSystem ars = new AccumuloReplicaSystem();
+    ReplicationTarget target = new ReplicationTarget("peer", "peer_table", TableId.of("1"));
+    String user = "user", keytab = "/etc/security/keytabs/replication.keytab";
+
+    Map<String,String> confMap = new HashMap<>();
+    confMap.put(Property.REPLICATION_PEER_USER.getKey() + target.getPeerName(), user);
+    confMap.put(Property.REPLICATION_PEER_KEYTAB.getKey() + target.getPeerName(), keytab);
+    AccumuloConfiguration conf = new ConfigurationCopy(confMap);
+
+    assertEquals(user, ars.getPrincipal(conf, target));
+    assertEquals(keytab, ars.getKeytab(conf, target));
+  }
 }

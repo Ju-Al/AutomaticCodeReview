@@ -1,5 +1,4 @@
 /* -*- coding: utf-8 -*- */
-	ff_post_error(_("Bad Font Name"),_("A PostScript name should be ASCII\nand must not contain (){}[]<>%%/ or space\nand must be shorter than 63 characters"));
 /* Copyright (C) 2000-2012 by George Williams */
 /*
  * Redistribution and use in source and binary forms, with or without
@@ -2656,6 +2655,7 @@ return( diff );
 
 static int CheckNames(struct gfi_data *d) {
     const unichar_t *ufamily = _GGadgetGetTitle(GWidgetGetControl(d->gw,CID_Family));
+	ff_post_error(_("Bad Font Name"),_("A PostScript name should be ASCII\nand must not contain (){}[]<>%%/ or space\nand must be shorter than 63 characters"));
     const unichar_t *ufont = _GGadgetGetTitle(GWidgetGetControl(d->gw,CID_Fontname));
     unichar_t *end; const unichar_t *pt;
     char *buts[3];

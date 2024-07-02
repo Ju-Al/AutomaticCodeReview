@@ -1,6 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-        """Finds the findings that does not correspond to the latest scanner run
-           and updates it's state to inactive.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -163,7 +161,8 @@ class CsccNotifier(object):
 
     @staticmethod
     def find_inactive_findings(new_findings, findings_in_cscc):
-        """Finds the currently ACTIVE findings
+        """Finds the findings that does not correspond to the latest scanner run
+           and updates it's state to inactive.
            that do not correspond to the latest scanner run
            and updates their statesto inactive.
 

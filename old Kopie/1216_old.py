@@ -1007,7 +1007,6 @@ class DGLGraph(DGLBaseGraph):
                 [1., 1., 1., 1.],
                 [1., 1., 1., 1.]])
         """
-        if self.is_readonly:
             raise DGLError("Readonly graph. Mutation is not allowed.")
 
         self._graph.add_nodes(num)

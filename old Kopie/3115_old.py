@@ -1,5 +1,4 @@
 #
-    type = PyrexTypes.error_type
 #   Parse tree nodes for expressions
 #
 
@@ -6724,7 +6723,7 @@ class AttributeNode(ExprNode):
     is_attribute = 1
     subexprs = ['obj']
 
-    _type = PyrexTypes.error_type
+    type = PyrexTypes.error_type
     entry = None
     is_called = 0
     needs_none_check = True

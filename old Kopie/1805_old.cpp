@@ -1,6 +1,4 @@
 /*	EQEMu: Everquest Server Emulator
-			uint32 remain = (GetDisciplineRemainingTime(this, spells[spell_id].timer_id) / 1000);
-			GetOwner()->Message(Chat::White, "%s can use this discipline in %d minutes %d seconds.", GetCleanName(), (remain / 60), (remain % 60));
 	Copyright (C) 2001-2016 EQEMu Development Team (http://eqemulator.org)
 
 	This program is free software; you can redistribute it and/or modify
@@ -9551,7 +9549,8 @@ bool Bot::UseDiscipline(uint32 spell_id, uint32 target) {
 			if(spells[spell_id].timer_id > 0 && spells[spell_id].timer_id < MAX_DISCIPLINE_TIMERS)
 				SetDisciplineRecastTimer(spells[spell_id].timer_id, spell.recast_time);
 		} else {
-			uint32 remaining_time = (GetDisciplineRemainingTime(this, spells[spell_id].timer_id) / 1000);			
+			uint32 remain = (GetDisciplineRemainingTime(this, spells[spell_id].timer_id) / 1000);
+			GetOwner()->Message(Chat::White, "%s can use this discipline in %d minutes %d seconds.", GetCleanName(), (remain / 60), (remain % 60));
 			GetOwner()->Message(
 				Chat::White,
 				fmt::format(

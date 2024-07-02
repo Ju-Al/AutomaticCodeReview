@@ -1,5 +1,4 @@
 /***************************************************************************
-    bool edit_mode = false;
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -239,7 +238,7 @@ std::string SelectFileListSimple( const std::string & header, const std::string 
     fheroes2::Button buttonOk( rt.x + 34, rt.y + 315, ICN::REQUEST, 1, 2 );
     fheroes2::Button buttonCancel( rt.x + 244, rt.y + 315, ICN::REQUEST, 3, 4 );
 
-    bool edit_mode = editor;
+    bool edit_mode = false;
 
     MapsFileInfoList lists = GetSortedMapsFileInfoList();
     FileInfoListBox listbox( rt.getPosition(), edit_mode );

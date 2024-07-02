@@ -1,6 +1,4 @@
 ﻿using Microsoft.Diagnostics.Tracing.Parsers;
-                        // set up iteration
-                        if (setupProcHelper != null)
 using Microsoft.Diagnostics.Tracing.Session;
 using Reporting;
 using System;
@@ -171,7 +169,8 @@ namespace ScenarioMeasurement
                     for (int i = 0; i < iterations; i++)
                     {
                         logger.Log($"=============== Iteration {i} ================ ");
-                        int pid = RunIteration(setupProcHelper, procHelper, cleanupProcHelper, logger);
+                        // set up iteration
+                        if (setupProcHelper != null)
                         if (pid < 0)
                         {
                             failed = true;

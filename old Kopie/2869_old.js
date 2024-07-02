@@ -1,6 +1,4 @@
 // Sandstorm - Personal Cloud Sandbox
-      if (identity.services.email.email.toLowerCase().split("@").pop() === emailDomain) {
-        return true;
 // Copyright (c) 2014 Sandstorm Development Group, Inc. and contributors
 // All rights reserved.
 //
@@ -1111,7 +1109,8 @@ _.extend(SandstormDb.prototype, {
     const ldapEnabled = orgMembership && orgMembership.ldap && orgMembership.ldap.enabled;
     const samlEnabled = orgMembership && orgMembership.saml && orgMembership.saml.enabled;
     if (emailEnabled && emailDomain && identity.services.email) {
-      const domainSuffixes = emailDomain.split(/\s*,\s*/);
+      if (identity.services.email.email.toLowerCase().split("@").pop() === emailDomain) {
+        return true;
       for (let i = 0; i < domainSuffixes.length; i++) {
         const suffix = domainSuffixes[i];
         const domain = identity.services.email.email.toLowerCase().split("@").pop();

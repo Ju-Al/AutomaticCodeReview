@@ -1,6 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-        public static Task CopyToAsync(this Stream stream, IPipeWriter writer)
-            return stream.CopyToAsync(new PipelineWriterStream(writer));
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Buffers;
@@ -65,7 +63,8 @@ namespace System.IO.Pipelines
         /// <param name="stream"></param>
         /// <param name="writer"></param>
         /// <returns></returns>
-        public static Task CopyToAsync(this Stream stream, IPipeWriter writer, CancellationToken cancellationToken = default(CancellationToken))
+            return stream.CopyToAsync(new PipelineWriterStream(writer));
+        public static Task CopyToAsync(this Stream stream, IPipeWriter writer)
         {
             // 81920 is the default bufferSize, there is not stream.CopyToAsync overload that takes only a cancellationToken
             return stream.CopyToAsync(new PipelineWriterStream(writer, cancellationToken), bufferSize: 81920, cancellationToken: cancellationToken);

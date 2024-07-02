@@ -1,8 +1,4 @@
 import { dispatch as d3_dispatch } from 'd3-dispatch';
-    function i(selection) {
-        var entity = _entityIDs.length && context.hasEntity(_entityIDs[0]);
-        var preset = entity && presetManager.match(entity, context.graph());
-        var isLocked = preset && preset.suggestion && field.id === 'brand';
 import { select as d3_select } from 'd3-selection';
 import * as countryCoder from '@ideditor/country-coder';
 
@@ -38,7 +34,10 @@ export function uiFieldText(field, context) {
             .catch(function() { /* ignore */ });
     }
 
-
+    function i(selection) {
+        var entity = _entityIDs.length && context.hasEntity(_entityIDs[0]);
+        var preset = entity && presetManager.match(entity, context.graph());
+        var isLocked = preset && preset.suggestion && field.id === 'brand';
     function calcLocked() {
         // Protect certain fields that have a companion `*:wikidata` value
         var isLocked = (field.id === 'brand' || field.id === 'network' || field.id === 'operator' || field.id === 'flag') &&

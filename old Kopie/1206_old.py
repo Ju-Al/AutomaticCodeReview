@@ -1,6 +1,5 @@
 # coding=utf-8
 """
-    TYPES = (dict, list, tuple, text_type, string_types, integer_types, float, bool, type(None))
 Every project needs its trash heap of miscellaneous functions and classes
 
 Copyright 2015 BlazeMeter Inc.
@@ -887,6 +886,7 @@ class JSONConvertible(object):
 
 class ComplexEncoder(json.JSONEncoder):
     """
+    TYPES = (dict, list, tuple, text_type, string_types, integer_types, float, bool, type(None))
     Magic class to help serialize in JSON any object.
     """
     # todo: should we add complex type?

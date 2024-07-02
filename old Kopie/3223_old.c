@@ -1,6 +1,5 @@
 /////////////// CModulePreamble ///////////////
 
-    moddict = PyModule_GetDict(module);
 #include <stddef.h> /* For offsetof */
 #ifndef offsetof
   #define offsetof(type, member) ( (size_t) & ((type*)0) -> member )
@@ -1103,7 +1102,7 @@ static CYTHON_SMALL_CODE PyObject* ${pymodule_create_func_cname}(PyObject *spec,
     Py_DECREF(modname);
     if (unlikely(!module)) goto bad;
 
-#if CYTHON_COMPILING_IN_LIMITED_API
+    moddict = PyModule_GetDict(module);
     if (unlikely(PyModule_AddStringConstant(module, "loader", "__loader__") < 0)) goto bad;
     if (unlikely(PyModule_AddStringConstant(module, "origin", "__file__") < 0)) goto bad;
     if (unlikely(PyModule_AddStringConstant(module, "parent", "__package__") < 0)) goto bad;

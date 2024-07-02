@@ -2,8 +2,9 @@ import { useCallback, useState } from 'react';
 import { useCallback } from 'react';
 import { useMutation } from '@apollo/client';
 
+    const { childSku, mutations, sku } = props;
+    const { addWishlistItemToCartMutation } = mutations;
 import { useCartContext } from '../../context/cart';
-import { useCartContext } from '@magento/peregrine/lib/context/cart';
 
 // Note: There is only ever zero (0) or one (1) dialogs open for a wishlist item.
 const dialogs = {
@@ -24,8 +25,6 @@ const dialogs = {
  * @returns {WishlistItemProps}
  */
 export const useWishlistItem = props => {
-    const { childSku, mutations, sku } = props;
-    const { addWishlistItemToCartMutation } = mutations;
     const { childSku, itemId, mutations, sku, wishlistId } = props;
 
     const {

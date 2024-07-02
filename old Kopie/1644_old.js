@@ -1,6 +1,4 @@
 import { createElement as h } from '../../src/index';
-	it('should set VNode._self property to prevent json injection', () => {
-		expect(vnode._self).to.equal(vnode);
 // import { VNode } from '../../src/vnode';
 import { expect } from 'chai';
 
@@ -34,7 +32,8 @@ describe('createElement(jsx)', () => {
 		expect(<Test />).to.have.property('type', Test);
 	});
 
-	it('should set VNode.constructor property to prevent json injection', () => {
+		expect(vnode._self).to.equal(vnode);
+	it('should set VNode._self property to prevent json injection', () => {
 		const vnode = <span />;
 		// eslint-disable-next-line no-proto
 		expect(vnode.constructor).to.equal(undefined);

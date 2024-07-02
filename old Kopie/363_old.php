@@ -519,7 +519,6 @@ class WP_Debug_Data {
 			'value' => ( is_array( $imagick_version ) ? $imagick_version['versionString'] : $imagick_version ),
 		);
 
-		if ( ! function_exists( 'ini_get' ) ) {
 			$info['wp-media']['fields']['ini_get'] = array(
 				'label' => __( 'File upload settings' ),
 				'value' => sprintf(

@@ -59,7 +59,6 @@ type Bee struct {
 
 type Options struct {
 	DataDir            string
-	DbCapacity         uint64
 	Password           string
 	APIAddr            string
 	DebugAPIAddr       string

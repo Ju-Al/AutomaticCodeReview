@@ -93,7 +93,6 @@ an example.
 */
 
 #define MAX_REMOTE_JOBS_DEFAULT 100
-#define FAIL_DIR "makeflow.failed.%d"
 
 static sig_atomic_t makeflow_abort_flag = 0;
 static int makeflow_failed_flag = 0;

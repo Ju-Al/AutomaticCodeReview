@@ -2486,7 +2486,6 @@ class PodsAdmin {
 
         // Output in json format
         if ( false !== $output ) {
-
             /**
              * Ajax successful
              * @since  2.6.8

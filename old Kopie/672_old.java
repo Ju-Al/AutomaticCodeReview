@@ -257,8 +257,6 @@ public class SinksTest extends PipelineTestSupport {
         Set<Entry<Object, Object>> actual = jet().getMap(srcName).entrySet();
         assertEquals(0, actual.size());
     }
-
-    @Test
     public void mapWithUpdating_when_itemDataSerializable_then_exceptionShouldNotThrown() {
         // Given
         IStreamMap<Object, Object> sourceMap = jet().getMap(srcName);

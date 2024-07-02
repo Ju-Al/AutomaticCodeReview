@@ -1,6 +1,4 @@
 /*
-        assertTrue("Expected " + expectedList.size() + " objects but retrieved " + factList.size(), factList.size() == expectedList.size() );
-        for( Object fact : factList ) { 
  * Copyright 2011 Red Hat Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -98,7 +96,8 @@ public class SimpleBatchExecutionTest extends CommonTestMethodBase {
         List<Object> expectedList = new ArrayList<Object>(Arrays.asList(expectedArr));
         
         Collection<? extends Object> factList = ksession.getObjects();
-        Assertions.assertTrue(factList.size() == expectedList.size(),
+        assertTrue("Expected " + expectedList.size() + " objects but retrieved " + factList.size(), factList.size() == expectedList.size() );
+        for( Object fact : factList ) { 
                               "Expected " + expectedList.size() + " objects but retrieved " + factList.size());
         for( Object fact : factList ) {
            if( expectedList.contains(fact) ) { 

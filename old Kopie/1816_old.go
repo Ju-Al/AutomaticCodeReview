@@ -1064,7 +1064,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.mods, nil
 }
 
-func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock) {
 	maybelookup := func(addr basics.Address) {
 		if addr.IsZero() {
 			return

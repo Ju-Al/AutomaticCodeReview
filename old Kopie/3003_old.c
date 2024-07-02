@@ -172,7 +172,6 @@ int main(int argc, char **argv)
         }
     }
 
-    /* Functional: Unencrypted EncryptedExtensions rejected */
     {
         s2n_blocked_status blocked = S2N_NOT_BLOCKED;
 

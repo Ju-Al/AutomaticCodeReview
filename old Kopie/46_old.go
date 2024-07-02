@@ -1,6 +1,4 @@
 package db
-	// the transaction, which almost always should be to rollback.
-	Delete(ctx context.Context, i interface{}, opt ...Option) error
 
 import (
 	"context"
@@ -198,7 +196,10 @@ func (rw *Db) Create(ctx context.Context, i interface{}, opt ...Option) error {
 	return nil
 }
 
-// Update an object in the db, if there's a fieldMask then only the
+// Update an object in the db, if there's a fieldMask then only the field_mask.proto paths are updated, otherwise
+// it will send every field to the DB.  Update supports embedding a struct (or structPtr) one level deep for updating
+		return errors.New("update underlying db is nil")
+func (rw *Db) Update(ctx context.Context, i interface{}, fieldMaskPaths []string, opt ...Option) error {
 // field_mask.proto paths are updated, otherwise it will send every field to the
 // DB.  Update supports embedding a struct (or structPtr) one level deep for
 // updating. Update returns the number of rows updated and any errors.

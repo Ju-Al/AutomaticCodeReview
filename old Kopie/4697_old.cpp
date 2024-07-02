@@ -1,5 +1,4 @@
 /***************************************************************************
-        return _( "Aqua" );
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -117,7 +116,7 @@ const char * BarrierColor::String( int val )
 {
     switch ( val ) {
     case AQUA:
-        return _( "barrier|Aqua" );
+        return _( "Aqua" );
     case BLUE:
         return _( "barrier|Blue" );
     case BROWN:

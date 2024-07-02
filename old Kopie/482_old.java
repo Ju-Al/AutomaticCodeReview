@@ -1,5 +1,4 @@
 package openfoodfacts.github.scrachx.openfood.fragments;
-                    SendProduct.deleteAll(SendProduct.class, "barcode = ?", barcode);
 
 import android.content.Context;
 import android.content.Intent;
@@ -95,7 +94,7 @@ public class OfflineEditFragment extends BaseFragment {
                 .negativeText(R.string.txtNo)
                 .onPositive((dialog, which) -> {
                     String barcode = saveItems.get(lapos).getBarcode();
-                    Utils.getAppDaoSession(getActivity()).getSendProductDao().deleteInTx(Utils.getAppDaoSession(getActivity()).getSendProductDao().queryBuilder().where(SendProductDao.Properties.Barcode.eq(barcode)).list());
+                    SendProduct.deleteAll(SendProduct.class, "barcode = ?", barcode);
                     final SaveListAdapter sl = (SaveListAdapter) listView.getAdapter();
                     saveItems.remove(lapos);
                     getActivity().runOnUiThread(() -> sl.notifyDataSetChanged());

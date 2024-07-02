@@ -212,7 +212,6 @@ func TestGetHeadersFromFrame(t *testing.T) {
 	assert.Nil(err)
 	assert.Equal(basicHeaders, headers)
 }
-
 // Ensures addHeadersToFrame returns a new frame with the headers added.
 func TestAddHeadersToFrame(t *testing.T) {
 	assert := assert.New(t)

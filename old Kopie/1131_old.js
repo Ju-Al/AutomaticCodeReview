@@ -1,5 +1,4 @@
 import { updateAutosave, getAutosaveState } from '../autosave'
-import { stateFromJsmd } from '../jsmd-tools'
 import { newNotebook, newCell } from '../../editor-state-prototypes'
 
 describe('updateAutosave', () => {

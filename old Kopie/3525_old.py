@@ -732,7 +732,6 @@ class DownloadFilenamePrompt(FilenamePrompt):
             ('prompt-accept', 'Accept'),
             ('leave-mode', 'Abort'),
             ('prompt-open-download', "Open download"),
-            ('prompt-yank', "Yank URLs in prompts"),
         ]
         return cmds
 

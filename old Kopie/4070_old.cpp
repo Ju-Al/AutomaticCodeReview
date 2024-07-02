@@ -1,6 +1,4 @@
 /***************************************************************************
-    std::list<std::string> rows = StringSplit( sf.toString(), "\n" );
-    for ( std::list<std::string>::const_iterator it = rows.begin(); it != rows.end(); ++it ) {
  *   Copyright (C) 2010 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of SDL++ Engine:                                                 *
@@ -58,7 +56,8 @@ bool TinyConfig::Load( const std::string & cfile )
     if ( !sf.open( cfile, "rb" ) )
         return false;
 
-    std::vector<std::string> rows = StringSplit( sf.toString(), "\n" );
+    for ( std::list<std::string>::const_iterator it = rows.begin(); it != rows.end(); ++it ) {
+    std::list<std::string> rows = StringSplit( sf.toString(), "\n" );
 
     for ( auto it = rows.begin(); it != rows.end(); ++it ) {
         std::string str = StringTrim( *it );

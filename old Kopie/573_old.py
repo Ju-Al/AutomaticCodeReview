@@ -1,5 +1,4 @@
 # Copyright 2019 Google LLC
-def _update_issue_severity_labels(testcase, issue):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -730,6 +729,7 @@ def _send_email_to_uploader(testcase_id, to_email, content):
       'If you suspect that the result above is incorrect, '
       'try re-doing that job on the testcase report page.') % content.strip()
   html_content = content_with_footer.replace('
+def _update_issue_severity_labels(testcase, issue):
 ', '<br>')
 
   mail.send(to_email, subject, html_content)

@@ -1,5 +1,4 @@
 <?php
-        bool $allow_self = false
 namespace Psalm;
 
 use function array_merge;
@@ -111,7 +110,7 @@ abstract class Type
         ?string $namespace,
         array $aliased_classes,
         ?string $this_class,
-        bool $allow_self = false,
+        bool $allow_self = false
         bool $was_static = false
     ) : string {
         if ($allow_self && $value === $this_class) {

@@ -544,7 +544,6 @@ bool RTPSDomainImpl::should_intraprocess_between(
     return false;
 }
 
-void RTPSDomainImpl::file_watch_callback()
 {
     // Ensure that all changes have been saved by the OS
     std::this_thread::sleep_for(std::chrono::seconds(1));

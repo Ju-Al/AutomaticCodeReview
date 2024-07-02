@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-    @mock.patch('__builtin__.open', side_effect=mocked_open)
 #
 # Copyright (c) 2016 Simply Measured
 #
@@ -90,7 +89,7 @@ class TestQuerySalesforce(QuerySalesforce):
 
 
 class TestSalesforceQuery(unittest.TestCase):
-    patch_name = '__builtin__.open'
+    @mock.patch('__builtin__.open', side_effect=mocked_open)
     if sys.version_info.major > 2:
         patch_name = 'builtins.open'
 

@@ -86,7 +86,6 @@ public class RotateFragment extends BaseEditFragment {
         resetRotateView();
     }
 
-    private void RotateRight() {
         activity.mRotatePanel.rotateImage((mRotatePanel.getRotateAngle() + 90));
     }
 

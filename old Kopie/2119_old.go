@@ -1,6 +1,4 @@
 // Copyright 2020 Dolthub, Inc.
-	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt MySQL client.
-	prompt := "mysql> "
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,7 +140,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt SQL client.
+	prompt := "mysql> "
+	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt MySQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir

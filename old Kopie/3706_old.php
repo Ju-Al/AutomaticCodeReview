@@ -148,7 +148,6 @@ class Sensei_Templates {
 		$find = array( 'sensei.php' );
 		$file = '';
 
-		if ( Sensei()->feature_flags->is_enabled( 'optional_templates' ) && ! apply_filters( 'sensei_use_sensei_template', true ) ) {
 			return $template;
 		}
 

@@ -1,62 +1,20 @@
-import React, { Component, Fragment } from 'react';
-import { Route } from 'react-router-dom';
-import PropTypes from 'prop-types';
+import React from 'react';
+import { Switch, Route } from 'react-router-dom';
+import { Page } from '@magento/peregrine';
+import ErrorView from 'src/components/ErrorView/index';
+import CreateAccountPage from 'src/components/CreateAccountPage/index';
 
-import classify from 'src/classify';
-import defaultClasses from './searchTrigger.css';
+const renderRoutingError = props => <ErrorView {...props} />;
+const search = () => <Search />;
 
-class SearchTrigger extends Component {
-    static propTypes = {
-        children: PropTypes.node,
-        classes: PropTypes.shape({
-            root: PropTypes.string,
-            open: PropTypes.string
-        }),
-        searchOpen: PropTypes.bool,
-        toggleSearch: PropTypes.func.isRequired
-    };
+const renderRoutes = () => (
+    <Switch>
+        <Route exact path="/search.html">
+            <Page>{search}</Page>
+        </Route>
+        <Route exact path="/create-account" component={CreateAccountPage} />
+        <Route render={() => <Page>{renderRoutingError}</Page>} />
+    </Switch>
+);
 
-    render() {
-        const { children, classes, toggleSearch, searchOpen } = this.props;
-        const searchClass = searchOpen ? classes.open : classes.root;
-
-        return (
-            <Fragment>
-                <button className={searchClass} onClick={toggleSearch}>
-                    {children}
-                </button>
-                <Route
-                    exact
-                    path="/search.html"
-                    render={() => {
-                        const { searchOpen, toggleSearch } = this.props;
-                        const props = { searchOpen, toggleSearch };
-
-                        return <EnsureOpenSearch {...props} />;
-                    }}
-                />
-            </Fragment>
-        );
-    }
-}
-
-class EnsureOpenSearch extends Component {
-    static propTypes = {
-        searchOpen: PropTypes.bool,
-        toggleSearch: PropTypes.func.isRequired
-    };
-
-    componentDidMount() {
-        const { searchOpen, toggleSearch } = this.props;
-        if (searchOpen !== true) {
-            toggleSearch();
-        }
-    }
-
-    render() {
-        // Do not render anything.
-        return null;
-    }
-}
-
-export default classify(defaultClasses)(SearchTrigger);
+export default renderRoutes;

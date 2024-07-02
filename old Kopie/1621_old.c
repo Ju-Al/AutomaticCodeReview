@@ -1,5 +1,4 @@
 /*
-#else
 *   Copyright (c) 1996-2003, Darren Hiebert
 *
 *   This source code is released for free distribution under the terms of the
@@ -266,6 +265,7 @@ static optionDescription LongOptionDescription [] = {
  {1,"       Specify string to print to stdout following the tags for each file"},
  {1,"       parsed when --filter is enabled."},
  {0,"  --format=level"},
+#else
  {0,"       Force output of specified tag file format [" STRINGIFY(DEFAULT_FILE_FORMAT) "]."},
  {1,"  --guess-language-eagerly"},
  {1,"       Guess the language of input file more eagerly"},

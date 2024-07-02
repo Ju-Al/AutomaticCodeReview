@@ -42,7 +42,6 @@ import type {
   TransferFundsCalculateFeeRequest,
   TransferFundsRequest,
 } from '../api/wallets/types';
-import { TESTNET_MAGIC } from '../../../main/config';
 /* eslint-disable consistent-return */
 
 /**

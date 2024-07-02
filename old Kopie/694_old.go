@@ -1,9 +1,4 @@
 // Copyright 2018 The Go Cloud Authors
-		mecs := item.([]msgErrChan)
-		for _, mec := range mecs {
-			m := mec.msg
-		for _, mec := range mecs {
-			mec.errChan <- err
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -246,7 +241,11 @@ func (s *Subscription) Close() error {
 // It is for use by provider implementations.
 func NewSubscription(ctx context.Context, d driver.Subscription, opts *SubscriptionOptions) *Subscription {
 	handler := func(item interface{}) {
-		ms := item.([]*Message)
+		for _, mec := range mecs {
+			m := mec.msg
+		for _, mec := range mecs {
+			mec.errChan <- err
+		mecs := item.([]msgErrChan)
 		var ids []driver.AckID
 		for _, m := range ms {
 			id := m.ackID

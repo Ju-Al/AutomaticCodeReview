@@ -1,8 +1,4 @@
 // 
-        private static void MergeLiterals(List<LayoutRenderer> list)
-                var lr1 = list[i] as LiteralLayoutRenderer;
-                var lr2 = list[i + 1] as LiteralLayoutRenderer;
-                if (lr1 != null && lr2 != null)
 // Copyright (c) 2004-2020 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
@@ -503,7 +499,10 @@ namespace NLog.Layouts
             return true;
         }
 
-        private static void MergeLiterals(IList<LayoutRenderer> list)
+                var lr1 = list[i] as LiteralLayoutRenderer;
+                var lr2 = list[i + 1] as LiteralLayoutRenderer;
+                if (lr1 != null && lr2 != null)
+        private static void MergeLiterals(List<LayoutRenderer> list)
         {
             for (int i = 0; i + 1 < list.Count;)
             {

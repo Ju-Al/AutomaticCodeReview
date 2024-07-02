@@ -493,8 +493,6 @@ class News extends Frontend
 		}
 
 		return $arrFeeds;
-	}
-
 	/**
 	 * Change the page title to news title, if set.
 	 * @param PageModel   $objPage

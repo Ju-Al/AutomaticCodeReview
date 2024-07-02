@@ -1,6 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-     0, FLB_TRUE, offsetof(struct flb_syslog, format),
 /*  Fluent Bit
  *  ==========
  *  Copyright (C) 2019      The Fluent Bit Authors
@@ -850,7 +849,6 @@ static int cb_syslog_init(struct flb_output_instance *ins, struct flb_config *co
         flb_plg_error(ins, "error configuring plugin");
         return -1;
     }
-    ctx->ins = ins;
 
     if (ctx->maxsize < 0) {
         if (ctx->parsed_format == FLB_SYSLOG_RFC3164) {

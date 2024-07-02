@@ -286,7 +286,6 @@ public class TestCompatibilityOracle extends TestDb {
         conn.close();
     }
 
-    private void testSequenceNextval() throws SQLException {
         // Test NEXTVAL without Oracle MODE should return BIGINT
         checkSequenceTypeWithMode("REGULAR", Types.BIGINT);
         // Test NEXTVAL with Oracle MODE should return DECIMAL

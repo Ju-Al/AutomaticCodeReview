@@ -150,11 +150,6 @@ func (o *runTaskOpts) Ask() error {
 	}
 	if err := o.askEnvName(); err != nil {
 		return err
-	}
-	return nil
-}
-
-// Execute deploys and runs the task.
 func (o *runTaskOpts) Execute() error {
 	if err := o.deployTaskResources(); err != nil {
 		return err

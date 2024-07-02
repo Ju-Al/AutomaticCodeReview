@@ -36,7 +36,6 @@ public class ErrorCollector implements OutputSink<IssueOutput> {
     assertThat(issues).isEmpty();
   }
 
-  public List<IssueOutput> issuesOf(IssueOutput.Category category) {
     return issues.stream().filter(i -> i.getCategory().equals(category)).collect(ImmutableList.toImmutableList());
   }
 

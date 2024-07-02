@@ -1589,7 +1589,6 @@ const MeshTopology::HexahedraAroundQuad& MeshTopology::getHexahedraAroundQuad(Qu
 
 
 
-const vector< MeshTopology::EdgesAroundVertex >& MeshTopology::getEdgesAroundVertexArray()
 {
     if (m_edgesAroundVertex.empty())	// this method should only be called when the array exists.
     {

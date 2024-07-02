@@ -1,5 +1,4 @@
 import itertools
-            dimensionless = util.dimensionless_contents(self.streams, self.kdims)
 import types
 from numbers import Number
 from itertools import groupby
@@ -727,7 +726,7 @@ class DynamicMap(HoloMap):
 
         # Cache lookup
         try:
-            dimensionless = util.dimensionless_contents(get_streams(self),
+            dimensionless = util.dimensionless_contents(self.streams, self.kdims)
                                                         self.kdims, False)
             if (dimensionless and not self._dimensionless_cache):
                 raise KeyError('Using dimensionless streams disables DynamicMap cache')

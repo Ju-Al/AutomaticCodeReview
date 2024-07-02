@@ -1,5 +1,4 @@
 package module
-
 import "github.com/onflow/flow-go/model/flow"
 
 // SealValidator is an interface which is used for validating

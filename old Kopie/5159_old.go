@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// run determines whether a retry is necessary based on the config and
 // idempotency information. It then calls the function with or without retries
 // as appropriate, using the configured settings.
 func run(ctx context.Context, call func() error, retry *retryConfig, isIdempotent bool) error {

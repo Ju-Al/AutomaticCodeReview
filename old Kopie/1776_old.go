@@ -1,22 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-// For encoding we use msgpack from github.com/ugorji/go.
-// It was already imported in go-cloud and is reasonably performant.
-// However the more recent version has better resource handling with
-// the addition of the following:
-// 	mh.ExplicitRelease = true
-// 	defer enc.Release()
-// However this is not compatible with etcd at the moment.
-// https://github.com/etcd-io/etcd/pull/10337
-var mh codec.MsgpackHandle
-
-func init() {
-	// driver.Message.Metadata type
-	dm := driver.Message{}
-	mh.MapType = reflect.TypeOf(dm.Metadata)
-}
-
-// only encodes Body and Metadata. Otherwise we would have to
-// add codec decorations to driver.Message.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -193,8 +175,25 @@ type topic struct {
 	subj string
 }
 
+// For encoding we use msgpack from github.com/ugorji/go.
+// It was already imported in go-cloud and is reasonably performant.
+// However the more recent version has better resource handling with
+// the addition of the following:
+// 	mh.ExplicitRelease = true
+// 	defer enc.Release()
+// However this is not compatible with etcd at the moment.
+// https://github.com/etcd-io/etcd/pull/10337
+var mh codec.MsgpackHandle
+
+func init() {
+	// driver.Message.Metadata type
+	dm := driver.Message{}
+	mh.MapType = reflect.TypeOf(dm.Metadata)
+}
+
 // We define our own version of message here for encoding that
-// only encodes Body and Metadata.
+// only encodes Body and Metadata. Otherwise we would have to
+// add codec decorations to driver.Message.
 type encMsg struct {
 	Body     []byte
 	Metadata map[string]string

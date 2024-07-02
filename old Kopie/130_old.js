@@ -1,5 +1,5 @@
 var express = require('express');
-    host = '0.0.0.0';var app = express();
+var app = express();
 var expressWs = require('express-ws')(app);
 var pty = require('pty.js');
 
@@ -46,7 +46,7 @@ app.ws('/bash', function(ws, req) {
 });
 
 var port = process.env.PORT || 3000,
-    host = '127.0.0.1';
+    host = '0.0.0.0';    host = '127.0.0.1';
 
 console.log('App listening to http://' + host + ':' + port);
 app.listen(port, host);

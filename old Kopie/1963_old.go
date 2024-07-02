@@ -507,7 +507,6 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 	}
 	return
 }
-
 // isLocalhost returns true if the given host is a localhost address.
 func isLocalhost(host string) bool {
 	for _, v := range []string{"localhost", "127.0.0.1", "[::1]", "::1"} {

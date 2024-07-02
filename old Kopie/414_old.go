@@ -1,8 +1,23 @@
 package commands
 
 import (
+	sternCmd "github.com/wercker/stern/cmd"
+	"github.com/wercker/stern/kubernetes"
+	cmd.Use = "logs <appname>"
+	cmd.Short = "Tail pods logs of an application"
+	cmd.Long = "Tail pods logs of an application"
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+			ioStreams.Errorf("please specify the application name")
+		appName := args[0]
+		cmd.SetArgs([]string{appName + ".*"})
+		namespace := env.Namespace
+		cmd.Flags().String("namespace", namespace, "")
+		return nil
+	}
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		config, err := sternCmd.ParseConfig(args)
+		if err := Run(ctx, config, ioStreams); err != nil {
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"text/template"
@@ -16,8 +31,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	sternCmd "github.com/wercker/stern/cmd"
-	"github.com/wercker/stern/kubernetes"
 	"github.com/wercker/stern/stern"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -26,31 +39,18 @@ import (
 func NewLogsCommand(c types.Args, ioStreams cmdutil.IOStreams) *cobra.Command {
 	largs := &Args{C: c}
 	cmd := &cobra.Command{}
-	cmd.Use = "logs <appname>"
-	cmd.Short = "Tail pods logs of an application"
-	cmd.Long = "Tail pods logs of an application"
-	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 	cmd.Use = "logs"
 	cmd.Short = "Tail logs for application"
 	cmd.Long = "Tail logs for application"
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			ioStreams.Errorf("please specify the application name")
 			ioStreams.Errorf("please specify app name")
 			return nil
 		}
-		appName := args[0]
-		cmd.SetArgs([]string{appName + ".*"})
 		env, err := GetEnv(cmd)
 		if err != nil {
 			return err
 		}
-		namespace := env.Namespace
-		cmd.Flags().String("namespace", namespace, "")
-		return nil
-	}
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		config, err := sternCmd.ParseConfig(args)
 		app, err := application.Load(env.Name, args[0])
 		if err != nil {
 			return err
@@ -58,7 +58,6 @@ func NewLogsCommand(c types.Args, ioStreams cmdutil.IOStreams) *cobra.Command {
 		largs.App = app
 		largs.Env = env
 		ctx := context.Background()
-		if err := Run(ctx, config, ioStreams); err != nil {
 		if err := largs.Run(ctx, ioStreams); err != nil {
 			return err
 		}

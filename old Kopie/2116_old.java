@@ -1,5 +1,4 @@
 package openfoodfacts.github.scrachx.openfood.views;
-
 import android.app.SearchManager;
 import android.app.SearchableInfo;
 import android.content.Context;

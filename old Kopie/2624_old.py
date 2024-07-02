@@ -1,6 +1,4 @@
 # Copyright 2001 by Brad Chapman.  All rights reserved.
-        self.assertEqual(rec1.annotations["references"][0], rec1.annotations["references"][0])
-        cmp1, cmp2 = rec1.annotations["references"][0], rec2.annotations["references"][0]
 # Revisions copyright 2011-2013 by Peter Cock. All rights reserved.
 # Copyright 2015-2017 by Kai Blin.  All rights reserved.
 # This code is part of the Biopython distribution and governed by its
@@ -30,7 +28,8 @@ class TestReference(unittest.TestCase):
         rec1 = SeqIO.read(testfile, "genbank")
         rec2 = SeqIO.read(testfile, "genbank")
 
-        self.assertEqual(
+        self.assertEqual(rec1.annotations["references"][0], rec1.annotations["references"][0])
+        cmp1, cmp2 = rec1.annotations["references"][0], rec2.annotations["references"][0]
             rec1.annotations["references"][0], rec1.annotations["references"][0]
         )
         cmp1, cmp2 = (

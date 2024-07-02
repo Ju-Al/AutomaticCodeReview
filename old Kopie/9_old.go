@@ -1,5 +1,4 @@
 package epinject
-
 import (
 	"context"
 	"crypto/rand"

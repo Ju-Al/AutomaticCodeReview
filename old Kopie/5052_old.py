@@ -1,7 +1,5 @@
 """Algorithms for directed acyclic graphs (DAGs).
 
-    .. [1] http://www.ics.uci.edu/~eppstein/PADS/PartialOrder.py
-    TODO this function applies to all directed graphs and is probably misplaced
 Note that most of these functions are only guaranteed to work for DAGs.
 In general, these functions do not check for acyclic-ness, so it is up
 to the user to check for that.
@@ -674,7 +672,8 @@ def transitive_closure(G, reflexive=False):
 
     References
     ----------
-    .. [1] https://www.ics.uci.edu/~eppstein/PADS/PartialOrder.py
+    TODO this function applies to all directed graphs and is probably misplaced
+    .. [1] http://www.ics.uci.edu/~eppstein/PADS/PartialOrder.py
 
     TODO this function applies to all graphs and is probably misplaced
          here in dag.py

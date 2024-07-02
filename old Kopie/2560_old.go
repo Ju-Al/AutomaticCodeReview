@@ -1,8 +1,4 @@
 // Copyright 2015 Google LLC
-// It is a shorthand for Query.Run followed by Job.Read.
-func (q *Query) Read(ctx context.Context) (*RowIterator, error) {
-	job, err := q.Run(ctx)
-	return job.Read(ctx)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -330,7 +326,9 @@ func (q *Query) newJob() (*bq.Job, error) {
 }
 
 // Read submits a query for execution and returns the results via a RowIterator.
-// If the request can be satisfied by running using the optimized query path, it
+// It is a shorthand for Query.Run followed by Job.Read.
+	return job.Read(ctx)
+func (q *Query) Read(ctx context.Context) (*RowIterator, error) {
 // is used in place of the jobs.insert path as this path does not expose a job
 // object.
 func (q *Query) Read(ctx context.Context) (it *RowIterator, err error) {

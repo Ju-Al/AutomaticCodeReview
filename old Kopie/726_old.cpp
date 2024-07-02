@@ -1,8 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-                if((!drop_participant_builtin_topic_data_ && writer_id == c_EntityId_SPDPWriter) ||
-                        (!drop_publication_builtin_topic_data_ && writer_id == c_EntityId_SEDPPubWriter) ||
-                        (!drop_subscription_builtin_topic_data_ && writer_id == c_EntityId_SEDPSubWriter))
-                    return false;
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,243 +12,98 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fastrtps/transport/test_UDPv4Transport.h>
-#include <cstdlib>
+/**
+ * @file RTPSParticipantLeaseDuration.cpp
+ *
+ */
 
-using namespace std;
+#include <fastrtps/rtps/builtin/discovery/participant/timedevent/RemoteParticipantLeaseDuration.h>
+#include <fastrtps/rtps/resources/ResourceEvent.h>
+#include <fastrtps/rtps/builtin/discovery/participant/PDPSimple.h>
+#include <fastrtps/rtps/builtin/data/ParticipantProxyData.h>
+#include "../../../../participant/RTPSParticipantImpl.h"
+#include <fastrtps/rtps/participant/ParticipantDiscoveryInfo.h>
+#include <fastrtps/rtps/participant/RTPSParticipantListener.h>
+#include <fastrtps/utils/TimeConversion.h>
 
-namespace eprosima{
+#include <fastrtps/log/Log.h>
+
+#include <mutex>
+#include <chrono>
+
+
+
+namespace eprosima {
 namespace fastrtps{
-namespace rtps{
+namespace rtps {
 
-std::vector<std::vector<octet> > test_UDPv4Transport::test_UDPv4Transport_DropLog;
-uint32_t test_UDPv4Transport::test_UDPv4Transport_DropLogLength = 0;
-bool test_UDPv4Transport::test_UDPv4Transport_ShutdownAllNetwork = false;
-bool test_UDPv4Transport::always_drop_participant_builtin_topic_data = false;
 
-test_UDPv4Transport::test_UDPv4Transport(const test_UDPv4TransportDescriptor& descriptor):
-    drop_data_messages_percentage_(descriptor.dropDataMessagesPercentage),
-    drop_participant_builtin_topic_data_(descriptor.dropParticipantBuiltinTopicData),
-    drop_publication_builtin_topic_data_(descriptor.dropPublicationBuiltinTopicData),
-    drop_subscription_builtin_topic_data_(descriptor.dropSubscriptionBuiltinTopicData),
-    drop_data_frag_messages_percentage_(descriptor.dropDataFragMessagesPercentage),
-    drop_heartbeat_messages_percentage_(descriptor.dropHeartbeatMessagesPercentage),
-    drop_ack_nack_messages_percentage_(descriptor.dropAckNackMessagesPercentage),
-    sequence_number_data_messages_to_drop_(descriptor.sequenceNumberDataMessagesToDrop),
-    percentage_of_messages_to_drop_(descriptor.percentageOfMessagesToDrop)
+RemoteParticipantLeaseDuration::RemoteParticipantLeaseDuration(PDPSimple* p_SPDP,
+        ParticipantProxyData* pdata,
+        double interval):
+    TimedEvent(p_SPDP->getRTPSParticipant()->getEventResource().getIOService(),
+            p_SPDP->getRTPSParticipant()->getEventResource().getThread(), interval),
+    mp_PDP(p_SPDP),
+    mp_participantProxyData(pdata)
     {
-        test_UDPv4Transport_DropLogLength = 0;
-        test_UDPv4Transport_ShutdownAllNetwork = false;
-        UDPv4Transport::mSendBufferSize = descriptor.sendBufferSize;
-        UDPv4Transport::mReceiveBufferSize = descriptor.receiveBufferSize;
-        test_UDPv4Transport_DropLog.clear();
-        test_UDPv4Transport_DropLogLength = descriptor.dropLogLength;
+
     }
 
-test_UDPv4TransportDescriptor::test_UDPv4TransportDescriptor():
-    SocketTransportDescriptor(s_maximumMessageSize, s_maximumInitialPeersRange),
-    dropDataMessagesPercentage(0),
-    dropParticipantBuiltinTopicData(false),
-    dropPublicationBuiltinTopicData(false),
-    dropSubscriptionBuiltinTopicData(false),
-    dropDataFragMessagesPercentage(0),
-    dropHeartbeatMessagesPercentage(0),
-    dropAckNackMessagesPercentage(0),
-    percentageOfMessagesToDrop(0),
-    sequenceNumberDataMessagesToDrop(),
-    dropLogLength(0)
-    {
-    }
-
-TransportInterface* test_UDPv4TransportDescriptor::create_transport() const
+RemoteParticipantLeaseDuration::~RemoteParticipantLeaseDuration()
 {
-    return new test_UDPv4Transport(*this);
+    destroy();
 }
 
-bool test_UDPv4Transport::send(
-        const octet* send_buffer,
-        uint32_t send_buffer_size,
-        eProsimaUDPSocket& socket,
-        const Locator_t& remote_locator,
-        bool only_multicast_purpose)
+void RemoteParticipantLeaseDuration::event(EventCode code, const char* msg)
 {
-    if (packet_should_drop(send_buffer, send_buffer_size))
+    // Unused in release mode.
+    (void)msg;
+
+    if(code == EVENT_SUCCESS)
     {
-        log_drop(send_buffer, send_buffer_size);
-        return true;
-    }
-    else
-    {
-        return UDPv4Transport::send(send_buffer, send_buffer_size, socket, remote_locator, only_multicast_purpose);
-    }
-}
-
-static bool ReadSubmessageHeader(CDRMessage_t& msg, SubmessageHeader_t& smh)
-{
-    if (msg.length - msg.pos < 4)
-        return false;
-
-    smh.submessageId = msg.buffer[msg.pos]; msg.pos++;
-    smh.flags = msg.buffer[msg.pos]; msg.pos++;
-    msg.msg_endian = smh.flags & BIT(0) ? LITTLEEND : BIGEND;
-    uint16_t length = 0;
-    CDRMessage::readUInt16(&msg, &length);
-
-    if (msg.pos + length > msg.length)
-    {
-        return false;
-    }
-
-    if ( (length == 0) && (smh.submessageId != INFO_TS) && (smh.submessageId != PAD) )
-    {
-        // THIS IS THE LAST SUBMESSAGE
-        smh.submessageLength = msg.length - msg.pos;
-        smh.is_last = true;
-    }
-    else
-    {
-        smh.submessageLength = length;
-        smh.is_last = false;
-    }
-    return true;
-}
-
-bool test_UDPv4Transport::packet_should_drop(const octet* send_buffer, uint32_t send_buffer_size)
-{
-    if(test_UDPv4Transport_ShutdownAllNetwork)
-    {
-        return true;
-    }
-
-    CDRMessage_t cdrMessage(send_buffer_size);;
-    memcpy(cdrMessage.buffer, send_buffer, send_buffer_size);
-    cdrMessage.length = send_buffer_size;
-
-    if(cdrMessage.length < RTPSMESSAGE_HEADER_SIZE)
-        return false;
-
-    if(cdrMessage.buffer[cdrMessage.pos++] != 'R' ||
-            cdrMessage.buffer[cdrMessage.pos++] != 'T' ||
-            cdrMessage.buffer[cdrMessage.pos++] != 'P' ||
-            cdrMessage.buffer[cdrMessage.pos++] != 'S')
-        return false;
-
-    cdrMessage.pos += 4 + 12; // RTPS version + GUID
-
-    SubmessageHeader_t cdrSubMessageHeader;
-    while (cdrMessage.pos < cdrMessage.length)
-    {
-        ReadSubmessageHeader(cdrMessage, cdrSubMessageHeader);
-        if (cdrMessage.pos + cdrSubMessageHeader.submessageLength > cdrMessage.length)
-            return false;
-
-        SequenceNumber_t sequence_number{SequenceNumber_t::unknown()};
-        EntityId_t writer_id;
-        auto old_pos = cdrMessage.pos;
-
-        switch(cdrSubMessageHeader.submessageId)
+        logInfo(RTPS_LIVELINESS,"RTPSParticipant no longer ALIVE, trying to remove: "
+                << mp_participantProxyData->m_guid);
+        // If overcame, remove participant.
+        auto now = std::chrono::steady_clock::now();
+        auto real_lease_tm = last_received_message_tm +
+                std::chrono::microseconds(TimeConv::Duration_t2MicroSecondsInt64(mp_participantProxyData->m_leaseDuration));
+        if (now > real_lease_tm)
         {
-            case DATA:
-                // Get WriterID.
-                cdrMessage.pos += 8;
-                CDRMessage::readEntityId(&cdrMessage, &writer_id);
-                CDRMessage::readInt32(&cdrMessage, &sequence_number.high);
-                CDRMessage::readUInt32(&cdrMessage, &sequence_number.low);
-                cdrMessage.pos = old_pos;
+            logInfo(RTPS_LIVELINESS,"RTPSParticipant no longer ALIVE, trying to remove: "
+                    << mp_participantProxyData->m_guid);
 
-                if(writer_id == c_EntityId_SPDPWriter ||
-                        writer_id == c_EntityId_SEDPPubWriter ||
-                        writer_id == c_EntityId_SEDPSubWriter)
+            // This assignment must be before removeRemoteParticipant because mp_participantProxyData is deleted there.
+            ParticipantDiscoveryInfo info;
+            info.status = ParticipantDiscoveryInfo::DROPPED_PARTICIPANT;
+            info.info.copy(*mp_participantProxyData);
+
+            // Set pointer to null because this call will be delete itself.
+            mp_participantProxyData->mp_leaseDurationTimer = nullptr;
+            if(mp_PDP->removeRemoteParticipant(mp_participantProxyData->m_guid))
+            {
+                if(mp_PDP->getRTPSParticipant()->getListener()!=nullptr)
                 {
-                    if (always_drop_participant_builtin_topic_data)
-                    {
-                        return true;
-                    }
-                    else if(!drop_participant_builtin_topic_data_)
-                    {
-                        return false;
-                    }
+                    mp_PDP->getRTPSParticipant()->getListener()->onParticipantDiscovery(
+                            mp_PDP->getRTPSParticipant()->getUserRTPSParticipant(), std::move(info));
                 }
-
-                if(should_be_dropped(&drop_data_messages_percentage_))
-                    return true;
-
-                break;
-
-            case ACKNACK:
-                if(should_be_dropped(&drop_ack_nack_messages_percentage_))
-                    return true;
-
-                break;
-
-            case HEARTBEAT:
-                cdrMessage.pos += 8;
-                CDRMessage::readInt32(&cdrMessage, &sequence_number.high);
-                CDRMessage::readUInt32(&cdrMessage, &sequence_number.low);
-                cdrMessage.pos = old_pos;
-                if(should_be_dropped(&drop_heartbeat_messages_percentage_))
-                    return true;
-
-                break;
-
-            case DATA_FRAG:
-                if(should_be_dropped(&drop_data_frag_messages_percentage_))
-                    return true;
-
-                break;
-
-            case GAP:
-                cdrMessage.pos += 8;
-                CDRMessage::readInt32(&cdrMessage, &sequence_number.high);
-                CDRMessage::readUInt32(&cdrMessage, &sequence_number.low);
-                cdrMessage.pos = old_pos;
-
-                break;
+            }
+            return;
         }
 
-        if(sequence_number != SequenceNumber_t::unknown() &&
-                find(sequence_number_data_messages_to_drop_.begin(),
-                    sequence_number_data_messages_to_drop_.end(),
-                    sequence_number) != sequence_number_data_messages_to_drop_.end())
-            return true;
-
-        cdrMessage.pos += cdrSubMessageHeader.submessageLength;
+        // Calculate next trigger.
+        auto next_trigger = real_lease_tm - now;
+        update_interval_millisec(std::chrono::duration_cast<std::chrono::milliseconds>(next_trigger).count());
+        restart_timer();
     }
-
-    if(random_chance_drop())
-        return true;
-
-    return false;
-}
-
-bool test_UDPv4Transport::log_drop(const octet* buffer, uint32_t size)
-{
-    if (test_UDPv4Transport_DropLog.size() < test_UDPv4Transport_DropLogLength)
+    else if(code == EVENT_ABORT)
     {
-        vector<octet> message;
-        message.assign(buffer, buffer + size);
-        test_UDPv4Transport_DropLog.push_back(message);
-        return true;
+        logInfo(RTPS_LIVELINESS," Stopped for "<<mp_participantProxyData->m_participantName
+                << " with ID: "<< mp_participantProxyData->m_guid.guidPrefix);
     }
-
-    return false;
-}
-
-bool test_UDPv4Transport::random_chance_drop()
-{
-    return should_be_dropped(&percentage_of_messages_to_drop_);
-}
-
-bool test_UDPv4Transport::should_be_dropped(PercentageData* percent)
-{
-    percent->accumulator += percent->percentage;
-    if (percent->accumulator >= 100u)
+    else
     {
-        percent->accumulator -= 100u;
-        return true;
+        logInfo(RTPS_LIVELINESS,"message: " <<msg);
     }
-
-    return false;
 }
 
 } // namespace rtps

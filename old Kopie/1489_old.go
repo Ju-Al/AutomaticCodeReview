@@ -1,7 +1,5 @@
 package sync
 
-
-		s.lock.Unlock()
 import (
 	"archive/tar"
 	"bufio"
@@ -446,9 +444,10 @@ func (s *Sync) watchOutgoing(st Stream) {
 
 	for c := range ch {
 		s.lock.Lock()
+
 		if s.outgoingBlocks[c.Path] > 0 {
+		s.lock.Unlock()
 			s.outgoingBlocks[c.Path] -= 1
-			s.lock.Unlock()
 		} else {
 			s.lock.Unlock()
 			s.outgoing <- c

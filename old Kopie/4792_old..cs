@@ -272,7 +272,6 @@ namespace Jackett.Common.Indexers
             CQ dom = results.Content;
             int numVal = 0;
 
-            // find number of torrents / page
             int torrent_per_page = dom[".box_torrent_all"].Find(".box_torrent").Length;
             int start_page = (query.Offset / torrent_per_page)+1;
             int previously_parsed_on_page = query.Offset - (start_page * torrent_per_page) + 1; //+1 because indexing start from 0

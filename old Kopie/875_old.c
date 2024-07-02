@@ -73,7 +73,6 @@ int main (int argc, char ** argv)
 
 	init (argc, argv);
 
-#ifdef HAS_FGETPWENT
 	test_read ();
 #endif
 	test_write ();

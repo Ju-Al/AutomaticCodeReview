@@ -51,7 +51,6 @@ func initNonRelic() {
 	})
 }
 
-// Signature format Check for non-relic algos (ECDSA)
 func signatureFormatCheckNonRelic(algo SigningAlgorithm, s Signature) (bool, error) {
 	switch algo {
 	case ECDSAP256:

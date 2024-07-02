@@ -1,8 +1,4 @@
 # This code is part of the Biopython distribution and governed by its
-        self.assertEqual(str(FormattedSeq(Seq("GATC"))),
-                         "FormattedSeq(Seq('GATC'), linear=True)")
-        self.assertFalse(FormattedSeq(Seq("GATC")) ==
-                         FormattedSeq(Seq("TAGC")))
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 #
@@ -57,7 +53,10 @@ class SequenceTesting(unittest.TestCase):
 
     def test_formatted_seq(self):
         """Test several methods of FormattedSeq."""
-        self.assertEqual(
+        self.assertEqual(str(FormattedSeq(Seq("GATC"))),
+                         "FormattedSeq(Seq('GATC'), linear=True)")
+        self.assertFalse(FormattedSeq(Seq("GATC")) ==
+                         FormattedSeq(Seq("TAGC")))
             str(FormattedSeq(Seq("GATC"))), "FormattedSeq(Seq('GATC'), linear=True)"
         )
         self.assertFalse(FormattedSeq(Seq("GATC")) == FormattedSeq(Seq("TAGC")))

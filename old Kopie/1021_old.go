@@ -1,7 +1,5 @@
 package validator
 
-	"logs_file_path": "config key replaced: logs_file is now log_file",
-	"logs_level":     "config key replaced: logs_level is now log_level",
 var validKeys = []string{
 	// Root Keys.
 	"host",
@@ -131,7 +129,8 @@ var validKeys = []string{
 }
 
 var specificErrorKeys = map[string]string{
-	"logs_file_path":   "config key replaced: logs_file is now log_file",
+	"logs_file_path": "config key replaced: logs_file is now log_file",
+	"logs_level":     "config key replaced: logs_level is now log_level",
 	"logs_level":       "config key replaced: logs_level is now log_level",
 	"google_analytics": "config key incorrect: google_analytics - this functionality has been removed",
 	"authentication_backend.file.password_options.algorithm":   "config key incorrect: authentication_backend.file.password_options should be authentication_backend.file.password",

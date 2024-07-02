@@ -17,7 +17,6 @@ package escape
 
 import (
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 )

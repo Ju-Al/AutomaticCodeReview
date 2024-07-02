@@ -1,5 +1,4 @@
 
-                // This should be an error
 package com.fsck.k9.mail;
 
 import android.support.annotation.VisibleForTesting;
@@ -65,7 +64,7 @@ public class Address implements Serializable {
                     mPersonal = (personal == null) ? null : personal.trim();
                 }
             } else {
-                Timber.e(new IllegalArgumentException(), "address " + address + " is invalid");
+                // This should be an error
             }
         } else {
             mAddress = address;

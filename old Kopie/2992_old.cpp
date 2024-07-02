@@ -1936,7 +1936,6 @@ int LGBM_BoosterPredictForCSRSingleRow(BoosterHandle handle,
   API_END();
 }
 
-int LGBM_BoosterPredictForCSRSingleRowFastInit(BoosterHandle handle,
                                                const int data_type,
                                                const int64_t num_col,
                                                const char* parameter,

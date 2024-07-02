@@ -1,5 +1,4 @@
 define([
-        controller: "wizardremoteaccess"
     "jQuery",
     "emby-button",
     "emby-input",
@@ -373,8 +372,8 @@ define([
         autoFocus: false,
         roles: "admin",
         controller: "userprofilespage"
+        controller: "wizardremoteaccess"
     });
-
     defineRoute({
         path: "/wizardremoteaccess.html",
         autoFocus: false,

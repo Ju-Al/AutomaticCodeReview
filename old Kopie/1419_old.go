@@ -1,5 +1,4 @@
 package promql
-
 import (
 	"fmt"
 

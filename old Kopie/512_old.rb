@@ -1,6 +1,4 @@
 module Pod
-          puts "\nPods added in the last #{d == 1 ? 'day' : "#{d} days"}".yellow
-          sets.sort_by {|s| creation_dates[s.name]}.each {|s| puts @presenter.describe(s)}
   class Command
     class List < Command
       def self.banner
@@ -58,7 +56,8 @@ module Pod
         days.reverse.each do |d|
           sets = groups[d]
           next unless sets
-          UI.section("\nPods added in the last #{d == 1 ? 'day' : "#{d} days"}".yellow) do
+          puts "\nPods added in the last #{d == 1 ? 'day' : "#{d} days"}".yellow
+          sets.sort_by {|s| creation_dates[s.name]}.each {|s| puts @presenter.describe(s)}
             sorted = sets.sort_by {|s| creation_dates[s.name]}
             sorted.each { |set| UI.pod(set, (@stats ? :stats : :name)) }
           end

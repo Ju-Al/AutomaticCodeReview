@@ -1,6 +1,4 @@
 /*
-	_ "knative.dev/pkg/metrics/testing"
-
 Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,13 +24,14 @@ import (
 	"strings"
 	"time"
 
+	_ "knative.dev/pkg/metrics/testing"
+
 	cev2 "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
 	"github.com/cloudevents/sdk-go/v2/binding/transformer"
 	"github.com/cloudevents/sdk-go/v2/protocol"
 	"github.com/cloudevents/sdk-go/v2/protocol/http"
 	"github.com/google/knative-gcp/pkg/metrics"
-	"github.com/google/knative-gcp/pkg/tracing"
 	"github.com/google/wire"
 	"go.opencensus.io/trace"
 	"go.uber.org/zap"

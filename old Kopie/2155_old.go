@@ -184,7 +184,6 @@ var (
 		[]string{Outcome},
 	)
 
-	installPlanWarningCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "install_plan_warnings_count",
 			Help: "monotonic count of resources created with warnings (for example, deprecation warnings)",

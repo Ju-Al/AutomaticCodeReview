@@ -52,7 +52,6 @@ int s2n_server_nst_recv(struct s2n_connection *conn) {
         POSIX_GUARD(s2n_realloc(&conn->client_ticket, session_ticket_len));
 
         POSIX_GUARD(s2n_stuffer_read(&conn->handshake.io, &conn->client_ticket));
-
         if (conn->config->session_ticket_cb != NULL) {
             size_t session_len = s2n_connection_get_session_length(conn);
             uint8_t session_data[S2N_TLS12_SESSION_SIZE] = { 0 };

@@ -400,7 +400,6 @@ func (c *contractDeferred) VerifyInstruction(rst ReadOnlyStateTrie, inst Instruc
 	return nil
 }
 
-// This function is used in the case we do a deferred transaction on a deferred
 // transaction.
 func (c *contractDeferred) VerifyDeferredInstruction(rst ReadOnlyStateTrie, inst Instruction, ctxHash []byte) error {
 	// We make a special case for the delete instruction. Anyone should be able

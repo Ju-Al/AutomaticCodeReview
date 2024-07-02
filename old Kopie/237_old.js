@@ -11,8 +11,6 @@ function Address() {
 
 Address.parent = parent;
 parent.applyEncodingsTo(Address);
-
-//create a pubKeyHash address
 Address.fromPubKey = function(pubKey, network) {
   if (!network)
     network = 'livenet';

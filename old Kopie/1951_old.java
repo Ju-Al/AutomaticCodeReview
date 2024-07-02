@@ -1,5 +1,4 @@
 package fr.free.nrw.commons.explore.recentsearches;
-        adapter = new ArrayAdapter<String>(getContext(),R.layout.item_recent_searches, recentSearches);
 
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -57,7 +56,7 @@ public class RecentSearchesFragment extends CommonsDaggerSupportFragment {
                 .create()
                 .show();
         });
-        currentThemeIsDark = PreferenceManager.getDefaultSharedPreferences(getContext()).getBoolean("theme", false);
+        adapter = new ArrayAdapter<String>(getContext(),R.layout.item_recent_searches, recentSearches);
         if (currentThemeIsDark) {
             adapter = new ArrayAdapter<String>(getContext(), R.layout.item_recent_searches_dark_theme, recentSearches);
         } else {

@@ -1,5 +1,4 @@
 /**
-});
 * Copyright (c) Microsoft.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -168,7 +167,7 @@ describe('arm', function () {
     });
   });
 });
-
+});
 function listPoll(suite, groupName, tagName, attemptsLeft, responseIsEmpty, callback) {
   if(attemptsLeft === 0) {
     assert.throws( function() {

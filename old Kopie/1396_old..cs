@@ -1,86 +1,58 @@
-﻿// -------------------------------------------------------------------------------------------------
-    public class TestFhirServerFactory : IDisposable
-        private readonly ConcurrentDictionary<(DataStore dataStore, Type startupType), Lazy<TestFhirServer>> _cache = new ConcurrentDictionary<(DataStore dataStore, Type startupType), Lazy<TestFhirServer>>();
-        public TestFhirServer GetTestFhirServer(DataStore dataStore, Type startupType)
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
-// -------------------------------------------------------------------------------------------------
+// Licensed to the .NET Foundation under one or more agreements.
+// See the LICENSE file in the project root for more information.
+#if !NETFRAMEWORK
+using BenchmarkDotNet.Attributes;
+using MicroBenchmarks;
+using System.Text.Encodings.Web;
 
-using System;
-using System.Collections.Concurrent;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Health.Fhir.Tests.Common.FixtureParameters;
-using Xunit;
-
-namespace Microsoft.Health.Fhir.Tests.E2E.Rest
+namespace System.Text.Tests
 {
-    /// <summary>
-    /// Creates and caches <see cref="TestFhirServer"/> instances. This class is intended to be used as an assembly fixture,
-    /// so that the <see cref="TestFhirServer"/> instances can be reused across test classes in an assembly.
-    /// </summary>
-    public class TestFhirServerFactory : IAsyncLifetime, IAsyncDisposable
+    [BenchmarkCategory(Categories.Libraries)]
+    public class Perf_DefaultJavaScriptEncoder
     {
-        private readonly ConcurrentDictionary<(DataStore dataStore, Type startupType), Lazy<Task<TestFhirServer>>> _cache = new ConcurrentDictionary<(DataStore dataStore, Type startupType), Lazy<Task<TestFhirServer>>>();
+        [Params("no escaping required", "&Hello+<World>!")]
+        public string sourceString;
 
-        public async Task<TestFhirServer> GetTestFhirServer(DataStore dataStore, Type startupType)
+        // pads the string with a pseudorandom number of non-escapable characters
+        [Params(16, 512)]
+        public int paddingSize;
+
+        private JavaScriptEncoder _encoder;
+        private string _sourceBufferUtf16;
+        private char[] _destinationBufferUtf16;
+
+        private byte[] _sourceBufferUtf8;
+        private byte[] _destinationBufferUtf8;
+
+        [GlobalSetup]
+        public void SetupGetBytes()
         {
-            return await _cache.GetOrAdd(
-                    (dataStore, startupType),
-                    tuple =>
-                        new Lazy<Task<TestFhirServer>>(() =>
-                        {
-                            TestFhirServer testFhirServer;
-                            string environmentUrl = GetEnvironmentUrl(tuple.dataStore);
+            _encoder = JavaScriptEncoder.Default;
+            _sourceBufferUtf16 = BuildSourceString();
+            _destinationBufferUtf16 = new char[paddingSize + 10 * sourceString.Length];
 
-                            if (string.IsNullOrEmpty(environmentUrl))
-                            {
-                                testFhirServer = new InProcTestFhirServer(tuple.dataStore, tuple.startupType);
-                            }
-                            else
-                            {
-                                if (environmentUrl.Last() != '/')
-                                {
-                                    environmentUrl = $"{environmentUrl}/";
-                                }
-
-                                testFhirServer = new RemoteTestFhirServer(environmentUrl);
-                            }
-
-                            return testFhirServer.ConfigureSecurityOptions().ContinueWith(_ => testFhirServer, TaskContinuationOptions.ExecuteSynchronously);
-                        }))
-                .Value;
-        }
-
-        private static string GetEnvironmentUrl(DataStore dataStore)
-        {
-            switch (dataStore)
+            _sourceBufferUtf8 = Encoding.UTF8.GetBytes(_sourceBufferUtf16);
+            _destinationBufferUtf8 = new byte[paddingSize + 10 * sourceString.Length];
+            
+            string BuildSourceString()
             {
-                case DataStore.CosmosDb:
-                    return Environment.GetEnvironmentVariable($"TestEnvironmentUrl{Constants.TestEnvironmentVariableVersionSuffix}");
-                case DataStore.SqlServer:
-                    return Environment.GetEnvironmentVariable($"TestEnvironmentUrl{Constants.TestEnvironmentVariableVersionSuffix}_Sql");
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(dataStore), dataStore, null);
-            }
-        }
-
-        Task IAsyncLifetime.InitializeAsync() => Task.CompletedTask;
-
-        async Task IAsyncLifetime.DisposeAsync()
-        {
-            await DisposeAsync();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            foreach (Lazy<Task<TestFhirServer>> cacheValue in _cache.Values)
-            {
-                if (cacheValue.IsValueCreated)
+                var sb = new StringBuilder();
+                // pad the string with `paddingSize` non-escapable ascii characters
+                var random = new Random(42);
+                for (int i = 0; i < paddingSize; i++)
                 {
-                    (await cacheValue.Value).Dispose();
+                    sb.Append((char)random.Next('a', 'z' + 1));
                 }
+                sb.Append(sourceString);
+                return sb.ToString();
             }
         }
+
+        [Benchmark]
+        public void EncodeUtf8() => _encoder.EncodeUtf8(_sourceBufferUtf8, _destinationBufferUtf8, out int _, out int _);
+
+        [Benchmark]
+        public void EncodeUtf16() => _encoder.Encode(_sourceBufferUtf16, _destinationBufferUtf16, out int _, out int _);
     }
 }
+#endif

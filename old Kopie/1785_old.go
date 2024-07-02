@@ -5,7 +5,6 @@ type AlertStatus struct {
 	CallbackID string
 	AlertID    int
 	LogEntry   string
-
 	// Summary of the alert that this status is in regards to.
 	Summary string
 	// Details of the alert that this status is in regards to.

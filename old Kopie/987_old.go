@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,7 +81,7 @@ func stripTransaction(tx string) string {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool, authToken string) error {
+func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path

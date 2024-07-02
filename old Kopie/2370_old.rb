@@ -1,5 +1,4 @@
 class CookbooksController < ApplicationController
-    if @current_params[:order].present?
   before_action :assign_cookbook, except: [:index, :directory, :available_for_adoption]
   before_action :store_location_then_authenticate_user!, only: [:follow, :unfollow, :adoption]
 
@@ -32,7 +31,7 @@ class CookbooksController < ApplicationController
       @cookbooks = @cookbooks.featured
     end
 
-    if (order = @current_params[:order]).present?
+    if @current_params[:order].present?
 
       if order == "recently_updated"
         @cookbooks = @cookbooks.undeprecated

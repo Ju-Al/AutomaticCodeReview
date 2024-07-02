@@ -1,5 +1,4 @@
 /*
-		projectID := os.Getenv(lib.ProwProjectKey)
 Copyright 2019 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -202,7 +201,7 @@ func CloudStorageSourceWithTargetTestImpl(t *testing.T, assertMetrics bool, auth
 		time.Sleep(sleepTime)
 
 		// If we reach this point, the projectID should have been set.
-		projectID := lib.GetEnvOrFail(t, lib.ProwProjectKey)
+		projectID := os.Getenv(lib.ProwProjectKey)
 		f := map[string]interface{}{
 			"metric.type":                 lib.EventCountMetricType,
 			"resource.type":               lib.GlobalMetricResourceType,

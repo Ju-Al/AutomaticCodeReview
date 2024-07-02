@@ -177,7 +177,6 @@ class DALIGenericIterator(object):
         # Change index for double buffering
         self._current_data_batch = (self._current_data_batch + 1) % 2
         self._counter += self._num_gpus * self.batch_size
-        
         if (self._stop_at_epoch) and (self._counter > self._size):
             # First calculate how much data is required to return exactly self._size entries. 
             diff = self._num_gpus * self.batch_size - (self._counter - self._size)

@@ -1,5 +1,4 @@
 /*
-    JobGroupInfo info = newJobGroupInfo("REMOVE-ORPHAN-FILES", "REMOVE-ORPHAN-FILES");
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -143,7 +142,7 @@ public class BaseRemoveOrphanFilesSparkAction
 
   @Override
   public RemoveOrphanFiles.Result execute() {
-    JobGroupInfo info = newJobGroupInfo("REMOVE-ORPHAN-FILES",
+    JobGroupInfo info = newJobGroupInfo("REMOVE-ORPHAN-FILES", "REMOVE-ORPHAN-FILES");
         String.format("Removing orphan files(%s) from %s", getDescription(), table.name()));
     return withJobGroupInfo(info, this::doExecute);
   }

@@ -179,8 +179,6 @@ func (h *Handler) ValidateJWTSVID(ctx context.Context, req *workload.ValidateJWT
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	log.WithField(telemetry.SPIFFEID, spiffeID).Debug("Successfully validated JWT")
-
-	id, err := spiffeid.FromString(spiffeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unexpected SPIFFE ID: %v", err)
 	}

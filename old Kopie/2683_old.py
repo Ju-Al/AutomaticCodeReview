@@ -1,5 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-        cls.securitycenter_beta_api_client = securitycenter.SecurityCenterClient(version='v1beta1')
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,7 +38,7 @@ class SecurityCenterTest(unittest_utils.ForsetiTestCase):
         """Set up."""
         fake_global_configs = {
             'securitycenter': {'max_calls': 1, 'period': 1.1}}
-        cls.securitycenter = securitycenter.SecurityCenterClient(version='v1')
+        cls.securitycenter_beta_api_client = securitycenter.SecurityCenterClient(version='v1beta1')
         cls.project_id = 111111
         cls.source_id = 'organizations/111/sources/222'
 

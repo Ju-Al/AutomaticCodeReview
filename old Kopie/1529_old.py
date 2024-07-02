@@ -1,5 +1,4 @@
 import json
-        result = {'Records': []}
 import uuid
 import hashlib
 from flask import Flask, jsonify, request, make_response
@@ -94,7 +93,7 @@ def post_request():
             ShardId=stream_shard_id, ShardIteratorType=data['ShardIteratorType'])
     elif action == '%s.GetRecords' % ACTION_HEADER_PREFIX:
         kinesis_records = kinesis.get_records(**data)
-        result = {'Records': [], 'NextShardIterator': kinesis_records['NextShardIterator']}
+        result = {'Records': []}
         for record in kinesis_records['Records']:
             result['Records'].append(json.loads(to_str(record['Data'])))
     else:

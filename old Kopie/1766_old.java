@@ -1,6 +1,5 @@
 package com.hubspot.singularity.hooks;
 
-    for (SingularityWebhook webhook : webhooks) {
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +74,7 @@ public class SingularityWebhookSender {
     int requestUpdates = 0;
     int deployUpdates = 0;
 
-    List<CompletableFuture<Void>> webhookFutures = new ArrayList<>();
+    for (SingularityWebhook webhook : webhooks) {
 
     for (SingularityWebhook webhook : webhooks) {
       switch (webhook.getType()) {

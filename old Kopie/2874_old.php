@@ -1,5 +1,4 @@
 <?php
-
 namespace WP_Rocket\Tests\Unit\inc\ThirdParty\Hostings\HostResolver;
 
 use Brain\Monkey\Functions;

@@ -226,7 +226,6 @@ func getImageConfig(ctx context.Context, sc *types.SystemContext, store storage.
 	}
 	image, err := ref.NewImage(ctx, sc)
 	if err != nil {
-		if img, err2 := store.Image(imageID); err2 == nil && img.ID == imageID {
 			return nil, nil
 		}
 		return nil, errors.Wrapf(err, "unable to open image %q", imageID)

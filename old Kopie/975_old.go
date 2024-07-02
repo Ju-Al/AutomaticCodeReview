@@ -1,6 +1,5 @@
 /**
-	queueOrigin := meta.QueueOrigin
-	if queueOrigin == nil { * Optimism 2020 Copyright
+ * Optimism 2020 Copyright
  */
 
 package types
@@ -161,7 +160,8 @@ func TxMetaEncode(meta *TransactionMeta) []byte {
 		common.WriteVarBytes(b, 0, l.Bytes())
 	}
 
-	queueOrigin := uint8(meta.QueueOrigin)
+	queueOrigin := meta.QueueOrigin
+	if queueOrigin == nil {	queueOrigin := uint8(meta.QueueOrigin)
 	q := new(bytes.Buffer)
 	binary.Write(q, binary.LittleEndian, queueOrigin)
 	common.WriteVarBytes(b, 0, q.Bytes())

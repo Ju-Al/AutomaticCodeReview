@@ -1,6 +1,4 @@
 /*
-    byte[] magic = DfsLogger.LOG_FILE_HEADER_V4.getBytes(UTF_8);
-    byte[] magicBuffer = new byte[magic.length];
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -363,7 +361,8 @@ public class DfsLogger implements Comparable<DfsLogger> {
       AccumuloConfiguration conf) throws IOException {
     DataInputStream decryptingInput;
 
-    byte[] magic4 = DfsLogger.LOG_FILE_HEADER_V4.getBytes(UTF_8);
+    byte[] magic = DfsLogger.LOG_FILE_HEADER_V4.getBytes(UTF_8);
+    byte[] magicBuffer = new byte[magic.length];
     byte[] magic3 = DfsLogger.LOG_FILE_HEADER_V3.getBytes(UTF_8);
 
     if (magic4.length != magic3.length)

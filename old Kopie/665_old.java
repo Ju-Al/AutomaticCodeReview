@@ -1,8 +1,5 @@
 package com.fsck.k9.controller;
 
-        if (account.isAnIdentity(message.getFrom()) && !account.isNotifySelfNewMail()) {
-            return false;
-        }
 import java.io.CharArrayWriter;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -5353,7 +5350,11 @@ public class MessagingController implements Runnable {
         }
     }
 
-    /**
+    /** Cancel a notification of new email messages */
+    public void notifyAccountCancel(Context context, Account account) {
+        notifMgr.cancel(account.getAccountNumber());
+        notifMgr.cancel(-1000 - account.getAccountNumber());
+        NotificationManager notifMgr =
      * Cancel a notification of new email messages
      * @param  account all notifications for this account will be canceled and removed
      */

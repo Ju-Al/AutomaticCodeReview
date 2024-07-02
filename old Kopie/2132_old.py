@@ -155,7 +155,6 @@ class InventoryIndex(BASE):
         session.add(self)
         session.flush()
 
-    def get_lifecycle_state_details(self, session, resource_type_input):
         """Generate/return the count of lifecycle states (ACTIVE, DELETE_PENDING) of the specific
            resource type input (project, folder) for this inventory index.
 

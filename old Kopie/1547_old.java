@@ -1,5 +1,4 @@
 /*
-     *
  *  Copyright 2013-2019 Amazon.com,
  *  Inc. or its affiliates. All Rights Reserved.
  *
@@ -473,7 +472,7 @@ public class CognitoUserPool {
      * @param userAttributes    REQUIRED: User attributes.
      * @param validationData    REQUIRED: Validation key value pairs, these will be passed to pre
      *                          and post registration lambda functions.
-     * @param clientMetadata    REQUIRED: Client metadata for lambda function for user registration
+     *
      * @return SignUpResult
      */
     private SignUpResult signUpInternal(String userId, String password,

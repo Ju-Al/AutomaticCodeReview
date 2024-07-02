@@ -123,7 +123,6 @@ func (DNSName) TableName() string {
 	return "dns_names"
 }
 
-// FederatedTrustDomain holds federated trust domains.
 // It has the information needed to get updated bundles of the
 // federated trust domain from a SPIFFE bundle endpoint server.
 type FederatedTrustDomain struct {

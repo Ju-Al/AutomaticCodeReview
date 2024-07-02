@@ -1,5 +1,4 @@
 import React, { Fragment } from 'react';
-import { Redirect } from '@magento/venia-drivers';
 import { useAccountInformationPage } from '@magento/peregrine/lib/talons/AccountInformationPage/useAccountInformationPage';
 
 import { mergeClasses } from '../../classify';

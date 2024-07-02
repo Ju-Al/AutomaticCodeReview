@@ -1,10 +1,6 @@
 /*
-        properties(options, true).forEach(properties::putIfAbsent);
-        properties(options, false).forEach(properties::putIfAbsent);
-    private static Map<String, String> properties(Map<String, String> options, boolean isKey) {
-        Map<String, String> properties = new HashMap<>();
-
-        if (JAVA_FORMAT.equals(format)) {
+    static final String AVRO_SERIALIZER = "io.confluent.kafka.serializers.KafkaAvroSerializer";
+    static final String AVRO_DESERIALIZER = "io.confluent.kafka.serializers.KafkaAvroDeserializer";
  * Copyright (c) 2008-2020, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");

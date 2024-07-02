@@ -1,6 +1,4 @@
 /*
-  /* XXX: right now we don't have a good solution for this */
-  rpmostree_output_message ("WARNING: changes to /etc are not currently preserved!");
  * Copyright (C) 2015,2017 Red Hat, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -661,7 +659,8 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
         return FALSE;
     }
 
-  /* XXX: right now we don't have a good solution for this:
+  /* XXX: right now we don't have a good solution for this */
+  rpmostree_output_message ("WARNING: changes to /etc are not currently preserved!");
    * https://github.com/projectatomic/rpm-ostree/issues/40 */
   rpmostree_output_message ("WARNING: changes to /etc will not appear in the pending deployment!");
 

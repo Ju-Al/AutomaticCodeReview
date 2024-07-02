@@ -1,5 +1,4 @@
 #include "../PluginStructs/P016_data_struct.h"
-    if (iCmdInhibitTime > (int32_t)(_now - iLastCmdTime)) {
 
 #ifdef USES_P016
 
@@ -64,7 +63,7 @@ void P016_data_struct::ExecuteCode(uint32_t  Code) {
   uint32_t _now = millis();
   if (iLastCmd == Code) {
     // same code as before
-    if (iCmdInhibitTime > static_cast<uint32_t>(_now - iLastCmdTime)) {
+    if (iCmdInhibitTime > (int32_t)(_now - iLastCmdTime)) {
       // inhibit time not ellapsed
       return;
     }

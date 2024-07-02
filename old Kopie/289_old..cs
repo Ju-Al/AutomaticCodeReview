@@ -1,5 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                            new HashIndex(DataType.String, 3),
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -60,7 +59,7 @@ namespace Microsoft.Health.Fhir.CosmosDb.Features.Storage.Versioning
                         Indexes = new Collection<Index>
                         {
                             new RangeIndex(DataType.Number, -1),
-                            new RangeIndex(DataType.String, -1),
+                            new HashIndex(DataType.String, 3),
                         },
                     },
                     new IncludedPath

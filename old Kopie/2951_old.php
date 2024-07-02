@@ -1,5 +1,4 @@
 <?php
-	 * @return bool|void False if rocket key is invalid.
 
 namespace WP_Rocket\Engine\Cache;
 
@@ -47,7 +46,7 @@ class WPCache implements ActivationInterface, DeactivationInterface {
 	 *
 	 * @since 3.6.3
 	 *
-	 * @param int $sites_number Number of WP Rocket config files found.
+	 * @return bool|void False if rocket key is invalid.
 	 * @return bool
 	 */
 	public function update_wp_cache( $sites_number = 0 ) {

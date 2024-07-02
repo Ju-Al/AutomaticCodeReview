@@ -1,5 +1,4 @@
 /*
-  _drivers.push_back(OgrDriverInfo(".s57",      "S57",            true,     true,   GDAL_OF_VECTOR));
  * This file is part of Hootenanny.
  *
  * Hootenanny is free software: you can redistribute it and/or modify
@@ -55,7 +54,7 @@ void OgrUtilities::loadDriverInfo()
   _drivers.push_back(OgrDriverInfo(".db",       "SQLite",         true,     true,   GDAL_OF_VECTOR));
   _drivers.push_back(OgrDriverInfo(".mif",      "MapInfo File",   true,     true,   GDAL_OF_VECTOR));
   _drivers.push_back(OgrDriverInfo(".tab",      "MapInfo File",   true,     true,   GDAL_OF_VECTOR));
-//  _drivers.push_back(OgrDriverInfo(".s57",      "S57",            true,     true,   GDAL_OF_VECTOR));
+  _drivers.push_back(OgrDriverInfo(".s57",      "S57",            true,     true,   GDAL_OF_VECTOR));
   _drivers.push_back(OgrDriverInfo(".000",      "S57",            true,     true,   GDAL_OF_VECTOR));
   _drivers.push_back(OgrDriverInfo(".bna",      "BNA",            true,     true,   GDAL_OF_VECTOR));
   _drivers.push_back(OgrDriverInfo(".csv",      "CSV",            true,     true,   GDAL_OF_VECTOR));

@@ -1,5 +1,4 @@
 const path = require('path');
-        ]
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const packageConfig = require('./package.json');
@@ -30,7 +29,7 @@ module.exports = {
     resolve: {
         modules: [
             path.resolve(__dirname, 'node_modules')
-        ],
+        ]
         alias: {
             'SyncPlay': path.resolve(__dirname, 'src/components/syncPlay/core')
         }

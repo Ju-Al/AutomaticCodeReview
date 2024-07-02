@@ -1,5 +1,4 @@
 import { createElement } from 'lwc';
-
 import LockerIntegration from 'x/lockerIntegration';
 
 describe('integration', () => {

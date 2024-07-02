@@ -1,5 +1,4 @@
 /**
-  shared_model::validation::DefaultTransactionValidator transaction_validator;
  * Copyright Soramitsu Co., Ltd. 2017 All Rights Reserved.
  * http://soramitsu.co.jp
  *
@@ -102,13 +101,13 @@ TEST_F(TransactionValidatorTest, StatelessValidTest) {
                    },
                    [] {});
 
+  shared_model::validation::DefaultTransactionValidator transaction_validator;
   auto result = proto::Transaction(iroha::protocol::Transaction(tx));
   auto answer = transaction_validator.validate(result);
 
   ASSERT_FALSE(answer.hasErrors()) << answer.reason();
 }
 
-/**
  * @given Protobuf transaction object with unset command
  * @when validate is called
  * @then there is a error returned

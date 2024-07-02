@@ -1,14 +1,4 @@
 // Copyright (c) 2015-2019 K Team. All Rights Reserved.
-        K results = rewriter.prove(specModule, boundaryPattern);
-        int exit;
-        if (results instanceof KApply) {
-            KApply kapp = (KApply) results;
-            exit = kapp.klabel().name().equals("#True") ? 0 : 1;
-        } else {
-            exit = 1;
-        }
-        kprint.prettyPrint(compiled._1(), compiled._1().getModule("LANGUAGE-PARSING").get(), s -> kprint.outputFile(s), results);
-        return exit;
 package org.kframework.kprove;
 
 import com.google.inject.Inject;
@@ -70,7 +60,16 @@ public class KProve {
         Module specModule = compiled._2();
         Rule boundaryPattern = buildBoundaryPattern(compiledDefinition);
 
-        RewriterResult results = rewriter.prove(specModule, boundaryPattern);
+        K results = rewriter.prove(specModule, boundaryPattern);
+        int exit;
+        if (results instanceof KApply) {
+            KApply kapp = (KApply) results;
+            exit = kapp.klabel().name().equals("#True") ? 0 : 1;
+        } else {
+            exit = 1;
+        }
+        kprint.prettyPrint(compiled._1(), compiled._1().getModule("LANGUAGE-PARSING").get(), s -> kprint.outputFile(s), results);
+        return exit;
         kprint.prettyPrint(compiled._1(), compiled._1().getModule("LANGUAGE-PARSING").get(), s -> kprint.outputFile(s), results.k());
         return results.exitCode().orElse(-1);
     }

@@ -1,5 +1,4 @@
 // @flow
-      isRanking,
 import React, { Component, Fragment } from 'react';
 import { observer, inject } from 'mobx-react';
 import StakePools from '../../components/staking/stake-pools/StakePools';
@@ -54,6 +53,7 @@ export default class StakePoolsListPage extends Component<Props> {
     const {
       stakePoolsRequest,
       stakePools,
+      isRanking,
       selectedDelegationWalletId,
       stake,
       fetchingStakePoolsFailed,
@@ -61,7 +61,6 @@ export default class StakePoolsListPage extends Component<Props> {
       getStakePoolById,
     } = staking;
     const { all } = wallets;
-    const isLoading = !isSynced || fetchingStakePoolsFailed;
     const isRanking = staking.isRanking && stakePoolsRequest.isExecuting;
 
     return (

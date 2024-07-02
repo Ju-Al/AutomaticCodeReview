@@ -1,6 +1,5 @@
 // This is the API that JS files loaded from the webview can see
 const webviewApiPromises_ = {};
-let cb_ = () => {};
 
 // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
 const webviewApi = {

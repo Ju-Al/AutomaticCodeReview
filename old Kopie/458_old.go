@@ -1,5 +1,4 @@
 // Cosi takes a file or a message and signs it collectively.
-// For usage, see README.md
 package main
 
 import (

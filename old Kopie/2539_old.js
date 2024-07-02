@@ -694,7 +694,7 @@ class ExpandedContainer extends Component<Props, State> {
                 />
               </label>
             </AccordionTab>
-            <AccordionTab
+
               className={styles.section}
               isExpanded={isAssumptionsTabExpanded}
               label="Assumptions"

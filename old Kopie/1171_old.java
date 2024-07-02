@@ -1,188 +1,226 @@
-package com.fsck.k9.helper;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-import android.content.Context;
-import android.text.Spannable;
-import android.text.SpannableString;
-import android.text.SpannableStringBuilder;
-import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
-import android.util.Log;
+package org.apache.iceberg;
 
-import com.fsck.k9.Account;
-import com.fsck.k9.K9;
-import com.fsck.k9.R;
-import com.fsck.k9.activity.FolderInfoHolder;
-import com.fsck.k9.activity.MessageInfoHolder;
-import com.fsck.k9.mail.Address;
-import com.fsck.k9.mail.Flag;
-import com.fsck.k9.mail.MessagingException;
-import com.fsck.k9.mail.Message.RecipientType;
-import com.fsck.k9.mailstore.LocalMessage;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import org.apache.iceberg.exceptions.RuntimeIOException;
+import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.relocated.com.google.common.base.MoreObjects;
+import org.apache.iceberg.relocated.com.google.common.base.Objects;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 
-public class MessageHelper {
-    /**
-     * If the number of addresses exceeds this value the addresses aren't
-     * resolved to the names of Android contacts.
-     *
-     * <p>
-     * TODO: This number was chosen arbitrarily and should be determined by
-     * performance tests.
-     * </p>
-     *
-     * @see #toFriendly(Address[], com.fsck.k9.helper.Contacts)
-     */
-    private static final int TOO_MANY_ADDRESSES = 50;
+class BaseSnapshot implements Snapshot {
+  private static final long INITIAL_SEQUENCE_NUMBER = 0;
 
-    private static MessageHelper sInstance;
+  private final FileIO io;
+  private final long snapshotId;
+  private final Long parentId;
+  private final long sequenceNumber;
+  private final long timestampMillis;
+  private final String manifestListLocation;
+  private final String operation;
+  private final Map<String, String> summary;
 
-    public synchronized static MessageHelper getInstance(final Context context) {
-        if (sInstance == null) {
-            sInstance = new MessageHelper(context);
-        }
-        return sInstance;
+  // lazily initialized
+  private transient List<ManifestFile> allManifests = null;
+  private transient List<ManifestFile> dataManifests = null;
+  private transient List<ManifestFile> deleteManifests = null;
+  private transient List<DataFile> cachedAdds = null;
+  private transient List<DataFile> cachedDeletes = null;
+
+  /**
+   * For testing only.
+   */
+  BaseSnapshot(FileIO io,
+               long snapshotId,
+               String... manifestFiles) {
+    this(io, snapshotId, null, System.currentTimeMillis(), null, null,
+        Lists.transform(Arrays.asList(manifestFiles),
+            path -> new GenericManifestFile(io.newInputFile(path), 0)));
+  }
+
+  BaseSnapshot(FileIO io,
+               long sequenceNumber,
+               long snapshotId,
+               Long parentId,
+               long timestampMillis,
+               String operation,
+               Map<String, String> summary,
+               String manifestList) {
+    this.io = io;
+    this.sequenceNumber = sequenceNumber;
+    this.snapshotId = snapshotId;
+    this.parentId = parentId;
+    this.timestampMillis = timestampMillis;
+    this.operation = operation;
+    this.summary = summary;
+    this.manifestListLocation = manifestList;
+  }
+
+  BaseSnapshot(FileIO io,
+               long snapshotId,
+               Long parentId,
+               long timestampMillis,
+               String operation,
+               Map<String, String> summary,
+               List<ManifestFile> dataManifests) {
+    this(io, INITIAL_SEQUENCE_NUMBER, snapshotId, parentId, timestampMillis, operation, summary, null);
+    this.allManifests = dataManifests;
+  }
+
+  @Override
+  public long sequenceNumber() {
+    return sequenceNumber;
+  }
+
+  @Override
+  public long snapshotId() {
+    return snapshotId;
+  }
+
+  @Override
+  public Long parentId() {
+    return parentId;
+  }
+
+  @Override
+  public long timestampMillis() {
+    return timestampMillis;
+  }
+
+  @Override
+  public String operation() {
+    return operation;
+  }
+
+  @Override
+  public Map<String, String> summary() {
+    return summary;
+  }
+
+  private void cacheManifests() {
+    if (allManifests == null) {
+      // if manifests isn't set, then the snapshotFile is set and should be read to get the list
+      this.allManifests = ManifestLists.read(io.newInputFile(manifestListLocation));
     }
 
-    private Context mContext;
+    if (dataManifests == null) {
+      this.dataManifests = ImmutableList.copyOf(Iterables.filter(allManifests,
+          manifest -> manifest.content() == ManifestContent.DATA));
 
-    private MessageHelper(final Context context) {
-        mContext = context;
+    if (deleteManifests == null) {
+      this.deleteManifests = ImmutableList.copyOf(Iterables.filter(allManifests,
+          manifest -> manifest.content() == ManifestContent.DELETES));
+    }
+  }
+
+  @Override
+  public List<ManifestFile> allManifests() {
+    if (allManifests == null) {
+      cacheManifests();
+    }
+    return allManifests;
+  }
+
+  @Override
+  public List<ManifestFile> dataManifests() {
+    if (dataManifests == null) {
+      cacheManifests();
+    }
+    return dataManifests;
+  }
+
+  @Override
+  public List<ManifestFile> deleteManifests() {
+    if (deleteManifests == null) {
+      cacheManifests();
+    }
+    return deleteManifests;
+  }
+
+  @Override
+  public List<DataFile> addedFiles() {
+    if (cachedAdds == null) {
+      cacheChanges();
+    }
+    return cachedAdds;
+  }
+
+  @Override
+  public List<DataFile> deletedFiles() {
+    if (cachedDeletes == null) {
+      cacheChanges();
+    }
+    return cachedDeletes;
+  }
+
+  @Override
+  public String manifestListLocation() {
+    return manifestListLocation;
+  }
+
+  private void cacheChanges() {
+    ImmutableList.Builder<DataFile> adds = ImmutableList.builder();
+    ImmutableList.Builder<DataFile> deletes = ImmutableList.builder();
+
+    // read only manifests that were created by this snapshot
+    Iterable<ManifestFile> changedManifests = Iterables.filter(dataManifests(),
+        manifest -> Objects.equal(manifest.snapshotId(), snapshotId));
+    try (CloseableIterable<ManifestEntry<DataFile>> entries = new ManifestGroup(io, changedManifests)
+        .ignoreExisting()
+        .entries()) {
+      for (ManifestEntry<DataFile> entry : entries) {
+        switch (entry.status()) {
+          case ADDED:
+            adds.add(entry.file().copy());
+            break;
+          case DELETED:
+            deletes.add(entry.file().copyWithoutStats());
+            break;
+          default:
+            throw new IllegalStateException(
+                "Unexpected entry status, not added or deleted: " + entry);
+        }
+      }
+    } catch (IOException e) {
+      throw new RuntimeIOException(e, "Failed to close entries while caching changes");
     }
 
-    public void populate(final MessageInfoHolder target,
-                         final LocalMessage message,
-                         final FolderInfoHolder folder,
-                         Account account) {
-        final Contacts contactHelper = K9.showContactName() ? Contacts.getInstance(mContext) : null;
-        try {
-            target.message = message;
-            target.compareArrival = message.getInternalDate();
-            target.compareDate = message.getSentDate();
-            if (target.compareDate == null) {
-                target.compareDate = message.getInternalDate();
-            }
+    this.cachedAdds = adds.build();
+    this.cachedDeletes = deletes.build();
+  }
 
-            target.folder = folder;
-
-            target.read = message.isSet(Flag.SEEN);
-            target.answered = message.isSet(Flag.ANSWERED);
-            target.forwarded = message.isSet(Flag.FORWARDED);
-            target.flagged = message.isSet(Flag.FLAGGED);
-
-            Address[] addrs = message.getFrom();
-
-            if (addrs.length > 0 &&  account.isAnIdentity(addrs[0])) {
-                CharSequence to = toFriendly(message.getRecipients(RecipientType.TO), contactHelper);
-                target.compareCounterparty = to.toString();
-                target.sender = new SpannableStringBuilder(mContext.getString(R.string.message_to_label)).append(to);
-            } else {
-                target.sender = toFriendly(addrs, contactHelper);
-                target.compareCounterparty = target.sender.toString();
-            }
-
-            if (addrs.length > 0) {
-                target.senderAddress = addrs[0].getAddress();
-            } else {
-                // a reasonable fallback "whomever we were corresponding with
-                target.senderAddress = target.compareCounterparty;
-            }
-
-            target.uid = message.getUid();
-            target.account = message.getFolder().getAccountUuid();
-            target.uri = message.getUri();
-        } catch (MessagingException me) {
-            Log.w(K9.LOG_TAG, "Unable to load message info", me);
-        }
-    }
-
-    public CharSequence getDisplayName(Account account, Address[] fromAddrs, Address[] toAddrs) {
-        final Contacts contactHelper = K9.showContactName() ? Contacts.getInstance(mContext) : null;
-
-        CharSequence displayName;
-        if (fromAddrs.length > 0 && account.isAnIdentity(fromAddrs[0])) {
-            CharSequence to = toFriendly(toAddrs, contactHelper);
-            displayName = new SpannableStringBuilder(
-                    mContext.getString(R.string.message_to_label)).append(to);
-        } else {
-            displayName = toFriendly(fromAddrs, contactHelper);
-        }
-
-        return displayName;
-    }
-
-    public boolean toMe(Account account, Address[] toAddrs) {
-        for (Address address : toAddrs) {
-            if (account.isAnIdentity(address)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Returns the name of the contact this email address belongs to if
-     * the {@link Contacts contacts} parameter is not {@code null} and a
-     * contact is found. Otherwise the personal portion of the {@link Address}
-     * is returned. If that isn't available either, the email address is
-     * returned.
-     *
-     * @param address An {@link com.fsck.k9.mail.Address}
-     * @param contacts A {@link Contacts} instance or {@code null}.
-     * @return A "friendly" name for this {@link Address}.
-     */
-    public static CharSequence toFriendly(Address address, Contacts contacts) {
-        return toFriendly(address,contacts,
-                K9.showCorrespondentNames(),
-                K9.showCorrespondentNamesAndEmailAddresses(),
-                K9.changeContactNameColor(),
-                K9.getContactNameColor());
-    }
-
-    public static CharSequence toFriendly(Address[] addresses, Contacts contacts) {
-        if (addresses == null) {
-            return null;
-        }
-
-        if (addresses.length >= TOO_MANY_ADDRESSES) {
-            // Don't look up contacts if the number of addresses is very high.
-            contacts = null;
-        }
-
-        SpannableStringBuilder sb = new SpannableStringBuilder();
-        for (int i = 0; i < addresses.length; i++) {
-            sb.append(toFriendly(addresses[i], contacts));
-            if (i < addresses.length - 1) {
-                sb.append(',');
-            }
-        }
-        return sb;
-    }
-
-    /* package, for testing */ static CharSequence toFriendly(Address address, Contacts contacts,
-                                                 boolean showCorrespondentNames,
-                                                 boolean showCorrespondentNamesAndEmailAdresses,
-                                                 boolean changeContactNameColor,
-                                                 int contactNameColor) {
-        if (!showCorrespondentNames) {
-            return address.getAddress();
-        } else if (contacts != null){
-            String name = contacts.getNameForAddress(address.getAddress());
-            // TODO: The results should probably be cached for performance reasons.
-            if (name != null) {
-                if (showCorrespondentNamesAndEmailAdresses) name += " <" + address.getAddress() + ">";
-                if (changeContactNameColor) {
-                    final SpannableString coloredName = new SpannableString(name);
-                    coloredName.setSpan(new ForegroundColorSpan(contactNameColor),
-                            0,
-                            coloredName.length(),
-                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    );
-                    return coloredName;
-                } else {
-                    return name;
-                }
-            }
-        }
-        if(showCorrespondentNamesAndEmailAdresses) return (!TextUtils.isEmpty(address.getPersonal())) ? address.getPersonal() + " <" + address.getAddress() + ">" : address.getAddress();
-        return (!TextUtils.isEmpty(address.getPersonal())) ? address.getPersonal() : address.getAddress();
-    }
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("id", snapshotId)
+        .add("timestamp_ms", timestampMillis)
+        .add("operation", operation)
+        .add("summary", summary)
+        .add("manifest-list", manifestListLocation)
+        .toString();
+  }
 }

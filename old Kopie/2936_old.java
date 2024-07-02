@@ -1,6 +1,5 @@
 package com.fsck.k9.controller;
 
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;

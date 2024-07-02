@@ -1,7 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-    if (1 == context->finished) {
-        flb_coro_resume(context->coroutine);
 /*  Fluent Bit
  *  ==========
  *  Copyright (C) 2019-2021 The Fluent Bit Authors
@@ -583,7 +581,8 @@ static int flb_net_getaddrinfo_event_handler(void *arg)
                     context->response_event.fd,
                     context->response_event.fd);
 
-    /* We count on having this opportunity to remove the socket from the event loop
+    if (1 == context->finished) {
+        flb_coro_resume(context->coroutine);
      * even if the event that triggered this callback was a timeout or premature
      * close but we will need to figure this out if there is a chance for c-ares
      * to open multiple simultaneous connections as suspected.

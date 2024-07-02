@@ -1,5 +1,4 @@
 // Copyright 2019 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-bool DataWriterImpl::write(
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,7 +154,7 @@ bool DataWriterImpl::write(
     return create_new_change_with_params(ALIVE, data, params);
 }
 
-ReturnCode_t DataWriterImpl::write(
+bool DataWriterImpl::write(
             void* data,
             const rtps::InstanceHandle_t& handle)
 {

@@ -1,5 +1,4 @@
 <?php
-		$this->blocks            = $blocks;
 /**
  * Blocks API: WP_Block_List class
  *
@@ -57,7 +56,7 @@ class WP_Block_List implements Iterator, ArrayAccess, Countable {
 			$registry = WP_Block_Type_Registry::get_instance();
 		}
 
-		/**
+		$this->blocks            = $blocks;
 		 * Filters blocks passed to WP_Block_List constructor.
 		 *
 		 * @since x.x.x

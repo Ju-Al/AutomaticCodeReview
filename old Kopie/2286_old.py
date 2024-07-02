@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-
-        >>> regex('ABCGN')
-        'A[CGT]CG.'
 #
 #      Restriction Analysis Libraries.
 #      Copyright (C) 2004. Frederic Sohm.
@@ -106,7 +103,9 @@ def regex(site):
     """Construct a regular expression (string) from a DNA sequence.
 
     Example:
-    >>> regex('ABCGN')
+
+        >>> regex('ABCGN')
+        'A[CGT]CG.'
     'A[CGT]CG.'
 
     """

@@ -1,5 +1,4 @@
 /*
-        const {formatDate}      = this.context.intl;
  * Copyright 2015, Yahoo Inc.
  * Copyrights licensed under the New BSD License.
  * See the accompanying LICENSE file for terms.
@@ -33,7 +32,7 @@ export default class FormattedDate extends Component {
     }
 
     render() {
-        const {formatDate, textComponent} = this.context.intl;
+        const {formatDate}      = this.context.intl;
         const {value, children} = this.props;
 
         let formattedDate = formatDate(value, this.props);

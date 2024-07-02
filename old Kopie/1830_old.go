@@ -1,203 +1,133 @@
-package verification
+package signature
 
 import (
-	"testing"
+	"fmt"
 
-	"github.com/onflow/flow-go/state/protocol"
-
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
-	"github.com/onflow/flow-go/consensus/hotstuff/mocks"
 	"github.com/onflow/flow-go/consensus/hotstuff/model"
-	"github.com/onflow/flow-go/consensus/hotstuff/signature"
 	"github.com/onflow/flow-go/crypto"
 	"github.com/onflow/flow-go/model/encoding"
-	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/module/local"
-	modulemock "github.com/onflow/flow-go/module/mock"
-	storagemock "github.com/onflow/flow-go/storage/mock"
-	"github.com/onflow/flow-go/utils/unittest"
 )
 
-// Test that when DKG key is available for a view, a signed block can pass the validation
-// the sig include both staking sig and random beacon sig.
-func TestCombinedSignWithDKGKey(t *testing.T) {
-	identities := unittest.IdentityListFixture(4, unittest.WithRole(flow.RoleConsensus))
-
-	// prepare data
-	dkgKey := unittest.RandomBeaconPriv()
-	pk := dkgKey.PublicKey()
-	view := uint64(20)
-
-	fblock := unittest.BlockFixture()
-	fblock.Header.ProposerID = identities[0].NodeID
-	fblock.Header.View = view
-	block := model.BlockFromFlow(fblock.Header, 10)
-	signerID := fblock.Header.ProposerID
-
-	epochCounter := uint64(3)
-	epochLookup := &modulemock.EpochLookup{}
-	epochLookup.On("EpochForViewWithFallback", view).Return(epochCounter, nil)
-
-	keys := &storagemock.SafeBeaconKeys{}
-	// there is DKG key for this epoch
-	keys.On("RetrieveMyBeaconPrivateKey", epochCounter).Return(dkgKey, true, nil)
-
-	beaconKeyStore := signature.NewEpochAwareRandomBeaconKeyStore(epochLookup, keys)
-
-	stakingPriv := unittest.StakingPrivKeyFixture()
-	nodeID := unittest.IdentityFixture()
-	nodeID.NodeID = signerID
-	nodeID.StakingPubKey = stakingPriv.PublicKey()
-
-	me, err := local.New(nodeID, stakingPriv)
-	require.NoError(t, err)
-	signer := NewCombinedSigner(me, beaconKeyStore)
-
-	dkg := &mocks.DKG{}
-	dkg.On("KeyShare", signerID).Return(pk, nil)
-
-	committee := &mocks.Committee{}
-	committee.On("DKG", mock.Anything).Return(dkg, nil)
-
-	packer := signature.NewConsensusSigDataPacker(committee)
-	verifier := NewCombinedVerifier(committee, packer)
-
-	// check that a created proposal can be verified by a verifier
-	proposal, err := signer.CreateProposal(block)
-	require.NoError(t, err)
-
-	vote := proposal.ProposerVote()
-	err = verifier.VerifyVote(nodeID, vote.SigData, proposal.Block)
-	require.NoError(t, err)
-
-	// check that a created proposal's signature is a combined staking sig and random beacon sig
-	msg := MakeVoteMessage(block.View, block.BlockID)
-	stakingSig, err := stakingPriv.Sign(msg, crypto.NewBLSKMAC(encoding.ConsensusVoteTag))
-	require.NoError(t, err)
-
-	beaconSig, err := dkgKey.Sign(msg, crypto.NewBLSKMAC(encoding.RandomBeaconTag))
-	require.NoError(t, err)
-
-	expectedSig := signature.EncodeDoubleSig(stakingSig, beaconSig)
-	require.Equal(t, expectedSig, proposal.SigData)
-
-	// vote should be valid
-	vote, err = signer.CreateVote(block)
-	require.NoError(t, err)
-
-	err = verifier.VerifyVote(nodeID, vote.SigData, block)
-	require.NoError(t, err)
-
-	// vote on different block should be invalid
-	blockWrongID := *block
-	blockWrongID.BlockID[0]++
-	err = verifier.VerifyVote(nodeID, vote.SigData, &blockWrongID)
-	require.ErrorIs(t, err, model.ErrInvalidSignature)
-
-	// vote with a wrong view should be invalid
-	blockWrongView := *block
-	blockWrongView.View++
-	err = verifier.VerifyVote(nodeID, vote.SigData, &blockWrongView)
-	require.ErrorIs(t, err, model.ErrInvalidSignature)
-
-	// vote by different signer should be invalid
-	wrongVoter := identities[1]
-	wrongVoter.StakingPubKey = unittest.StakingPrivKeyFixture().PublicKey()
-	err = verifier.VerifyVote(wrongVoter, vote.SigData, block)
-	require.ErrorIs(t, err, model.ErrInvalidSignature)
-
-	// vote with changed signature should be invalid
-	brokenSig := append([]byte{}, vote.SigData...) // copy
-	brokenSig[4]++
-	err = verifier.VerifyVote(nodeID, brokenSig, block)
-	require.ErrorIs(t, err, model.ErrInvalidSignature)
-
-	// Vote from a node that is _not_ part of the Random Beacon committee should be rejected.
-	// Specifically, we expect that the verifier recognizes the `protocol.IdentityNotFoundError`
-	// as a sign of an invalid vote and wraps it into a `model.InvalidSignerError`.
-	*dkg = mocks.DKG{} // overwrite DKG mock with a new one
-	dkg.On("KeyShare", signerID).Return(nil, protocol.IdentityNotFoundError{NodeID: signerID})
-	err = verifier.VerifyVote(nodeID, vote.SigData, proposal.Block)
-	require.True(t, model.IsInvalidSignerError(err))
+// randomBeaconInspector implements hotstuff.RandomBeaconInspector interface.
+// All methods of this structure are concurrency-safe.
+type randomBeaconInspector struct {
+	inspector crypto.ThresholdSignatureInspector
 }
 
-// Test that when DKG key is not available for a view, a signed block can pass the validation
-// the sig only include staking sig
-func TestCombinedSignWithNoDKGKey(t *testing.T) {
-	// prepare data
-	dkgKey := unittest.RandomBeaconPriv()
-	pk := dkgKey.PublicKey()
-	view := uint64(20)
+// NewRandomBeaconInspector instantiates a new randomBeaconInspector.
+// The constructor errors if:
+//  - n is not between `ThresholdSignMinSize` and `ThresholdSignMaxSize`,
+//    for n the number of participants `n := len(publicKeyShares)`
+//  - threshold value is not between 0 and n-1
+//  - any input public key is not a BLS key
+func NewRandomBeaconInspector(
+	groupPublicKey crypto.PublicKey,
+	publicKeyShares []crypto.PublicKey,
+	threshold int,
+	message []byte,
+) (*randomBeaconInspector, error) {
 
-	fblock := unittest.BlockFixture()
-	fblock.Header.View = view
-	block := model.BlockFromFlow(fblock.Header, 10)
-	signerID := fblock.Header.ProposerID
+	inspector, err := crypto.NewBLSThresholdSignatureInspector(
+		groupPublicKey,
+		publicKeyShares,
+		threshold,
+		message,
+		encoding.RandomBeaconTag)
+	if err != nil {
+		return nil, fmt.Errorf("creating BSL Threshold Signature Inspector failed: %w", err)
+	}
 
-	epochCounter := uint64(3)
-	epochLookup := &modulemock.EpochLookup{}
-	epochLookup.On("EpochForViewWithFallback", view).Return(epochCounter, nil)
-
-	keys := &storagemock.SafeBeaconKeys{}
-	// there is no DKG key for this epoch
-	keys.On("RetrieveMyBeaconPrivateKey", epochCounter).Return(nil, false, nil)
-
-	beaconKeyStore := signature.NewEpochAwareRandomBeaconKeyStore(epochLookup, keys)
-
-	stakingPriv := unittest.StakingPrivKeyFixture()
-	nodeID := unittest.IdentityFixture()
-	nodeID.NodeID = signerID
-	nodeID.StakingPubKey = stakingPriv.PublicKey()
-
-	me, err := local.New(nodeID, stakingPriv)
-	require.NoError(t, err)
-	signer := NewCombinedSigner(me, beaconKeyStore)
-
-	dkg := &mocks.DKG{}
-	dkg.On("KeyShare", signerID).Return(pk, nil)
-
-	committee := &mocks.Committee{}
-	// even if the node failed DKG, and has no random beacon private key,
-	// but other nodes, who completed and succeeded DKG, have a public key
-	// for this failed node, which can be used to verify signature from
-	// this failed node.
-	committee.On("DKG", mock.Anything).Return(dkg, nil)
-
-	packer := signature.NewConsensusSigDataPacker(committee)
-	verifier := NewCombinedVerifier(committee, packer)
-
-	proposal, err := signer.CreateProposal(block)
-	require.NoError(t, err)
-
-	vote := proposal.ProposerVote()
-	err = verifier.VerifyVote(nodeID, vote.SigData, proposal.Block)
-	require.NoError(t, err)
-
-	// As the proposer does not have a Random Beacon Key, it should sign solely with its staking key.
-	// In this case, the SigData should be identical to the staking sig.
-	expectedStakingSig, err := stakingPriv.Sign(
-		MakeVoteMessage(block.View, block.BlockID),
-		crypto.NewBLSKMAC(encoding.ConsensusVoteTag),
-	)
-	require.NoError(t, err)
-	require.Equal(t, expectedStakingSig, crypto.Signature(proposal.SigData))
+	return &randomBeaconInspector{
+		inspector: inspector,
+	}, nil
 }
 
-// Test_VerifyQC checks that a QC without any signers is rejected right away without calling into any sub-components
-func Test_VerifyQC(t *testing.T) {
-	committee := &mocks.Committee{}
-	packer := signature.NewConsensusSigDataPacker(committee)
-	verifier := NewCombinedVerifier(committee, packer)
+// Verify verifies the signature share under the signer's public key and the message agreed upon.
+// The function is thread-safe and wait-free (i.e. allowing arbitrary many routines to
+// execute the business logic, without interfering with each other).
+// It allows concurrent verification of the given signature.
+// Returns :
+//  - engine.InvalidInputError if signerIndex is invalid
+	verif, err := r.inspector.VerifyShare(signerIndex, share)
+			return engine.NewInvalidInputErrorf("verify beacon share from %d failed: %w", signerIndex, err)
+	if !verif { // invalid signature
+		return fmt.Errorf("invalid beacon share from %d: %w", signerIndex, signature.ErrInvalidFormat)
+//  - module/signature.ErrInvalidFormat if signerID is valid but signature is cryptographically invalid
+//  - model.ErrInvalidSignature if signerID is valid but signature is cryptographically invalid
+//  - other error if there is an unexpected exception.
+func (r *randomBeaconInspector) Verify(signerIndex int, share crypto.Signature) error {
+	valid, err := r.inspector.VerifyShare(signerIndex, share)
+	if err != nil {
+		if crypto.IsInvalidInputsError(err) {
+			return model.NewInvalidSignerError(err)
+		}
+		return fmt.Errorf("unexpected error verifying beacon signature from %d: %w", signerIndex, err)
+	}
 
-	header := unittest.BlockHeaderFixture()
-	block := model.BlockFromFlow(&header, header.View-1)
-	sigData := unittest.QCSigDataFixture()
+	if !valid { // invalid signature
+		return model.ErrInvalidSignature
+	}
+	return nil
+}
 
-	err := verifier.VerifyQC([]*flow.Identity{}, sigData, block)
-	require.ErrorIs(t, err, model.ErrInvalidFormat)
+// TrustedAdd adds a share to the internal signature shares store.
+// There is no pre-check of the signature's validity _before_ adding it.
+// It is the caller's responsibility to make sure the signature was previously verified.
+// Nevertheless, the implementation guarantees safety (only correct threshold signatures
+// are returned) through a post-check (verifying the threshold signature
+// _after_ reconstruction before returning it).
+// The function is thread-safe but locks its internal state, thereby permitting only
+// one routine at a time to add a signature.
+// Returns:
+//  - (true, nil) if the signature has been added, and enough shares have been collected.
+//  - (false, nil) if the signature has been added, but not enough shares were collected.
+//  - (false, error) if there is any exception adding the signature share.
+//      - model.InvalidSignerError if signerIndex is invalid (out of the valid range)
+//  	- model.DuplicatedSignerError if the signer has been already added
+//      - other error if there is an unexpected exception.
+func (r *randomBeaconInspector) TrustedAdd(signerIndex int, share crypto.Signature) (enoughshares bool, exception error) {
+	// Trusted add to the crypto layer
+	enough, err := r.inspector.TrustedAdd(signerIndex, share)
+	if err != nil {
+		if crypto.IsInvalidInputsError(err) {
+			return false, model.NewInvalidSignerError(err)
+		}
+		if crypto.IsDuplicatedSignerError(err) {
+			return false, model.NewDuplicatedSignerError(err)
+		}
+		return false, fmt.Errorf("unexpected error while adding share from %d: %w", signerIndex, err)
+	}
+	return enough, nil
+}
 
-	err = verifier.VerifyQC(nil, sigData, block)
-	require.ErrorIs(t, err, model.ErrInvalidFormat)
+// EnoughShares indicates whether enough shares have been accumulated in order to reconstruct
+// a group signature.
+//
+// The function is write-blocking
+func (r *randomBeaconInspector) EnoughShares() bool {
+	return r.inspector.EnoughShares()
+}
+
+// Reconstruct reconstructs the group signature. The function is thread-safe but locks
+// its internal state, thereby permitting only one routine at a time.
+//
+// Returns:
+// - (signature, nil) if no error occurred
+// - (nil, model.InsufficientSignaturesError) if not enough shares were collected
+// - (nil, model.InvalidSignatureIncluded) if at least one collected share does not serialize to a valid BLS signature,
+//    or if the constructed signature failed to verify against the group public key and stored message. This post-verification
+//    is required  for safety, as `TrustedAdd` allows adding invalid signatures.
+// - (nil, error) for any other unexpected error.
+func (r *randomBeaconInspector) Reconstruct() (crypto.Signature, error) {
+	sig, err := r.inspector.ThresholdSignature()
+	if err != nil {
+		if crypto.IsInvalidInputsError(err) {
+			return nil, model.NewInvalidSignatureIncludedError(err)
+		}
+		if crypto.IsNotEnoughSharesError(err) {
+			return nil, model.NewInsufficientSignaturesError(err)
+		}
+		return nil, fmt.Errorf("unexpected error random beacon sig reconstruction: %w", err)
+	}
+	return sig, nil
 }

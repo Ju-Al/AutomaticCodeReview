@@ -73,8 +73,6 @@ namespace System.Text.Primitives.Tests
                 plainText.Append((char)val);
             }
             return plainText.ToString();
-        }
-
         [Benchmark]
         [InlineData(1000, 0x0000, 0x007F)]
         [InlineData(1000, 0x0080, 0x07FF)]

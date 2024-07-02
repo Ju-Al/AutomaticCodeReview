@@ -1,9 +1,4 @@
 /*
-          List<QCMutation> list = tsm.getMutations().get(entry.getKey());
-          if (list == null) {
-            list = new ArrayList<>();
-            tsm.getMutations().put(entry.getKey(), list);
-          }
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -377,7 +372,11 @@ class ConditionalWriterImpl implements ConditionalWriter {
 
       for (int i = 1; i < mutations.size(); i++) {
         for (Entry<KeyExtent,List<QCMutation>> entry : mutations.get(i).getMutations().entrySet()) {
-          List<QCMutation> list = tsm.getMutations().computeIfAbsent(entry.getKey(),
+          List<QCMutation> list = tsm.getMutations().get(entry.getKey());
+          if (list == null) {
+            list = new ArrayList<>();
+            tsm.getMutations().put(entry.getKey(), list);
+          }
               k -> new ArrayList<>());
 
           list.addAll(entry.getValue());

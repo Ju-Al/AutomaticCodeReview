@@ -1,5 +1,4 @@
 <?php
-/**
  * Table Definition for external_session
  *
  * PHP version 5

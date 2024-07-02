@@ -1,22 +1,4 @@
 <?php
-            ->add("module_id", "choice", array(
-                "choices" => $this->getModuleChoices(),
-                "constraints" => array(
-                    new NotBlank()
-                ),
-                "label" => Translator::getInstance()->trans("Module"),
-                "label_attr" => array(
-                    "for" => "module_id"
-            ))
-            ->add("hook_id", "choice", array(
-                "choices" => $this->getHookChoices(),
-                "constraints" => array(
-                    new NotBlank()
-                ),
-                "label" => Translator::getInstance()->trans("Hook"),
-                "label_attr" => array("for" => "locale_create")
-            ))
-        ;
 /*************************************************************************************/
 /*      This file is part of the Thelia package.                                     */
 /*                                                                                   */
@@ -50,7 +32,22 @@ class ModuleHookCreationForm extends BaseForm
     protected function buildForm()
     {
         $this->formBuilder
-            ->add(
+            ->add("module_id", "choice", array(
+                "choices" => $this->getModuleChoices(),
+                "constraints" => array(
+                    new NotBlank()
+                ),
+                "label" => Translator::getInstance()->trans("Module"),
+            ))
+            ->add("hook_id", "choice", array(
+                "choices" => $this->getHookChoices(),
+                "constraints" => array(
+                    new NotBlank()
+                ),
+                "label" => Translator::getInstance()->trans("Hook"),
+                "label_attr" => array("for" => "locale_create")
+            ))
+        ;
                 "module_id",
                 "choice",
                 array(

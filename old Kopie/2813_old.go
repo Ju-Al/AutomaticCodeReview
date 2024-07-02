@@ -1,5 +1,4 @@
 package router
-
 import (
 	"bufio"
 	"bytes"

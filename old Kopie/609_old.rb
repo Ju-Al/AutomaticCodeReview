@@ -1,5 +1,4 @@
 require 'rspec/core/formatters/helpers'
-        # to be invoked after this one is #dump_failure (once for each failed example),
 require 'stringio'
 
 module RSpec
@@ -87,7 +86,7 @@ module RSpec
         end
 
         # This method is invoked after all of the examples have executed. The next method
-        # to be invoked after this one is #dump_failures
+        # to be invoked after this one is #dump_failure (once for each failed example),
         # (BaseTextFormtter then calls #dump_failure once for each failed example.)
         def start_dump
         end

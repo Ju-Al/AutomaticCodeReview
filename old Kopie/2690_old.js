@@ -1,4 +1,36 @@
 import React, { Fragment } from 'react';
+import { Form } from 'informed';
+import { func, number, string } from 'prop-types';
+import { Minus as MinusIcon, Plus as PlusIcon } from 'react-feather';
+import { useQuantity } from '@magento/peregrine/lib/talons/CartPage/ProductListing/useQuantity';
+
+import { mergeClasses } from '../../../classify';
+import Icon from '../../Icon';
+import TextInput from '../../TextInput';
+import { Message } from '../../Field';
+import defaultClasses from './quantity.css';
+
+export const QuantityFields = props => {
+    const { initialValue, itemId, label, min, onChange, message } = props;
+    const classes = mergeClasses(defaultClasses, props.classes);
+    const iconClasses = { root: classes.icon };
+
+    const talonProps = useQuantity({
+        initialValue,
+        min,
+        onChange
+    });
+
+    const {
+        isDecrementDisabled,
+        isIncrementDisabled,
+        handleBlur,
+        handleDecrement,
+        handleIncrement,
+        maskInput
+    } = talonProps;
+
+    return (
         <div className={classes.root}>
             <label className={classes.label} htmlFor={itemId}>
                 {label}
@@ -32,40 +64,6 @@ import React, { Fragment } from 'react';
             >
                 <Icon classes={iconClasses} src={PlusIcon} size={20} />
             </button>
-        </div>
-import { Form } from 'informed';
-import { func, number, string } from 'prop-types';
-import { Minus as MinusIcon, Plus as PlusIcon } from 'react-feather';
-import { useQuantity } from '@magento/peregrine/lib/talons/CartPage/ProductListing/useQuantity';
-
-import { mergeClasses } from '../../../classify';
-import Icon from '../../Icon';
-import TextInput from '../../TextInput';
-import { Message } from '../../Field';
-import defaultClasses from './quantity.css';
-
-export const QuantityFields = props => {
-    const { initialValue, itemId, label, min, onChange, message } = props;
-    const classes = mergeClasses(defaultClasses, props.classes);
-    const iconClasses = { root: classes.icon };
-
-    const talonProps = useQuantity({
-        initialValue,
-        min,
-        onChange
-    });
-
-    const {
-        isDecrementDisabled,
-        isIncrementDisabled,
-        handleBlur,
-        handleDecrement,
-        handleIncrement,
-        maskInput
-    } = talonProps;
-
-    return (
-        <Fragment>
             <div className={classes.root}>
                 <label className={classes.label} htmlFor={itemId}>
                     {label}

@@ -1,5 +1,4 @@
 <?php
-/**
  * Mocked WpeCommon for WP Engine to the minimum requirement for tests to run.
  */
 if ( ! class_exists( 'wordfence' ) ) {

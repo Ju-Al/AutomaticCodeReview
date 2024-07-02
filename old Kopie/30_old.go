@@ -1,7 +1,5 @@
 package config
 
-	os.Chdir(dir)
-	defer os.Chdir(cwd)
 import (
 	"os"
 	"testing"
@@ -75,7 +73,8 @@ func assertFiles(t *testing.T, dir string, files []string) {
 	assert := assert.New(t)
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
+	os.Chdir(dir)
+	defer os.Chdir(cwd)
 		t.Error(err)
 	}
 	defer func() {

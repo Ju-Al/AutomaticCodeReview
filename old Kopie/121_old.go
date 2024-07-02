@@ -1,13 +1,4 @@
 // Copyright (C) 2019 Algorand, Inc.
-		dnsAddrs := wn.getDNSAddrs()
-		if len(dnsAddrs) > 0 {
-			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
-			mp, ok := wn.phonebook.(*MultiPhonebook)
-			if ok {
-				mp.AddPhonebook(&wn.dnsPhonebook)
-		} else {
-			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1170,7 +1161,15 @@ func (wn *WebsocketNetwork) meshThread() {
 		}
 
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+		dnsAddrs := wn.getDNSAddrs()
+		if len(dnsAddrs) > 0 {
+			wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
+			wn.dnsPhonebook.ReplacePeerList(dnsAddrs)
+			mp, ok := wn.phonebook.(*MultiPhonebook)
+			if ok {
+		} else {
+			wn.log.Debugf("got no DNS addrs for network %#v", wn.NetworkID)
+				mp.AddPhonebook(&wn.dnsPhonebook)
 		multiPhonebook := &MultiPhonebook{}
 		dnsStatus := false
 		for _, dnsBootstrap := range dnsBootstrapArray {

@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        self.filename = util.filename(filename, ext='gro')
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -327,7 +326,7 @@ class GROWriter(base.WriterBase):
                w.write(u.atoms)
 
         """
-        self.filename = util.filename(filename, ext='gro', keep = True)
+        self.filename = util.filename(filename, ext='gro')
         self.n_atoms = n_atoms
         self.reindex = kwargs.pop('reindex', True)
 

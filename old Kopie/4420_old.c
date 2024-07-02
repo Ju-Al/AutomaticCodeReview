@@ -1,8 +1,4 @@
 # This file is overwritten during software install.
-blacklist /var/lib/systemd
-blacklist ${PATH}/systemctl
-blacklist /etc/systemd/system
-blacklist /etc/runlevels/
 # Persistent customizations should go in a .local file.
 include disable-common.local
 
@@ -164,6 +160,8 @@ blacklist ${RUNUSER}/gsconnect
 blacklist ${HOME}/.config/systemd
 blacklist ${HOME}/.local/share/systemd
 blacklist ${PATH}/systemctl
+blacklist /etc/runlevels/
+blacklist /etc/systemd/system
 blacklist ${PATH}/systemd-run
 blacklist ${RUNUSER}/systemd
 blacklist /etc/systemd/network

@@ -1,6 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-    def tab_clone(self, bg=False, window=False):
 # Copyright 2014-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -384,7 +383,7 @@ class CommandDispatcher:
                 yield parsed
 
     @cmdutils.register(instance='command-dispatcher', scope='window')
-    def tab_clone(self, bg=False, window=False, private=False):
+    def tab_clone(self, bg=False, window=False):
         """Duplicate the current tab.
 
         Args:

@@ -1,5 +1,4 @@
 # This file is part of Hypothesis, which may be found at
-def target(observation: float, *, label: str = "") -> None:
 # https://github.com/HypothesisWorks/hypothesis/
 #
 # Most of this work is copyright (C) 2013-2020 David R. MacIver
@@ -126,7 +125,7 @@ def event(value: str) -> None:
 
 
 @deprecated_posargs
-def target(observation: float, *, label: str = "", allow_outside_given_test: bool = False) -> None:
+def target(observation: float, *, label: str = "") -> None:
     """Calling this function with a ``float`` observation gives it feedback
     with which to guide our search for inputs that will cause an error, in
     addition to all the usual heuristics.  Observations must always be finite.

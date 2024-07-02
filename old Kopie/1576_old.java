@@ -1,6 +1,4 @@
 /*
-        // provide some stdout feedback when tests fail
-        task.testLogging(testLogging -> testLogging.events("failed"));
  * (c) Copyright 2019 Palantir Technologies Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -144,7 +142,8 @@ public final class BaselineTesting implements Plugin<Project> {
         // Computes the desired parallelism based on the number of available processors/cores
         task.systemProperty("junit.jupiter.execution.parallel.config.strategy", "dynamic");
 
-        // provide some stdout feedback when tests fail when running on CI and locally
+        // provide some stdout feedback when tests fail
+        task.testLogging(testLogging -> testLogging.events("failed"));
         task.getTestLogging().getEvents().add(TestLogEvent.FAILED);
 
         // Only on CI, print out more detailed test information to avoid hitting the circleci 10 min deadline if

@@ -1,5 +1,4 @@
 /*
-      return THREADED_SELECTOR;
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -44,7 +43,7 @@ public enum ThriftServerType {
   public static ThriftServerType get(String name) {
     // Our custom HsHa server is the default (if none is provided)
     if (StringUtils.isBlank(name)) {
-      return CUSTOM_HS_HA;
+      return THREADED_SELECTOR;
     }
     return ThriftServerType.valueOf(name.trim().toUpperCase());
   }

@@ -191,7 +191,6 @@ public class OpenFoodAPIServiceTest implements APIUtils {
     @Test
     public void post_product() throws IOException {
         SendProduct product = new SendProduct();
-
         product.setBarcode("978020137962");
         product.setName("coca3");
         product.setBrands("auchan");

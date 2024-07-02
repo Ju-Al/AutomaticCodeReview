@@ -1,6 +1,4 @@
 import React, { useMemo } from 'react';
-    const { loading, error, data } = useQuery(GET_PRODUCTS_BY_SKU, {
-        variables: { skus, pageSize: skus.length }
 import { gql, useQuery } from '@apollo/client';
 import { arrayOf, bool, number, oneOf, shape, string } from 'prop-types';
 
@@ -85,7 +83,8 @@ const Products = props => {
         paddingLeft
     };
 
-    const { data: storeConfigData } = useQuery(GET_STORE_CONFIG_DATA, {
+    const { loading, error, data } = useQuery(GET_PRODUCTS_BY_SKU, {
+        variables: { skus, pageSize: skus.length }
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first'
     });

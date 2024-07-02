@@ -1,5 +1,4 @@
 # api_wrapper.py
-
 from pgoapi import PGoApi
 from pgoapi.exceptions import NotLoggedInException
 import logger

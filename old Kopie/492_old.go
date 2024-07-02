@@ -374,8 +374,6 @@ func (l *Ledger) DumpTrieAsJSON(state ledger.State, outputFilePath string) error
 	defer writer.Flush()
 
 	return trie.DumpAsJSON(writer)
-}
-
 // this operation should only be used for exporting
 func (l *Ledger) keepOnlyOneTrie(state ledger.State) error {
 	// don't write things to WALs

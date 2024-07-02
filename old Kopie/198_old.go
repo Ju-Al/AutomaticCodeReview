@@ -1,14 +1,5 @@
 package groups
 
-	auth := handlers.ToTokenMetadata(ctx)
-	_ = auth
-	gl, err := s.listFromRepo(ctx, parentScope(req))
-	return &pbs.ListGroupsResponse{Items: gl}, nil
-	auth := handlers.ToTokenMetadata(ctx)
-	_ = auth
-	auth := handlers.ToTokenMetadata(ctx)
-	_ = auth
-	u, err := s.createInRepo(ctx, parentScope(req), req.GetItem())
 import (
 	"context"
 	"errors"
@@ -53,7 +44,15 @@ var _ pbs.GroupServiceServer = Service{}
 
 // ListGroups implements the interface pbs.GroupServiceServer.
 func (s Service) ListGroups(ctx context.Context, req *pbs.ListGroupsRequest) (*pbs.ListGroupsResponse, error) {
-	authResults := auth.Verify(ctx)
+	auth := handlers.ToTokenMetadata(ctx)
+	gl, err := s.listFromRepo(ctx, parentScope(req))
+	return &pbs.ListGroupsResponse{Items: gl}, nil
+	auth := handlers.ToTokenMetadata(ctx)
+	_ = auth
+	auth := handlers.ToTokenMetadata(ctx)
+	_ = auth
+	u, err := s.createInRepo(ctx, parentScope(req), req.GetItem())
+	_ = auth
 	if !authResults.Valid {
 		return nil, handlers.ForbiddenError()
 	}

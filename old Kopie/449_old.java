@@ -1,7 +1,4 @@
 /*
-    if (e.getJoinType() == JoinRelType.INNER && e.getCondition().isAlwaysTrue()) {
-      joinType = JoinType.COMMA;
-      condType = JoinConditionType.NONE.symbol(POS);
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -117,7 +114,9 @@ public class RelToSqlConverter extends SqlImplementor
     SqlNode sqlCondition = null;
     SqlLiteral condType = JoinConditionType.ON.symbol(POS);
     JoinType joinType = joinType(e.getJoinType());
-    if ((e.getJoinType() == JoinRelType.INNER || e.getJoinType() == JoinRelType.FULL)
+    if (e.getJoinType() == JoinRelType.INNER && e.getCondition().isAlwaysTrue()) {
+      joinType = JoinType.COMMA;
+      condType = JoinConditionType.NONE.symbol(POS);
             && e.getCondition().isAlwaysTrue()) {
       sqlCondition = SqlLiteral.createBoolean(true, POS);
     } else {

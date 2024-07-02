@@ -9661,9 +9661,6 @@ flatpak_dir_find_local_related (FlatpakDir *self,
     }
 
   return g_steal_pointer (&related);
-}
-
-static GDBusProxy *
 get_accounts_dbus_proxy (void)
 {
   GDBusConnection *conn = NULL;

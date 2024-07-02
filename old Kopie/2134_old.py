@@ -518,7 +518,6 @@ def retrieve_resource_details(resource_id, resource_status, resources, stack_nam
     resource_props = resource.get('Properties')
     try:
         if resource_type == 'Lambda::Function':
-            resource_props['FunctionName'] = resource_props.get('FunctionName',
                                                                 'lambda-function-'.format(common.short_uid()))
 
             resource_id = resource_props['FunctionName'] if resource else resource_id

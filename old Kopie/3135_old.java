@@ -80,7 +80,6 @@ public class SimpleDataUtil {
       Types.NestedField.optional(2, "data", Types.StringType.get())
   );
 
-  public static final Schema DATE_SCHEMA = new Schema(
           Types.NestedField.required(1, "dt", Types.DateType.get()),
           Types.NestedField.optional(2, "data", Types.StringType.get())
   );

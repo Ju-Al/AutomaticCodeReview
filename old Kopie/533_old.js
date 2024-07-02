@@ -1,5 +1,4 @@
 // @flow
-            onFileSelected={walletFile.onChange}
 import React, { Component } from 'react';
 import { observer } from 'mobx-react';
 import classnames from 'classnames';
@@ -216,7 +215,7 @@ export default class WalletFileImportDialog extends Component {
           <FileUploadWidget
             {...walletFile.bind()}
             selectedFile={walletFile.value}
-            onFileSelected={(file) => {
+            onFileSelected={walletFile.onChange}
               walletFile.set(file);
             }}
           />

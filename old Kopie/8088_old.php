@@ -1,48 +1,42 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Labels</title>
+  <?php
+    $settings->labels_width = $settings->labels_width - $settings->labels_display_sgutter;
+    $settings->labels_height = $settings->labels_height - $settings->labels_display_bgutter;
+    // Leave space on bottom for 1D barcode if necessary
+    $qr_size = ($settings->alt_barcode_enabled=='1') && ($settings->alt_barcode!='') ? $settings->labels_height - .3 : $settings->labels_height - .3;
+    // Leave space on left for QR code if necessary
+    $qr_txt_size = ($settings->qr_code=='1' ? $settings->labels_width - $qr_size - .1: $settings->labels_width);
+    ?>
 
-</head>
-<body>
+  <style>
 
-<?php
-$settings->labels_width = $settings->labels_width - $settings->labels_display_sgutter;
-$settings->labels_height = $settings->labels_height - $settings->labels_display_bgutter;
-// Leave space on bottom for 1D barcode if necessary
-$qr_size = ($settings->alt_barcode_enabled=='1') && ($settings->alt_barcode!='') ? $settings->labels_height - .3 : $settings->labels_height - .3;
-// Leave space on left for QR code if necessary
-$qr_txt_size = ($settings->qr_code=='1' ? $settings->labels_width - $qr_size - .1: $settings->labels_width);
-?>
+  body {
+    font-family: arial, helvetica, sans-serif;
+    width: {{ $settings->labels_pagewidth }}in;
+    height: {{ $settings->labels_pageheight }}in;
+    margin: {{ $settings->labels_pmargin_top }}in {{ $settings->labels_pmargin_right }}in {{ $settings->labels_pmargin_bottom }}in {{ $settings->labels_pmargin_left }}in;
+    font-size: {{ $settings->labels_fontsize }}pt;
+  }
 
-<style>
+  .label {
+    width: {{ $settings->labels_width }}in;
+    height: {{ $settings->labels_height }}in;
+    padding: 0in;
+    margin-right: {{ $settings->labels_display_sgutter }}in; /* the gutter */
+    margin-bottom: {{ $settings->labels_display_bgutter }}in;
+    display: inline-block;
+    overflow: hidden;
+  }
 
-    body {
-        font-family: arial, helvetica, sans-serif;
-        width: {{ $settings->labels_pagewidth }}in;
-        height: {{ $settings->labels_pageheight }}in;
-        margin: {{ $settings->labels_pmargin_top }}in {{ $settings->labels_pmargin_right }}in {{ $settings->labels_pmargin_bottom }}in {{ $settings->labels_pmargin_left }}in;
-        font-size: {{ $settings->labels_fontsize }}pt;
-    }
+  .page-break  {
+    page-break-after:always;
+  }
 
-    .label {
-        width: {{ $settings->labels_width }}in;
-        height: {{ $settings->labels_height }}in;
-        padding: 0in;
-        margin-right: {{ $settings->labels_display_sgutter }}in; /* the gutter */
-        margin-bottom: {{ $settings->labels_display_bgutter }}in;
-        display: inline-block;
-        overflow: hidden;
-    }
-
-    .page-break  {
-        page-break-after:always;
-    }
-
-    div.qr_img {
-        width: {{ $qr_size }}in;
-        height: {{ $qr_size }}in;
+  div.qr_img {
+    width: {{ $qr_size }}in;
+    height: {{ $qr_size }}in;
     float: left;
     display: inline-block;
     padding-right: .04in;
@@ -58,7 +52,46 @@ $qr_txt_size = ($settings->qr_code=='1' ? $settings->labels_width - $qr_size - .
   }
 
  .qr_text {
-    width: {{ $qr_txt_size }}in;        float: left;
+    width: {{ $qr_txt_size }}in;  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Labels</title>
+
+</head>
+<body>
+
+<?php
+$settings->labels_width = $settings->labels_width - $settings->labels_display_sgutter;
+$settings->labels_height = $settings->labels_height - $settings->labels_display_bgutter;
+// Leave space on bottom for 1D barcode if necessary
+$qr_size = ($settings->alt_barcode_enabled=='1') && ($settings->alt_barcode!='') ? $settings->labels_height - .3 : $settings->labels_height - .3;
+// Leave space on left for QR code if necessary
+$qr_txt_size = ($settings->qr_code=='1' ? $settings->labels_width - $qr_size - .1: $settings->labels_width);
+?>
+
+<style>
+    body {
+        font-family: arial, helvetica, sans-serif;
+        width: {{ $settings->labels_pagewidth }}in;
+        height: {{ $settings->labels_pageheight }}in;
+        margin: {{ $settings->labels_pmargin_top }}in {{ $settings->labels_pmargin_right }}in {{ $settings->labels_pmargin_bottom }}in {{ $settings->labels_pmargin_left }}in;
+        font-size: {{ $settings->labels_fontsize }}pt;
+    }
+    .label {
+        width: {{ $settings->labels_width }}in;
+        height: {{ $settings->labels_height }}in;
+        padding: 0in;
+        margin-right: {{ $settings->labels_display_sgutter }}in; /* the gutter */
+        margin-bottom: {{ $settings->labels_display_bgutter }}in;
+        display: inline-block;
+        overflow: hidden;
+    }
+    .page-break  {
+        page-break-after:always;
+    }
+    div.qr_img {
+        width: {{ $qr_size }}in;
+        height: {{ $qr_size }}in;
+
+        float: left;
         display: inline-flex;
         padding-right: .15in;
     }

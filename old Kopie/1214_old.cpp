@@ -1,397 +1,567 @@
-/******************************************************************************
-            if (syn && match(field)) {
-              found_matching_synopsis = true;
-              auto opt = syn->lookup(x.op, make_view(rhs));
-              if (!opt || *opt) {
-                VAST_DEBUG(this, "selects", part_id, "at predicate", x);
-                result.push_back(part_id);
-                break;
- *                    _   _____   __________                                  *
- *                   | | / / _ | / __/_  __/     Visibility                   *
- *                   | |/ / __ |_\ \  / /          Across                     *
- *                   |___/_/ |_/___/ /_/       Space and Time                 *
- *                                                                            *
- * This file is part of VAST. It is subject to the license terms in the       *
- * LICENSE file found in the top-level directory of this distribution and at  *
- * http://vast.io/license. No part of VAST, including this file, may be       *
- * copied, modified, propagated, or distributed except according to the terms *
- * contained in the LICENSE file.                                             *
- ******************************************************************************/
+//-----------------------------------------------------------------------------
+// Copyright (c) 2012 GarageGames, LLC
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
+//-----------------------------------------------------------------------------
 
-#include "vast/meta_index.hpp"
+#include <stdarg.h>
+#include <stdio.h>
 
-#include "vast/fwd.hpp"
+#include "core/strings/stringFunctions.h"
+#include "platform/platform.h"
 
-#include "vast/data.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/detail/set_operations.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/detail/tracepoint.hpp"
-#include "vast/expression.hpp"
-#include "vast/fbs/utils.hpp"
-#include "vast/logger.hpp"
-#include "vast/synopsis.hpp"
-#include "vast/synopsis_factory.hpp"
-#include "vast/system/instrumentation.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/time.hpp"
 
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XBOX) || defined(TORQUE_OS_XENON)
+// This standard function is not defined when compiling with VC7...
+#define vsnprintf	_vsnprintf
+#endif
 
-#include <type_traits>
 
-namespace vast {
+//-----------------------------------------------------------------------------
 
-void partition_synopsis::shrink() {
-  for (auto& [field, synopsis] : field_synopses_) {
-    if (!synopsis)
-      continue;
-    auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
-      continue;
-    synopsis.swap(shrinked_synopsis);
-  }
-  // TODO: Make a utility function instead of copy/pasting
-  for (auto& [field, synopsis] : type_synopses_) {
-    if (!synopsis)
-      continue;
-    auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
-      continue;
-    synopsis.swap(shrinked_synopsis);
-  }
+// Original code from: http://sourcefrog.net/projects/natsort/
+// Somewhat altered here.
+//TODO: proper UTF8 support; currently only working for single-byte characters
+
+/* -*- mode: c; c-file-style: "k&r" -*-
+
+  strnatcmp.c -- Perform 'natural order' comparisons of strings in C.
+  Copyright (C) 2000, 2004 by Martin Pool <mbp sourcefrog net>
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+*/
+
+
+/* partial change history:
+ *
+ * 2004-10-10 mbp: Lift out character type dependencies into macros.
+ *
+ * Eric Sosman pointed out that ctype functions take a parameter whose
+ * value must be that of an unsigned int, even on platforms that have
+ * negative chars in their default char type.
+ */
+
+typedef char nat_char;
+
+/* These are defined as macros to make it easier to adapt this code to
+ * different characters types or comparison functions. */
+static inline int
+nat_isdigit( nat_char a )
+{
+   return dIsdigit( a );
 }
 
-void partition_synopsis::add(const table_slice& slice,
-                             const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
-    return has_skip_attribute(field.type)
-             ? nullptr
-             : factory<synopsis>::make(field.type, synopsis_options);
-  };
-  for (size_t col = 0; col < slice.columns(); ++col) {
-    auto add_column = [&](const synopsis_ptr& syn) {
-      for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col);
-        if (!caf::holds_alternative<caf::none_t>(view))
-          syn->add(std::move(view));
+
+static inline int
+nat_isspace( nat_char a )
+{
+   return dIsspace( a );
+}
+
+
+static inline nat_char
+nat_toupper( nat_char a )
+{
+   return dToupper( a );
+}
+
+
+
+static S32
+compare_right(const nat_char* a, const nat_char* b)
+{
+   S32 bias = 0;
+
+   /* The longest run of digits wins.  That aside, the greatest
+   value wins, but we can't know that it will until we've scanned
+   both numbers to know that they have the same magnitude, so we
+   remember it in BIAS. */
+   for (;; a++, b++) {
+      if (!nat_isdigit(*a)  &&  !nat_isdigit(*b))
+         break;
+      else if (!nat_isdigit(*a))
+         return -1;
+      else if (!nat_isdigit(*b))
+         return +1;
+      else if (*a < *b) {
+         if (!bias)
+            bias = -1;
+      } else if (*a > *b) {
+         if (!bias)
+            bias = +1;
+      } else if (!*a  &&  !*b)
+         return bias;
+   }
+
+   return bias;
+}
+
+
+static int
+compare_left(const nat_char* a, const nat_char* b)
+{
+   /* Compare two left-aligned numbers: the first to have a
+   different value wins. */
+   for (;; a++, b++) {
+      if (!nat_isdigit(*a)  &&  !nat_isdigit(*b))
+         break;
+      else if (!nat_isdigit(*a))
+         return -1;
+      else if (!nat_isdigit(*b))
+         return +1;
+      else if (*a < *b)
+         return -1;
+      else if (*a > *b)
+         return +1;
+   }
+
+   return 0;
+}
+
+
+static S32 strnatcmp0(const nat_char* a, const nat_char* b, S32 fold_case)
+{
+   S32 ai, bi;
+   nat_char ca, cb;
+   S32 fractional, result;
+
+   ai = bi = 0;
+   while (1) {
+      ca = a[ai]; cb = b[bi];
+
+      /* skip over leading spaces or zeros */
+      while (nat_isspace(ca))
+         ca = a[++ai];
+
+      while (nat_isspace(cb))
+         cb = b[++bi];
+
+      /* process run of digits */
+      if (nat_isdigit(ca)  &&  nat_isdigit(cb)) {
+         fractional = (ca == '0' || cb == '0');
+
+         if (fractional) {
+            if ((result = compare_left(a+ai, b+bi)) != 0)
+               return result;
+         } else {
+            if ((result = compare_right(a+ai, b+bi)) != 0)
+               return result;
+         }
       }
-    };
-    auto&& layout = slice.layout();
-    auto& field = layout.fields[col];
-    auto& type = field.type;
-    if (!caf::holds_alternative<string_type>(type)) {
-      // Locate the relevant synopsis.
-      auto key = qualified_record_field{layout.name(), field};
-      auto it = field_synopses_.find(key);
-      if (it == field_synopses_.end()) {
-        // Attempt to create a synopsis if we have never seen this key before.
-        it
-          = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
+
+      if (!ca && !cb) {
+         /* The strings compare the same.  Perhaps the caller
+         will want to call strcmp to break the tie. */
+         return 0;
       }
-      // If there exists a synopsis for a field, add the entire column.
-      if (auto& syn = it->second)
-        add_column(syn);
-    } else { // type == string
-      auto key = qualified_record_field{layout.name(), field};
-      field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::type{field.type}.attributes({});
-      auto tt = type_synopses_.find(cleaned_type);
-      if (tt == type_synopses_.end())
-        tt = type_synopses_.emplace(cleaned_type, make_synopsis(field)).first;
-      if (auto& syn = tt->second)
-        add_column(syn);
-    }
-  }
-}
 
-size_t partition_synopsis::size_bytes() const {
-  size_t result = 0;
-  for (auto& [field, synopsis] : field_synopses_)
-    result += synopsis ? synopsis->size_bytes() : 0ull;
-  return result;
-}
-
-size_t meta_index::size_bytes() const {
-  size_t result = 0;
-  for (auto& [id, partition_synopsis] : synopses_)
-    result += partition_synopsis.size_bytes();
-  return result;
-}
-
-void meta_index::add(const uuid& partition, const table_slice& slice) {
-  auto& part_syn = synopses_[partition];
-  part_syn.add(slice, synopsis_options_);
-}
-
-void meta_index::erase(const uuid& partition) {
-  synopses_.erase(partition);
-}
-
-void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
-  synopses_[partition] = std::move(ps);
-}
-
-partition_synopsis& meta_index::at(const uuid& partition) {
-  return synopses_.at(partition);
-}
-
-void meta_index::replace(const uuid& partition,
-                         std::unique_ptr<partition_synopsis> ps) {
-  auto it = synopses_.find(partition);
-  if (it != synopses_.end()) {
-    it->second.field_synopses_.swap(ps->field_synopses_);
-  }
-}
-
-std::vector<uuid> meta_index::lookup(const expression& expr) const {
-  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
-  auto start = system::stopwatch::now();
-  // TODO: we could consider a flat_set<uuid> here, which would then have
-  // overloads for inplace intersection/union and simplify the implementation
-  // of this function a bit. This would also simplify the maintainance of a
-  // critical invariant: partition UUIDs must be sorted. Otherwise the
-  // invariants of the inplace union and intersection algorithms are violated,
-  // leading to wrong results. This invariant is easily violated because we
-  // currently just append results to the candidate vector, so all places where
-  // we return an assembled set must ensure the post-condition of returning a
-  // sorted list.
-  using result_type = std::vector<uuid>;
-  result_type memoized_partitions;
-  auto all_partitions = [&] {
-    if (!memoized_partitions.empty() || synopses_.empty())
-      return memoized_partitions;
-    memoized_partitions.reserve(synopses_.size());
-    std::transform(synopses_.begin(), synopses_.end(),
-                   std::back_inserter(memoized_partitions),
-                   [](auto& x) { return x.first; });
-    std::sort(memoized_partitions.begin(), memoized_partitions.end());
-    return memoized_partitions;
-  };
-  auto f = detail::overload{
-    [&](const conjunction& x) -> result_type {
-      VAST_ASSERT(!x.empty());
-      auto i = x.begin();
-      auto result = lookup(*i);
-      if (!result.empty())
-        for (++i; i != x.end(); ++i) {
-          auto xs = lookup(*i);
-          if (xs.empty())
-            return xs; // short-circuit
-          detail::inplace_intersect(result, xs);
-          VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-        }
-      return result;
-    },
-    [&](const disjunction& x) -> result_type {
-      result_type result;
-      for (auto& op : x) {
-        auto xs = lookup(op);
-        VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
-        if (xs.size() == synopses_.size())
-          return xs; // short-circuit
-        detail::inplace_unify(result, xs);
-        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+      if (fold_case) {
+         ca = nat_toupper(ca);
+         cb = nat_toupper(cb);
       }
-      return result;
-    },
-    [&](const negation&) -> result_type {
-      // We cannot handle negations, because a synopsis may return false
-      // positives, and negating such a result may cause false
-      // negatives.
-      // TODO: The above statement seems to only apply to bloom filter
-      // synopses, but it should be possible to handle time or bool synopses.
-      return all_partitions();
-    },
-    [&](const predicate& x) -> result_type {
-      // Performs a lookup on all *matching* synopses with operator and
-      // data from the predicate of the expression. The match function
-      // uses a qualified_record_field to determine whether the synopsis should
-      // be queried.
-      auto search = [&](auto match) {
-        VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
-        auto& rhs = caf::get<data>(x.rhs);
-        result_type result;
-        for (auto& [part_id, part_syn] : synopses_) {
-          for (auto& [field, syn] : part_syn.field_synopses_) {
-            if (match(field)) {
-              auto cleaned_type = vast::type{field.type}.attributes({});
-              // We rely on having a field -> nullptr mapping here for the
-              // fields that don't have their own synopsis.
-              if (syn) {
-                auto opt = syn->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
-                  result.push_back(part_id);
-                  break;
-                }
-                // The field has no dedicated synopsis. Check if there is one
-                // for the type in general.
-              } else if (auto it = part_syn.type_synopses_.find(cleaned_type);
-                         it != part_syn.type_synopses_.end() && it->second) {
-                auto opt = it->second->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
-                  result.push_back(part_id);
-                  break;
-                }
-              } else {
-                // The meta index couldn't rule out this partition, so we have
-                // to include it in the result set.
-                result.push_back(part_id);
-                break;
-              }
-            }
-          }
-        }
-        VAST_DEBUG(this, "checked", synopses_.size(),
-                   "partitions for predicate", x, "and got", result.size(),
-                   "results");
-        // Some calling paths require the result to be sorted.
-        std::sort(result.begin(), result.end());
-        return result;
-      };
-      auto extract_expr = detail::overload{
-        [&](const attribute_extractor& lhs, const data& d) -> result_type {
-          if (lhs.attr == atom::timestamp_v) {
-            auto pred = [](auto& field) {
-              return has_attribute(field.type, "timestamp");
-            };
-            return search(pred);
-          } else if (lhs.attr == atom::type_v) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            result_type result;
-            for (auto& [part_id, part_syn] : synopses_) {
-              for (auto& pair : part_syn.field_synopses_) {
-                // TODO: provide an overload for view of evaluate() so that
-                // we can use string_view here. Fortunately type names are
-                // short, so we're probably not hitting the allocator due to
-                // SSO.
-                auto type_name = data{pair.first.layout_name};
-                if (evaluate(type_name, x.op, d)) {
-                  result.push_back(part_id);
-                  break;
-                }
-              }
-            }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
-            return result;
-          } else if (lhs.attr == atom::field_v) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            result_type result;
-            auto s = caf::get_if<std::string>(&d);
-            if (!s) {
-              VAST_WARNING_ANON("#field meta queries only support string "
-                                "comparisons");
-            } else {
-              for (const auto& synopsis : synopses_) {
-                // Compare the desired field name with each field in the
-                // partition.
-                auto matching = [&] {
-                  for (const auto& pair : synopsis.second.field_synopses_) {
-                    auto fqn = pair.first.fqn();
-                    if (detail::ends_with(fqn, *s))
-                      return true;
-                  }
-                  return false;
-                }();
-                // Only insert the partition if both sides are equal, i.e. the
-                // operator is "positive" and matching is true, or both are
-                // negative.
-                if (!is_negated(x.op) == matching)
-                  result.push_back(synopsis.first);
-              }
-            }
-            // Re-establish potentially violated invariant.
-            std::sort(result.begin(), result.end());
-            return result;
-          }
-          VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
-          return all_partitions();
-        },
-        [&](const field_extractor& lhs, const data&) -> result_type {
-          auto pred = [&](auto& field) {
-            return detail::ends_with(field.fqn(), lhs.field);
-          };
-          return search(pred);
-        },
-        [&](const type_extractor& lhs, const data&) -> result_type {
-          auto pred = [&](auto& field) { return field.type == lhs.type; };
-          return search(pred);
-        },
-        [&](const auto&, const auto&) -> result_type {
-          VAST_WARNING(this, "cannot process predicate:", x);
-          return all_partitions();
-        },
-      };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
-    },
-    [&](caf::none_t) -> result_type {
-      VAST_ERROR(this, "received an empty expression");
-      VAST_ASSERT(!"invalid expression");
-      return all_partitions();
-    },
-  };
-  auto result = caf::visit(f, expr);
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    system::stopwatch::now() - start);
-  VAST_DEBUG_ANON("meta index lookup found", result.size(), "candidates in",
-                  delta.count(), "microseconds");
-  VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
-  return result;
+
+      if (ca < cb)
+         return -1;
+      else if (ca > cb)
+         return +1;
+
+      ++ai; ++bi;
+   }
 }
 
-caf::settings& meta_index::factory_options() {
-  return synopsis_options_;
+
+S32 dStrnatcmp(const nat_char* a, const nat_char* b) {
+   return strnatcmp0(a, b, 0);
 }
 
-caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
-  for (auto& [fqf, synopsis] : x.field_synopses_) {
-    auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
-      return maybe_synopsis.error();
-    synopses.push_back(*maybe_synopsis);
-  }
-  for (auto& [type, synopsis] : x.type_synopses_) {
-    qualified_record_field fqf;
-    fqf.type = type;
-    auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
-      return maybe_synopsis.error();
-    synopses.push_back(*maybe_synopsis);
-  }
-  auto synopses_vector = builder.CreateVector(synopses);
-  fbs::partition_synopsis::v0Builder ps_builder(builder);
-  ps_builder.add_synopses(synopses_vector);
-  return ps_builder.Finish();
+
+/* Compare, recognizing numeric string and ignoring case. */
+S32 dStrnatcasecmp(const nat_char* a, const nat_char* b) {
+   return strnatcmp0(a, b, 1);
 }
 
-caf::error
-unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
-  if (!x.synopses())
-    return make_error(ec::format_error, "missing synopses");
-  for (auto synopsis : *x.synopses()) {
-    if (!synopsis)
-      return make_error(ec::format_error, "synopsis is null");
-    qualified_record_field qf;
-    if (auto error
-        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))
-      return error;
-    synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr))
-      return error;
-    if (!qf.field_name.empty())
-      ps.field_synopses_[qf] = std::move(ptr);
-    else
-      ps.type_synopses_[qf.type] = std::move(ptr);
-  }
-  return caf::none;
+//------------------------------------------------------------------------------
+// non-standard string functions
+
+char *dStrdup_r(const char *src, const char *fileName, dsize_t lineNumber)
+{
+   char *buffer = (char *) dMalloc_r(dStrlen(src) + 1, fileName, lineNumber);
+   dStrcpy(buffer, src);
+   return buffer;
 }
 
-} // namespace vast
+char* dStrichr( char* str, char ch )
+{
+   AssertFatal( str != NULL, "dStrichr - NULL string" );
+   
+   if( !ch )
+      return dStrchr( str, ch ); 
+   
+   char c = dToupper( ch );
+   while( *str )
+   {
+      if( dToupper( *str ) == c )
+         return str;
+         
+      ++ str;
+   }
+         
+   return NULL;
+}
+
+const char* dStrichr( const char* str, char ch )
+{
+   AssertFatal( str != NULL, "dStrichr - NULL string" );
+   
+   if( !ch )
+      return dStrchr( str, ch ); 
+
+   char c = dToupper( ch );
+   while( *str )
+   {
+      if( dToupper( *str ) == c )
+         return str;
+         
+      ++ str;
+   }
+      
+   return NULL;
+}
+
+// concatenates a list of src's onto the end of dst
+// the list of src's MUST be terminated by a NULL parameter
+// dStrcatl(dst, sizeof(dst), src1, src2, NULL);
+char* dStrcatl(char *dst, dsize_t dstSize, ...)
+{
+   const char* src = NULL;
+   char *p = dst;
+
+   AssertFatal(dstSize > 0, "dStrcatl: destination size is set zero");
+   dstSize--;  // leave room for string termination
+
+   // find end of dst
+   while (dstSize && *p++)
+      dstSize--;
+
+   va_list args;
+   va_start(args, dstSize);
+
+   // concatenate each src to end of dst
+   while ( (src = va_arg(args, const char*)) != NULL )
+   {
+      while( dstSize && *src )
+      {
+         *p++ = *src++;
+         dstSize--;
+      }
+   }
+
+   va_end(args);
+
+   // make sure the string is terminated
+   *p = 0;
+
+   return dst;
+}
+
+
+// copy a list of src's into dst
+// the list of src's MUST be terminated by a NULL parameter
+// dStrccpyl(dst, sizeof(dst), src1, src2, NULL);
+char* dStrcpyl(char *dst, dsize_t dstSize, ...)
+{
+   const char* src = NULL;
+   char *p = dst;
+
+   AssertFatal(dstSize > 0, "dStrcpyl: destination size is set zero");
+   dstSize--;  // leave room for string termination
+
+   va_list args;
+   va_start(args, dstSize);
+
+   // concatenate each src to end of dst
+   while ( (src = va_arg(args, const char*)) != NULL )
+   {
+      while( dstSize && *src )
+      {
+         *p++ = *src++;
+         dstSize--;
+      }
+   }
+
+   va_end(args);
+
+   // make sure the string is terminated
+   *p = 0;
+
+   return dst;
+}
+
+
+S32 dStrcmp( const UTF16 *str1, const UTF16 *str2)
+{
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XBOX) || defined(TORQUE_OS_XENON)
+   return wcscmp( reinterpret_cast<const wchar_t *>( str1 ), reinterpret_cast<const wchar_t *>( str2 ) );
+#else
+   S32 ret;
+   const UTF16 *a, *b;
+   a = str1;
+   b = str2;
+
+   while( ((ret = *a - *b) == 0) && *a && *b )
+      a++, b++;
+
+   return ret;
+#endif
+}  
+
+char* dStrupr(char *str)
+{
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XBOX) || defined(TORQUE_OS_XENON)
+   return _strupr(str);
+#else
+   if (str == NULL)
+      return(NULL);
+
+   char* saveStr = str;
+   while (*str)
+   {
+      *str = toupper(*str);
+      str++;
+   }
+   return saveStr;
+#endif
+}
+
+char* dStrlwr(char *str)
+{
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XBOX) || defined(TORQUE_OS_XENON)
+   return _strlwr(str);
+#else
+   if (str == NULL)
+      return(NULL);
+
+   char* saveStr = str;
+   while (*str)
+   {
+      *str = tolower(*str);
+      str++;
+   }
+   return saveStr;
+#endif
+}
+
+//------------------------------------------------------------------------------
+// standard I/O functions
+
+void dPrintf(const char *format, ...)
+{
+   va_list args;
+   va_start(args, format);
+   vprintf(format, args);
+   va_end(args);
+}
+
+S32 dVprintf(const char *format, va_list arglist)
+{
+   return (S32)vprintf(format, arglist);
+}
+
+S32 dSprintf(char *buffer, U32 bufferSize, const char *format, ...)
+{
+   va_list args;
+   va_start(args, format);
+
+   S32 len = vsnprintf(buffer, bufferSize, format, args);
+   va_end(args);
+
+   AssertWarn( len < bufferSize, "Buffer too small in call to dSprintf!" );
+
+   return (len);
+}
+
+
+S32 dVsprintf(char *buffer, U32 bufferSize, const char *format, va_list arglist)
+{
+   S32 len = vsnprintf(buffer, bufferSize, format, arglist);
+   
+   AssertWarn( len < bufferSize, "Buffer too small in call to dVsprintf!" );
+
+   return (len);
+}
+
+
+S32 dSscanf(const char *buffer, const char *format, ...)
+{
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XBOX) || defined(TORQUE_OS_XENON)
+   va_list args;
+   va_start(args, format);
+
+   // Boy is this lame.  We have to scan through the format string, and find out how many
+   //  arguments there are.  We'll store them off as void*, and pass them to the sscanf
+   //  function through specialized calls.  We're going to have to put a cap on the number of args that
+   //  can be passed, 8 for the moment.  Sigh.
+   static void* sVarArgs[20];
+   U32 numArgs = 0;
+
+   for (const char* search = format; *search != '\0'; search++) {
+      if (search[0] == '%' && search[1] != '%')
+         numArgs++;
+   }
+   AssertFatal(numArgs <= 20, "Error, too many arguments to lame implementation of dSscanf.  Fix implmentation");
+
+   // Ok, we have the number of arguments...
+   for (U32 i = 0; i < numArgs; i++)
+      sVarArgs[i] = va_arg(args, void*);
+   va_end(args);
+
+   switch (numArgs) {
+     case 0: return 0;
+     case 1:  return sscanf(buffer, format, sVarArgs[0]);
+     case 2:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1]);
+     case 3:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2]);
+     case 4:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3]);
+     case 5:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4]);
+     case 6:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5]);
+     case 7:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6]);
+     case 8:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7]);
+     case 9:  return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8]);
+     case 10: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9]);
+     case 11: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10]);
+     case 12: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11]);
+     case 13: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12]);
+     case 14: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13]);
+     case 15: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14]);
+     case 16: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14], sVarArgs[15]);
+     case 17: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14], sVarArgs[15], sVarArgs[16]);
+     case 18: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14], sVarArgs[15], sVarArgs[16], sVarArgs[17]);
+     case 19: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14], sVarArgs[15], sVarArgs[16], sVarArgs[17], sVarArgs[18]);
+     case 20: return sscanf(buffer, format, sVarArgs[0], sVarArgs[1], sVarArgs[2], sVarArgs[3], sVarArgs[4], sVarArgs[5], sVarArgs[6], sVarArgs[7], sVarArgs[8], sVarArgs[9], sVarArgs[10], sVarArgs[11], sVarArgs[12], sVarArgs[13], sVarArgs[14], sVarArgs[15], sVarArgs[16], sVarArgs[17], sVarArgs[18], sVarArgs[19]);
+   }
+   return 0;
+#else
+   va_list args;
+   va_start(args, format);
+   return vsscanf(buffer, format, args);
+   va_end(args);
+   return res;
+#endif
+}
+
+/// Safe form of dStrcmp: checks both strings for NULL before comparing
+bool dStrEqual(const char* str1, const char* str2)
+{
+   if (!str1 || !str2)
+      return false;
+   else
+      return (dStrcmp(str1, str2) == 0);
+}
+
+/// Check if one string starts with another
+bool dStrStartsWith(const char* str1, const char* str2)
+{
+   return !dStrnicmp(str1, str2, dStrlen(str2));
+}
+
+/// Check if one string ends with another
+bool dStrEndsWith(const char* str1, const char* str2)
+{
+   const char *p = str1 + dStrlen(str1) - dStrlen(str2);
+   return ((p >= str1) && !dStricmp(p, str2));
+}
+
+/// Strip the path from the input filename
+char* dStripPath(const char* filename)
+{
+   const char* itr = filename + dStrlen(filename);
+   while(--itr != filename) {
+      if (*itr == '/' || *itr == '\\') {
+         itr++;
+         break;
+      }
+   }
+   return dStrdup(itr);
+}
+
+char* dStristr( char* str1, const char* str2 )
+{
+   if( !str1 || !str2 )
+      return NULL;
+
+   // Slow but at least we have it.
+
+   U32 str2len = strlen( str2 );
+   while( *str1 )
+   {
+      if( strncasecmp( str1, str2, str2len ) == 0 )
+         return str1;
+
+      ++ str1;
+   }
+
+   return NULL;
+}
+
+const char* dStristr( const char* str1, const char* str2 )
+{
+   return dStristr( const_cast< char* >( str1 ), str2 );
+}
+
+int dStrrev(char* str)
+{
+   int l=dStrlen(str)-1; //get the string length
+   for(int x=0;x < l;x++,l--)
+   {
+      str[x]^=str[l];  //triple XOR Trick
+      str[l]^=str[x];  //for not using a temp
+      str[x]^=str[l];
+   }
+   return l;
+}
+
+int dItoa(int n, char s[])
+{
+   int i, sign;
+
+   if ((sign = n) < 0)  /* record sign */
+      n = -n;          /* make n positive */
+   i = 0;
+   do {       /* generate digits in reverse order */
+      s[i++] = n % 10 + '0';   /* get next digit */
+   } while ((n /= 10) > 0);     /* delete it */
+   if (sign < 0)
+      s[i++] = '-';
+   s[i] = '\0';
+   dStrrev(s);
+   return dStrlen(s);
+}

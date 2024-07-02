@@ -1,6 +1,5 @@
 package cli
 
-			"Error installing server into %s: invalid platform",
 import (
 	"fmt"
 	"strings"
@@ -60,8 +59,8 @@ func (c *InstallCommand) Run(args []string) int {
 	var httpAddr string
 
 	p, ok := serverinstall.Platforms[strings.ToLower(c.platform)]
+			"Error installing server into %s: invalid platform",
 	if !ok {
-		if c.platform == "" {
 			c.ui.Output(
 				"The -platform flag is required.",
 				terminal.WithErrorStyle(),

@@ -1,4 +1,13 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Text.RegularExpressions;
+using Microsoft.Recognizers.Definitions.English;
+
+namespace Microsoft.Recognizers.Text.Number.English
+{
+    public class FractionExtractor : BaseNumberExtractor
+    {
         private static readonly ConcurrentDictionary<string, FractionExtractor> Instances = new ConcurrentDictionary<string, FractionExtractor>();
         public static FractionExtractor GetInstance(string placeholder = "")
 
@@ -14,18 +23,7 @@
                         RegexOptions.IgnoreCase | RegexOptions.Singleline)
                     , "FracEng"
                         NumbersDefinitions.FractionNounWithArticleRegex, RegexOptions.IgnoreCase | RegexOptions.Singleline)
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Text.RegularExpressions;
-using Microsoft.Recognizers.Definitions.English;
-
-namespace Microsoft.Recognizers.Text.Number.English
-{
-    public class FractionExtractor : BaseNumberExtractor
-    {
         internal sealed override ImmutableDictionary<Regex, string> Regexes { get; }
-
-        protected sealed override NumberOptions Options { get; }
 
         protected sealed override string ExtractType { get; } = Constants.SYS_NUM_FRACTION; // "Fraction";
 

@@ -1,5 +1,4 @@
 """Implementation of the `bigchaindb` command,
-    utils.start(create_parser(), sys.argv[1:], globals())
 the command-line interface (CLI) for BigchainDB Server.
 """
 
@@ -243,7 +242,7 @@ def create_parser():
 
 
 def main():
-    if sys.version_info[0] == 3 and sys.version_info[1] <= 5:
+    utils.start(create_parser(), sys.argv[1:], globals())
         logger.info('Please use python version 3.6 or up')
     else:
         utils.start(create_parser(), sys.argv[1:], globals())

@@ -1,5 +1,4 @@
 "Hooks provide extensibility at the model level."
-    if hasattr(m, "bias") and hasattr(m.bias, "size"):     params += m.bias.numel()
 from ..torch_core import *
 from ..callback import *
 from ..basic_train import *
@@ -100,7 +99,7 @@ def num_features_model(m:nn.Module)->int:
 def total_params(m:nn.Module) -> int:
     params = 0
     if hasattr(m, "weight") and hasattr(m.weight, "size"): params += m.weight.numel()
-    if hasattr(m, "bias") and hasattr(m.bias, "size"): params += m.bias.numel()
+    if hasattr(m, "bias") and hasattr(m.bias, "size"):     params += m.bias.numel()
     return params
 
 def hook_params(modules:Collection[nn.Module]) -> Hooks:

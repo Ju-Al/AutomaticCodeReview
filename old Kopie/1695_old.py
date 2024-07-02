@@ -1,5 +1,4 @@
 "Manages data input pipeline - folderstransformbatch input. Includes support for classification, segmentation and bounding boxes"
-    return x.cpu()*std[...,None,None] + mean[...,None,None] if do_x else x.cpu()
 from ..torch_core import *
 from .image import *
 from .transform import *
@@ -59,7 +58,7 @@ def normalize(x:TensorImage, mean:FloatTensor,std:FloatTensor)->TensorImage:
 
 def denormalize(x:TensorImage, mean:FloatTensor,std:FloatTensor, do_x:bool=True)->TensorImage:
     "Denormalize `x` with `mean` and `std`."
-    if x.dtype == torch.float16:
+    return x.cpu()*std[...,None,None] + mean[...,None,None] if do_x else x.cpu()
         return x.cpu().float()*std[...,None,None] + mean[...,None,None] if do_x else x.cpu()
     else:
         return x.cpu()*std[...,None,None] + mean[...,None,None] if do_x else x.cpu()

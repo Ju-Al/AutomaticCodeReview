@@ -1,5 +1,4 @@
 // Copyright 2019 Liquidata, Inc.
-			err = prettyPrintResults(ctx, se.db.Root().VRW().Format(), sqlSch, rowIter)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -443,7 +442,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Show:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.sdb.Root().VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, se.db.Root().VRW().Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.Delete:

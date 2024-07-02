@@ -1,8 +1,4 @@
 // @flow
-  render() {
-    const { actions, stores } = this.props;
-    const { app, networkStatus, uiDialogs, wallets, voting, profile } = stores;
-    const { openExternalLink } = app;
 import React, { Component } from 'react';
 import { observer, inject } from 'mobx-react';
 import Layout from '../MainLayout';
@@ -31,7 +27,10 @@ export default class VotingRegistrationPage extends Component<Props> {
     this.props.actions.router.goToRoute.trigger({ route: ROUTES.WALLETS.ADD });
   };
 
-  getInnerContent = (isVotingRegistrationDialogOpen: boolean) => {
+  render() {
+    const { actions, stores } = this.props;
+    const { app, networkStatus, uiDialogs, wallets, voting, profile } = stores;
+    const { openExternalLink } = app;
     const { app, networkStatus, wallets, voting } = this.props.stores;
     const { isSynced, syncPercentage } = networkStatus;
     const { isRegistrationEnded } = voting;

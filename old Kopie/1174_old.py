@@ -465,7 +465,6 @@ class ProductLookupView(ObjectLookupView):
         return qs.filter(Q(title__icontains=term)
                          | Q(parent__title__icontains=term))
 
-
 class ProductClassCreateView(generic.CreateView):
     template_name = 'dashboard/catalogue/product_class_form.html'
     model = ProductClass

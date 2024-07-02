@@ -17,58 +17,141 @@
 package shed
 
 import (
+	"encoding/binary"
+
 	"github.com/dgraph-io/badger"
 	"github.com/ethersphere/bee/pkg/logging"
 )
 
-// StringField is the most simple field implementation
-// that stores an arbitrary string under a specific LevelDB key.
-type StringField struct {
+// Uint64Vector provides a way to have multiple counters in the database.
+// It transparently encodes uint64 type value to bytes.
+type Uint64Vector struct {
 	db     *DB
 	key    []byte
 	logger logging.Logger
 }
 
-// NewStringField retruns a new Instance of StringField.
+// NewUint64Vector returns a new Uint64Vector.
 // It validates its name and type against the database schema.
-func (db *DB) NewStringField(name string, logger logging.Logger) (f StringField, err error) {
-	key, err := db.schemaFieldKey(name, "string")
+func (db *DB) NewUint64Vector(name string, logger logging.Logger) (f Uint64Vector, err error) {
+	key, err := db.schemaFieldKey(name, "vector-uint64")
 	if err != nil {
 		return f, err
 	}
-	return StringField{
+	return Uint64Vector{
 		db:     db,
 		key:    key,
 		logger: logger,
 	}, nil
 }
 
-// Get returns a string value from database.
-// If the value is not found, an empty string is returned
-// an no error.
-func (f StringField) Get() (val string, err error) {
-	b, err := f.db.Get(f.key)
+// Get retrieves a uint64 value at index i from the database.
+// If the value is not found in the database a 0 value
+// is returned and no error.
+func (f Uint64Vector) Get(i uint64) (val uint64, err error) {
+	b, err := f.db.Get(f.indexKey(i))
 	if err != nil {
 		if err == ErrNotFound {
-			f.logger.Errorf("key %s not found", string(f.key))
-			return "", nil
+			return 0, nil
 		}
-		return "", err
+		return 0, err
 	}
-	return string(b), nil
+	return binary.BigEndian.Uint64(b), nil
 }
 
-// Put stores a string in the database.
-func (f StringField) Put(val string) (err error) {
-	return f.db.Put(f.key, []byte(val))
+// Put encodes uin64 value and stores it in the database.
+func (f Uint64Vector) Put(i, val uint64) (err error) {
+	return f.db.Put(f.indexKey(i), encodeUint64(val))
 }
 
-// PutInBatch stores a string in a batch that can be
-// saved later in database.
-func (f StringField) PutInBatch(batch *leveldb.Batch, val string) {
-	batch.Put(f.key, []byte(val))
-	err := batch.Set(f.key, []byte(val))
+// PutInBatch stores a uint64 value at index i in a batch
+// that can be saved later in the database.
+func (f Uint64Vector) PutInBatch(batch *leveldb.Batch, i, val uint64) {
+	batch.Put(f.indexKey(i), encodeUint64(val))
+	err := batch.Set(f.indexKey(i), encodeUint64(val))
 	if err != nil {
-		f.logger.Debugf("could not set values in PutInBatch")
+		f.logger.Debugf("could not put uint64 value in batch. Error : ", err.Error())
 	}
+}
+
+// Inc increments a uint64 value in the database.
+// This operation is not goroutine safe.
+func (f Uint64Vector) Inc(i uint64) (val uint64, err error) {
+	val, err = f.Get(i)
+	if err != nil {
+		if err == ErrNotFound {
+			val = 0
+		} else {
+			f.logger.Debugf("error getiing value while doing Inc. Error: %s", err.Error())
+			return 0, err
+		}
+	}
+	val++
+	return val, f.Put(i, val)
+}
+
+// IncInBatch increments a uint64 value at index i in the batch
+// by retreiving a value from the database, not the same batch.
+// This operation is not goroutine safe.
+func (f Uint64Vector) IncInBatch(batch *badger.Txn, i uint64) (val uint64, err error) {
+	val, err = f.Get(i)
+	if err != nil {
+		if err == ErrNotFound {
+			val = 0
+		} else {
+			f.logger.Debugf("error getiing value while doing IncInBatch. Error: %s", err.Error())
+			return 0, err
+		}
+	}
+	val++
+	f.PutInBatch(batch, i, val)
+	return val, nil
+}
+
+// Dec decrements a uint64 value at index i in the database.
+// This operation is not goroutine safe.
+// The field is protected from overflow to a negative value.
+func (f Uint64Vector) Dec(i uint64) (val uint64, err error) {
+	val, err = f.Get(i)
+	if err != nil {
+		if err == ErrNotFound {
+			val = 0
+		} else {
+			f.logger.Debugf("error getiing value while doing Dec. Error: %s", err.Error())
+			return 0, err
+		}
+	}
+	if val != 0 {
+		val--
+	}
+	return val, f.Put(i, val)
+}
+
+// DecInBatch decrements a uint64 value at index i in the batch
+// by retreiving a value from the database, not the same batch.
+// This operation is not goroutine safe.
+// The field is protected from overflow to a negative value.
+func (f Uint64Vector) DecInBatch(batch *badger.Txn, i uint64) (val uint64, err error) {
+	val, err = f.Get(i)
+	if err != nil {
+		if err == ErrNotFound {
+			val = 0
+		} else {
+			f.logger.Debugf("error getiing value while doing DecInBatch. Error: %s", err.Error())
+			return 0, err
+		}
+	}
+	if val != 0 {
+		val--
+	}
+	f.PutInBatch(batch, i, val)
+	return val, nil
+}
+
+// indexKey concatenates field prefix and vector index
+// returning a unique database key for a specific vector element.
+func (f Uint64Vector) indexKey(i uint64) (key []byte) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, i)
+	return append(f.key, b...)
 }

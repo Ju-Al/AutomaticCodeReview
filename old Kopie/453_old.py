@@ -770,7 +770,6 @@ class WireClient(object):
                                                goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
         xml_text = self.fetch_manifest(ext_handler.versionUris)
-        print(xml_text)
         self.save_cache(local_file, xml_text)
         return ExtensionManifest(xml_text)
 

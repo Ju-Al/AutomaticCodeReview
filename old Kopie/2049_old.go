@@ -1,19 +1,5 @@
 package docker
 
-	events := make(chan *docker.APIEvents)
-	if err := c.AddEventListener(events); err != nil {
-		Log.Errorf("[docker] Unable to add listener to Docker API: %s", err)
-		return err
-	}
-
-		for event := range events {
-			switch event.Status {
-			case "start":
-				id := event.ID
-				ob.ContainerStarted(id)
-			case "die":
-				id := event.ID
-				ob.ContainerDied(id)
 import (
 	"errors"
 	"fmt"
@@ -92,8 +78,21 @@ func (c *Client) Info() string {
 
 // AddObserver adds an observer for docker events
 func (c *Client) AddObserver(ob ContainerObserver) error {
+	events := make(chan *docker.APIEvents)
+	if err := c.AddEventListener(events); err != nil {
+		Log.Errorf("[docker] Unable to add listener to Docker API: %s", err)
+		return err
+	}
+
 	go func() {
-		retryInterval := InitialInterval
+		for event := range events {
+			switch event.Status {
+			case "start":
+				id := event.ID
+				ob.ContainerStarted(id)
+			case "die":
+				id := event.ID
+				ob.ContainerDied(id)
 		for {
 			events := make(chan *docker.APIEvents)
 			if err := c.AddEventListener(events); err != nil {

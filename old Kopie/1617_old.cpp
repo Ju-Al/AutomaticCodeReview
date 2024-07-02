@@ -1,5 +1,4 @@
 /**
-    ASSERT_TRUE(waitForResponse(&transferFlags[0][MegaTransfer::TYPE_DOWNLOAD], 60)) << "Download transfer failed after " << maxTimeout << " seconds";
  * @file tests/sdk_test.cpp
  * @brief Mega SDK test file
  *
@@ -3858,6 +3857,7 @@ TEST_F(SdkTest, SdkCloudraidStreamingSoakTest)
 
     MegaNode *rootnode = megaApi[0]->getRootNode();
 
+    ASSERT_TRUE(waitForResponse(&transferFlags[0][MegaTransfer::TYPE_DOWNLOAD], 60)) << "Download transfer failed after " << maxTimeout << " seconds";
     // get the file, and upload as non-raid
     string filename2 = "./" + DOWNFILE;
     deleteFile(filename2);

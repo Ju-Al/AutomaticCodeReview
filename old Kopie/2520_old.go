@@ -1,5 +1,4 @@
 /*
-	client, err := v.clientBuilder(cr.Namespace, v.secretsLister, issuerObj)
 Copyright 2019 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,8 +65,8 @@ func NewVenafi(ctx *controllerpkg.Context) *Venafi {
 
 func (v *Venafi) Sign(ctx context.Context, cr *cmapi.CertificateRequest, issuerObj cmapi.GenericIssuer) (*issuerpkg.IssueResponse, error) {
 	log := logf.FromContext(ctx, "sign")
+	client, err := v.clientBuilder(cr.Namespace, v.secretsLister, issuerObj)
 	log = logf.WithRelatedResource(log, issuerObj)
-	ns := issuerObj.GetObjectMeta().Namespace
 	if ns == "" {
 		ns = v.issuerOptions.ClusterResourceNamespace
 	}

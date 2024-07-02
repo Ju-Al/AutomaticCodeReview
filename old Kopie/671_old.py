@@ -11,25 +11,25 @@ from streamlink.stream import HTTPStream
 
 #algorithm for https://github.com/spacemeowx2/DouyuHTML5Player/blob/master/src/douyu/blackbox.js
 #python version by debugzxcv at https://gist.github.com/debugzxcv/85bb2750d8a5e29803f2686c47dc236b
+LAPI_URL = "https://www.douyu.com/lapi/live/getPlay/{0}"
+#new API key from https://github.com/spacemeowx2/DouyuHTML5Player/commit/5065e5e8e60f1eddf2eb8370b6fcb9136c6685a4
+LAPI_SECRET = "a2053899224e8a92974c729dceed1cc99b3d8282"
+    "low": 540,
+    "middle": 720,
+    "source": 1080
+}
 from streamlink.plugins.douyutv_blackbox import stupidMD5
-from streamlink.stream import HTTPStream, HLSStream
 
 #new API and key from https://gist.github.com/spacemeowx2/629b1d131bd7e240a7d28742048e80fc by spacemeowx2
 MAPI_URL = "https://m.douyu.com/html5/live?roomId={0}"
-LAPI_URL = "https://www.douyu.com/lapi/live/getPlay/{0}"
 LAPI_URL = "http://coapi.douyucdn.cn/lapi/live/thirdPart/getPlay/{0}?rate={1}"
 
 LAPI_SECRET = "9TUk5fjjUjg9qIMH3sdnh"
 
-#new API key from https://github.com/spacemeowx2/DouyuHTML5Player/commit/5065e5e8e60f1eddf2eb8370b6fcb9136c6685a4
-LAPI_SECRET = "a2053899224e8a92974c729dceed1cc99b3d8282"
 SHOW_STATUS_ONLINE = 1
 SHOW_STATUS_OFFLINE = 2
 STREAM_WEIGHTS = {
         "low": 540,
-    "middle": 720,
-    "source": 1080
-}
         "middle":  720,
         "source": 1080
         }

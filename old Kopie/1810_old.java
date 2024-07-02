@@ -1788,7 +1788,6 @@ public class Function extends Expression implements FunctionCall {
             String msgText = v1.getString();
             throw DbException.fromUser(sqlState, msgText);
         }
-        case JSON_FIELD: {
             if(v0.getValueType() == Value.JSON) {
                 JsonNode json = ((ValueJson) v0).getObject();
                 if (json.isArray() && v1.getValueType() >= Value.BYTE && v1.getValueType() <= Value.DECIMAL) {

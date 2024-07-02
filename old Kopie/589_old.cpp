@@ -1,22 +1,4 @@
 /* -------------------------------------------------------------------------- *
-/**
- * API constructor.
- */
-Joint::Joint(const std::string &name, 
-    const PhysicalFrame& parent, 
-    const SimTK::Vec3& locationInParent, const SimTK::Vec3& orientationInParent,
-    const PhysicalFrame& child, 
-    const SimTK::Vec3& locationInChild, const SimTK::Vec3& orientationInChild, 
-    bool reverse) : Super()
-    setNull();
-    constructInfrastructure();
-
-    set_location_in_parent(locationInParent);
-    set_orientation_in_parent(orientationInParent);
-    set_location_in_child(locationInChild);
-    set_orientation_in_child(orientationInChild);
-    updConnector<PhysicalFrame>("parent_body").set_connectee_name(parent.getName());
-    updConnector<PhysicalFrame>("child_body").set_connectee_name(child.getName());
  *                            OpenSim:  Joint.cpp                             *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -75,7 +57,24 @@ Joint::Joint() : Super()
     constructInfrastructure();
 }
 
-/* API constructor. */
+/**
+ * API constructor.
+ */
+Joint::Joint(const std::string &name, 
+    const PhysicalFrame& parent, 
+    const SimTK::Vec3& locationInParent, const SimTK::Vec3& orientationInParent,
+    const PhysicalFrame& child, 
+    const SimTK::Vec3& locationInChild, const SimTK::Vec3& orientationInChild, 
+    setNull();
+    constructInfrastructure();
+
+    set_location_in_parent(locationInParent);
+    set_orientation_in_parent(orientationInParent);
+    set_location_in_child(locationInChild);
+    set_orientation_in_child(orientationInChild);
+    updConnector<PhysicalFrame>("parent_body").set_connectee_name(parent.getName());
+    updConnector<PhysicalFrame>("child_body").set_connectee_name(child.getName());
+    bool reverse) : Super()
 Joint::Joint(const std::string &name, const std::string& parentName, 
                                       const std::string& childName,
                                       bool reverse) : Joint()

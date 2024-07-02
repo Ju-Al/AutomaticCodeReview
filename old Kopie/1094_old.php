@@ -1,5 +1,4 @@
 <?php
-        $sSubject = gT('User data');
 /*
 * LimeSurvey
 * Copyright (C) 2007-2011 The LimeSurvey Project Team / Carsten Schmitz
@@ -73,8 +72,8 @@ class GlobalSettings extends Survey_Common_Action
 
         $sFrom = Yii::app()->getConfig("siteadminname")." <".Yii::app()->getConfig("siteadminemail").">";
         
+        $sSubject = gT('User data');
         $sSiteName = Yii::app()->getConfig('sitename');
-        $sSubject = gT('Test email from ') .$sSiteName;
 
         $sSiteAdminBounce = Yii::app()->getConfig('siteadminbounce');
 

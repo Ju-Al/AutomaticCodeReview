@@ -1,20 +1,5 @@
 package expected
 
-	// Since introducing new map fields to the report.NodeMetadata type, its
-	// zero value is •not valid• -- every time you need one, you need to use
-	// the report.MakeNodeMetadata constructor. (Similarly, but not exactly
-	// the same, is that a zero-value Adjacency is not the same as a created
-	// but empty Adjacency.)
-	//
-	// But we're not doing this in tests.  We also don't particularly care
-	// about the output of NodeMetadata for the rendering pipeline, as this
-	// is never serialised to json.  So this function sterilizes invalid
-	// RenderableNodes by setting an empty NodeMetadata from the proper
-	// constructor.
-		if n.Adjacency == nil {
-			n.Adjacency = report.MakeIDList()
-		}
-		n.NodeMetadata = report.MakeNodeMetadata()
 import (
 	"fmt"
 
@@ -25,7 +10,21 @@ import (
 
 // Sterilize cleans up RenderableNodes test fixtures
 func Sterilize(r render.RenderableNodes) render.RenderableNodes {
-	// RenderableNodes contain NodeMetadatas, but generally we
+	// Since introducing new map fields to the report.NodeMetadata type, its
+	// zero value is •not valid• -- every time you need one, you need to use
+	// the report.MakeNodeMetadata constructor. (Similarly, but not exactly
+	// the same, is that a zero-value Adjacency is not the same as a created
+	// but empty Adjacency.)
+	//
+	// But we're not doing this in tests.  We also don't particularly care
+	// about the output of NodeMetadata for the rendering pipeline, as this
+	// is never serialised to json.  So this function sterilizes invalid
+	// RenderableNodes by setting an empty NodeMetadata from the proper
+		if n.Adjacency == nil {
+			n.Adjacency = report.MakeIDList()
+		}
+		n.NodeMetadata = report.MakeNodeMetadata()
+	// constructor.
 	// only care about the Adjacency field - the rest is internal
 	// state not sent to the client.  So in the tests we ignore
 	// this state.

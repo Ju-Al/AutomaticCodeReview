@@ -1,144 +1,123 @@
-// Copyright 2016 Keybase Inc. All rights reserved.
-// Use of this source code is governed by a BSD
-// license that can be found in the LICENSE file.
-
-package libfuse
+package committees
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
 
-	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
-	"github.com/kardianos/osext"
-	"github.com/keybase/client/go/libkb"
-	"github.com/keybase/kbfs/libkbfs"
-	"golang.org/x/net/context"
+	"github.com/onflow/flow-go/consensus/hotstuff"
+	"github.com/onflow/flow-go/consensus/hotstuff/committees/leader"
+	"github.com/onflow/flow-go/consensus/hotstuff/model"
+	"github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/model/flow/filter"
+	"github.com/onflow/flow-go/state/protocol"
+	"github.com/onflow/flow-go/storage"
 )
 
-const (
-	// TrashDirName is the .Trashes special directory that macOS uses for Trash
-	// on non boot volumes.
-	TrashDirName = ".Trashes"
-
-	// FSEventsDirName is the .fseventsd directory that macOS always tries to get.
-	// TODO: find out what this is for.
-	FSEventsDirName = ".fseventsd"
-
-	// DSStoreFileName is the .DS_Store file
-	// TODO: find out if this is necessary
-	DSStoreFileName = ".DS_Store"
-)
-
-// mountRootSpecialPaths defines automatically handled special paths.
-// TrashDirName is notably missing here since we use the *Trash type to handle
-// it.
-var mountRootSpecialPaths = map[string]bool{
-	FSEventsDirName: true,
-	DSStoreFileName: true,
+// Cluster represents the committee for a cluster of collection nodes. Cluster
+// committees are epoch-scoped.
+//
+// Clusters build blocks on a cluster chain but must obtain identity table
+// information from the main chain. Thus, block ID parameters in this Committee
+// implementation reference blocks on the cluster chain, which in turn reference
+// blocks on the main chain - this implementation manages that translation.
+type Cluster struct {
+	state    protocol.State
+	payloads storage.ClusterPayloads
+	me       flow.Identifier
+	// pre-computed leader selection for the full lifecycle of the cluster
+	selection *leader.LeaderSelection
+	// a filter that returns all members of the cluster committee allowed to vote
+	clusterMemberFilter flow.IdentityFilter
+	// initial set of cluster members, WITHOUT updated weight
+	initialClusterMembers flow.IdentityList
 }
 
-var platformRootDirs = []fuse.Dirent{
-	{
-		Type: fuse.DT_Dir,
-		Name: TrashDirName,
-	},
-	{
-		Type: fuse.DT_Dir,
-		Name: FSEventsDirName,
-	},
-	{
-		Type: fuse.DT_File,
-		Name: DSStoreFileName,
-	},
-}
+func NewClusterCommittee(
+	state protocol.State,
+	payloads storage.ClusterPayloads,
+	cluster protocol.Cluster,
+	epoch protocol.Epoch,
+	me flow.Identifier,
+) (*Cluster, error) {
 
-func (r *Root) platformLookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.LookupResponse) (fs.Node, error) {
-	switch req.Name {
-	case VolIconFileName:
-		return newExternalBundleResourceFile("KeybaseFolder.icns")
-	case ExtendedAttributeSelfFileName:
-		return newExternalBundleResourceFile("ExtendedAttributeFinderInfo.bin")
-	}
-
-	if r.private.fs.platformParams.UseLocal {
-		if mountRootSpecialPaths[req.Name] {
-			cuser, err := libkbfs.GetCurrentUsernameIfPossible(ctx, r.private.fs.config.KBPKI(), false)
-			if err != nil {
-				return nil, err
-			}
-			return &Alias{realPath: fmt.Sprintf("private/%s/.darwin/%s", cuser, req.Name)}, nil
-		}
-
-		if req.Name == TrashDirName {
-			cuser, err := libkbfs.GetCurrentUsernameIfPossible(ctx, r.private.fs.config.KBPKI(), false)
-			if err != nil {
-				return nil, err
-			}
-			return &Trash{
-				fs:         r.private.fs,
-				kbusername: cuser,
-			}, nil
-		}
-	}
-
-	return nil, nil
-}
-
-func newExternalBundleResourceFile(path string) (*SpecialReadFile, error) {
-	bpath, err := bundleResourcePath(path)
+	selection, err := leader.SelectionForCluster(cluster, epoch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not compute leader selection for cluster: %w", err)
 	}
-	return newExternalFile(bpath)
+
+	com := &Cluster{
+		state:                 state,
+		payloads:              payloads,
+		me:                    me,
+		selection:             selection,
+		clusterMemberFilter:   cluster.Members().Selector(),
+		initialClusterMembers: cluster.Members(),
+	}
+	return com, nil
 }
 
-func bundleResourcePath(path string) (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("Bundle resource path only available on macOS/darwin")
-	}
-	execPath, err := osext.Executable()
+func (c *Cluster) Identities(blockID flow.Identifier, selector flow.IdentityFilter) (flow.IdentityList, error) {
+
+	// first retrieve the cluster block payload
+	payload, err := c.payloads.ByBlockID(blockID)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("could not get cluster payload: %w", err)
 	}
-	return filepath.Join(execPath, "..", "..", "..", "Resources", path), nil
-}
 
-// Trash is a mock .Trashes directory
-type Trash struct {
-	fs         *FS
-	kbusername libkb.NormalizedUsername
-}
+	// an empty reference block ID indicates a root block
+	isRootBlock := payload.ReferenceBlockID == flow.ZeroID
 
-// Lookup implements the fs.NodeRequestLookuper interface for *Trash
-func (t *Trash) Lookup(ctx context.Context,
-	req *fuse.LookupRequest, resp *fuse.LookupResponse) (fs.Node, error) {
-	if req.Name == strconv.Itoa(os.Getuid()) {
-		return &Alias{
-			realPath: fmt.Sprintf("../private/%s/.trash", t.kbusername),
-		}, nil
+	// use the initial cluster members for root block
+	if isRootBlock {
+		return c.initialClusterMembers.Filter(selector), nil
 	}
-	return nil, fuse.ENOENT
+
+	// otherwise use the snapshot given by the reference block
+	identities, err := c.state.AtBlockID(payload.ReferenceBlockID).Identities(filter.And(
+		selector,
+		c.clusterMemberFilter,
+	))
+	return identities, convertError(err)
 }
 
-// Attr implements the fs.Node interface for *Trash
-func (t *Trash) Attr(ctx context.Context, a *fuse.Attr) error {
-	a.Mode = os.ModeDir | 0755
-	return nil
+func (c *Cluster) Identity(blockID flow.Identifier, nodeID flow.Identifier) (*flow.Identity, error) {
+
+	// first retrieve the cluster block payload
+	payload, err := c.payloads.ByBlockID(blockID)
+	if err != nil {
+		return nil, fmt.Errorf("could not get cluster payload: %w", err)
+	}
+
+	// an empty reference block ID indicates a root block
+	isRootBlock := payload.ReferenceBlockID == flow.ZeroID
+
+	// use the initial cluster members for root block
+	if isRootBlock {
+		identity, ok := c.initialClusterMembers.ByNodeID(nodeID)
+		if !ok {
+			return nil, protocol.IdentityNotFoundError{NodeID: nodeID}
+		}
+		return identity, nil
+	}
+
+	// otherwise use the snapshot given by the reference block
+	identity, err := c.state.AtBlockID(payload.ReferenceBlockID).Identity(nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("could not get identity for node (id=%x): %w", nodeID, err)
+	}
+	if !c.clusterMemberFilter(identity) {
+		return nil, model.ErrInvalidSigner
+	}
+	return identity, nil
 }
 
-// ReadDirAll implements the fs.NodeReadDirAller interface for *Trash
-func (t *Trash) ReadDirAll(ctx context.Context) (res []fuse.Dirent, err error) {
-	t.fs.log.CDebugf(ctx, "Trash ReadDirAll")
-	defer func() { t.fs.reportErr(ctx, libkbfs.ReadMode, err) }()
+func (c *Cluster) LeaderForView(view uint64) (flow.Identifier, error) {
+	return c.selection.LeaderForView(view)
+}
 
-	return []fuse.Dirent{
-		{
-			Type: fuse.DT_Link,
-			Name: strconv.Itoa(os.Getuid()),
-		},
-	}, nil
+func (c *Cluster) Self() flow.Identifier {
+	return c.me
+}
+
+func (c *Cluster) DKG(_ flow.Identifier) (hotstuff.DKG, error) {
+	panic("queried DKG of cluster committee")
 }

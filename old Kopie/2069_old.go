@@ -168,7 +168,7 @@ func (s *Server) HandleRPC(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			batchRes[i], cached = s.handleSingleRPC(ctx, req)
+			batchRes[i] = s.handleSingleRPC(ctx, req)			batchRes[i], cached = s.handleSingleRPC(ctx, req)
 		}
 
 		setCacheHeader(w, cached)
@@ -325,6 +325,7 @@ func (s *Server) populateContext(w http.ResponseWriter, r *http.Request) context
 	)
 }
 
+func setCacheHeader(w http.ResponseWriter, cached bool) {
 	const cacheStatusHdr = "X-Proxyd-Cache-Status"
 	if cached {
 		w.Header().Set(cacheStatusHdr, "HIT")

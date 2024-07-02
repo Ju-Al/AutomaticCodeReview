@@ -1,5 +1,4 @@
 #
-    commands: typing.Sequence[DDLCommand]
 # This source file is part of the EdgeDB open source project.
 #
 # Copyright 2008-present MagicStack Inc. and the EdgeDB authors.
@@ -624,7 +623,7 @@ class SetSpecialField(BaseSetField):
 class ObjectDDL(DDLCommand, CompositeDDL):
     __abstract_node__ = True
     name: ObjectRef
-    commands: typing.List[DDLCommand]
+    commands: typing.Sequence[DDLCommand]
 
 
 class CreateObject(ObjectDDL):

@@ -1,5 +1,4 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-    def update_state(self, y_true, y_pred):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -176,7 +175,7 @@ class FBetaScore(Metric):
                 initializer='zeros',
                 dtype=self.dtype)
 
-    # TO DO SSaishruthi: Add sample weight option
+    def update_state(self, y_true, y_pred):
     def update_state(self, y_true, y_pred, sample_weight=None):
         y_true = tf.cast(y_true, tf.int32)
         y_pred = tf.cast(y_pred, tf.int32)

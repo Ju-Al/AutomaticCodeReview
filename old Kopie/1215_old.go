@@ -1,5 +1,4 @@
 /*
-func (i *Identity) getGoogleServiceAccountName(ctx context.Context, identifiable duck.Identifiable, clusterName string) (string, string, error) {
 Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -152,7 +151,7 @@ func (i *Identity) DeleteWorkloadIdentity(ctx context.Context, projectID string,
 }
 
 // getGoogleServiceAccountName will return Google service account name and corresponding raw Kubernetes service account name.
-func (i *Identity) getGoogleServiceAccountName(ctx context.Context, identifiable duck.Identifiable) (resources.IdentityNames, error) {
+func (i *Identity) getGoogleServiceAccountName(ctx context.Context, identifiable duck.Identifiable, clusterName string) (string, string, error) {
 	namespace := identifiable.GetObjectMeta().GetNamespace()
 	clusterName := identifiable.GetObjectMeta().GetAnnotations()[v1alpha1.ClusterNameAnnotation]
 	if clusterName == "" {

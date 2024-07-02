@@ -27,7 +27,6 @@ const (
 	LBWebServiceHealthCheckPathParamKey = "HealthCheckPath"
 	LBWebServiceTargetContainerParamKey = "TargetContainer"
 	LBWebServiceTargetPortParamKey      = "TargetPort"
-	LBWebServiceStickiness              = "Stickiness"
 )
 
 type loadBalancedWebSvcReadParser interface {

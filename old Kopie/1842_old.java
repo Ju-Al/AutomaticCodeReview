@@ -1,8 +1,4 @@
 /*
-            ClientMessage response = invocation(request, masterAddress()).invoke().get();
-    protected Address masterAddress() {
-        Optional<Member> first = container().getCluster().getMembers().stream().findFirst();
-        return first.orElseThrow(() -> new IllegalStateException("No members found in cluster")).getAddress();
  * Copyright (c) 2008-2019, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +16,8 @@
 
 package com.hazelcast.jet.impl;
 
-import com.hazelcast.client.impl.protocol.ClientMessage;
-import com.hazelcast.client.impl.spi.impl.ClientInvocation;
+import com.hazelcast.cluster.Address;
+import com.hazelcast.cluster.Member;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.jet.Job;
@@ -30,99 +26,82 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.metrics.JobMetrics;
-import com.hazelcast.jet.impl.client.protocol.codec.JetExportSnapshotCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetGetJobConfigCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetGetJobMetricsCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetGetJobStatusCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetGetJobStatusCodec.ResponseParameters;
-import com.hazelcast.jet.impl.client.protocol.codec.JetGetJobSubmissionTimeCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetJoinSubmittedJobCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetResumeJobCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetSubmitJobCodec;
-import com.hazelcast.jet.impl.client.protocol.codec.JetTerminateJobCodec;
-import com.hazelcast.jet.impl.util.Util;
+import com.hazelcast.jet.impl.metrics.RawJobMetrics;
+import com.hazelcast.jet.impl.operation.GetJobConfigOperation;
+import com.hazelcast.jet.impl.operation.GetJobMetricsOperation;
+import com.hazelcast.jet.impl.operation.GetJobStatusOperation;
+import com.hazelcast.jet.impl.operation.GetJobSubmissionTimeOperation;
+import com.hazelcast.jet.impl.operation.JoinSubmittedJobOperation;
+import com.hazelcast.jet.impl.operation.ResumeJobOperation;
+import com.hazelcast.jet.impl.operation.SubmitJobOperation;
+import com.hazelcast.jet.impl.operation.TerminateJobOperation;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.spi.exception.TargetNotMemberException;
+import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.impl.JobMetricsUtil.toJobMetrics;
 import static com.hazelcast.jet.impl.util.ExceptionUtil.rethrow;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
+import static com.hazelcast.jet.impl.util.Util.getJetInstance;
 
 /**
- * {@link Job} proxy on client.
+ * {@link Job} proxy on member.
  */
-public class ClientJobProxy extends AbstractJobProxy<JetClientInstanceImpl> {
+public class JobProxy extends AbstractJobProxy<NodeEngineImpl> {
 
-    private static final long RETRY_DELAY_NS = MILLISECONDS.toNanos(200);
-    private static final long RETRY_TIME_NS = SECONDS.toNanos(60);
-
-    ClientJobProxy(JetClientInstanceImpl client, long jobId) {
-        super(client, jobId);
+    public JobProxy(NodeEngineImpl nodeEngine, long jobId) {
+        super(nodeEngine, jobId);
     }
 
-    ClientJobProxy(JetClientInstanceImpl client, long jobId, DAG dag, JobConfig config) {
-        super(client, jobId, dag, config);
+    public JobProxy(NodeEngineImpl engine, long jobId, DAG dag, JobConfig config) {
+        super(engine, jobId, dag, config);
     }
 
-    @Nonnull
-    @Override
+    @Nonnull @Override
     public JobStatus getStatus() {
-        return callAndRetryIfTargetNotFound(()  -> {
-            ClientMessage request = JetGetJobStatusCodec.encodeRequest(getId());
-            ClientMessage response = invocation(request, masterUuid()).invoke().get();
-            ResponseParameters parameters = JetGetJobStatusCodec.decodeResponse(response);
-            return JobStatus.values()[parameters.response];
-        });
+        try {
+            return this.<JobStatus>invokeOp(new GetJobStatusOperation(getId())).get();
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
     }
 
-    @Nonnull
-    @Override
+    @Nonnull @Override
     public JobMetrics getMetrics() {
-        return callAndRetryIfTargetNotFound(()  -> {
-            ClientMessage request = JetGetJobMetricsCodec.encodeRequest(getId());
-            ClientMessage response = invocation(request, masterUuid()).invoke().get();
-            JetGetJobMetricsCodec.ResponseParameters parameters = JetGetJobMetricsCodec.decodeResponse(response);
-            return toJobMetrics(serializationService().toObject(parameters.response));
-        });
+        try {
+            List<RawJobMetrics> shards = this.<List<RawJobMetrics>>invokeOp(new GetJobMetricsOperation(getId())).get();
+            return toJobMetrics(shards);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
     }
 
     @Override
     protected CompletableFuture<Void> invokeSubmitJob(Data dag, JobConfig config) {
-        Data configData = serializationService().toData(config);
-        ClientMessage request = JetSubmitJobCodec.encodeRequest(getId(), dag, configData);
-        return invocation(request, masterUuid()).invoke().thenApply(c -> null);
+        return invokeOp(new SubmitJobOperation(getId(), dag, serializationService().toData(config)));
     }
 
     @Override
     protected CompletableFuture<Void> invokeJoinJob() {
-        ClientMessage request = JetJoinSubmittedJobCodec.encodeRequest(getId());
-        ClientInvocation invocation = invocation(request, masterUuid());
-        // this invocation should never time out, as the job may be running for a long time
-        invocation.setInvocationTimeoutMillis(Long.MAX_VALUE); // 0 is not supported
-        return invocation.invoke().thenApply(c -> null);
+        return invokeOp(new JoinSubmittedJobOperation(getId()));
     }
 
     @Override
     protected CompletableFuture<Void> invokeTerminateJob(TerminationMode mode) {
-        ClientMessage request = JetTerminateJobCodec.encodeRequest(getId(), mode.ordinal());
-        return invocation(request, masterUuid()).invoke().thenApply(c -> null);
+        return invokeOp(new TerminateJobOperation(getId(), mode));
     }
 
     @Override
     public void resume() {
-        ClientMessage request = JetResumeJobCodec.encodeRequest(getId());
         try {
-            invocation(request, masterUuid()).invoke().get();
-        } catch (Throwable t) {
-            throw rethrow(t);
+            invokeOp(new ResumeJobOperation(getId())).get();
+        } catch (Exception e) {
+            throw rethrow(e);
         }
     }
 
@@ -137,72 +116,61 @@ public class ClientJobProxy extends AbstractJobProxy<JetClientInstanceImpl> {
     }
 
     private JobStateSnapshot doExportSnapshot(String name, boolean cancelJob) {
-        ClientMessage request = JetExportSnapshotCodec.encodeRequest(getId(), name, cancelJob);
         try {
-            invocation(request, masterUuid()).invoke().get();
-        } catch (Throwable t) {
-            throw rethrow(t);
+            JetService jetService = container().getService(JetService.SERVICE_NAME);
+            Operation operation = jetService.createExportSnapshotOperation(getId(), name, cancelJob);
+            invokeOp(operation).get();
+        } catch (Exception e) {
+            throw rethrow(e);
         }
-        return container().getJobStateSnapshot(name);
+        return getJetInstance(container()).getJobStateSnapshot(name);
     }
 
     @Override
     protected long doGetJobSubmissionTime() {
-        return callAndRetryIfTargetNotFound(() -> {
-            ClientMessage request = JetGetJobSubmissionTimeCodec.encodeRequest(getId());
-            ClientMessage response = invocation(request, masterUuid()).invoke().get();
-            return JetGetJobSubmissionTimeCodec.decodeResponse(response).response;
-        });
+        try {
+            return this.<Long>invokeOp(new GetJobSubmissionTimeOperation(getId())).get();
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
     }
 
     @Override
     protected JobConfig doGetJobConfig() {
-        return callAndRetryIfTargetNotFound(() -> {
-            ClientMessage request = JetGetJobConfigCodec.encodeRequest(getId());
-            ClientMessage response = invocation(request, masterUuid()).invoke().get();
-            Data data = JetGetJobConfigCodec.decodeResponse(response).response;
-            return serializationService().toObject(data);
-        });
+        try {
+            return this.<JobConfig>invokeOp(new GetJobConfigOperation(getId())).get();
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
     }
 
     @Override
-    protected UUID masterUuid() {
-        return Util.getMaster(container().getCluster()).getUuid();
+        Optional<Member> first = container().getClusterService().getMembers().stream().findFirst();
+        return first.orElseThrow(() -> new IllegalStateException("No members found in cluster")).getUuid();
+    }
+
+    protected Address masterAddress() {
+        Address masterAddress = container().getMasterAddress();
+        if (masterAddress == null) {
+            throw new IllegalStateException("Master address unknown: instance is not yet initialized or is shut down");
+        }
+        return masterAddress;
     }
 
     @Override
     protected SerializationService serializationService() {
-        return container().getHazelcastClient().getSerializationService();
+        return container().getSerializationService();
     }
 
     @Override
     protected LoggingService loggingService() {
-        return container().getHazelcastClient().getLoggingService();
+        return container().getLoggingService();
     }
 
-    private ClientInvocation invocation(ClientMessage request, UUID invocationUuid) {
-        return new ClientInvocation(
-                container().getHazelcastClient(), request, "jobId=" + getIdString(), invocationUuid
-        );
+    private <T> CompletableFuture<T> invokeOp(Operation op) {
+        return container()
+                .getOperationService()
+                .createInvocationBuilder(JetService.SERVICE_NAME, op, masterAddress())
+                .invoke();
     }
-
-    private <T> T callAndRetryIfTargetNotFound(Callable<T> action) {
-        long timeLimit = System.nanoTime() + RETRY_TIME_NS;
-        for (;;) {
-            try {
-                return action.call();
-            } catch (Exception e) {
-                if (System.nanoTime() < timeLimit
-                        && e instanceof ExecutionException
-                        && e.getCause() instanceof TargetNotMemberException
-                ) {
-                    // ignore the TargetNotMemberException and retry with new master
-                    LockSupport.parkNanos(RETRY_DELAY_NS);
-                    continue;
-                }
-                throw rethrow(e);
-            }
-        }
-    }
-
 }

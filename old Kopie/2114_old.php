@@ -1,6 +1,5 @@
 <?php
 
-    public function setUsername(string $username): void
 declare(strict_types=1);
 
 namespace Bolt\Entity;
@@ -115,7 +114,7 @@ class User implements UserInterface, \Serializable
         return $this->id;
     }
 
-    public function setDisplayName(?string $displayName): void
+    public function setDisplayName(string $displayName): void
     {
         $this->displayName = $displayName;
     }

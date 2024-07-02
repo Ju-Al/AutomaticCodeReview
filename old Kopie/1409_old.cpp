@@ -1,5 +1,4 @@
 // -*- c++ -*-
-void FixColvars::post_force(int vflag)
 
 // This file is part of the Collective Variables module (Colvars).
 // The original version of Colvars and its updates are located at:
@@ -646,7 +645,7 @@ void FixColvars::setup(int vflag)
 /* ---------------------------------------------------------------------- */
 /* Main colvars handler:
  * Send coodinates and add colvar forces to atoms. */
-void FixColvars::post_force(int /*vflag*/)
+void FixColvars::post_force(int vflag)
 {
   // some housekeeping: update status of the proxy as needed.
   if (me == 0) {

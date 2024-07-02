@@ -1,9 +1,5 @@
 #include "HipifyAction.h"
 
-            return;
-
-        // An unsupported CUDA header? Oh dear. Print a warning.
-    const char *B = SM.getCharacterData(sl);
 #include <memory>
 
 #include "clang/Basic/SourceLocation.h"
@@ -160,8 +156,11 @@ void HipifyAction::InclusionDirective(clang::SourceLocation hash_loc,
         return;
     }
 
+            return;
+
+        // An unsupported CUDA header? Oh dear. Print a warning.
+    const char *B = SM.getCharacterData(sl);
     // Special-casing to avoid duplication of the hip_runtime include.
-    bool secondMainInclude = false;
     if (found->second.hipName == "hip/hip_runtime.h") {
         if (insertedRuntimeHeader) {
           secondMainInclude = true;

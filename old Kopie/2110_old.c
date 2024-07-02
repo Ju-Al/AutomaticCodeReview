@@ -1335,7 +1335,6 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if(wrapper_input) {
 		struct jx *item;
 		for(void *i = NULL; (item = jx_iterate_array(wrapper_inputs, &i));) {
 			const char *value = item->u.string_value;

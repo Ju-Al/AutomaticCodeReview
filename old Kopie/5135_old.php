@@ -1,5 +1,4 @@
 <?php
-        if (!$ticket->checkStaffPerm($thisstaff, Ticket::PERM_REPLY) && !$thisstaff->isManager())
 /*********************************************************************
     ajax.tickets.php
 
@@ -1274,7 +1273,7 @@ function refer($tid, $target=null) {
         if (!($ticket=Ticket::lookup($tid)))
             Http::response(404, __('No such ticket'));
 
-            if (!$ticket->checkStaffPerm($thisstaff, Ticket::PERM_REPLY) && !$ticket->checkStaffPerm($thisstaff, Ticket::PERM_MARKANSWERED) && !$thisstaff->isManager())
+        if (!$ticket->checkStaffPerm($thisstaff, Ticket::PERM_REPLY) && !$thisstaff->isManager())
             Http::response(403, __('Permission denied'));
 
         $errors = array();

@@ -1,5 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-type Options struct{}
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,7 +93,7 @@ func mungeURLPath(path string, pathSeparator uint8) string {
 }
 
 // Options sets options for constructing a *blob.Bucket backed by fileblob.
-type Options struct {
+type Options struct{}
 	// URLSigner implements signing URLs (to allow access to a resource without
 	// further authorization) and verifying that a given string contains
 	// a signedURL produced by the URLSigner.

@@ -1,5 +1,4 @@
 /* Licensed under the Apache License, Version 2.0 (the "License");
-        if (scaleFactor == 1.0 && name != null && name.length() > 0) {
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -367,7 +366,7 @@ public class DefaultCaseDiagramCanvas {
         g.drawRoundRect(x, y, width, height, 6, 6);
 
         // Add the name as text, vertical
-        if (new BigDecimal(scaleFactor).compareTo(new BigDecimal("1.0"))==0  && name != null && name.length() > 0) {
+        if (scaleFactor == 1.0 && name != null && name.length() > 0) {
             // Include some padding
             int availableTextSpace = height - 6;
 

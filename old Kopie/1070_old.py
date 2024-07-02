@@ -1,6 +1,5 @@
 import logging
 
-            path='database',
 from backports import csv
 
 from django.conf import settings
@@ -367,8 +366,8 @@ def _create_or_update_translated_resources(
             .filter(project_locale__project=project)
         )
 
+            path='database',
     if resource is None:
-        is_tutorial = project.slug == 'tutorial'
         resource_path = 'playground' if is_tutorial else 'database'
         resource, _ = Resource.objects.get_or_create(
             path=resource_path,

@@ -1,686 +1,443 @@
-# -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        types = np.zeros(n_atoms, dtype='|S5')
-        for line in datalines:
-            idx, resid = np.int64(line[:2])
-            atype = line[2]
-            idx -= 1
-            resids[idx] = resid
-            types[idx] = atype
-                charge = float(line[3])
-                charges[idx] = charge
-# vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
-#
-# MDAnalysis --- http://www.mdanalysis.org
-# Copyright (c) 2006-2016 The MDAnalysis Development Team and contributors
-# (see the file AUTHORS for the full list of names)
-#
-# Released under the GNU Public Licence, v2 or any higher version
-#
-# Please cite your use of MDAnalysis in published work:
-#
-# R. J. Gowers, M. Linke, J. Barnoud, T. J. E. Reddy, M. N. Melo, S. L. Seyler,
-# D. L. Dotson, J. Domanski, S. Buchoux, I. M. Kenney, and O. Beckstein.
-# MDAnalysis: A Python package for the rapid analysis of molecular dynamics
-# simulations. In S. Benthall and S. Rostrup editors, Proceedings of the 15th
-# Python in Science Conference, pages 102-109, Austin, TX, 2016. SciPy.
-#
-# N. Michaud-Agrawal, E. J. Denning, T. B. Woolf, and O. Beckstein.
-# MDAnalysis: A Toolkit for the Analysis of Molecular Dynamics Simulations.
-# J. Comput. Chem. 32 (2011), 2319--2327, doi:10.1002/jcc.21787
-#
+from __future__ import absolute_import
 
-"""
-LAMMPSParser
-============
+from collections import Callable, Iterable
+import warnings
 
-Parses data files for LAMMPS_.
-
-.. _LAMMPS: http://lammps.sandia.gov/
-
-Classes
--------
-
-.. autoclass:: DATAParser
-   :members:
-   :inherited-members:
-
-Deprecated classes
-------------------
-
-.. autoclass:: LAMMPSDataConverter
-   :members:
-
-"""
-from __future__ import absolute_import, print_function
-
-from six.moves import range
-
+import param
 import numpy as np
-import logging
-import string
-import functools
+import pandas as pd
+import xarray as xr
+import datashader as ds
+import datashader.transfer_functions as tf
+import dask.dataframe as dd
 
-from . import guessers
-from ..lib.util import openany, conv_float
-from ..lib.mdamath import triclinic_box
-from .base import TopologyReaderBase, squash_by
-from ..core.topology import Topology
-from ..core.topologyattrs import (
-    Atomtypes,
-    Atomids,
-    Angles,
-    Bonds,
-    Charges,
-    Dihedrals,
-    Impropers,
-    Masses,
-    Resids,
-    Resnums,
-    Segids,
-)
+from datashader.core import bypixel
+from datashader.pandas import pandas_pipeline
+from datashader.dask import dask_pipeline
+from datashape.dispatch import dispatch
+from datashape import discover as dsdiscover
+import datashader.transfer_functions as tf
 
-logger = logging.getLogger("MDAnalysis.topology.LAMMPS")
+from ..core import (ElementOperation, Element, Dimension, NdOverlay,
+                    Overlay, CompositeOverlay, Dataset)
+from ..core.data import PandasInterface, DaskInterface
+from ..core.util import get_param_values, basestring
+from ..element import Image, Path, Curve, Contours, RGB
+from ..streams import RangeXY, PlotSize
 
 
-# Sections will all start with one of these words
-# and run until the next section title
-SECTIONS = set([
-    'Atoms',  # Molecular topology sections
-    'Velocities',
-    'Masses',
-    'Ellipsoids',
-    'Lines',
-    'Triangles',
-    'Bodies',
-    'Bonds',  # Forcefield sections
-    'Angles',
-    'Dihedrals',
-    'Impropers',
-    'Pair',
-    'Pair LJCoeffs',
-    'Bond Coeffs',
-    'Angle Coeffs',
-    'Dihedral Coeffs',
-    'Improper Coeffs',
-    'BondBond Coeffs',  # Class 2 FF sections
-    'BondAngle Coeffs',
-    'MiddleBondTorsion Coeffs',
-    'EndBondTorsion Coeffs',
-    'AngleTorsion Coeffs',
-    'AngleAngleTorsion Coeffs',
-    'BondBond13 Coeffs',
-    'AngleAngle Coeffs',
-])
-# We usually check by splitting around whitespace, so check
-# if any SECTION keywords will trip up on this
-# and add them
-for val in list(SECTIONS):
-    if len(val.split()) > 1:
-        SECTIONS.add(val.split()[0])
-
-
-HEADERS = set([
-    'atoms',
-    'bonds',
-    'angles',
-    'dihedrals',
-    'impropers',
-    'atom types',
-    'bond types',
-    'angle types',
-    'dihedral types',
-    'improper types',
-    'extra bond per atom',
-    'extra angle per atom',
-    'extra dihedral per atom',
-    'extra improper per atom',
-    'extra special per atom',
-    'ellipsoids',
-    'lines',
-    'triangles',
-    'bodies',
-    'xlo xhi',
-    'ylo yhi',
-    'zlo zhi',
-    'xy xz yz',
-])
-
-
-class DATAParser(TopologyReaderBase):
-    """Parse a LAMMPS DATA file for topology and coordinates.
-
-    Note that LAMMPS_ DATA files can be used standalone.
-
-    Both topology and coordinate parsing functionality is kept in this
-    class as the topology and coordinate reader share many common
-    functions
-
-    The parser implements the `LAMMPS DATA file format`_ but only for
-    the LAMMPS `atom_style`_ *full* (numeric ids 7, 10) and
-    *molecular* (6, 9).
-
-    .. _LAMMPS DATA file format: :http://lammps.sandia.gov/doc/2001/data_format.html
-    .. _`atom_style`: http://lammps.sandia.gov/doc/atom_style.html
-
-    .. versionadded:: 0.9.0
+@dispatch(Element)
+def discover(dataset):
     """
-    format = 'DATA'
+    Allows datashader to correctly discover the dtypes of the data
+    in a holoviews Element.
+    """
+    return dsdiscover(PandasInterface.as_dframe(dataset))
 
-    def iterdata(self):
-        with openany(self.filename, 'r') as f:
-            for line in f:
-                line = line.partition('#')[0].strip()
-                if line:
-                    yield line
 
-    def grab_datafile(self):
-        """Split a data file into dict of header and sections
+@bypixel.pipeline.register(Element)
+def dataset_pipeline(dataset, schema, canvas, glyph, summary):
+    """
+    Defines how to apply a datashader pipeline to a holoviews Element,
+    using multidispatch. Returns an Image type with the appropriate
+    bounds and dimensions. Passing the returned Image to datashader
+    transfer functions is not yet supported.
+    """
+    x0, x1 = canvas.x_range
+    y0, y1 = canvas.y_range
+    kdims = [dataset.get_dimension(d) for d in (glyph.x, glyph.y)]
 
-        Returns
-        -------
-        header - dict of header section: value
-        sections - dict of section name: content
+    column = summary.column
+    if column and isinstance(summary, ds.count_cat):
+        name = '%s Count' % summary.column
+    else:
+        name = column
+    vdims = [dataset.get_dimension(column)(name) if column
+             else Dimension('Count')]
+
+    if dataset.interface is PandasInterface:
+        agg = pandas_pipeline(dataset.data, schema, canvas,
+                              glyph, summary)
+    elif dataset.interface is DaskInterface:
+        agg = dask_pipeline(dataset.data, schema, canvas,
+                            glyph, summary)
+
+    agg = agg.rename({'x_axis': kdims[0].name,
+                      'y_axis': kdims[1].name})
+    return agg
+
+
+class aggregate(ElementOperation):
+    """
+    aggregate implements 2D binning for any valid HoloViews Element
+    type using datashader. I.e., this operation turns a HoloViews
+    Element or overlay of Elements into an hv.Image or an overlay of
+    hv.Images by rasterizing it, which provides a fixed-sized
+    representation independent of the original dataset size.
+
+    By default it will simply count the number of values in each bin
+    but other aggregators can be supplied implementing mean, max, min
+    and other reduction operations.
+
+    The bins of the aggregate are defined by the width and height and
+    the x_range and y_range. If x_sampling or y_sampling are supplied
+    the operation will ensure that a bin is no smaller than theminimum
+    sampling distance by reducing the width and height when the zoomed
+    in beyond the minimum sampling distance.
+
+    By default, the PlotSize operator is applied when this operation
+    is used dynamically, which means that the height and width
+    will automatically be set to match the inner dimensions of 
+    the plot in which this is used.
+    """
+
+    aggregator = param.ClassSelector(class_=ds.reductions.Reduction,
+                                     default=ds.count())
+
+    dynamic = param.Boolean(default=True, doc="""
+       Enables dynamic processing by default.""")
+
+    height = param.Integer(default=400, doc="""
+       The height of the aggregated image in pixels.""")
+
+    width = param.Integer(default=400, doc="""
+       The width of the aggregated image in pixels.""")
+
+    x_range  = param.NumericTuple(default=None, length=2, doc="""
+       The x_range as a tuple of min and max x-value. Auto-ranges
+       if set to None.""")
+
+    y_range  = param.NumericTuple(default=None, length=2, doc="""
+       The x_range as a tuple of min and max y-value. Auto-ranges
+       if set to None.""")
+
+    x_sampling = param.Number(default=None, doc="""
+        Specifies the smallest allowed sampling interval along the y-axis.""")
+
+    y_sampling = param.Number(default=None, doc="""
+        Specifies the smallest allowed sampling interval along the y-axis.""")
+
+    streams = param.List(default=[PlotSize, RangeXY], doc="""
+        List of streams that are applied if dynamic=True, allowing
+        for dynamic interaction with the plot.""")
+
+    element_type = param.ClassSelector(class_=(Dataset,), instantiate=False,
+                                        is_instance=False, default=Image,
+                                        doc="""
+        The type of the returned Elements, must be a 2D Dataset type.""")
+
+    @classmethod
+    def get_agg_data(cls, obj, category=None):
         """
-        f = list(self.iterdata())
-
-        starts = [i for i, line in enumerate(f)
-                  if line.split()[0] in SECTIONS]
-        starts += [None]
-
-        header = {}
-        for line in f[:starts[0]]:
-            for token in HEADERS:
-                if line.endswith(token):
-                    header[token] = line.split(token)[0]
-                    continue
-
-        sects = {f[l]:f[l+1:starts[i+1]]
-                 for i, l in enumerate(starts[:-1])}
-
-        return header, sects
-
-    def parse(self):
-        """Parses a LAMMPS_ DATA file.
-
-        Returns
-        -------
-        MDAnalysis Topology object.
+        Reduces any Overlay or NdOverlay of Elements into a single
+        xarray Dataset that can be aggregated.
         """
-        # Can pass atom_style to help parsing
-        atom_style = self.kwargs.get('atom_style', None)
-
-        head, sects = self.grab_datafile()
-
-        try:
-            masses = self._parse_masses(sects['Masses'])
-        except KeyError:
-            masses = None
-
-        try:
-            top = self._parse_atoms(sects['Atoms'], masses)
-        except KeyError:
-            raise ValueError("Data file was missing Atoms section")
-
-        # create mapping of id to index (ie atom id 10 might be the 0th atom)
-        mapping = {}
-        for i, atom_id in enumerate(top.ids.values):
-            mapping[atom_id] = i
-
-        for attr, L, nentries in [
-                (Bonds, 'Bonds', 2),
-                (Angles, 'Angles', 3),
-                (Dihedrals, 'Dihedrals', 4),
-                (Impropers, 'Impropers', 4)
-        ]:
-            try:
-                type, sect = self._parse_bond_section(sects[L], nentries, mapping)
-            except KeyError:
-                pass
+        paths = []
+        kdims = list(obj.kdims)
+        vdims = list(obj.vdims)
+        dims = obj.dimensions(label=True)[:2]
+        if isinstance(obj, Path):
+            glyph = 'line'
+            for p in obj.data:
+                df = pd.DataFrame(p, columns=obj.dimensions('key', True))
+                if isinstance(obj, Contours) and obj.vdims and obj.level:
+                    df[obj.vdims[0].name] = p.level
+                paths.append(df)
+        elif isinstance(obj, CompositeOverlay):
+            element = None
+            for key, el in obj.data.items():
+                x, y, element, glyph = cls.get_agg_data(el)
+                dims = (x, y)
+                df = PandasInterface.as_dframe(element)
+                if isinstance(obj, NdOverlay):
+                    df = df.assign(**dict(zip(obj.dimensions('key', True), key)))
+                paths.append(df)
+            if element is None:
+                dims = None
             else:
-                top.add_TopologyAttr(attr(sect, type))
+                kdims += element.kdims
+                vdims = element.vdims
+        elif isinstance(obj, Element):
+            glyph = 'line' if isinstance(obj, Curve) else 'points'
+            paths.append(PandasInterface.as_dframe(obj))
 
-        return top
-
-    def read_DATA_timestep(self, n_atoms, TS_class, TS_kwargs):
-        """Read a DATA file and try and extract x, v, box.
-
-        - positions
-        - velocities (optional)
-        - box information
-
-        Fills this into the Timestep object and returns it
-
-        .. versionadded:: 0.9.0
-        """
-        header, sects = self.grab_datafile()
-
-        unitcell = self._parse_box(header)
-
-        positions = np.zeros((n_atoms, 3),
-                             dtype=np.float32, order='F')
-        try:
-            positions = self._parse_pos(sects['Atoms'], positions)
-        except KeyError:
-            raise IOError("Position information not found")
-
-        if 'Velocities' in sects:
-            velocities = np.zeros((n_atoms, 3),
-                                  dtype=np.float32, order='F')
-            velocities = self._parse_vel(sects['Velocities'], velocities)
+        if dims is None or len(dims) != 2:
+            return None, None, None, None
         else:
-            velocities = None
+            x, y = dims
 
-        ts = TS_class.from_coordinates(positions,
-                                       velocities=velocities,
-                                       **TS_kwargs)
-        ts._unitcell = unitcell
-
-        return ts
-
-    def _parse_pos(self, datalines, pos):
-        """Strip coordinate info into np array"""
-        # TODO: could maybe store this from topology parsing?
-        ids = np.zeros(len(pos), dtype=np.int32)
-
-        for i, line in enumerate(datalines):
-            line = line.split()
-            n = len(line)
-            ids[i] = line[0]
-
-            if n in (7, 10):
-                pos[i] = line[4:7]
-            elif n in (6, 9):
-                pos[i] = line[3:6]
-    
-        # save to class for vels later
-        self.order = np.argsort(ids)
-        pos = pos[self.order]
-
-        return pos
-
-    def _parse_vel(self, datalines, vel):
-        """Strip velocity info into np array in place"""
-        for i, line in enumerate(datalines):
-            line = line.split()
-            vel[i] = line[1:4]
-
-        vel = vel[self.order]
-
-        return vel
-
-    def _parse_bond_section(self, datalines, nentries, mapping):
-        """Read lines and strip information
-
-        Arguments
-        ---------
-        datalines : list
-          the raw lines from the data file
-        nentries : int
-          number of integers per line
-        mapping : dict
-          converts atom_ids to index within topology
-        """
-        section = []
-        type = []
-        for line in datalines:
-            line = line.split()
-            # map to 0 based int
-            section.append(tuple([mapping[int(x)] for x in line[2:2 + nentries]]))
-            type.append(line[1])
-        return tuple(type), tuple(section)
-
-    def _parse_atoms(self, datalines, massdict=None):
-        """Creates a Topology object
-
-        Adds the following attributes
-         - resid
-         - type
-         - masses (optional)
-         - charge (optional)
-
-        Lammps atoms can have lots of different formats,
-        and even custom formats
-
-        http://lammps.sandia.gov/doc/atom_style.html
-
-        Treated here are
-        - atoms with 7 fields (with charge) "full"
-        - atoms with 6 fields (no charge) "molecular"
-
-        Arguments
-        ---------
-        datalines - the relevent lines from the data file
-        massdict - dictionary relating type to mass
-
-        Returns
-        -------
-        top - Topology object
-        """
-        logger.info("Doing Atoms section")
-
-        n_atoms = len(datalines)
-
-        # Fields per line
-        n = len(datalines[0].split())
-        has_charge = True if n in [7, 10] else False
-
-        # atom ids aren't necessarily sequential
-        atom_ids = np.zeros(n_atoms, dtype=np.int32)
-        types = np.zeros(n_atoms, dtype=object)
-        resids = np.zeros(n_atoms, dtype=np.int32)
-        if has_charge:
-            charges = np.zeros(n_atoms, dtype=np.float32)
-
-        for i, line in enumerate(datalines):
-            line = line.split()
-
-            atom_ids[i] = line[0]
-            resids[i] = line[1]
-            types[i] = line[2]
-            if has_charge:
-                charges[i] = line[3]
-
-        # at this point, we've read the atoms section,
-        # but it's still (potentially) unordered
-
-        # TODO: Maybe we can optimise by checking if we need to sort
-        # ie `if np.any(np.diff(atom_ids) > 1)`  but we want to search
-        # in a generatorish way, np.any() would check everything at once
-        order = np.argsort(atom_ids)
-        atom_ids = atom_ids[order]
-        types = types[order]
-        resids = resids[order]
-        if has_charge:
-            charges = charges[order]
-
-        attrs = []
-        attrs.append(Atomtypes(types))
-        if has_charge:
-            attrs.append(Charges(charges))
-        if massdict is not None:
-            masses = np.zeros(n_atoms, dtype=np.float64)
-            for i, at in enumerate(types):
-                masses[i] = massdict[at]
-            attrs.append(Masses(masses))
+        if len(paths) > 1:
+            if glyph == 'line':
+                path = paths[0][:1]
+                if isinstance(path, dd.DataFrame):
+                    path = path.compute()
+                empty = path.copy()
+                empty.iloc[0, :] = (np.NaN,) * empty.shape[1]
+                paths = [elem for path in paths for elem in (path, empty)][:-1]
+            if all(isinstance(path, dd.DataFrame) for path in paths):
+                df = dd.concat(paths)
+            else:
+                paths = [path.compute() if isinstance(path, dd.DataFrame) else path
+                         for path in paths]
+                df = pd.concat(paths)
         else:
-            # Guess them
-            masses = guessers.guess_masses(types)
-            attrs.append(Masses(masses, guessed=True))
+            df = paths[0]
+        if category and df[category].dtype.name != 'category':
+            df[category] = df[category].astype('category')
 
-        residx, resids = squash_by(resids)[:2]
-        n_residues = len(resids)
+        for d in (x, y):
+            if df[d].dtype.kind == 'M':
+                param.warning('Casting %s dimension data to integer '
+                              'datashader cannot process datetime data ')
+                df[d] = df[d].astype('int64') / 1000000.
 
-        attrs.append(Atomids(atom_ids))
-        attrs.append(Resids(resids))
-        attrs.append(Resnums(resids.copy()))
-        attrs.append(Segids(np.array(['SYSTEM'], dtype=object)))
+        return x, y, Dataset(df, kdims=kdims, vdims=vdims), glyph
 
-        top = Topology(n_atoms, n_residues, 1,
-                       attrs=attrs,
-                       atom_resindex=residx)
 
-        return top
+    def _process(self, element, key=None):
+        agg_fn = self.p.aggregator
+        category = agg_fn.column if isinstance(agg_fn, ds.count_cat) else None
+        x, y, data, glyph = self.get_agg_data(element, category)
 
-    def _parse_masses(self, datalines):
-        """Lammps defines mass on a per atom type basis.
+        if x is None or y is None:
+            x0, x1 = self.p.x_range or (-0.5, 0.5)
+            y0, y1 = self.p.y_range or (-0.5, 0.5)
+            xc = np.linspace(x0, x1, self.p.width)
+            yc = np.linspace(y0, y1, self.p.height)
+            xarray = xr.DataArray(np.full((self.p.height, self.p.width), np.NaN, dtype=np.float32),
+                                  dims=['y', 'x'], coords={'x': xc, 'y': yc})
+            return self.p.element_type(xarray)
 
-        This reads mass for each type and stores in dict
-        """
-        logger.info("Doing Masses section")
+        xstart, xend = self.p.x_range if self.p.x_range else data.range(x)
+        ystart, yend = self.p.y_range if self.p.y_range else data.range(y)
 
-        masses = {}
-        for line in datalines:
-            line = line.split()
-            masses[line[0]] = float(line[1])
+        # Compute highest allowed sampling density
+        width, height = self.p.width, self.p.height
+        if self.p.x_sampling:
+            x_range = xend - xstart
+            width = int(min([(x_range/self.p.x_sampling), width]))
+        if self.p.y_sampling:
+            y_range = yend - ystart
+            height = int(min([(y_range/self.p.y_sampling), height]))
 
-        return masses
+        cvs = ds.Canvas(plot_width=width, plot_height=height,
+                        x_range=(xstart, xend), y_range=(ystart, yend))
 
-    def _parse_box(self, header):
-        x1, x2 = np.float32(header['xlo xhi'].split())
-        x = x2 - x1
-        y1, y2 = np.float32(header['ylo yhi'].split())
-        y = y2 - y1
-        z1, z2 = np.float32(header['zlo zhi'].split())
-        z = z2 - z1
-
-        if 'xy xz yz' in header:
-            # Triclinic
-            unitcell = np.zeros((3, 3), dtype=np.float32)
-
-            xy, xz, yz = np.float32(header['xy xz yz'].split())
-
-            unitcell[0][0] = x
-            unitcell[1][0] = xy
-            unitcell[1][1] = y
-            unitcell[2][0] = xz
-            unitcell[2][1] = yz
-            unitcell[2][2] = z
-
-            unitcell = triclinic_box(*unitcell)
+        column = agg_fn.column
+        if column and isinstance(agg_fn, ds.count_cat):
+            name = '%s Count' % agg_fn.column
         else:
-            # Orthogonal
-            unitcell = np.zeros(6, dtype=np.float32)
-            unitcell[:3] = x, y, z
-            unitcell[3:] = 90., 90., 90.
+            name = column
+        vdims = [element.get_dimension(column)(name) if column
+                 else Dimension('Count')]
+        params = dict(get_param_values(element), kdims=element.dimensions()[:2],
+                      datatype=['xarray'], vdims=vdims)
 
-        return unitcell
-
-
-@functools.total_ordering
-class LAMMPSAtom(object):  # pragma: no cover
-    __slots__ = ("index", "name", "type", "chainid", "charge", "mass", "_positions")
-
-    def __init__(self, index, name, type, chain_id, charge=0, mass=1):
-        self.index = index
-        self.name = repr(type)
-        self.type = type
-        self.chainid = chain_id
-        self.charge = charge
-        self.mass = mass
-
-    def __repr__(self):
-        return "<LAMMPSAtom " + repr(self.index + 1) + ": name " + repr(self.type) + " of chain " + repr(
-            self.chainid) + ">"
-
-    def __lt__(self, other):
-        return self.index < other.index
-
-    def __eq__(self, other):
-        return self.index == other.index
-
-    def __hash__(self):
-        return hash(self.index)
-
-    def __getattr__(self, attr):
-        if attr == 'pos':
-            return self._positions[self.index]
+        agg = getattr(cvs, glyph)(data, x, y, self.p.aggregator)
+        if agg.ndim == 2:
+            return self.p.element_type(agg, **params)
         else:
-            super(LAMMPSAtom, self).__getattribute__(attr)
+            return NdOverlay({c: self.p.element_type(agg.sel(**{column: c}),
+                                                     **params)
+                              for c in agg.coords[column].data},
+                             kdims=[data.get_dimension(column)])
 
-    def __iter__(self):
-        pos = self.pos
-        return iter((self.index + 1, self.chainid, self.type, self.charge, self.mass, pos[0], pos[1], pos[2]))
 
 
-class LAMMPSDataConverter(object):  # pragma: no cover
-    """Class to parse a LAMMPS_ DATA file and convert it to PSF/PDB.
-
-    The DATA file contains both topology and coordinate information.
-
-    The :class:`LAMMPSDataConverter` class can extract topology information and
-    coordinates from a LAMMPS_ data file. For instance, in order to
-    produce a PSF file of the topology and a PDB file of the coordinates
-    from a data file "lammps.data" you can use::
-
-      from MDAnalysis.topology.LAMMPSParser import LAMPPSData
-      d = LAMMPSDataConverter("lammps.data")
-      d.writePSF("lammps.psf")
-      d.writePDB("lammps.pdb")
-
-    You can then read a trajectory (e.g. a LAMMPS DCD, see
-    :class:`MDAnalysis.coordinates.LAMMPS.DCDReader`) with ::
-
-      u = MDAnalysis.Unverse("lammps.psf", "lammps.dcd", format="LAMMPS")
-
-    .. deprecated:: 0.9.0
-
-    .. versionchanged:: 0.9.0
-       Renamed from ``LAMMPSData`` to ``LAMMPSDataConverter``.
+class shade(ElementOperation):
     """
-    header_keywords = [
-        "atoms", "bonds", "angles", "dihedrals", "impropers",
-        "atom types", "bond types", "angle types",
-        "dihedral types", "improper types",
-        "xlo xhi", "ylo yhi", "zlo zhi"]
+    shade applies a normalization function followed by colormapping to
+    an Image or NdOverlay of Images, returning an RGB Element.
+    The data must be in the form of a 2D or 3D DataArray, but NdOverlays
+    of 2D Images will be automatically converted to a 3D array.
 
-    connections = dict([
-        ["Bonds", ("bonds", 3)],
-        ["Angles", ("angles", 3)],
-        ["Dihedrals", ("dihedrals", 4)],
-        ["Impropers", ("impropers", 2)]])
+    In the 2D case data is normalized and colormapped, while a 3D
+    array representing categorical aggregates will be supplied a color
+    key for each category. The colormap (cmap) may be supplied as an
+    Iterable or a Callable.
+    """
 
-    coeff = dict([
-        ["Masses", ("atom types", 1)],
-        ["Velocities", ("atoms", 3)],
-        ["Pair Coeffs", ("atom types", 4)],
-        ["Bond Coeffs", ("bond types", 2)],
-        ["Angle Coeffs", ("angle types", 4)],
-        ["Dihedral Coeffs", ("dihedral types", 3)],
-        ["Improper Coeffs", ("improper types", 2)]])
+    cmap = param.ClassSelector(class_=(Iterable, Callable, dict), doc="""
+        Iterable or callable which returns colors as hex colors.
+        Callable type must allow mapping colors between 0 and 1.""")
 
-    def __init__(self, filename=None):
-        self.names = {}
-        self.headers = {}
-        self.sections = {}
-        if filename is None:
-            self.title = "LAMMPS data file"
+    normalization = param.ClassSelector(default='eq_hist',
+                                        class_=(basestring, Callable),
+                                        doc="""
+        The normalization operation applied before colormapping.
+        Valid options include 'linear', 'log', 'eq_hist', 'cbrt',
+        and any valid transfer function that accepts data, mask, nbins
+        arguments.""")
+
+    link_inputs = param.Boolean(default=True, doc="""
+         By default, the link_inputs parameter is set to True so that
+         when applying shade, backends that support linked streams
+         update RangeXY streams on the inputs of the shade operation.""")
+
+    @classmethod
+    def concatenate(cls, overlay):
+        """
+        Concatenates an NdOverlay of Image types into a single 3D
+        xarray Dataset.
+        """
+        if not isinstance(overlay, NdOverlay):
+            raise ValueError('Only NdOverlays can be concatenated')
+        xarr = xr.concat([v.data.T for v in overlay.values()],
+                         dim=overlay.kdims[0].name)
+        params = dict(get_param_values(overlay.last),
+                      vdims=overlay.last.vdims,
+                      kdims=overlay.kdims+overlay.last.kdims)
+        return Dataset(xarr.T, datatype=['xarray'], **params)
+
+
+    @classmethod
+    def uint32_to_uint8(cls, img):
+        """
+        Cast uint32 RGB image to 4 uint8 channels.
+        """
+        return np.flipud(img.view(dtype=np.uint8).reshape(img.shape + (4,)))
+
+
+    @classmethod
+    def rgb2hex(cls, rgb):
+        """
+        Convert RGB(A) tuple to hex.
+        """
+        if len(rgb) > 3:
+            rgb = rgb[:-1]
+        return "#{0:02x}{1:02x}{2:02x}".format(*(int(v*255) for v in rgb))
+
+
+    def _process(self, element, key=None):
+        if isinstance(element, NdOverlay):
+            bounds = element.last.bounds
+            element = self.concatenate(element)
         else:
-            # Open and check validity
-            with openany(filename, 'r') as file:
-                file_iter = file.xreadlines()
-                self.title = file_iter.next()
-                # Parse headers
-                headers = self.headers
-                for l in file_iter:
-                    line = l.strip()
-                    if len(line) == 0:
-                        continue
-                    found = False
-                    for keyword in self.header_keywords:
-                        if line.find(keyword) >= 0:
-                            found = True
-                            values = line.split()
-                            if keyword in ("xlo xhi", "ylo yhi", "zlo zhi"):
-                                headers[keyword] = (float(values[0]), float(values[1]))
-                            else:
-                                headers[keyword] = int(values[0])
-                    if found is False:
-                        break
+            bounds = element.bounds
 
-            # Parse sections
-            # XXX This is a crappy way to do it
-            with openany(filename, 'r') as file:
-                file_iter = file.xreadlines()
-                # Create coordinate array
-                positions = np.zeros((headers['atoms'], 3), np.float64)
-                sections = self.sections
-                for l in file_iter:
-                    line = l.strip()
-                    if len(line) == 0:
-                        continue
-                    if line in self.coeff:
-                        h, numcoeff = self.coeff[line]
-                        # skip line
-                        file_iter.next()
-                        data = []
-                        for i in range(headers[h]):
-                            fields = file_iter.next().strip().split()
-                            data.append(tuple([conv_float(el) for el in fields[1:]]))
-                        sections[line] = data
-                    elif line in self.connections:
-                        h, numfields = self.connections[line]
-                        # skip line
-                        file_iter.next()
-                        data = []
-                        for i in range(headers[h]):
-                            fields = file_iter.next().strip().split()
-                            data.append(tuple(np.int64(fields[1:])))
-                        sections[line] = data
-                    elif line == "Atoms":
-                        file_iter.next()
-                        data = []
-                        for i in range(headers["atoms"]):
-                            fields = file_iter.next().strip().split()
-                            index = int(fields[0]) - 1
-                            a = LAMMPSAtom(index=index, name=fields[2], type=int(fields[2]), chain_id=int(fields[1]),
-                                           charge=float(fields[3]))
-                            a._positions = positions
-                            data.append(a)
-                            positions[index] = np.array([float(fields[4]), float(fields[5]), float(fields[6])])
-                        sections[line] = data
-                    elif line == "Masses":
-                        file_iter.next()
-                        data = []
-                        for i in range(headers["atom type"]):
-                            fields = file_iter.next().strip().split()
-                            print("help")
-                self.positions = positions
+        array = element.data[element.vdims[0].name]
+        kdims = element.kdims
 
-    def writePSF(self, filename, names=None):
-        """Export topology information to a simple PSF file."""
-        # Naveen formatted -- works with MDAnalysis verison 52
-        #psf_atom_format = "   %5d %-4s %-4d %-4s %-4s %-4s %10.6f      %7.4f            %1d\n"
-        # Liz formatted -- works with MDAnalysis verison 59
-        #psf_atom_format = "%8d %4.4s %-4.4s %-4.4s %-4.4s %-4.4s %16.8e %1s %-7.4f %7.7s %s\n"
-        # Oli formatted -- works with MDAnalysis verison 81
-        psf_atom_format = "%8d %4s %-4s %4s %-4s% 4s %-14.6f%-14.6f%8s\n"
-        with openany(filename, 'w') as file:
-            file.write("PSF\n\n")
-            file.write(string.rjust('0', 8) + ' !NTITLE
+        # Compute shading options depending on whether
+        # it is a categorical or regular aggregate
+        shade_opts = dict(how=self.p.normalization)
+        if element.ndims > 2:
+            kdims = element.kdims[1:]
+            categories = array.shape[-1]
+            if not self.p.cmap:
+                pass
+            elif isinstance(self.p.cmap, dict):
+                shade_opts['color_key'] = self.p.cmap
+            elif isinstance(self.p.cmap, Iterable):
+                shade_opts['color_key'] = [c for i, c in
+                                           zip(range(categories), self.p.cmap)]
+            else:
+                colors = [self.p.cmap(s) for s in np.linspace(0, 1, categories)]
+                shade_opts['color_key'] = map(self.rgb2hex, colors)
+        elif not self.p.cmap:
+            pass
+        elif isinstance(self.p.cmap, Callable):
+            colors = [self.p.cmap(s) for s in np.linspace(0, 1, 256)]
+            shade_opts['cmap'] = map(self.rgb2hex, colors)
+        else:
+            shade_opts['cmap'] = self.p.cmap
 
-')
-            file.write(string.rjust(str(len(self.sections["Atoms"])), 8) + ' !NATOM
-')
-            #print self.sections["Masses"]
-            for i, atom in enumerate(self.sections["Atoms"]):
-                if names is not None:
-                    resname, atomname = names[i]
-                else:
-                    resname, atomname = 'TEMP', 'XXXX'
-                for j, liz in enumerate(self.sections["Masses"]):
-                    liz = liz[0]
-                    #print j+1, atom.type, liz
-                    if j + 1 == atom.type:
-                        line = [
-                            i + 1, 'TEMP',
-                            str(atom.chainid), resname, atomname, str(atom.type + 1), atom.charge,
-                            float(liz), 0.]
-                    else:
-                        continue
-                #print line
-                file.write(psf_atom_format % tuple(line))
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
+            if np.isnan(array.data).all():
+                arr = np.zeros(array.data.shape, dtype=np.uint32)
+                img = array.copy()
+                img.data = arr
+            else:
+                img = tf.shade(array, **shade_opts)
+        params = dict(get_param_values(element), kdims=kdims,
+                      bounds=bounds, vdims=RGB.vdims[:])
+        return RGB(self.uint32_to_uint8(img.data), **params)
 
-            file.write("\n")
-            num_bonds = len(self.sections["Bonds"])
-            bond_list = self.sections["Bonds"]
-            file.write(string.rjust(str(num_bonds), 8) + ' !NBOND
-')
-            for index in range(0, num_bonds, 4):
-                try:
-                    bonds = bond_list[index:index + 4]
-                except IndexError:
-                    bonds = bond_list[index:-1]
-                bond_line = [string.rjust(str(bond[1]), 8) + string.rjust(str(bond[2]), 8) for bond in bonds]
-                file.write(''.join(bond_line) + '
-')
 
-    def writePDB(self, filename):
-        """Export coordinates to a simple PDB file."""
-        atom_format = "%6s%.5s %4s %4s %.4s    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s  \n"
-        p = self.positions
-        with openany(filename, 'w') as file:
-            for i, atom in enumerate(self.sections["Atoms"]):
-                line = [
-                    "ATOM  ", str(i + 1), 'XXXX', 'TEMP', str(atom.type + 1), p[i, 0], p[i, 1], p[i, 2], 0.0, 0.0,
-                    str(atom.type)]
-                file.write(atom_format % tuple(line))
+
+class datashade(aggregate, shade):
+    """
+    Applies the aggregate and shade operations, aggregating all
+    elements in the supplied object and then applying normalization
+    and colormapping the aggregated data returning RGB elements.
+
+    See aggregate and shade operations for more details.
+    """
+
+    def _process(self, element, key=None):
+        agg = aggregate._process(self, element, key)
+        shaded = shade._process(self, agg, key)
+        return shaded
+
+
+
+class dynspread(ElementOperation):
+    """
+    Spreading expands each pixel in an Image based Element a certain
+    number of pixels on all sides according to a given shape, merging
+    pixels using a specified compositing operator. This can be useful
+    to make sparse plots more visible. Dynamic spreading determines
+    how many pixels to spread based on a density heuristic.
+
+    See the datashader documentation for more detail:
+
+    http://datashader.readthedocs.io/en/latest/api.html#datashader.transfer_functions.dynspread
+    """
+
+    how = param.ObjectSelector(default='source',
+                               objects=['source', 'over',
+                                        'saturate', 'add'], doc="""
+        The name of the compositing operator to use when combining
+        pixels.""")
+
+    max_px = param.Integer(default=3, doc="""
+        Maximum number of pixels to spread on all sides.""")
+
+    shape = param.ObjectSelector(default='circle', objects=['circle', 'square'],
+                                 doc="""
+        The shape to spread by. Options are 'circle' [default] or 'square'.""")
+
+    threshold = param.Number(default=0.5, bounds=(0,1), doc="""
+        When spreading, determines how far to spread.
+        Spreading starts at 1 pixel, and stops when the fraction
+        of adjacent non-empty pixels reaches this threshold.
+        Higher values give more spreading, up to the max_px
+        allowed.""")
+
+    link_inputs = param.Boolean(default=True, doc="""
+         By default, the link_inputs parameter is set to True so that
+         when applying dynspread, backends that support linked streams
+         update RangeXY streams on the inputs of the dynspread operation.""")
+
+    @classmethod
+    def uint8_to_uint32(cls, img):
+        shape = img.shape
+        flat_shape = np.multiply.reduce(shape[:2])
+        rgb = img.reshape((flat_shape, 4)).view('uint32').reshape(shape[:2])
+        return rgb
+
+
+    def _apply_dynspread(self, array):
+        img = tf.Image(array)
+        return tf.dynspread(img, max_px=self.p.max_px,
+                            threshold=self.p.threshold,
+                            how=self.p.how, shape=self.p.shape).data
+
+
+    def _process(self, element, key=None):
+        if not isinstance(element, RGB):
+            raise ValueError('dynspread can only be applied to RGB Elements.')
+        rgb = element.rgb
+        new_data = {kd.name: rgb.dimension_values(kd, expanded=False)
+                    for kd in rgb.kdims}
+        rgbarray = np.dstack([element.dimension_values(vd, flat=False)
+                              for vd in element.vdims])
+        data = self.uint8_to_uint32(rgbarray)
+        array = self._apply_dynspread(data)
+        img = datashade.uint32_to_uint8(array)
+        for i, vd in enumerate(element.vdims):
+            if i < img.shape[-1]:
+                new_data[vd.name] = img[..., i]
+        return element.clone(new_data)
+

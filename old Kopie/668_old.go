@@ -184,7 +184,6 @@ type PeerEventDetails struct {
 	HostName     string
 	Incoming     bool
 	InstanceName string
-	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`

@@ -1,15 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-def _get_timestamp(global_configs, statuses=('SUCCESS', 'PARTIAL_SUCCESS')):
-        global_configs (dict): Global configurations.
-        statuses (tuple): Snapshot statues.
-    latest_timestamp = None
-    try:
-        current_dao = dao.Dao(global_configs)
-        latest_timestamp = current_dao.get_latest_snapshot_timestamp(statuses)
-    except db_errors.MySQLError as err:
-        LOGGER.error('Error getting latest snapshot timestamp: %s', err)
-
-    return latest_timestamp
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -87,7 +76,17 @@ def find_pipelines(pipeline_name):
         LOGGER.error('Can\'t import pipeline %s: %s', pipeline_name, e.message)
 # pylint: enable=inconsistent-return-statements
 
-def _get_latest_inventory_index_id(service_config):
+        global_configs (dict): Global configurations.
+        statuses (tuple): Snapshot statues.
+    latest_timestamp = None
+    try:
+        current_dao = dao.Dao(global_configs)
+        latest_timestamp = current_dao.get_latest_snapshot_timestamp(statuses)
+    except db_errors.MySQLError as err:
+        LOGGER.error('Error getting latest snapshot timestamp: %s', err)
+
+    return latest_timestamp
+def _get_timestamp(global_configs, statuses=('SUCCESS', 'PARTIAL_SUCCESS')):
     """Get latest snapshot timestamp.
 
     Args:

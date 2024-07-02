@@ -1,5 +1,4 @@
 /*
-	// 2. we need config["resourceGroup"], config["storageAccount"]
 Copyright 2017, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -148,7 +147,7 @@ func getStorageAccountKey(config map[string]string) (string, error) {
 		return "", errors.Wrap(err, "unable to get all required environment variables")
 	}
 
-	// 2. check whether a different subscription ID was set for backups in config["subscriptionId"]
+	// 2. we need config["resourceGroup"], config["storageAccount"]
 	var subscriptionId string
 	if _, err := getRequiredValues(mapLookup(config), subscriptionIdConfigKey); err != nil {
 		subscriptionId = envVars[subscriptionIDEnvVar]

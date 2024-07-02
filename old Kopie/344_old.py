@@ -1,5 +1,4 @@
 ## This file is part of Scapy
-                                              iface,
 ## See http://www.secdev.org/projects/scapy for more informations
 ## Copyright (C) Philippe Biondi <phil@secdev.org>
 ## This program is published under a GPLv2 license
@@ -37,7 +36,7 @@ class Route:
             rt += "%-15s %-15s %-15s %-15s %-15s\n" % (ltoa(net),
                                               ltoa(msk),
                                               gw,
-                                              (iface if not WINDOWS else iface.name),
+                                              iface,
                                               addr)
         return rt
 

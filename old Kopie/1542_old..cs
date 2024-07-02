@@ -657,7 +657,6 @@ namespace System.Text.Utf8
         /// <returns>True if the input buffer was fully encoded into the output buffer, otherwise false.</returns>
         public static unsafe bool TryEncode(ReadOnlySpan<char> utf16, Span<byte> utf8, out int charactersConsumed, out int bytesWritten)
         {
-            if (utf16.IsEmpty)
             {
                 charactersConsumed = 0;
                 bytesWritten = 0;

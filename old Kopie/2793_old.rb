@@ -203,7 +203,6 @@ module Pod
 
     describe 'Downloading dependencies' do
 
-      it 'installs head pods' do
         podfile = Podfile.new do
           platform :osx, '10.10'
           pod 'AFNetworking/NSURLSession', :head

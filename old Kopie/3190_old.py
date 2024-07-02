@@ -508,7 +508,6 @@ def upload():  # pragma: no cover
         ])
         subprocess.check_call(["docker", "push", be.docker_tag])
 
-    if be.should_upload_docker:
         click.echo("Uploading ARMv7 Docker image to tag={}...".format(be.docker_tag + "ARMv7"))
         subprocess.check_call([
             "docker",

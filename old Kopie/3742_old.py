@@ -298,8 +298,6 @@ class KeyInfo:
                 return key_string.upper()
             elif self.modifiers == Qt.NoModifier:
                 assert not is_special(self.key, self.modifiers)
-                return key_string.lower()
-            elif self.modifiers == Qt.KeypadModifier:
                 assert not is_special(self.key, self.modifiers)
                 return key_string.lower()
             else:

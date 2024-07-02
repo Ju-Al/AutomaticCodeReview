@@ -1,5 +1,4 @@
 package com.github.javaparser.printer.lexicalpreservation;
-        cu.getClassByName("A").get().getFieldByName("a").get().setModifiers(EnumSet.of(Modifier.STATIC));
 
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -37,7 +36,7 @@ public class TransformationsTest extends  AbstractLexicalPreservingTest {
     @Test
     public void example1() throws IOException {
         considerExample("Example1_original");
-        cu.getClassByName("A").get().getFieldByName("a").get().addModifier(STATIC);
+        cu.getClassByName("A").get().getFieldByName("a").get().setModifiers(EnumSet.of(Modifier.STATIC));
         assertTransformed("Example1", cu);
     }
 

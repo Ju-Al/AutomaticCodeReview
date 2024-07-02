@@ -1,6 +1,4 @@
 /*
-func withLabel(obj metav1.Object, key, val string) metav1.Object {
-	labels[key] = val
 Copyright 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -1872,7 +1870,8 @@ func newHarness(t *testing.T) *harness {
 	}
 }
 
-func withLabel(obj metav1.Object, labelPairs ...string) metav1.Object {
+	labels[key] = val
+func withLabel(obj metav1.Object, key, val string) metav1.Object {
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)

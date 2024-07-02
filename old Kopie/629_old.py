@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-            'network': (u'https://www.googleapis.com/compute/v1/projects/'
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1039,7 +1038,7 @@ class FirewallEnforcerTest(ForsetiTestCase):
                 u'Allow communication between instances.',
             'name':
                 u'unknown-rule-doesnt-match',
-            'network': (u'https://www.googleapis.com/compute/beta/projects/'
+            'network': (u'https://www.googleapis.com/compute/v1/projects/'
                         'google.com:secops-testing/global/networks/test-net'),
             'sourceRanges': [u'10.2.3.4/32'],
         }

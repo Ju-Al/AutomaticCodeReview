@@ -1963,7 +1963,6 @@ void model::update_weights() {
   // after a weights gradient has been computed. Thus, iterating in
   // reverse order will use gradients that have already finished their
   // allreduce, giving more time for more recent allreduces to finish.
-  int counter = 0;
   for (auto rit = m_weights.rbegin(); rit != m_weights.rend(); ++rit) {
     auto& w = **rit;
     auto&& opt = w.get_optimizer();

@@ -1,36 +1,5 @@
 #include "C3DFileAdapter.h"
 
-        force_table.
-            updTableMetaData().
-            setValueForKey("CalibrationMatrices", std::move(fpCalMatrices));
-
-        force_table.
-            updTableMetaData().
-            setValueForKey("Corners",             std::move(fpCorners));
-
-        force_table.
-            updTableMetaData().
-            setValueForKey("Origins",             std::move(fpOrigins));
-
-        force_table.
-            updTableMetaData().
-            setValueForKey("Types",               std::move(fpTypes));
-
-        force_table.
-            updTableMetaData().
-            setValueForKey("DataRate", 
-                           std::to_string(acquisition->GetAnalogFrequency()));
-        ValueArray<std::string> labels{};
-            labels.upd().push_back(SimTK::Value<std::string>("f" + fp_str));
-            labels.upd().push_back(SimTK::Value<std::string>("m" + fp_str));
-            labels.upd().push_back(SimTK::Value<std::string>("p" + fp_str));
-        TimeSeriesTableVec3::DependentsMetaData force_dep_metadata{};
-        force_dep_metadata.setValueArrayForKey("labels", labels);
-        force_dep_metadata.setValueArrayForKey("units", units);
-        force_table.setDependentsMetaData(force_dep_metadata);
-        for(int f = 0;
-            f < fp_force_pts->GetFrontItem()->GetFrameNumber();
-            ++f) {
 #include "btkAcquisitionFileReader.h"
 #include "btkAcquisition.h"
 #include "btkForcePlatformsExtractor.h"
@@ -219,8 +188,38 @@ C3DFileAdapter::extendRead(const std::string& fileName) const {
     }
 
     if(fp_force_pts->GetItemNumber() != 0) {
+        force_table.
+            updTableMetaData().
+            setValueForKey("CalibrationMatrices", std::move(fpCalMatrices));
 
-        std::vector<std::string> labels{};
+        force_table.
+            updTableMetaData().
+            setValueForKey("Corners",             std::move(fpCorners));
+
+        force_table.
+            updTableMetaData().
+            setValueForKey("Origins",             std::move(fpOrigins));
+
+        force_table.
+            updTableMetaData().
+            setValueForKey("Types",               std::move(fpTypes));
+
+        force_table.
+            updTableMetaData().
+            setValueForKey("DataRate", 
+                           std::to_string(acquisition->GetAnalogFrequency()));
+
+            labels.upd().push_back(SimTK::Value<std::string>("f" + fp_str));
+            labels.upd().push_back(SimTK::Value<std::string>("m" + fp_str));
+            labels.upd().push_back(SimTK::Value<std::string>("p" + fp_str));
+        TimeSeriesTableVec3::DependentsMetaData force_dep_metadata{};
+        force_dep_metadata.setValueArrayForKey("labels", labels);
+        force_dep_metadata.setValueArrayForKey("units", units);
+        force_table.setDependentsMetaData(force_dep_metadata);
+        for(int f = 0;
+            f < fp_force_pts->GetFrontItem()->GetFrameNumber();
+            ++f) {
+        ValueArray<std::string> labels{};
         ValueArray<std::string> units{};
         for(int fp = 1; fp <= fp_force_pts->GetItemNumber(); ++fp) {
             auto fp_str = std::to_string(fp);

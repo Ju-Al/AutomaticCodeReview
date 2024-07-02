@@ -1,6 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-    logging.info("Cleaning out compiled protos.")
-            logging.info('Skipping grpc service directory: %s', root)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +42,8 @@ def clean(path):
     """
     # Start running from one directory above the directory which is found by
     # this scripts's location as __file__.
-    LOGGER.info("Cleaning out compiled protos.")
+            logging.info('Skipping grpc service directory: %s', root)
+    logging.info("Cleaning out compiled protos.")
     cwd = os.path.dirname(path)
 
     # Find all the .proto files.

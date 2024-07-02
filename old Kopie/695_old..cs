@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-
 namespace Mirror.Examples.Additive
 {
     [RequireComponent(typeof(CharacterController))]

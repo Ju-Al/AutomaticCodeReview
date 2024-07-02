@@ -1197,7 +1197,6 @@ describe 'apache::vhost define' do
       it { is_expected.to contain 'ShibCompatValidUser On' }
     end
   end
-
   describe 'auth_oidc' do
     pp = <<-MANIFEST
         class { 'apache': }

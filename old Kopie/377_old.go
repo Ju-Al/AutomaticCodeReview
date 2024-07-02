@@ -5,7 +5,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"github.com/sirupsen/logrus"
 	"testing"
 
 	testlog "github.com/sirupsen/logrus/hooks/test"

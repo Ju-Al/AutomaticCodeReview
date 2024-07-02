@@ -1,6 +1,4 @@
 # Copyright (c) Microsoft Corporation. All rights reserved. # pylint: disable=too-many-lines
-            cmds[0] = get_python_cmd()
-        self.assertTrue(args[0].startswith("python"))
 # Licensed under the Apache License.
 
 from __future__ import print_function
@@ -1088,7 +1086,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
         cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
         if cmds[0].lower() == "python":
-            cmds[0] = get_complete_python_cmd()
+        self.assertTrue(args[0].startswith("python"))
+            cmds[0] = get_python_cmd()
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)

@@ -1,8 +1,4 @@
 /*
-    List<String> manifestLists = getManifestListPaths(table.snapshots());
-  protected Dataset<Row> buildOtherMetadataFileDF(TableOperations ops) {
-    List<String> otherMetadataFiles = getOtherMetadataFilePaths(ops);
-    return spark.createDataset(otherMetadataFiles, Encoders.STRING()).toDF("file_path");
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -137,7 +133,10 @@ abstract class BaseSparkAction<ThisT, R> implements Action<ThisT, R> {
   }
 
   protected Dataset<Row> buildManifestListDF(Table table) {
-    List<String> manifestLists = ReachableFileUtil.manifestListLocations(table);
+  protected Dataset<Row> buildOtherMetadataFileDF(TableOperations ops) {
+    List<String> otherMetadataFiles = getOtherMetadataFilePaths(ops);
+    return spark.createDataset(otherMetadataFiles, Encoders.STRING()).toDF("file_path");
+    List<String> manifestLists = getManifestListPaths(table.snapshots());
     return spark.createDataset(manifestLists, Encoders.STRING()).toDF("file_path");
   }
 

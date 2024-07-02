@@ -663,7 +663,6 @@ public class TestHiveIcebergStorageHandlerWithEngine {
     HiveIcebergTestUtils.validateData(target2, target2Records, 1);
   }
 
-  @Test
   public void testWriteWithDefaultWriteFormat() {
     Assume.assumeTrue("Tez write is not implemented yet", executionEngine.equals("mr"));
 

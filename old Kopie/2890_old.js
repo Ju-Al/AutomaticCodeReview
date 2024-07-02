@@ -95,7 +95,6 @@ exports.init = function (cli) {
             var failedOperations = groupUtils.getFailedDeploymentOperations(options.subscription, resourceGroup, deployment.name, _);
 
             failedOperations.forEach(function (operation) {
-              //handle special case for web, where they send their own error message object
               if (operation.properties.statusMessage.Message) {
                 log.error(operation.properties.statusMessage.Message);
               }

@@ -1,5 +1,4 @@
 // Copyright 2020 Dolthub, Inc.
-	"github.com/dolthub/dolt/go/store/hash"
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	gsql "github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"

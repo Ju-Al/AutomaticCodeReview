@@ -324,9 +324,6 @@ func (s *TestStatement) Copy() Node {
 	ns.Assignment = s.Assignment.Copy().(*NativeVariableAssignment)
 
 	return ns
-}
-
-type TestCaseStatement struct {
 	Loc
 
 	ID    *Identifier

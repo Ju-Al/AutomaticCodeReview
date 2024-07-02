@@ -1,6 +1,5 @@
 /* $Id$ */
 
-	uint subtype = user->roadtypes;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -871,6 +870,7 @@ static void NPFFollowTrack(AyStar *aystar, OpenListNode *current)
 	AyStarUserData *user = (AyStarUserData *)aystar->user_data;
 	/* We leave src_tile on track src_trackdir in direction src_exitdir */
 	Trackdir src_trackdir = current->path.node.direction;
+	uint subtype = user->roadtypes;
 	TileIndex src_tile = current->path.node.tile;
 	DiagDirection src_exitdir = TrackdirToExitdir(src_trackdir);
 

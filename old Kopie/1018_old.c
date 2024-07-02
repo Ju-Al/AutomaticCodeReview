@@ -1,10 +1,4 @@
 #define _XOPEN_SOURCE 700
-		if (view && !surface && cursor->pointer_view) {
-			seat_view_deco_button(cursor->pointer_view,
-					sx, sy, button, state);
-		if (state == WLR_BUTTON_RELEASED &&
-				cursor->mode != ROOTS_CURSOR_PASSTHROUGH) {
-			cursor->mode = ROOTS_CURSOR_PASSTHROUGH;
 #include <math.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_xcursor_manager.h>
@@ -287,9 +281,13 @@ static void roots_cursor_press_button(struct roots_cursor *cursor,
 			break;
 		case BTN_MIDDLE:
 			roots_seat_begin_rotate(seat, view);
+		if (view && !surface && cursor->pointer_view) {
+			seat_view_deco_button(cursor->pointer_view,
+					sx, sy, button, state);
+		if (state == WLR_BUTTON_RELEASED &&
+				cursor->mode != ROOTS_CURSOR_PASSTHROUGH) {
+			cursor->mode = ROOTS_CURSOR_PASSTHROUGH;
 			break;
-		}
-
 		if (!is_touch) {
 			wlr_seat_pointer_notify_button(seat->seat, time, button, state);
 		}

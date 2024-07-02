@@ -1,227 +1,425 @@
-////////////////////////////////////////////////////////////////////////////
-//
-// Copyright 2016 Realm Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-////////////////////////////////////////////////////////////////////////////
-
 'use strict';
 
-const AuthError = require('./errors').AuthError;
+var Address = require('./address');
+var BN = require('./crypto/bn');
+var Point = require('./crypto/point');
+var Hash = require('./crypto/hash');
+var JSUtil = require('./util/js');
+var Network = require('./networks');
+var _ = require('lodash');
+var $ = require('./util/preconditions');
 
-function node_require(module) {
-    return require(module);
-}
+/**
+ * Instantiate a PublicKey from a {@link PrivateKey}, {@link Point}, `string`, or `Buffer`.
+ *
+ * There are two internal properties, `network` and `compressed`, that deal with importing
+ * a PublicKey from a PrivateKey in WIF format. More details described on {@link PrivateKey}
+ *
+ * @example
+ * ```javascript
+ * // instantiate from a private key
+ * var key = PublicKey(privateKey, true);
+ *
+ * // export to as a DER hex encoded string
+ * var exported = key.toString();
+ *
+ * // import the public key
+ * var imported = PublicKey.fromString(exported);
+ * ```
+ *
+ * @param {String} data - The encoded data in various formats
+ * @param {Object} extra - additional options
+ * @param {Network=} extra.network - Which network should the address for this public key be for
+ * @param {String=} extra.compressed - If the public key is compressed
+ * @returns {PublicKey} A new valid instance of an PublicKey
+ * @constructor
+ */
+var PublicKey = function PublicKey(data, extra) {
 
-function typeOf(obj) {
-    return ({}).toString.call(obj).match(/\s(\w+)/)[1].toLowerCase();
-}
+  if (!(this instanceof PublicKey)) {
+    return new PublicKey(data, extra);
+  }
 
-function checkTypes(args, types) {
-    args = [].slice.call(args);
-    for (var i = 0; i < types.length; ++i) {
-        if (typeOf(args[i]) !== types[i]) {
-            throw new TypeError('param ' + i + ' must be of type ' + types[i]);
-        }
-    }
-}
+  $.checkArgument(data, new TypeError('First argument is required, please include public key data.'));
 
-const performFetch = typeof fetch === 'undefined' ? node_require('node-fetch') : fetch;
+  if (data instanceof PublicKey) {
+    // Return copy, but as it's an immutable object, return same argument
+    return data;
+  }
+  extra = extra || {};
 
-const url_parse = require('url-parse');
+  var info = this._classifyArgs(data, extra);
 
-const postHeaders =  {
-    'content-type': 'application/json;charset=utf-8',
-    'accept': 'application/json'
+  // validation
+  info.point.validate();
+
+  JSUtil.defineImmutable(this, {
+    point: info.point,
+    compressed: info.compressed,
+    network: info.network || Network.defaultNetwork
+  });
+
+  return this;
 };
 
-function auth_url(server) {
-    if (server.charAt(server.length-1) != '/') {
-        return server + '/auth';
-    }
-    return server + 'auth';
-}
+/**
+ * Internal function to differentiate between arguments passed to the constructor
+ * @param {*} data
+ * @param {Object} extra
+ */
+PublicKey.prototype._classifyArgs = function(data, extra) {
+  /* jshint maxcomplexity: 10 */
+  var info = {
+    compressed: _.isUndefined(extra.compressed) || extra.compressed,
+    network: _.isUndefined(extra.network) ? undefined : Network.get(extra.network)
+  };
 
-function scheduleAccessTokenRefresh(user, localRealmPath, realmUrl, expirationDate) {
-    const refreshBuffer = 10 * 1000;
-    const timeout = expirationDate - Date.now() - refreshBuffer;
-    setTimeout(() => refreshAccessToken(user, localRealmPath, realmUrl), timeout);
-}
-
-function refreshAccessToken(user, localRealmPath, realmUrl) {
-    let parsedRealmUrl = url_parse(realmUrl);
-    const url = auth_url(user.server);
-    const options = {
-        method: 'POST',
-        body: JSON.stringify({
-            data: user.token,
-            path: parsedRealmUrl.pathname,
-            provider: 'realm',
-            app_id: ''
-        }),
-        headers: postHeaders
-    };
-    performFetch(url, options)
-        // in case something lower in the HTTP stack breaks, try again in 10 seconds
-        .catch(() => setTimeout(() => refreshAccessToken(user, localRealmPath, realmUrl), 10 * 1000))
-        .then((response) => response.json().then((json) => { return { response, json }; }))
-        .then((responseAndJson) => {
-            const response = responseAndJson.response;
-            const json = responseAndJson.json;
-            // Look up a fresh instance of the user.
-            // We do this because in React Native Remote Debugging
-            // `Realm.clearTestState()` will have invalidated the user object
-            let newUser = user.constructor.all[user.identity];
-            if (newUser) {
-                let session = newUser._sessionForOnDiskPath(localRealmPath);
-                if (session) {
-                    if (response.status != 200) {
-                        let errorHandler = session.config.error;
-                        let error = new AuthError(json);
-                        if (errorHandler) {
-                            errorHandler(session, error);
-                        } else {
-                            (console.error || console.log).call(console, `Unhandled session token refresh error: ${error}`);
-                        }
-                    } else if (session.state !== 'invalid') {
-                        parsedRealmUrl.set('pathname', json.access_token.token_data.path);
-                        session._refreshAccessToken(json.access_token.token, parsedRealmUrl.href);
-
-                        const tokenExpirationDate = new Date(json.access_token.token_data.expires * 1000);
-                        scheduleAccessTokenRefresh(newUser, localRealmPath, realmUrl, tokenExpirationDate);
-                    }
-                }
-            }
-        });
-}
-
-function _authenticate(userConstructor, server, json, callback) {
-    json.app_id = '';
-    const url = auth_url(server);
-    const options = {
-        method: 'POST',
-        body: JSON.stringify(json),
-        headers: postHeaders,
-        open_timeout: 5000
-    };
-    performFetch(url, options)
-        .then((response) => { 
-            if (response.status !== 200) {
-                return response.json().then((body) => callback(new AuthError(body)));
-            } else {
-                return response.json().then(function (body) {
-                    // TODO: validate JSON
-                    const token = body.refresh_token.token;
-                    const identity = body.refresh_token.token_data.identity;
-                    callback(undefined, userConstructor.createUser(server, identity, token, false));
-                }) 
-            }
-        })
-        .catch(callback);
-}
-
-module.exports = {
-    static: {
-        get current() {
-            const allUsers = this.all;
-            const keys = Object.keys(allUsers);
-            if (keys.length === 0) {
-                return undefined;
-            } else if (keys.length > 1) {
-                throw new Error("Multiple users are logged in");
-            }
-
-            return allUsers[keys[0]];
-        },
-
-        adminUser(token) {
-            checkTypes(arguments, ['string']);
-            var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-                return v.toString(16);
-            });
-            var user = this.createUser('', uuid, token, true);
-            return user;
-        },
-
-        register(server, username, password, callback) {
-            checkTypes(arguments, ['string', 'string', 'string', 'function']);
-            _authenticate(this, server, { 
-                provider: 'password', 
-                user_info: { password: password, register: true }, 
-                data: username
-            }, callback);
-        },
-
-        login(server, username, password, callback) {
-            checkTypes(arguments, ['string', 'string', 'string', 'function']);
-            _authenticate(this, server, { 
-                provider: 'password', 
-                user_info: { password: password }, 
-                data: username
-            }, callback);
-        },
-
-        registerWithProvider(server, options, callback) {
-
-            // Compatibility with previous signature: 
-            // registerWithProvider(server, provider, providerToken, callback)
-            if (arguments.length === 4) {
-                checkTypes(arguments, ['string', 'string', 'string', 'function']);
-                options = {
-                    provider: arguments[1],
-                    providerToken: arguments[2]
-                };
-                callback = arguments[3];    
-            } else {
-                checkTypes(arguments, ['string', 'object', 'function']);
-            }
-
-            let reqOptions = {
-                provider: options.provider,
-                data: options.providerToken,
-            };
-
-            if (options.userInfo) {
-                reqOptions.user_info = options.userInfo;
-            }
-
-            _authenticate(this, server, reqOptions, callback);
-        },
-
-        _refreshAccessToken: refreshAccessToken
-    },
-    instance: {
-        openManagementRealm() {
-            let url = url_parse(this.server);
-            if (url.protocol === 'http:') {
-                url.set('protocol', 'realm:');
-            } else if (url.protocol === 'https:') {
-                url.set('protocol', 'realms:');
-            } else {
-                throw new Error(`Unexpected user auth url: ${this.server}`);
-            }
-
-            url.set('pathname', '/~/__management');
-
-            return new this.constructor._realmConstructor({
-                schema: require('./management-schema'),
-                sync: {
-                    user: this,
-                    url: url.href
-                }
-            });
-        }
-    }
+  // detect type of data
+  if (data instanceof Point) {
+    info.point = data;
+  } else if (PublicKey._isJSON(data)) {
+    info = PublicKey._transformJSON(data);
+  } else if (typeof(data) === 'string') {
+    info = PublicKey._transformDER(new Buffer(data, 'hex'));
+  } else if (PublicKey._isBuffer(data)) {
+    info = PublicKey._transformDER(data);
+  } else if (PublicKey._isPrivateKey(data)) {
+    info = PublicKey._transformPrivateKey(data);
+  } else {
+    throw new TypeError('First argument is an unrecognized data format.');
+  }
+  return info;
 };
+
+/**
+ * Internal function to detect if an object is a {@link PrivateKey}
+ *
+ * @param {*} param - object to test
+ * @returns {boolean}
+ * @private
+ */
+PublicKey._isPrivateKey = function(param) {
+  var PrivateKey = require('./privatekey');
+  return param instanceof PrivateKey;
+};
+
+/**
+ * Internal function to detect if an object is a Buffer
+ *
+ * @param {*} param - object to test
+ * @returns {boolean}
+ * @private
+ */
+PublicKey._isBuffer = function(param) {
+  return (param instanceof Buffer) || (param instanceof Uint8Array);
+};
+
+/**
+ * Internal function to detect if a param is a JSON string or plain object
+ *
+ * @param {*} param - value to test
+ * @returns {boolean}
+ * @private
+ */
+PublicKey._isJSON = function(json) {
+  return !!(JSUtil.isValidJSON(json) || (json.x && json.y));
+};
+
+/**
+ * Internal function to transform a private key into a public key point
+ *
+ * @param {PrivateKey} privkey - An instance of PrivateKey
+ * @returns {Object} An object with keys: point and compressed
+ * @private
+ */
+PublicKey._transformPrivateKey = function(privkey) {
+  $.checkArgument(PublicKey._isPrivateKey(privkey),
+    new TypeError('Must be an instance of PrivateKey'));
+  var info = {};
+  info.point = Point.getG().mul(privkey.bn);
+  info.compressed = privkey.compressed;
+  info.network = privkey.network;
+  return info;
+};
+
+/**
+ * Internal function to transform DER into a public key point
+ *
+ * @param {Buffer} buf - An hex encoded buffer
+ * @param {bool} [strict] - if set to false, will loosen some conditions
+ * @returns {Object} An object with keys: point and compressed
+ * @private
+ */
+PublicKey._transformDER = function(buf, strict) {
+  /* jshint maxstatements: 30 */
+  /* jshint maxcomplexity: 12 */
+  $.checkArgument(PublicKey._isBuffer(buf), new TypeError('Must be a hex buffer of DER encoded public key'));
+  var info = {};
+
+  strict = _.isUndefined(strict) ? true : strict;
+
+  var x;
+  var y;
+  var xbuf;
+  var ybuf;
+
+  if (buf[0] === 0x04 || (!strict && (buf[0] === 0x06 || buf[0] === 0x07))) {
+    xbuf = buf.slice(1, 33);
+    ybuf = buf.slice(33, 65);
+    if (xbuf.length !== 32 || ybuf.length !== 32 || buf.length !== 65) {
+      throw new TypeError('Length of x and y must be 32 bytes');
+    }
+    x = BN(xbuf);
+    y = BN(ybuf);
+    info.point = new Point(x, y);
+    info.compressed = false;
+  } else if (buf[0] === 0x03) {
+    xbuf = buf.slice(1);
+    x = BN(xbuf);
+    info = PublicKey._transformX(true, x);
+    info.compressed = true;
+  } else if (buf[0] === 0x02) {
+    xbuf = buf.slice(1);
+    x = BN(xbuf);
+    info = PublicKey._transformX(false, x);
+    info.compressed = true;
+  } else {
+    throw new TypeError('Invalid DER format public key');
+  }
+  return info;
+};
+
+/**
+ * Internal function to transform X into a public key point
+ *
+ * @param {Boolean} odd - If the point is above or below the x axis
+ * @param {Point} x - The x point
+ * @returns {Object} An object with keys: point and compressed
+ * @private
+ */
+PublicKey._transformX = function(odd, x) {
+  $.checkArgument(typeof odd === 'boolean',
+    new TypeError('Must specify whether y is odd or not (true or false)'));
+  var info = {};
+  info.point = Point.fromX(odd, x);
+  return info;
+};
+
+/**
+ * Instantiate a PublicKey from JSON
+ *
+ * @param {String} json - A JSON string
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromJSON = function(json) {
+  $.checkArgument(PublicKey._isJSON(json),
+    new TypeError('Must be a valid JSON string or plain object'));
+  return new PublicKey(json);
+};
+
+/**
+ * Internal function to transform a JSON into a public key point
+ *
+ * @param {Buffer} buf - a JSON string or plain object
+ * @returns {Object} An object with keys: point and compressed
+ * @private
+ */
+PublicKey._transformJSON = function(json) {
+  if (JSUtil.isValidJSON(json)) {
+    json = JSON.parse(json);
+  }
+  var x = BN(json.x, 'hex');
+  var y = BN(json.y, 'hex');
+  var point = new Point(x, y);
+  return new PublicKey(point, {
+    compressed: json.compressed
+  });
+};
+
+/**
+ * Instantiate a PublicKey from a PrivateKey
+ *
+ * @param {PrivateKey} privkey - An instance of PrivateKey
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromPrivateKey = function(privkey) {
+  $.checkArgument(PublicKey._isPrivateKey(privkey), new TypeError('Must be an instance of PrivateKey'));
+  var info = PublicKey._transformPrivateKey(privkey);
+  return new PublicKey(info.point, {
+    compressed: info.compressed,
+    network: info.network
+  });
+};
+
+/**
+ * Instantiate a PublicKey from a Buffer
+ * @param {Buffer} buf - A DER hex buffer
+ * @param {bool} [strict] - if set to false, will loosen some conditions
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromDER = PublicKey.fromBuffer = function(buf, strict) {
+  $.checkArgument(PublicKey._isBuffer(buf),
+    new TypeError('Must be a hex buffer of DER encoded public key'));
+  var info = PublicKey._transformDER(buf, strict);
+  return new PublicKey(info.point, {
+    compressed: info.compressed
+  });
+};
+
+/**
+ * Instantiate a PublicKey from a Point
+ *
+ * @param {Point} point - A Point instance
+ * @param {boolean=} compressed - whether to store this public key as compressed format
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromPoint = function(point, compressed) {
+  $.checkArgument(point instanceof Point,
+    new TypeError('First argument must be an instance of Point.'));
+  return new PublicKey(point, {
+    compressed: compressed
+  });
+};
+
+/**
+ * Instantiate a PublicKey from a DER hex encoded string
+ *
+ * @param {String} str - A DER hex string
+ * @param {String} [encoding] - The type of string encoding
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromString = function(str, encoding) {
+  var buf = new Buffer(str, encoding || 'hex');
+  var info = PublicKey._transformDER(buf);
+  return new PublicKey(info.point, {
+    compressed: info.compressed
+  });
+};
+
+/**
+ * Instantiate a PublicKey from an X Point
+ *
+ * @param {Boolean} odd - If the point is above or below the x axis
+ * @param {Point} x - The x point
+ * @returns {PublicKey} A new valid instance of PublicKey
+ */
+PublicKey.fromX = function(odd, x) {
+  var info = PublicKey._transformX(odd, x);
+  return new PublicKey(info.point, {
+    compressed: info.compressed
+  });
+};
+
+/**
+ * Check if there would be any errors when initializing a PublicKey
+ *
+ * @param {String} data - The encoded data in various formats
+ * @param {String} [compressed] - If the public key is compressed
+ * @returns {null|Error} An error if exists
+ */
+PublicKey.getValidationError = function(data) {
+  var error;
+  try {
+    /* jshint nonew: false */
+    new PublicKey(data);
+  } catch (e) {
+    error = e;
+  }
+  return error;
+};
+
+/**
+ * Check if the parameters are valid
+ *
+ * @param {String} data - The encoded data in various formats
+ * @param {String} [compressed] - If the public key is compressed
+ * @returns {Boolean} If the public key would be valid
+ */
+PublicKey.isValid = function(data) {
+  return !PublicKey.getValidationError(data);
+};
+
+/**
+ * @returns {Object} A plain object of the PublicKey
+ */
+PublicKey.prototype.toObject = function toObject() {
+  return {
+    x: this.point.getX().toString('hex'),
+    y: this.point.getY().toString('hex'),
+    compressed: this.compressed
+  };
+};
+
+PublicKey.prototype.toJSON = function toJSON() {
+  return JSON.stringify(this.toObject());
+};
+
+/**
+ * Will output the PublicKey to a DER Buffer
+ *
+ * @returns {Buffer} A DER hex encoded buffer
+ */
+PublicKey.prototype.toBuffer = PublicKey.prototype.toDER = function() {
+  var x = this.point.getX();
+  var y = this.point.getY();
+
+  var xbuf = x.toBuffer({
+    size: 32
+  });
+  var ybuf = y.toBuffer({
+    size: 32
+  });
+
+  var prefix;
+  if (!this.compressed) {
+    prefix = new Buffer([0x04]);
+    return Buffer.concat([prefix, xbuf, ybuf]);
+  } else {
+    var odd = ybuf[ybuf.length - 1] % 2;
+    if (odd) {
+      prefix = new Buffer([0x03]);
+    } else {
+      prefix = new Buffer([0x02]);
+    }
+    return Buffer.concat([prefix, xbuf]);
+  }
+};
+
+ * Will return a sha256 + ripemd160 hash of the serialized public key
+ * @see https://github.com/bitcoin/bitcoin/blob/master/src/pubkey.h#L141
+ * @returns {Buffer}
+ */
+PublicKey.prototype.getID = function getID() {
+  return Hash.sha256ripemd160(this.toBuffer());
+};
+
+/**
+ * Will return an address for the public key
+ *
+ * @returns {Address} An address generated from the public key
+ */
+PublicKey.prototype.toAddress = function(network) {
+  return Address.fromPublicKey(this, network || this.network);
+};
+
+/**
+ * Will output the PublicKey to a DER encoded hex string
+ *
+ * @returns {String} A DER hex encoded string
+ */
+PublicKey.prototype.toString = function() {
+  return this.toDER().toString('hex');
+};
+
+/**
+ * Will return a string formatted for the console
+ *
+ * @returns {String} Public key
+ */
+PublicKey.prototype.inspect = function() {
+  return '<PublicKey: ' + this.toString() +
+    (this.compressed ? '' : ', uncompressed') + '>';
+};
+
+
+module.exports = PublicKey;

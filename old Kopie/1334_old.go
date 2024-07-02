@@ -1,7 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	limitFlagDescription          = "Optional. The maximum number of log events returned."
-	followFlagDescription         = "Optional. Specifies if the logs should be streamed."
-	sinceFlagDescription          = `Optional. Only return logs newer than a relative duration like 5s, 2m, or 3h.
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -136,7 +133,9 @@ const (
 Allows you to categorize resources.`
 	stackOutputDirFlagDescription = "Optional. Writes the stack template and template configuration to a directory."
 	prodEnvFlagDescription        = "If the environment contains production services."
-
+	limitFlagDescription          = "Optional. The maximum number of log events returned."
+	followFlagDescription         = "Optional. Specifies if the logs should be streamed."
+	sinceFlagDescription          = `Optional. Only return logs newer than a relative duration like 5s, 2m, or 3h.
 	limitFlagDescription  = "Optional. The maximum number of log events returned."
 	followFlagDescription = "Optional. Specifies if the logs should be streamed."
 	sinceFlagDescription  = `Optional. Only return logs newer than a relative duration like 5s, 2m, or 3h.

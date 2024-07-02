@@ -1,5 +1,3 @@
-/*!
- * @file Adafruit_HMC5883_U.cpp
  *
  * @mainpage Adafruit HMC5883 Unified Library
  *
@@ -263,4 +261,3 @@ void Adafruit_HMC5883_Unified::getSensor(sensor_t *sensor) {
   sensor->max_value = 800;  // 8 gauss == 800 microTesla
   sensor->min_value = -800; // -8 gauss == -800 microTesla
   sensor->resolution = 0.2; // 2 milligauss == 0.2 microTesla
-}

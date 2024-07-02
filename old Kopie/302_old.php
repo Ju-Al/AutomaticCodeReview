@@ -1,5 +1,4 @@
 <?php
-defined( 'ABSPATH' ) or die( 'Cheatin\' uh?' );
 
 if ( defined( 'ELEMENTOR_VERSION' ) ) :
 

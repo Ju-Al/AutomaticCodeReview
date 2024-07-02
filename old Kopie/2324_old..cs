@@ -1,8 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                        _contextAccessor.RequestContext?.BundleIssues.Add(new OperationOutcomeIssue(
-                            OperationOutcomeConstants.IssueSeverity.Warning,
-                            OperationOutcomeConstants.IssueType.NotSupported,
-                            string.Format(CultureInfo.InvariantCulture, Core.Resources.SearchParameterNotSupported, sorting.Item1, string.Join(", ", resourceTypesString))));
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -326,7 +322,10 @@ namespace Microsoft.Health.Fhir.Core.Features.Search
                     catch (SearchParameterNotSupportedException)
                     {
                         sortingsValid = false;
-                        searchSortErrors.Add(string.Format(CultureInfo.InvariantCulture, Core.Resources.SearchParameterNotSupported, sorting.Item1, string.Join(", ", resourceTypesString)));
+                        _contextAccessor.RequestContext?.BundleIssues.Add(new OperationOutcomeIssue(
+                            OperationOutcomeConstants.IssueSeverity.Warning,
+                            OperationOutcomeConstants.IssueType.NotSupported,
+                            string.Format(CultureInfo.InvariantCulture, Core.Resources.SearchParameterNotSupported, sorting.Item1, string.Join(", ", resourceTypesString))));
                     }
                 }
 

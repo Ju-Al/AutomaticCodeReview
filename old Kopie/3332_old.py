@@ -1,5 +1,4 @@
 # Licensed to Modin Development Team under one or more contributor license agreements.
-        reason="The reason of tests fail in `cloud` mode is unknown for now - issue #2340",
 # See the NOTICE file distributed with this work for additional information regarding
 # copyright ownership.  The Modin Development Team licenses this file to you under the
 # Apache License, Version 2.0 (the "License"); you may not use this file except in
@@ -1080,6 +1079,7 @@ class TestCsv:
         path = "modin/pandas/test/data/issue_3119.csv"
         read_df = pd.read_csv(path, index_col=0)
         assert get_internal_df(read_df).index.name is None
+        reason="The reason of tests fail in `cloud` mode is unknown for now - issue #2340",
         read_df = pd.read_csv(path, index_col=[0, 1])
         for name1, name2 in zip(get_internal_df(read_df).index.names, [None, "a"]):
             assert name1 == name2

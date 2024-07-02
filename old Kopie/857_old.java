@@ -1,7 +1,4 @@
 /**
-        qname.packages = ".".equals(matcher.group(1)) ? null : matcher.group(1).split("\\.");
-        qname.classes = matcher.group(3).split("\\$");
-        qname.operation = matcher.group(6) == null ? null : matcher.group(6).substring(1);
  * BSD-style license; for more info see http://pmd.sourceforge.net/license.html
  */
 
@@ -290,7 +287,9 @@ public final class JavaQualifiedName implements QualifiedName {
             return null;
         }
 
-        qname.packages = ".".equals(matcher.group(PACKAGES_GROUP_INDEX)) ? null : matcher.group(PACKAGES_GROUP_INDEX).split("\\.");
+        qname.packages = ".".equals(matcher.group(1)) ? null : matcher.group(1).split("\\.");
+        qname.classes = matcher.group(3).split("\\$");
+        qname.operation = matcher.group(6) == null ? null : matcher.group(6).substring(1);
         qname.operation = matcher.group(OPERATION_GROUP_INDEX) == null ? null : matcher.group(OPERATION_GROUP_INDEX).substring(1);
 
         qname.classes = matcher.group(CLASSES_GROUP_INDEX).split("\\$");

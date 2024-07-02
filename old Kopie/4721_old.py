@@ -1,10 +1,4 @@
 import mmcv
-        rois (Tensor): Boxes to be transformed. Has shape (N, 4)
-            Has shape (N, 4 * num_classes). Note N = num_anchors * W * H when
-            rois is a grid of anchors. Offset encoding follows [1]_.
-        max_shape (tuple[int, int]): Maximum bounds for boxes. specifies (H, W)
-        Tensor: Boxes with shape (N, 4), where columns represent
-            tl_x, tl_y, br_x, br_y.
 import numpy as np
 import torch
 
@@ -146,7 +140,12 @@ def delta2bbox(rois,
     This is the inverse function of :func:`bbox2delta`.
 
     Args:
-        rois (Tensor): Boxes to be transformed. Has shape (N, 4) or (B, N, 4)
+            Has shape (N, 4 * num_classes). Note N = num_anchors * W * H when
+            rois is a grid of anchors. Offset encoding follows [1]_.
+        max_shape (tuple[int, int]): Maximum bounds for boxes. specifies (H, W)
+        Tensor: Boxes with shape (N, 4), where columns represent
+            tl_x, tl_y, br_x, br_y.
+        rois (Tensor): Boxes to be transformed. Has shape (N, 4)
         deltas (Tensor): Encoded offsets with respect to each roi.
             Has shape (B, N, 4 * num_classes) or (B, N, 4) or
             (N, 4 * num_classes) or (N, 4). Note N = num_anchors * W * H

@@ -1,10 +1,5 @@
 import { playbackManager } from '../../../components/playback/playbackmanager';
-        if (browser.touch) {
-            dom.addEventListener(view, 'dblclick', onDoubleClick, {});
-        } else {
-            const options = { passive: true };
-            dom.addEventListener(view, 'dblclick', (e) => {
-                if (e.target !== view) return;import SyncPlay from '../../../components/syncPlay/core';
+import SyncPlay from '../../../components/syncPlay/core';
 import dom from '../../../scripts/dom';
 import inputManager from '../../../scripts/inputManager';
 import mouseManager from '../../../scripts/mouseManager';
@@ -1422,7 +1417,12 @@ import { appRouter } from '../../../components/appRouter';
             passive: true
         });
 
-        dom.addEventListener(view, 'dblclick', function () {
+        if (browser.touch) {
+            dom.addEventListener(view, 'dblclick', onDoubleClick, {});
+        } else {
+            const options = { passive: true };
+            dom.addEventListener(view, 'dblclick', (e) => {
+                if (e.target !== view) return;        dom.addEventListener(view, 'dblclick', function () {
             playbackManager.toggleFullscreen(currentPlayer);
         });
 

@@ -1,5 +1,4 @@
 from .imports import *
-    
 from .torch_imports import *
 from .core import *
 from .transforms import *
@@ -385,7 +384,7 @@ class Learner():
         if len(data_list)==0: data_list = [self.data]
         return fit(self.model, data_list, n_epochs,layer_opt, self.crit,
             metrics=metrics, callbacks=callbacks, reg_fn=self.reg_fn, clip=self.clip, fp16=self.fp16, **kwargs)
+    
 
-    def _determine_loss_func(self, data):
         raise NotImplementedError()
 

@@ -273,7 +273,6 @@ class NonDivArithmeticOpAnalyzer
         }
     }
 
-    /**
      * @param int|float $result
      */
     private static function getNumericalType($result): Type\Union

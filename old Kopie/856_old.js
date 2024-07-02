@@ -742,7 +742,6 @@ define(['browser', 'require', 'events', 'apphost', 'loading', 'dom', 'playbackMa
                 }
             }
 
-            // No idea what this is possibly trying to workaround
             setTimeout(function () {
                 // eslint-disable-next-line no-self-assign
                 elem.currentTime = elem.currentTime;

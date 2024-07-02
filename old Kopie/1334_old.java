@@ -96,7 +96,6 @@ public class LocalityGroupIterator extends HeapIterator implements Interruptible
       }
       defaultGroup = foundDefault;
     }
-
     @Deprecated
     public LocalityGroupContext(LocalityGroup[] groups) {
       this(Arrays.asList(groups));

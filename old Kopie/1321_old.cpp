@@ -1,6 +1,5 @@
 #include "diablo.h"
 
-			ObjSetMini(i, j, (unsigned char)pdungeon[i][j]);
 int trapid;
 int trapdir;
 BYTE *pObjCels[40];
@@ -2372,7 +2371,7 @@ void ObjChangeMapResync(int x1, int y1, int x2, int y2)
 
 	for (j = y1; j <= y2; j++) {
 		for (i = x1; i <= x2; i++) {
-			ObjSetMini(i, j, (BYTE)pdungeon[i][j]);
+			ObjSetMini(i, j, (unsigned char)pdungeon[i][j]);
 			dungeon[i][j] = pdungeon[i][j];
 		}
 	}

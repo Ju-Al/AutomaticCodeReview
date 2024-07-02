@@ -1,10 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-		err = s.addressbook.Put(i.BzzAddress.Overlay, *i.BzzAddress)
-		if err != nil {
-			s.logger.Debugf("stream handler: addressbook put error %s: %v", peerID, err)
-			s.logger.Errorf("stream handler: unable to persist peer %v", peerID)
-			_ = s.Disconnect(i.BzzAddress.Overlay, "unable to persist peer in addressbook")
-			return
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -365,7 +359,12 @@ func (s *Service) handleIncoming(stream network.Stream) {
 	}
 
 	if i.FullNode {
-
+		err = s.addressbook.Put(i.BzzAddress.Overlay, *i.BzzAddress)
+		if err != nil {
+			s.logger.Debugf("stream handler: addressbook put error %s: %v", peerID, err)
+			s.logger.Errorf("stream handler: unable to persist peer %v", peerID)
+			_ = s.Disconnect(i.BzzAddress.Overlay, "unable to persist peer in addressbook")
+			return
 		ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 		_, err := s.Ping(ctx, i.BzzAddress.Underlay)
 		cancel()

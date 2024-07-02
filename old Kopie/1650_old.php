@@ -54,7 +54,6 @@ class StatusTransformer extends Fractal\TransformerAbstract
             ];
           }),
           'tag' => [],
-          'location' => $status->place_id ? [
               'type' => 'Place',
               'name' => $status->place->name,
               'longitude' => $status->place->long,

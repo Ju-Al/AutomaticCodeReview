@@ -1,7 +1,24 @@
 import TabbedView from 'tabbedView';
 define(['tabbedView', 'globalize', 'require', 'emby-tabs', 'emby-button', 'emby-scroller'], function (TabbedView, globalize, require) {
+    function getTabs() {
+        return [{
+            name: globalize.translate('Home')
+        }, {
+            name: globalize.translate('Favorites')
+        }];
+    function getDefaultTabIndex() {
+    function getRequirePromise(deps) {
+        return new Promise(function (resolve, reject) {
+            require(deps, resolve);
+        });
+    function getTabController(index) {
+        var depends = [];
+                depends.push('controllers/hometab');
+                depends.push('controllers/favorites');
+        var instance = this;
+        return getRequirePromise(depends).then(function (controllerFactory) {
+            var controller = instance.tabControllers[index];
     'use strict';
-import globalize from 'globalize';
 import 'emby-tabs';
 import 'emby-button';
 import 'emby-scroller';
@@ -11,17 +28,10 @@ class HomeView extends TabbedView {
         super(view, params);
     }
 
-    function getTabs() {
-        return [{
-            name: globalize.translate('Home')
-        }, {
-            name: globalize.translate('Favorites')
-        }];
     setTitle() {
         Emby.Page.setTitle(null);
     }
 
-    function getDefaultTabIndex() {
     onPause() {
         super.onPause(this);
         document.querySelector('.skinHeader').classList.remove('noHomeButtonHeader');
@@ -36,10 +46,6 @@ class HomeView extends TabbedView {
         return 0;
     }
 
-    function getRequirePromise(deps) {
-        return new Promise(function (resolve, reject) {
-            require(deps, resolve);
-        });
     getTabs() {
         return [{
             name: globalize.translate('Home')
@@ -48,29 +54,22 @@ class HomeView extends TabbedView {
         }];
     }
 
-    function getTabController(index) {
     getTabController(index) {
         if (index == null) {
             throw new Error('index cannot be null');
         }
 
-        var depends = [];
         let depends = '';
 
         switch (index) {
             case 0:
-                depends.push('controllers/hometab');
                 depends = 'controllers/hometab';
                 break;
 
             case 1:
-                depends.push('controllers/favorites');
                 depends = 'controllers/favorites';
         }
 
-        var instance = this;
-        return getRequirePromise(depends).then(function (controllerFactory) {
-            var controller = instance.tabControllers[index];
         const instance = this;
         return import(depends).then(({ default: controllerFactory }) => {
             let controller = instance.tabControllers[index];

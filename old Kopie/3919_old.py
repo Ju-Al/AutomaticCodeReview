@@ -242,7 +242,6 @@ def test_classifier(output, centers, client, listen_port):
     assert_eq(p1_local, p2)
     assert_eq(y, p1_local)
 
-    # pref_leaf values should have the right shape
     # and values that look like valid tree nodes
     assert p1_pred_leaf.compute().shape == (
         X.shape[0],

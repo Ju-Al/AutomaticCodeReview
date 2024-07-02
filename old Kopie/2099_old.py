@@ -1,17 +1,4 @@
 # Copyright 2017 The Forseti Security Authors. All rights reserved.
-                         ColumnAction.CREATE: create_column}
-def migrate_schema(engine, base):
-        engine (object): Database engine to operate on.
-    # Create tables if not exists.
-    base.metadata.create_all(engine)
-    base.metadata.bind = engine
-
-    # Update schema changes.
-    # Find all the child classes inherited from declarative base class.
-    base_subclasses = _find_subclasses(base)
-    for subclass in base_subclasses:
-        get_schema_update_actions = getattr(subclass,
-                subclass.__tablename__ not in tables):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,7 +64,7 @@ def alter_column(table, old_column, new_column):
     """
     LOGGER.info('Attempting to alter column: %s', old_column.name)
 
-    # bind the columns with the corresponding table
+    # bind the old column with the corresponding table.
     old_column.table = table
 
     old_column.alter(name=new_column.name,
@@ -97,12 +84,44 @@ def drop_column(table, column):
 
 
 COLUMN_ACTION_MAPPING = {ColumnAction.DROP: drop_column,
-                         ColumnAction.CREATE: create_column,
+def migrate_schema(engine, base):
+    """Create all tables in the database if not existing.
+        engine (object): Database engine to operate on.
+    # Create tables if not exists.
+    base.metadata.create_all(engine)
+    base.metadata.bind = engine
+
+    # Update schema changes.
+    # Find all the child classes inherited from declarative base class.
+    base_subclasses = _find_subclasses(base)
+    for subclass in base_subclasses:
+        get_schema_update_actions = getattr(subclass,
+                subclass.__tablename__ not in tables):
+                        subclass.__tablename__)
+        LOGGER.info('Updating table %s', subclass.__tablename__)
+        table = tables.get(subclass.__tablename__)
+            column_action = column_action.upper()
+            if column_action in COLUMN_ACTION_MAPPING:
+                for column in columns:
+                    try:
+                        COLUMN_ACTION_MAPPING.get(column_action)(table,
+                                                                 column)
+                    except OperationalError:
+                        LOGGER.info('Failed to update db schema, table=%s',
+                                    subclass.__tablename__)
+                    except Exception:  # pylint: disable=broad-except
+                        LOGGER.exception(
+                            'Unexpected error happened when attempting '
+                            'to update database schema, table: %s',
+                            subclass.__tablename__)
+                LOGGER.warn('Columns: %s, ColumnAction %s doesn\'t '
+                            'exist.', columns, column_action)
+                         ColumnAction.CREATE: create_column}
                          ColumnAction.ALTER: alter_column}
 
 
 def migrate_schema(base, dao_classes):
-    """Create all tables in the database if not existing.
+    """Migrate database schema.
 
     Args:
         base (Base): Declarative base.

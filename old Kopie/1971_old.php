@@ -1,6 +1,7 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
 $lang['blog:disabled_after'] 				= 'Posting comments after %s has been disabled.'; #translate
+
  /**
  * Swedish translation.
  *

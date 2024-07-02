@@ -155,7 +155,6 @@ func ensureResourceTrackerCRDInstalled(c client.Client, clusterName string) erro
 	return nil
 }
 
-func ensureVelaSystemNamespaceInstalled(c client.Client, clusterName string) error {
 	ctx := context.Background()
 	remoteCtx := multicluster.ContextWithClusterName(ctx, clusterName)
 	if err := c.Get(remoteCtx, types2.NamespacedName{Name: types.DefaultKubeVelaNS}, &v1.Namespace{}); err != nil {

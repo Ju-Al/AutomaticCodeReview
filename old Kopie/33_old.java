@@ -1,5 +1,4 @@
 /*
-            } else {
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -54,8 +53,8 @@ public class MQClientManager {
             MQClientInstance prev = this.factoryTable.putIfAbsent(clientId, instance);
             if (prev != null) {
                 instance = prev;
-                log.warn("Previous MQClientInstance has created for clientId:[{}]", clientId);
             } else {
+                log.warn("Previous MQClientInstance has created for clientId:[{}]", clientId);
                 log.info("new MQClientInstance has created for clientId:[{}]", clientId);
             }
         }

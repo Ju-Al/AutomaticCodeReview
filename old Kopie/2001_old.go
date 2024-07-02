@@ -1,5 +1,4 @@
 package indexer
-
 import (
 	"context"
 	"encoding/binary"

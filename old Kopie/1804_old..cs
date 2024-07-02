@@ -898,7 +898,6 @@
         }
 
         [Fact]
-        public void Should_implicitly_convert_from_int_based_on_given_parameter_type_of_short ()
         {
             //Given
             const int expected = 42;

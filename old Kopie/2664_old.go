@@ -1,146 +1,723 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	bucket, urls, err := parseS3URLs(s.customResourceS3URL)
-	if err != nil {
-		return "", err
 // SPDX-License-Identifier: Apache-2.0
 
-package stack
+package cli
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
-	"github.com/aws/copilot-cli/internal/pkg/deploy"
+	"github.com/aws/copilot-cli/internal/pkg/template"
+
+	"github.com/aws/copilot-cli/internal/pkg/aws/identity"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"golang.org/x/mod/semver"
+
 	"github.com/aws/copilot-cli/internal/pkg/addon"
+	awscloudformation "github.com/aws/copilot-cli/internal/pkg/aws/cloudformation"
+	"github.com/aws/copilot-cli/internal/pkg/aws/ecr"
+	"github.com/aws/copilot-cli/internal/pkg/aws/s3"
+	"github.com/aws/copilot-cli/internal/pkg/aws/sessions"
+	"github.com/aws/copilot-cli/internal/pkg/aws/tags"
+	"github.com/aws/copilot-cli/internal/pkg/config"
+	"github.com/aws/copilot-cli/internal/pkg/deploy"
+	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation"
+	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation/stack"
+	"github.com/aws/copilot-cli/internal/pkg/describe"
+	"github.com/aws/copilot-cli/internal/pkg/exec"
 	"github.com/aws/copilot-cli/internal/pkg/manifest"
-	"github.com/aws/copilot-cli/internal/pkg/template"
+	"github.com/aws/copilot-cli/internal/pkg/repository"
+	"github.com/aws/copilot-cli/internal/pkg/term/color"
+	"github.com/aws/copilot-cli/internal/pkg/term/log"
+	termprogress "github.com/aws/copilot-cli/internal/pkg/term/progress"
+	"github.com/aws/copilot-cli/internal/pkg/term/prompt"
+	"github.com/aws/copilot-cli/internal/pkg/term/selector"
+	"github.com/aws/copilot-cli/internal/pkg/workspace"
+	"github.com/spf13/cobra"
 )
 
-var awsSDKLayerForRegion = map[string]*string{
-	"ap-northeast-1": aws.String("arn:aws:lambda:ap-northeast-1:249908578461:layer:AWSLambda-Node-AWS-SDK:15"),
-	"us-east-1":      aws.String("arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Node-AWS-SDK:15"),
-	"ap-southeast-1": aws.String("arn:aws:lambda:ap-southeast-1:468957933125:layer:AWSLambda-Node-AWS-SDK:14"),
-	"eu-west-1":      aws.String("arn:aws:lambda:eu-west-1:399891621064:layer:AWSLambda-Node-AWS-SDK:14"),
-	"us-west-1":      aws.String("arn:aws:lambda:us-west-1:325793726646:layer:AWSLambda-Node-AWS-SDK:15"),
-	"ap-northeast-2": aws.String("arn:aws:lambda:ap-northeast-2:296580773974:layer:AWSLambda-Node-AWS-SDK:14"),
-	"ap-south-1":     aws.String("arn:aws:lambda:ap-south-1:631267018583:layer:AWSLambda-Node-AWS-SDK:14"),
-	"ap-southeast-2": aws.String("arn:aws:lambda:ap-southeast-2:817496625479:layer:AWSLambda-Node-AWS-SDK:14"),
-	"ca-central-1":   aws.String("arn:aws:lambda:ca-central-1:778625758767:layer:AWSLambda-Node-AWS-SDK:14"),
-	"eu-central-1":   aws.String("arn:aws:lambda:eu-central-1:292169987271:layer:AWSLambda-Node-AWS-SDK:14"),
-	"eu-west-2":      aws.String("arn:aws:lambda:eu-west-2:142628438157:layer:AWSLambda-Node-AWS-SDK:14"),
-	"sa-east-1":      aws.String("arn:aws:lambda:sa-east-1:640010853179:layer:AWSLambda-Node-AWS-SDK:14"),
-	"us-east-2":      aws.String("arn:aws:lambda:us-east-2:259788987135:layer:AWSLambda-Node-AWS-SDK:14"),
-	"us-west-2":      aws.String("arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Node-AWS-SDK:14"),
-	"af-south-1":     aws.String("arn:aws:lambda:af-south-1:392341123054:layer:AWSLambda-Node-AWS-SDK:7"),
-	"ap-east-1":      aws.String("arn:aws:lambda:ap-east-1:118857876118:layer:AWSLambda-Node-AWS-SDK:14"),
-	"ap-northeast-3": aws.String("arn:aws:lambda:ap-northeast-3:961244031340:layer:AWSLambda-Node-AWS-SDK:14"),
-	"eu-north-1":     aws.String("arn:aws:lambda:eu-north-1:642425348156:layer:AWSLambda-Node-AWS-SDK:14"),
-	"eu-south-1":     aws.String("arn:aws:lambda:eu-south-1:426215560912:layer:AWSLambda-Node-AWS-SDK:7"),
-	"eu-west-3":      aws.String("arn:aws:lambda:eu-west-3:959311844005:layer:AWSLambda-Node-AWS-SDK:14"),
-	"me-south-1":     aws.String("arn:aws:lambda:me-south-1:507411403535:layer:AWSLambda-Node-AWS-SDK:10"),
+type deployWkldVars struct {
+	appName      string
+	name         string
+	envName      string
+	imageTag     string
+	resourceTags map[string]string
 }
 
-type requestDrivenWebSvcReadParser interface {
-	template.ReadParser
-	ParseRequestDrivenWebService(template.ParseRequestDrivenWebServiceInput) (*template.Content, error)
+type uploadCustomResourcesOpts struct {
+	uploader      customResourcesUploader
+	newS3Uploader func() (Uploader, error)
 }
 
-// RequestDrivenWebService represents the configuration needed to create a CloudFormation stack from a request-drive web service manifest.
-type RequestDrivenWebService struct {
-	*appRunnerWkld
-	manifest            *manifest.RequestDrivenWebService
-	app                 deploy.AppInformation
-	customResourceS3URL map[string]string
+type deploySvcOpts struct {
+	deployWkldVars
 
-	parser requestDrivenWebSvcReadParser
+	store               store
+	ws                  wsSvcDirReader
+	imageBuilderPusher  imageBuilderPusher
+	unmarshal           func([]byte) (manifest.WorkloadManifest, error)
+	s3                  artifactUploader
+	cmd                 runner
+	addons              templater
+	appCFN              appResourcesGetter
+	svcCFN              cloudformation.CloudFormation
+	sessProvider        sessionProvider
+	envUpgradeCmd       actionCommand
+	newAppVersionGetter func(string) (versionGetter, error)
+	endpointGetter      endpointGetter
+	identity            identityService
+
+	spinner progress
+	sel     wsSelector
+	prompt  prompter
+
+	// cached variables
+	targetApp         *config.Application
+	targetEnvironment *config.Environment
+	targetSvc         *config.Workload
+	imageDigest       string
+	buildRequired     bool
+	appEnvResources   *stack.AppRegionalResources
+
+	uploadOpts *uploadCustomResourcesOpts
 }
 
-// NewRequestDrivenWebServiceWithAlias creates a new RequestDrivenWebService stack from a manifest file. It creates
-// custom resources needed for alias with scripts accessible from the urls.
-func NewRequestDrivenWebServiceWithAlias(mft *manifest.RequestDrivenWebService, env string, app deploy.AppInformation, rc RuntimeConfig, urls map[string]string) (*RequestDrivenWebService, error) {
-	rdSvc, err := NewRequestDrivenWebService(mft, env, app, rc)
+func newSvcDeployOpts(vars deployWkldVars) (*deploySvcOpts, error) {
+	store, err := config.NewStore()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new config store: %w", err)
 	}
-	rdSvc.customResourceS3URL = urls
-	return rdSvc, nil
-}
-
-// NewRequestDrivenWebService creates a new RequestDrivenWebService stack from a manifest file.
-func NewRequestDrivenWebService(mft *manifest.RequestDrivenWebService, env string, app deploy.AppInformation, rc RuntimeConfig) (*RequestDrivenWebService, error) {
-	parser := template.New()
-	addons, err := addon.New(aws.StringValue(mft.Name))
+	ws, err := workspace.New()
 	if err != nil {
-		return nil, fmt.Errorf("new addons: %w", err)
+		return nil, fmt.Errorf("new workspace: %w", err)
 	}
-	return &RequestDrivenWebService{
-		appRunnerWkld: &appRunnerWkld{
-			wkld: &wkld{
-				name:   aws.StringValue(mft.Name),
-				env:    env,
-				app:    app.Name,
-				rc:     rc,
-				image:  mft.ImageConfig,
-				addons: addons,
-				parser: parser,
-			},
-			instanceConfig:    mft.InstanceConfig,
-			imageConfig:       mft.ImageConfig,
-			healthCheckConfig: mft.HealthCheckConfiguration,
+	prompter := prompt.New()
+	opts := &deploySvcOpts{
+		deployWkldVars: vars,
+
+		store:     store,
+		ws:        ws,
+		unmarshal: manifest.UnmarshalWorkload,
+		spinner:   termprogress.NewSpinner(log.DiagnosticWriter),
+		sel:       selector.NewWorkspaceSelect(prompter, store, ws),
+		prompt:    prompter,
+		newAppVersionGetter: func(appName string) (versionGetter, error) {
+			d, err := describe.NewAppDescriber(appName)
+			if err != nil {
+				return nil, fmt.Errorf("new app describer for application %s: %w", appName, err)
+			}
+			return d, nil
 		},
-		app:      app,
-		manifest: mft,
-		parser:   parser,
+		cmd:          exec.NewCmd(),
+		sessProvider: sessions.NewProvider(),
+	}
+	opts.uploadOpts = &uploadCustomResourcesOpts{
+		uploader: template.New(),
+		newS3Uploader: func() (Uploader, error) {
+			envRegion := opts.targetEnvironment.Region
+			sess, err := opts.sessProvider.DefaultWithRegion(opts.targetEnvironment.Region)
+			if err != nil {
+				return nil, fmt.Errorf("create session with region %s: %w", envRegion, err)
+			}
+			s3Client := s3.New(sess)
+			return s3Client, nil
+		},
+	}
+	return opts, err
+}
+
+// Validate returns an error if the user inputs are invalid.
+func (o *deploySvcOpts) Validate() error {
+	if o.appName == "" {
+		return errNoAppInWorkspace
+	}
+	if o.name != "" {
+		if err := o.validateSvcName(); err != nil {
+			return err
+		}
+	}
+	if o.envName != "" {
+		if err := o.validateEnvName(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Ask prompts the user for any required fields that are not provided.
+func (o *deploySvcOpts) Ask() error {
+	if err := o.askSvcName(); err != nil {
+		return err
+	}
+	if err := o.askEnvName(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Execute builds and pushes the container image for the service,
+func (o *deploySvcOpts) Execute() error {
+	o.imageTag = imageTagFromGit(o.cmd, o.imageTag) // Best effort assign git tag.
+	env, err := targetEnv(o.store, o.appName, o.envName)
+	if err != nil {
+		return err
+	}
+	o.targetEnvironment = env
+
+	app, err := o.store.GetApplication(o.appName)
+	if err != nil {
+		return err
+	}
+	o.targetApp = app
+
+	svc, err := o.store.GetService(o.appName, o.name)
+	if err != nil {
+		return fmt.Errorf("get service configuration: %w", err)
+	}
+	o.targetSvc = svc
+
+	if err := o.configureClients(); err != nil {
+		return err
+	}
+
+	if err := o.envUpgradeCmd.Execute(); err != nil {
+		return fmt.Errorf(`execute "env upgrade --app %s --name %s": %v`, o.appName, o.targetEnvironment.Name, err)
+	}
+
+	if err := o.configureContainerImage(); err != nil {
+		return err
+	}
+
+	addonsURL, err := o.pushAddonsTemplateToS3Bucket()
+	if err != nil {
+		return err
+	}
+
+	if err := o.deploySvc(addonsURL); err != nil {
+		return err
+	}
+	return o.showSvcURI()
+}
+
+// RecommendedActions returns follow-up actions the user can take after successfully executing the command.
+func (o *deploySvcOpts) RecommendedActions() []string {
+	return nil
+}
+
+func (o *deploySvcOpts) validateSvcName() error {
+	names, err := o.ws.ServiceNames()
+	if err != nil {
+		return fmt.Errorf("list services in the workspace: %w", err)
+	}
+	for _, name := range names {
+		if o.name == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("service %s not found in the workspace", color.HighlightUserInput(o.name))
+}
+
+func (o *deploySvcOpts) validateEnvName() error {
+	if _, err := targetEnv(o.store, o.appName, o.envName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func targetEnv(s store, appName, envName string) (*config.Environment, error) {
+	env, err := s.GetEnvironment(appName, envName)
+	if err != nil {
+		return nil, fmt.Errorf("get environment %s configuration: %w", envName, err)
+	}
+	return env, nil
+}
+
+func (o *deploySvcOpts) askSvcName() error {
+	if o.name != "" {
+		return nil
+	}
+
+	name, err := o.sel.Service("Select a service in your workspace", "")
+	if err != nil {
+		return fmt.Errorf("select service: %w", err)
+	}
+	o.name = name
+	return nil
+}
+
+func (o *deploySvcOpts) askEnvName() error {
+	if o.envName != "" {
+		return nil
+	}
+
+	name, err := o.sel.Environment("Select an environment", "", o.appName)
+	if err != nil {
+		return fmt.Errorf("select environment: %w", err)
+	}
+	o.envName = name
+	return nil
+}
+
+func (o *deploySvcOpts) configureClients() error {
+	defaultSessEnvRegion, err := o.sessProvider.DefaultWithRegion(o.targetEnvironment.Region)
+	if err != nil {
+		return fmt.Errorf("create ECR session with region %s: %w", o.targetEnvironment.Region, err)
+	}
+
+	envSession, err := o.sessProvider.FromRole(o.targetEnvironment.ManagerRoleARN, o.targetEnvironment.Region)
+	if err != nil {
+		return fmt.Errorf("assuming environment manager role: %w", err)
+	}
+
+	// ECR client against tools account profile AND target environment region.
+	repoName := fmt.Sprintf("%s/%s", o.appName, o.name)
+	registry := ecr.New(defaultSessEnvRegion)
+	o.imageBuilderPusher, err = repository.New(repoName, registry)
+	if err != nil {
+		return fmt.Errorf("initiate image builder pusher: %w", err)
+	}
+
+	o.s3 = s3.New(defaultSessEnvRegion)
+
+	// CF client against env account profile AND target environment region.
+	o.svcCFN = cloudformation.New(envSession)
+
+	o.endpointGetter, err = describe.NewEnvDescriber(describe.NewEnvDescriberConfig{
+		App:         o.appName,
+		Env:         o.envName,
+		ConfigStore: o.store,
+	})
+	if err != nil {
+		return fmt.Errorf("initiate env describer: %w", err)
+	}
+	addonsSvc, err := addon.New(o.name)
+	if err != nil {
+		return fmt.Errorf("initiate addons service: %w", err)
+	}
+	o.addons = addonsSvc
+
+	// client to retrieve an application's resources created with CloudFormation.
+	defaultSess, err := o.sessProvider.Default()
+	if err != nil {
+		return fmt.Errorf("create default session: %w", err)
+	}
+	o.appCFN = cloudformation.New(defaultSess)
+
+	cmd, err := newEnvUpgradeOpts(envUpgradeVars{
+		appName: o.appName,
+		name:    o.targetEnvironment.Name,
+	})
+	if err != nil {
+		return fmt.Errorf("new env upgrade command: %v", err)
+	}
+	o.envUpgradeCmd = cmd
+
+	// client to retrieve caller identity.
+	id := identity.New(defaultSess)
+	o.identity = id
+	return nil
+}
+
+func (o *deploySvcOpts) configureContainerImage() error {
+	svc, err := o.manifest()
+	if err != nil {
+		return err
+	}
+	required, err := manifest.ServiceDockerfileBuildRequired(svc)
+	if err != nil {
+		return err
+	}
+	if !required {
+		return nil
+	}
+	// If it is built from local Dockerfile, build and push to the ECR repo.
+	buildArg, err := o.dfBuildArgs(svc)
+	if err != nil {
+		return err
+	}
+	digest, err := o.imageBuilderPusher.BuildAndPush(exec.NewDockerCommand(), buildArg)
+	if err != nil {
+		return fmt.Errorf("build and push image: %w", err)
+	}
+	o.imageDigest = digest
+	o.buildRequired = true
+	return nil
+}
+
+func (o *deploySvcOpts) dfBuildArgs(svc interface{}) (*exec.BuildArguments, error) {
+	copilotDir, err := o.ws.CopilotDirPath()
+	if err != nil {
+		return nil, fmt.Errorf("get copilot directory: %w", err)
+	}
+	return buildArgs(o.name, o.imageTag, copilotDir, svc)
+}
+
+func buildArgs(name, imageTag, copilotDir string, unmarshaledManifest interface{}) (*exec.BuildArguments, error) {
+	type dfArgs interface {
+		BuildArgs(rootDirectory string) *manifest.DockerBuildArgs
+	}
+	mf, ok := unmarshaledManifest.(dfArgs)
+	if !ok {
+		return nil, fmt.Errorf("%s does not have required method BuildArgs()", name)
+	}
+	var tags []string
+	if imageTag != "" {
+		tags = append(tags, imageTag)
+	}
+	args := mf.BuildArgs(filepath.Dir(copilotDir))
+	return &exec.BuildArguments{
+		Dockerfile: *args.Dockerfile,
+		Context:    *args.Context,
+		Args:       args.Args,
+		CacheFrom:  args.CacheFrom,
+		Target:     aws.StringValue(args.Target),
+		Tags:       tags,
 	}, nil
 }
 
-// Template returns the CloudFormation template for the service parametrized for the environment.
-func (s *RequestDrivenWebService) Template() (string, error) {
-	outputs, err := s.addonsOutputs()
+// pushAddonsTemplateToS3Bucket generates the addons template for the service and pushes it to S3.
+// If the service doesn't have any addons, it returns the empty string and no errors.
+// If the service has addons, it returns the URL of the S3 object storing the addons template.
+func (o *deploySvcOpts) pushAddonsTemplateToS3Bucket() (string, error) {
+	template, err := o.addons.Template()
 	if err != nil {
-		return "", err
-	}
-
-	var region, bucket, dnsDelegationRole, dnsName *string
-	var urls map[string]*string
-	if s.manifest.Alias != nil {
-		bucket, urls, err = parseS3URLs(s.customResourceS3URL)
-		if err != nil {
-			return "", err
+		var notFoundErr *addon.ErrAddonsNotFound
+		if errors.As(err, &notFoundErr) {
+			// addons doesn't exist for service, the url is empty.
+			return "", nil
 		}
-		dnsDelegationRole, dnsName = convertAppInformation(s.app)
-		region = awsSDKLayerForRegion[s.rc.Region]
+		return "", fmt.Errorf("retrieve addons template: %w", err)
 	}
 
-	publishers, err := convertPublish(s.manifest.Publish, s.rc.AccountID, s.rc.Region, s.app.Name, s.env, s.name)
-	if err != nil {
-		return "", fmt.Errorf(`convert "publish" field for service %s: %w`, s.name, err)
-	}
-
-	content, err := s.parser.ParseRequestDrivenWebService(template.ParseRequestDrivenWebServiceInput{
-		Variables:         s.manifest.Variables,
-		Tags:              s.manifest.Tags,
-		NestedStack:       outputs,
-		EnableHealthCheck: !s.healthCheckConfig.IsEmpty(),
-
-		Alias:                s.manifest.Alias,
-		ScriptBucketName:     bucket,
-		CustomDomainLambda:   urls[template.AppRunnerCustomDomainLambdaFileName],
-		AWSSDKLayer:          region,
-		AppDNSDelegationRole: dnsDelegationRole,
-		AppDNSName:           dnsName,
-
-		Publish: publishers,
-	})
-	if err != nil {
+	if err := o.retrieveAppResourcesForEnvRegion(); err != nil {
 		return "", err
 	}
-	return content.String(), nil
+
+	reader := strings.NewReader(template)
+	url, err := o.s3.PutArtifact(o.appEnvResources.S3Bucket, fmt.Sprintf(deploy.AddonsCfnTemplateNameFormat, o.name), reader)
+	if err != nil {
+		return "", fmt.Errorf("put addons artifact to bucket %s: %w", o.appEnvResources.S3Bucket, err)
+	}
+	return url, nil
 }
 
-// SerializedParameters returns the CloudFormation stack's parameters serialized
-// to a YAML document annotated with comments for readability to users.
-func (s *RequestDrivenWebService) SerializedParameters() (string, error) {
-	return s.templateConfiguration(s)
+func (o *deploySvcOpts) manifest() (interface{}, error) {
+	raw, err := o.ws.ReadServiceManifest(o.name)
+	if err != nil {
+		return nil, fmt.Errorf("read service %s manifest file: %w", o.name, err)
+	}
+	mft, err := o.unmarshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal service %s manifest: %w", o.name, err)
+	}
+	envMft, err := mft.ApplyEnv(o.envName)
+	if err != nil {
+		return nil, fmt.Errorf("apply environment %s override: %s", o.envName, err)
+	}
+	return envMft, nil
+}
+
+func (o *deploySvcOpts) runtimeConfig(addonsURL string) (*stack.RuntimeConfig, error) {
+	endpoint, err := o.endpointGetter.ServiceDiscoveryEndpoint()
+	if err != nil {
+		return nil, err
+	}
+	if !o.buildRequired {
+		return &stack.RuntimeConfig{
+			AddonsTemplateURL:        addonsURL,
+			AdditionalTags:           tags.Merge(o.targetApp.Tags, o.resourceTags),
+			ServiceDiscoveryEndpoint: endpoint,
+			AccountID:                o.targetApp.AccountID,
+			Region:                   o.targetEnvironment.Region,
+		}, nil
+	}
+
+	if err := o.retrieveAppResourcesForEnvRegion(); err != nil {
+		return nil, err
+	}
+
+	repoURL, ok := o.appEnvResources.RepositoryURLs[o.name]
+	if !ok {
+		return nil, &errRepoNotFound{
+			wlName:       o.name,
+			envRegion:    o.targetEnvironment.Region,
+			appAccountID: o.targetApp.AccountID,
+		}
+	}
+	return &stack.RuntimeConfig{
+		AddonsTemplateURL: addonsURL,
+		AdditionalTags:    tags.Merge(o.targetApp.Tags, o.resourceTags),
+		Image: &stack.ECRImage{
+			RepoURL:  repoURL,
+			ImageTag: o.imageTag,
+			Digest:   o.imageDigest,
+		},
+		ServiceDiscoveryEndpoint: endpoint,
+		AccountID:                o.targetApp.AccountID,
+		Region:                   o.targetEnvironment.Region,
+	}, nil
+}
+
+func uploadCustomResources(o *uploadCustomResourcesOpts, appEnvResources *stack.AppRegionalResources) (map[string]string, error) {
+	s3Client, err := o.newS3Uploader()
+	if err != nil {
+		return nil, err
+	}
+
+	urls, err := o.uploader.UploadRequestDrivenWebServiceCustomResources(func(key string, objects ...s3.NamedBinary) (string, error) {
+		return s3Client.ZipAndUpload(appEnvResources.S3Bucket, key, objects...)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("upload custom resources to bucket %s: %w", appEnvResources.S3Bucket, err)
+	}
+
+	return urls, nil
+}
+
+func (o *deploySvcOpts) stackConfiguration(addonsURL string) (cloudformation.StackConfiguration, error) {
+	mft, err := o.manifest()
+	if err != nil {
+		return nil, err
+	}
+	rc, err := o.runtimeConfig(addonsURL)
+	if err != nil {
+		return nil, err
+	}
+	var conf cloudformation.StackConfiguration
+	switch t := mft.(type) {
+	case *manifest.LoadBalancedWebService:
+		if o.targetApp.RequiresDNSDelegation() {
+			var appVersionGetter versionGetter
+			if appVersionGetter, err = o.newAppVersionGetter(o.appName); err != nil {
+				return nil, err
+			}
+			if err = validateAlias(aws.StringValue(t.Name), aws.StringValue(t.Alias), o.targetApp, o.envName, appVersionGetter); err != nil {
+				return nil, err
+			}
+			conf, err = stack.NewHTTPSLoadBalancedWebService(t, o.targetEnvironment.Name, o.targetEnvironment.App, *rc)
+		} else {
+			conf, err = stack.NewLoadBalancedWebService(t, o.targetEnvironment.Name, o.targetEnvironment.App, *rc)
+		}
+	case *manifest.RequestDrivenWebService:
+		var caller identity.Caller
+		caller, err = o.identity.Get()
+		if err != nil {
+			return nil, fmt.Errorf("get identity: %w", err)
+		}
+		appInfo := deploy.AppInformation{
+			Name:                o.targetEnvironment.App,
+			DNSName:             o.targetApp.Domain,
+			AccountPrincipalARN: caller.RootUserARN,
+		}
+		if t.Alias == nil {
+			conf, err = stack.NewRequestDrivenWebService(t, o.targetEnvironment.Name, appInfo, *rc)
+			break
+		}
+
+		var (
+			urls             map[string]string
+			appVersionGetter versionGetter
+		)
+		if appVersionGetter, err = o.newAppVersionGetter(o.appName); err != nil {
+			return nil, err
+		}
+		if err = validateAppVersion(o.targetApp, appVersionGetter); err != nil {
+			logAppVersionOutdatedError(o.name)
+			return nil, err
+		}
+
+		if err = o.retrieveAppResourcesForEnvRegion(); err != nil {
+			return nil, err
+		}
+		if urls, err = uploadCustomResources(o.uploadOpts, o.appEnvResources); err != nil {
+			return nil, err
+		}
+		conf, err = stack.NewRequestDrivenWebServiceWithAlias(t, o.targetEnvironment.Name, appInfo, *rc, urls)
+	case *manifest.BackendService:
+		conf, err = stack.NewBackendService(t, o.targetEnvironment.Name, o.targetEnvironment.App, *rc)
+	default:
+		return nil, fmt.Errorf("unknown manifest type %T while creating the CloudFormation stack", t)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("create stack configuration: %w", err)
+	}
+	return conf, nil
+}
+
+func (o *deploySvcOpts) deploySvc(addonsURL string) error {
+	conf, err := o.stackConfiguration(addonsURL)
+	if err != nil {
+		return err
+	}
+
+	if err := o.svcCFN.DeployService(os.Stderr, conf, awscloudformation.WithRoleARN(o.targetEnvironment.ExecutionRoleARN)); err != nil {
+		return fmt.Errorf("deploy service: %w", err)
+	}
+	return nil
+}
+
+func validateAlias(svcName, alias string, app *config.Application, envName string, appVersionGetter versionGetter) error {
+	if alias == "" {
+		return nil
+	}
+	if err := validateAppVersion(app, appVersionGetter); err != nil {
+		logAppVersionOutdatedError(svcName)
+		return err
+	}
+	// Alias should be within either env, app, or root hosted zone.
+	var regEnvHostedZone, regAppHostedZone, regRootHostedZone *regexp.Regexp
+	var err error
+	if regEnvHostedZone, err = regexp.Compile(fmt.Sprintf(`^([^\.]+\.)?%s.%s.%s`, envName, app.Name, app.Domain)); err != nil {
+		return err
+	}
+	if regAppHostedZone, err = regexp.Compile(fmt.Sprintf(`^([^\.]+\.)?%s.%s`, app.Name, app.Domain)); err != nil {
+		return err
+	}
+	if regRootHostedZone, err = regexp.Compile(fmt.Sprintf(`^([^\.]+\.)?%s`, app.Domain)); err != nil {
+		return err
+	}
+	for _, re := range []*regexp.Regexp{regEnvHostedZone, regAppHostedZone, regRootHostedZone} {
+		if re.MatchString(alias) {
+			return nil
+		}
+	}
+	log.Errorf(`%s must match one of the following patterns:
+- %s.%s.%s,
+- <name>.%s.%s.%s,
+- %s.%s,
+- <name>.%s.%s,
+- %s,
+- <name>.%s
+`, color.HighlightCode("http.alias"), envName, app.Name, app.Domain, envName,
+		app.Name, app.Domain, app.Name, app.Domain, app.Name,
+		app.Domain, app.Domain, app.Domain)
+	return fmt.Errorf("alias is not supported in hosted zones not managed by Copilot")
+}
+
+func validateAppVersion(alias string, app *config.Application, appVersionGetter versionGetter) error {
+	appVersion, err := appVersionGetter.Version()
+	if err != nil {
+		return fmt.Errorf("get version for app %s: %w", app.Name, err)
+	}
+	diff := semver.Compare(appVersion, deploy.AliasLeastAppTemplateVersion)
+	if diff < 0 {
+		return fmt.Errorf(`alias is not compatible with application versions below %s`, deploy.AliasLeastAppTemplateVersion)
+	}
+	return nil
+}
+
+func logAppVersionOutdatedError(name string) {
+	log.Errorf(`Cannot deploy service %s because the application version is incompatible.
+To upgrade the application, please run %s first (see https://aws.github.io/copilot-cli/docs/credentials/#application-credentials).
+`, name, color.HighlightCode("copilot app upgrade"))
+}
+
+func (o *deploySvcOpts) retrieveAppResourcesForEnvRegion() error {
+	if o.appEnvResources == nil {
+		resources, err := o.appCFN.GetAppResourcesByRegion(o.targetApp, o.targetEnvironment.Region)
+		if err != nil {
+			return fmt.Errorf("get application %s resources from region %s: %w", o.targetApp.Name, o.targetEnvironment.Region, err)
+		}
+		o.appEnvResources = resources
+	}
+	return nil
+}
+
+func (o *deploySvcOpts) showSvcURI() error {
+	type identifier interface {
+		URI(string) (string, error)
+	}
+
+	var ecsSvcDescriber identifier
+	var err error
+	switch o.targetSvc.Type {
+	case manifest.LoadBalancedWebServiceType:
+		ecsSvcDescriber, err = describe.NewLBWebServiceDescriber(describe.NewLBWebServiceConfig{
+			NewServiceConfig: describe.NewServiceConfig{
+				App:         o.appName,
+				Svc:         o.name,
+				ConfigStore: o.store,
+			},
+		})
+	case manifest.RequestDrivenWebServiceType:
+		ecsSvcDescriber, err = describe.NewRDWebServiceDescriber(describe.NewRDWebServiceConfig{
+			NewServiceConfig: describe.NewServiceConfig{
+				App:         o.appName,
+				Svc:         o.name,
+				ConfigStore: o.store,
+			},
+		})
+	case manifest.BackendServiceType:
+		ecsSvcDescriber, err = describe.NewBackendServiceDescriber(describe.NewBackendServiceConfig{
+			NewServiceConfig: describe.NewServiceConfig{
+				App:         o.appName,
+				Svc:         o.name,
+				ConfigStore: o.store,
+			},
+		})
+	default:
+		err = errors.New("unexpected service type")
+	}
+	if err != nil {
+		return fmt.Errorf("create describer for service type %s: %w", o.targetSvc.Type, err)
+	}
+
+	uri, err := ecsSvcDescriber.URI(o.targetEnvironment.Name)
+	if err != nil {
+		return fmt.Errorf("get uri for environment %s: %w", o.targetEnvironment.Name, err)
+	}
+	switch o.targetSvc.Type {
+	case manifest.BackendServiceType:
+		msg := fmt.Sprintf("Deployed %s.\n", color.HighlightUserInput(o.name))
+		if uri != describe.BlankServiceDiscoveryURI {
+			msg = fmt.Sprintf("Deployed %s, its service discovery endpoint is %s.\n", color.HighlightUserInput(o.name), color.HighlightResource(uri))
+		}
+		log.Success(msg)
+	default:
+		log.Successf("Deployed %s, you can access it at %s.\n", color.HighlightUserInput(o.name), color.HighlightResource(uri))
+	}
+	return nil
+}
+
+// buildSvcDeployCmd builds the `svc deploy` subcommand.
+func buildSvcDeployCmd() *cobra.Command {
+	vars := deployWkldVars{}
+	cmd := &cobra.Command{
+		Use:   "deploy",
+		Short: "Deploys a service to an environment.",
+		Long:  `Deploys a service to an environment.`,
+		Example: `
+  Deploys a service named "frontend" to a "test" environment.
+  /code $ copilot svc deploy --name frontend --env test
+  Deploys a service with additional resource tags.
+  /code $ copilot svc deploy --resource-tags source/revision=bb133e7,deployment/initiator=manual`,
+		RunE: runCmdE(func(cmd *cobra.Command, args []string) error {
+			opts, err := newSvcDeployOpts(vars)
+			if err != nil {
+				return err
+			}
+			if err := opts.Validate(); err != nil {
+				return err
+			}
+			if err := opts.Ask(); err != nil {
+				return err
+			}
+			if err := opts.Execute(); err != nil {
+				return err
+			}
+			return nil
+		}),
+	}
+	cmd.Flags().StringVarP(&vars.appName, appFlag, appFlagShort, tryReadingAppName(), appFlagDescription)
+	cmd.Flags().StringVarP(&vars.name, nameFlag, nameFlagShort, "", svcFlagDescription)
+	cmd.Flags().StringVarP(&vars.envName, envFlag, envFlagShort, "", envFlagDescription)
+	cmd.Flags().StringVar(&vars.imageTag, imageTagFlag, "", imageTagFlagDescription)
+	cmd.Flags().StringToStringVar(&vars.resourceTags, resourceTagsFlag, nil, resourceTagsFlagDescription)
+
+	return cmd
 }

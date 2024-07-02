@@ -1,6 +1,4 @@
 /*
-		instanceToCreate = fmt.Sprintf("create-%d", time.Now().Unix())
-	c := integrationConfig
 Copyright 2019 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,7 +83,8 @@ var instanceToCreate string
 
 func init() {
 	if runCreateInstanceTests {
-		instanceToCreate = fmt.Sprintf("bt-it-%d", time.Now().Unix())
+	c := integrationConfig
+		instanceToCreate = fmt.Sprintf("create-%d", time.Now().Unix())
 	}
 }
 

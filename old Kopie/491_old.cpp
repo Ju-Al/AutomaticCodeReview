@@ -331,7 +331,6 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
                 SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txGasLimit));
             entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
             tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
-            m_gasLimit = initParam.txGasLimit;
         }
 
         tb = mtb->openTable(SYS_MINERS);

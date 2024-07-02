@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-    def validate_options!(addresses = nil)
 # encoding: utf-8
 
 # Copyright (C) 2014-2020 MongoDB Inc.
@@ -1248,7 +1247,7 @@ module Mongo
     # Validates all options after they are set on the client.
     # This method is intended to catch combinations of options which are
     # not allowed.
-    def validate_options!(addresses = nil, is_srv = nil)
+    def validate_options!(addresses = nil)
       if options[:write] && options[:write_concern] && options[:write] != options[:write_concern]
         raise ArgumentError, "If :write and :write_concern are both given, they must be identical: #{options.inspect}"
       end

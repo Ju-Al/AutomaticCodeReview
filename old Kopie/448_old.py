@@ -138,7 +138,6 @@ class ConnectionItem(common.WWrap):
                 self.state.last_saveload,
                 self.master.server_playback_path
             )
-    def server_copy_response(self, k):
         if k == "c":
             try:
                 pyperclip.copy(self.flow.response_content())

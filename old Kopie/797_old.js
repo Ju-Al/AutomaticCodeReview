@@ -1,5 +1,4 @@
 export const getFilterParams = () => {
-    const params = new URLSearchParams(window.location.search);
     let titles,
         values = [];
 

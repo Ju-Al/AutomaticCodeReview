@@ -84,7 +84,6 @@ static int iniKeyToElektraKey (void *vhandle, const char *section, const char *n
 
 	keyAddBaseName (appendKey, name);
 
-	if(value == NULL)
 		keySetMeta(appendKey, "ini/empty", "");
 	if (!lineContinuation)
 	{

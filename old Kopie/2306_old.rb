@@ -1,5 +1,4 @@
 require "spec_helper"
-
 describe "layouts/application.html.erb" do
   let!(:search) { { path: cookbooks_path, name: "Cookbooks" } }
 

@@ -1,5 +1,4 @@
 import Ember from 'ember';
-        var sexGrouping = patientBySex[visit.get('patient.sex')];
 import AbstractReportController from 'hospitalrun/controllers/abstract-report-controller';
 import PatientDiagnosis from 'hospitalrun/mixins/patient-diagnosis';
 import PatientVisits from 'hospitalrun/mixins/patient-visits';
@@ -569,7 +568,7 @@ export default AbstractReportController.extend(PatientDiagnosis, PatientVisits, 
           admissionDate: visit.get('startDate'),
           dischargeDate: visit.get('endDate')
         };
-        var sex = visit.get('patient.sex');
+        var sexGrouping = patientBySex[visit.get('patient.sex')];
         if (!sex) {
           sex = 'Sex Not Entered';
         }

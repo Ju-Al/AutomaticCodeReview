@@ -1,15 +1,4 @@
 # -*- coding: utf-8 -*-
-                 tracking_url_callback=None):
-        self.tracking_url_callback = tracking_url_callback
-        run_again = False
-        try:
-            task_gen = self.task.run(tracking_url_callback=self.tracking_url_callback)
-        except TypeError as ex:
-            if 'unexpected keyword argument' not in str(ex):
-                raise
-            run_again = True
-        if run_again:
-            task_gen = self.task.run()
 #
 # Copyright 2012-2015 Spotify AB
 #
@@ -106,7 +95,17 @@ class TaskProcess(multiprocessing.Process):
     Mainly for convenience since this is run in a separate process. """
 
     def __init__(self, task, worker_id, result_queue, random_seed=False, worker_timeout=0,
-                 run_callbacks=None):
+        self.tracking_url_callback = tracking_url_callback
+        run_again = False
+        try:
+            task_gen = self.task.run(tracking_url_callback=self.tracking_url_callback)
+        except TypeError as ex:
+            if 'unexpected keyword argument' not in str(ex):
+                raise
+            run_again = True
+        if run_again:
+            task_gen = self.task.run()
+                 tracking_url_callback=None):
         super(TaskProcess, self).__init__()
         self.task = task
         self.worker_id = worker_id

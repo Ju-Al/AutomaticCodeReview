@@ -1,5 +1,4 @@
 package org.jivesoftware.openfire.pubsub;
-                    if (userManager.isRegisteredUser(jid)) {
 
 import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.group.Group;
@@ -118,7 +117,7 @@ public class PubSubServiceInfo {
             try {
                 if (username.contains("@")) {
                     JID jid = new JID(username);
-                    if (userManager.isRegisteredUser(jid, true)) {
+                    if (userManager.isRegisteredUser(jid)) {
                         return jid;
                     }
                 } else if (userManager.isRegisteredUser(username)) {

@@ -1,5 +1,4 @@
 // Copyright 2018 Google LLC
-	defer w.notifier.Remove(w.file)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -149,7 +148,7 @@ func (w *watcher) Watch(ctx context.Context) (driver.Variable, error) {
 		}
 		return zeroVar, err
 	}
-	defer func() {
+	defer w.notifier.Remove(w.file)
 		if err := w.notifier.Remove(w.file); err != nil {
 			w.errFunc(err)
 		}

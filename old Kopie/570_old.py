@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-            new_data, new_index, new_columns, self._dtype_cachefrom __future__ import division
+from __future__ import division
 from __future__ import print_function
 
 import numpy as np
@@ -1584,8 +1584,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
         new_data = self._map_across_full_axis(axis, func)
 
         new_index = pandas.RangeIndex(len(self.index)) if not axis else self.index
-        new_columns = self.columns if not axis else pandas.RangeIndex(len(self.columns))
-        new_dtypes = self._get_dtype().copy()
+            new_data, new_index, new_columns, self._dtype_cache        new_columns = self.columns if not axis else pandas.RangeIndex(len(self.columns))
         new_dtypes.index = new_columns
         return self.__constructor__(
             new_data, new_index, new_columns, new_dtypes

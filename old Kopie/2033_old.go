@@ -148,7 +148,6 @@ func runCache(opts CacheOptions, gopts GlobalOptions, args []string) error {
 
 	return nil
 }
-
 func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {

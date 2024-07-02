@@ -50,7 +50,6 @@ type udpConn interface {
 
 type agentClientUDPParams struct {
 	HostPort                 string
-	Host                     string
 	Port                     string
 	MaxPacketSize            int
 	Logger                   *log.Logger

@@ -1,7 +1,4 @@
 /*
-				gen.SetCertificateIssuer(cmmeta.ObjectReference{Name: "letsencrypt-prod", Kind: "ClusterIssuer"}),
-			expErr:         false,
-			// Note: after `Event:` there is actually a tab, which sometimes shows as a single space, sometimes multiple
 Copyright 2020 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -124,7 +121,9 @@ No CertificateRequest found for this Certificate`,
 			certificate: gen.Certificate(crt2Name,
 				gen.SetCertificateNamespace(ns1),
 				gen.SetCertificateDNSNames("www.example.com"),
-				gen.SetCertificateIssuer(cmmeta.ObjectReference{Name: "letsencrypt-prod", Kind: "Issuer"}),
+			expErr:         false,
+			// Note: after `Event:` there is actually a tab, which sometimes shows as a single space, sometimes multiple
+				gen.SetCertificateIssuer(cmmeta.ObjectReference{Name: "letsencrypt-prod", Kind: "ClusterIssuer"}),
 				gen.SetCertificateSecretName("example-tls")),
 			certificateStatus: &cmapi.CertificateStatus{Conditions: []cmapi.CertificateCondition{crtReadyAndUpToDateCond, crtIssuingCond},
 				NotAfter: &metav1.Time{Time: certIsValidTime}, Revision: &revision1},

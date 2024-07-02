@@ -1,6 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-        args.basedir = tempfile.mkdtemp()
 # Copyright 2014-2015 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -71,7 +70,7 @@ def run(args):
         sys.exit(usertypes.Exit.ok)
 
     if args.temp_basedir:
-        args.basedir = tempfile.mkdtemp(prefix='qutebrowser-prefix-')
+        args.basedir = tempfile.mkdtemp()
 
     quitter = Quitter(args)
     objreg.register('quitter', quitter)

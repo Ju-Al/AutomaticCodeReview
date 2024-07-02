@@ -1,5 +1,4 @@
 /* Licensed under the Apache License, Version 2.0 (the "License");
-        CaseInstance caseInstance = getCaseInstanceFromRequest(caseInstanceId);
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  * 
@@ -55,7 +54,7 @@ public class CaseInstanceIdentityLinkResource extends BaseCaseInstanceResource {
             @ApiParam(name = "type") @PathVariable("type") String type,
             HttpServletRequest request) {
 
-        CaseInstance caseInstance = runtimeService.createCaseInstanceQuery().caseInstanceId(caseInstanceId).singleResult();
+        CaseInstance caseInstance = getCaseInstanceFromRequest(caseInstanceId);
         if (caseInstance == null) {
             throw new FlowableObjectNotFoundException("Could not find a case instance with id '" + caseInstanceId + "'.");
         }

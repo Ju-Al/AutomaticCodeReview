@@ -1,6 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////
-     *   _Currently, only the "change" event supported_.
-     * @param {callback(Realm, string)} callback - Function to be called when the event occurs.
 //
 // Copyright 2016 Realm Inc.
 //
@@ -211,7 +209,8 @@ class Realm {
     /**
      * Add a listener `callback` for the specified event `name`.
      * @param {string} name - The name of event that should cause the callback to be called.
-     *   _Currently, only the "change" or "schema" events supported_.
+     *   _Currently, only the "change" event supported_.
+     * @param {callback(Realm, string)} callback - Function to be called when the event occurs.
      * @param {callback(Realm, string)|callback(Realm, Schema)} callback - Function to be called when a change event occurs.
      *   Each callback will only be called once per event, regardless of the number of times
      *   it was added.

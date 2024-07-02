@@ -1,13 +1,4 @@
 // Copyright The OpenTelemetry Authors
-	spanContext := &data.span.spanContext
-	sampled := sampler.ShouldSample(SamplingParameters{
-		TraceID:         spanContext.TraceID,
-	if sampled.Decision == RecordAndSample {
-		spanContext.TraceFlags |= trace.FlagsSampled
-	} else {
-		spanContext.TraceFlags &^= trace.FlagsSampled
-	}
-	return sampled
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -602,7 +593,15 @@ type samplingData struct {
 
 func makeSamplingDecision(data samplingData) SamplingResult {
 	sampler := data.cfg.DefaultSampler
-	return sampler.ShouldSample(SamplingParameters{
+	spanContext := &data.span.spanContext
+		TraceID:         spanContext.TraceID,
+	if sampled.Decision == RecordAndSample {
+		spanContext.TraceFlags |= trace.FlagsSampled
+	} else {
+		spanContext.TraceFlags &^= trace.FlagsSampled
+	}
+	return sampled
+	sampled := sampler.ShouldSample(SamplingParameters{
 		ParentContext:   data.parent,
 		TraceID:         data.span.spanContext.TraceID,
 		Name:            data.name,

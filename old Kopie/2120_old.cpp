@@ -1,5 +1,4 @@
 /**
-        if (mApi[apiIndex].megaApi->isLoggedIn())
  * @file tests/sdk_test.cpp
  * @brief Mega SDK test file
  *
@@ -873,7 +872,7 @@ void SdkTest::releaseMegaApi(unsigned int apiIndex)
     assert(megaApi[apiIndex].get() == mApi[apiIndex].megaApi);
     if (mApi[apiIndex].megaApi)
     {
-        if (mApi[apiIndex].megaApi->isLoggedIn() && !gResumeSessions)
+        if (mApi[apiIndex].megaApi->isLoggedIn())
         {
             ASSERT_NO_FATAL_FAILURE( logout(apiIndex) );
         }

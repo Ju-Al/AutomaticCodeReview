@@ -317,8 +317,6 @@ def NeighborSampler(g, batch_size, expand_factor, num_hops=1,
     if not prefetch:
         return loader
     else:
-        return _PrefetchingLoader(loader, num_prefetch=num_workers*2)
-
 def LayerSampler(g, batch_size, layer_size, n_layers=1,
                  neighbor_type='in', node_prob=None, seed_nodes=None,
                  shuffle=False, num_workers=1,

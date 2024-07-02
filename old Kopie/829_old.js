@@ -1,9 +1,4 @@
 const async = require('async');
-    const testFiles = files.filter((file) => {
-      // Only keep the .js files
-      // TODO: make this a configuration in embark.json
-      return file.substr(-3) === '.js';
-    }).map((file) => {
 const Mocha = require('mocha');
 const path = require('path');
 const {runCmd} = require('../utils/utils');
@@ -17,7 +12,11 @@ function getFilesFromDir(filePath, cb) {
     if (err) {
       return cb(err);
     }
-    const testFiles = files.map((file) => {
+    const testFiles = files.filter((file) => {
+      // Only keep the .js files
+      // TODO: make this a configuration in embark.json
+      return file.substr(-3) === '.js';
+    }).map((file) => {
       return path.join(filePath, file);
     });
     cb(null, testFiles);

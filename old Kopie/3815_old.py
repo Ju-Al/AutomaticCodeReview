@@ -1032,9 +1032,6 @@ def spiral_layout(G, scale=1, center=None, dim=2,
     pos = dict(zip(G, pos))
 
     return pos
-
-
-def multipartite_layout(G, subset_key='subset', align='vertical',
                         scale=1, center=None):
     """Position nodes in layers of straight lines.
 

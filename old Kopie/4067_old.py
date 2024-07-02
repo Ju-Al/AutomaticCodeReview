@@ -1,5 +1,4 @@
 import networkx as nx
-import random
 import time
 from networkx.classes.function import is_directed
 

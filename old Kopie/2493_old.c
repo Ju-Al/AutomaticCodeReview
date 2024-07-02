@@ -247,7 +247,6 @@ int s2n_client_psk_recv(struct s2n_connection *conn, struct s2n_stuffer *extensi
         return S2N_SUCCESS;
     }
 
-    /* https://tools.ietf.org/html/rfc8446#section-4.2.11
      * The "pre_shared_key" extension MUST be the last extension in the ClientHello.
      * Servers MUST check that it is the last extension and otherwise fail the handshake
      * with an "illegal_parameter" alert.

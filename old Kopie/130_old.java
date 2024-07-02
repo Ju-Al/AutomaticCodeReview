@@ -1,9 +1,4 @@
 /*
-        String value = this.brokerAddrs.get(MixAll.MASTER_ID);
-        if (null == value) {
-            for (Map.Entry<Long, String> entry : this.brokerAddrs.entrySet()) {
-                return entry.getValue();
-            }
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -45,8 +40,11 @@ public class BrokerData implements Comparable<BrokerData> {
         this.brokerName = brokerName;
         this.brokerAddrs = brokerAddrs;
     }
-
-    /**
+        String value = this.brokerAddrs.get(MixAll.MASTER_ID);
+        if (null == value) {
+            for (Map.Entry<Long, String> entry : this.brokerAddrs.entrySet()) {
+                return entry.getValue();
+            }
      * Selects a (preferably master) broker address from the registered list.
      * If the master's address cannot be found, a slave broker address is selected in a random manner.
      *

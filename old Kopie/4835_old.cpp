@@ -270,7 +270,7 @@ void DataConverter::_convertToOgr(const QStringList& inputs, const QString& outp
       numTasks++;
     }
     int currentTask = 1;
-    double taskWeight = 1.0 / numTasks;
+    const float taskWeight = 1.0 / (float)numTasks;
 
     Progress inputLoadProgress(
       ConfigOptions().getJobId(), JOB_SOURCE, Progress::JobState::Running, 0.0, taskWeight);
@@ -294,7 +294,7 @@ void DataConverter::_convertToOgr(const QStringList& inputs, const QString& outp
       convertOps.setProgress(
         Progress(
           ConfigOptions().getJobId(), JOB_SOURCE, Progress::JobState::Running,
-          (float)(currentTask - 1) / (float)numTasks, 1.0 / (float)numTasks));
+          (currentTask - 1) / numTasks, 1.0 / numTasks));
       convertOps.apply(map);
       currentTask++;
       LOG_STATUS(

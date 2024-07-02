@@ -881,7 +881,6 @@ HERE;
         // TODO
         return [];
     }
-
     /**
      * Format date
      *

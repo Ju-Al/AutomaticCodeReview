@@ -1,6 +1,4 @@
 /*
-    assert !generateNullsOnLeft : "not implemented";
-    assert !generateNullsOnRight : "not implemented";
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -1373,7 +1371,8 @@ public abstract class EnumerableDefaults {
       final Function2<TSource, TInner, TResult> resultSelector,
       boolean generateNullsOnLeft,
       boolean generateNullsOnRight) {
-    if (generateNullsOnLeft) {
+    assert !generateNullsOnLeft : "not implemented";
+    assert !generateNullsOnRight : "not implemented";
       throw new UnsupportedOperationException("not implemented");
     }
     if (generateNullsOnRight) {

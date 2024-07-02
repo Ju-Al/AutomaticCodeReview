@@ -1,5 +1,4 @@
 /**
-/// getgroupid() -> <int>
  * This file is part of Hercules.
  * http://herc.ws - http://github.com/HerculesWS/Hercules
  *
@@ -9688,6 +9687,7 @@ BUILDIN(basicskillcheck)
 
 /// Returns the GM level of the player.
 ///
+/// getgroupid() -> <int>
 /// getgmlevel() -> <level>
 BUILDIN(getgmlevel)
 {

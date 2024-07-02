@@ -1,5 +1,4 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-  UNEXPECTED_ALERT_BEHAVIOR: 'unexpectedAlertBehavior',
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
@@ -133,7 +132,7 @@ const Capability = {
    * Defines how the driver should handle unexpected alerts. The value should
    * be one of "accept", "dismiss", or "ignore".
    */
-  UNEXPECTED_ALERT_BEHAVIOUR: 'unexpectedAlertBehaviour',
+  UNEXPECTED_ALERT_BEHAVIOR: 'unexpectedAlertBehavior',
 
   /** Defines the browser version. */
   VERSION: 'version'

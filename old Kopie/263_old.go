@@ -210,7 +210,6 @@ func (e *Engine) process(originID flow.Identifier, event interface{}) error {
 		defer e.unit.Unlock()
 		defer e.engineMetrics.MessageHandled(metrics.EngineMatching, metrics.MessageResultApproval)
 		return e.onApproval(originID, ev)
-	case *messages.ApprovalResponse:
 		e.unit.Lock()
 		defer e.unit.Unlock()
 		e.log.Debug().Msg("received approval response")

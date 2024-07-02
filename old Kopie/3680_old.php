@@ -1,5 +1,4 @@
 <?php
-		return array(System::getContainer()->get(EntityCacheTags::class)->getTagForModelClass($this->objModel));
 
 /*
  * This file is part of Contao.
@@ -258,7 +257,7 @@ abstract class Module extends Frontend
 	 */
 	protected function getResponseCacheTags(): array
 	{
-		return array(System::getContainer()->get(EntityCacheTags::class)->getTagForModelInstance($this->objModel));
+		return array(System::getContainer()->get(EntityCacheTags::class)->getTagForModelClass($this->objModel));
 	}
 
 	/**

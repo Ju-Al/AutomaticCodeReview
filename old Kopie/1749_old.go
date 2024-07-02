@@ -1,5 +1,4 @@
 /*
-	return s.Client.CoreV1().Pods(ch.Namespace).Create(s.buildPod(ch))
 Copyright 2019 The Jetstack cert-manager contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -133,7 +132,7 @@ func (s *Solver) cleanupPods(ctx context.Context, ch *v1alpha1.Challenge) error 
 // createPod will create a challenge solving pod for the given certificate,
 // domain, token and key.
 func (s *Solver) createPod(ch *v1alpha1.Challenge) (*corev1.Pod, error) {
-	return s.Client.CoreV1().Pods(ch.Namespace).Create(
+	return s.Client.CoreV1().Pods(ch.Namespace).Create(s.buildPod(ch))
 		s.buildPod(ch))
 }
 

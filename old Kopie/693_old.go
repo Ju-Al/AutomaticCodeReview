@@ -1,5 +1,4 @@
 // Package pseudohsm provides a pseudo HSM for development environments.
-package pseudohsm
 
 import (
 	"io/ioutil"

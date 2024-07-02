@@ -1,5 +1,4 @@
 /*
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -381,7 +380,7 @@ bool Ledger::consensusInitFactory()
     Ledger_LOG(DEBUG) << "[#initLedger] [#consensusInitFactory] [type]:  "
                       << m_param->mutableConsensusParam().consensusType;
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
         /// create RaftSealer
         m_sealer = createRaftSealer();

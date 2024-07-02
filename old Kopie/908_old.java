@@ -1,5 +1,4 @@
 /*
-  private static String formatTimestampMillis(long millis) {
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -319,7 +318,7 @@ abstract class BaseTableScan implements TableScan {
     return schema;
   }
 
-  protected static String formatTimestampMillis(long millis) {
+  private static String formatTimestampMillis(long millis) {
     return DATE_FORMAT.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()));
   }
 }

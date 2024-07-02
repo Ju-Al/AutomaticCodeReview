@@ -49,7 +49,6 @@ func coverageResultToXML(sources []core.BuildLabel, coverage core.TestCoverage) 
 	linesCovered := 0
 	validFiles := coverage.OrderedFiles()
 
-	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal("Invalid directory")
 	}

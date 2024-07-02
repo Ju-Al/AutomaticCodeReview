@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.core.feed;
-            if (mime != null && (mime.startsWith("audio/") || mime.startsWith("video/"))) {
 
 import android.content.ContentResolver;
 import android.content.Context;
@@ -71,7 +70,7 @@ public class LocalFeedUpdater {
         Set<String> mediaFileNames = new HashSet<>();
         for (DocumentFile file : documentFolder.listFiles()) {
             String mime = file.getType();
-            if (mime == null) {
+            if (mime != null && (mime.startsWith("audio/") || mime.startsWith("video/"))) {
                 continue;
             }
 

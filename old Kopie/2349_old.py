@@ -1,5 +1,4 @@
 import bigchaindb
-import functools
 import logging
 
 from bigchaindb.common.exceptions import ConfigurationError

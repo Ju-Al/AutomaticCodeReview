@@ -1,9 +1,4 @@
 # encoding: utf-8
-          if respond_to?(setter)
-            send(setter, value)
-          else
-            write_attribute(access, value)
-          end
 module Mongoid
   module Persistable
 
@@ -32,7 +27,11 @@ module Mongoid
         as_writable_attribute!(name, value) do |access|
           normalized = name.to_s
           setter = "#{normalized}="
-          process_attribute(normalized, value)
+          if respond_to?(setter)
+            send(setter, value)
+          else
+            write_attribute(access, value)
+          end
           save(validate: false)
         end
       end

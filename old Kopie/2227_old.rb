@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-      # represents one of the command types whitelisted by libmongocrypt and it
 # encoding: utf-8
 
 # Copyright (C) 2017-2020 MongoDB Inc.
@@ -200,7 +199,7 @@ module Mongo
       # auto-encryption options, the client has not been instructed to bypass
       # auto-encryption, and mongocryptd determines that this message is
       # eligible for encryption. A message is eligible for encryption if it
-      # represents one of the command types allowlisted by libmongocrypt and it
+      # represents one of the command types whitelisted by libmongocrypt and it
       # contains data that is required to be encrypted by a local or remote json schema.
       #
       # @param [ Mongo::Server::Connection ] connection The connection on which

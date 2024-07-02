@@ -701,8 +701,6 @@ func (svc *Service) SubmitDistributedQueryResults(
 	}
 
 	return nil
-}
-
 func logJSON(logger log.Logger, v interface{}, key string) {
 	jsonV, err := json.Marshal(v)
 	if err != nil {

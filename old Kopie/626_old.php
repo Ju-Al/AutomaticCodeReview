@@ -646,7 +646,6 @@ function _excerpt_render_inner_columns_blocks( $columns, $allowed_blocks ) {
 	return $output;
 }
 
-global $current_parsed_block;
 
 $current_parsed_block = array(
 	'blockName'  => null,

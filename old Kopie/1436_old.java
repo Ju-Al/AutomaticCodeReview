@@ -50,8 +50,6 @@ public class ASTType extends AbstractJavaTypeNode {
         }
         return 0; // this is not an array
     }
-
-
     /**
      *
      * @deprecated Use {@link #isArrayType()}

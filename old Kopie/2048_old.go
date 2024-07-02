@@ -115,7 +115,6 @@ func Debug() bool {
 	return false
 }
 
-// RecoverFlag allows us to capture things like --app FOO which would otherwise be discarded by urfave/cli if passed in position 0
 func RecoverFlag(c *cli.Context, flagNames []string) string {
 	for _, flagName := range flagNames {
 		f := c.String(flagName)

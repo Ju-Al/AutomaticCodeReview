@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        self._xyz.write("frame {0}\n".format(ts.frame))
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -267,8 +266,7 @@ class XYZWriter(base.WriterBase):
                 ts.positions, inplace=False)
         else:
             coordinates = ts.positions
-
-        # Write number of atoms
+        self._xyz.write("frame {0}\n".format(ts.frame))
         self._xyz.write("{0:d}\n".format(ts.n_atoms))
 
         # Write remark

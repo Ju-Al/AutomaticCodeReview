@@ -357,7 +357,6 @@ namespace Mirror
                 );
 
                 lastServerSendTime = NetworkTime.localTime;
-
                 if (CompareSnapshots(snapshot))
                 {
                     hasSentUnchangedPosition = true;

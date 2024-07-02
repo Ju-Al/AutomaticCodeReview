@@ -1,10 +1,4 @@
 #!/usr/bin/env python
-        for command_no, command in enumerate(filter(None, commands.splitlines()), 1):
-                                 'etoe-build' if ' setup.py ' in command else 'etoe-run'):
-                                     stderr=subprocess.PIPE,
-                                     stdout=subprocess.PIPE,
-                                     shell=True,
-                                     env=env)
 
 from __future__ import print_function
 
@@ -1766,6 +1760,12 @@ class EndToEndTest(unittest.TestCase):
         old_path = os.environ.get('PYTHONPATH')
         env = dict(os.environ)
         new_path = self.cython_syspath
+        for command_no, command in enumerate(filter(None, commands.splitlines()), 1):
+                                 'etoe-build' if ' setup.py ' in command else 'etoe-run'):
+                                     stderr=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,
+                                     shell=True,
+                                     env=env)
         if old_path:
             new_path = new_path + os.pathsep + old_path
         env['PYTHONPATH'] = new_path

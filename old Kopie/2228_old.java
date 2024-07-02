@@ -341,7 +341,6 @@ public class DetermineBasalAdapterSMBJS {
         mMicrobolusAllowed = microBolusAllowed;
         mSMBAlwaysAllowed = advancedFiltering;
 
-        mCurrentTime = System.currentTimeMillis();
 
     }
 

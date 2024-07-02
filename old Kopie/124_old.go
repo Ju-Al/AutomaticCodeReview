@@ -1,5 +1,4 @@
 // Copyright (C) 2019 Algorand, Inc.
-func makeFileIterator(files []string, bucket string) s3manager.BatchUploadIterator {
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,8 +25,8 @@ import (
 
 type fileIterator struct {
 	filePaths []string
+func makeFileIterator(files []string, bucket string) s3manager.BatchUploadIterator {
 	bucket    string
-	subFolder string
 	next      struct {
 		path string
 		f    *os.File

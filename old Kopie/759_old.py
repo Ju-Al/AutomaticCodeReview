@@ -1,8 +1,4 @@
 # Copyright 2019 Google LLC
-def _limit_corpus_size(corpus_directory, size_limit):
-  files_list = os.listdir(corpus_directory)
-    file_to_delete_full_path = os.path.join(corpus_directory, file_to_delete)
-    shell.remove_file(file_to_delete_full_path)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,7 +112,10 @@ def _get_corpus_file_paths(corpus_path):
   ]
 
 
-def _limit_corpus_size(corpus_url, size_limit):
+  files_list = os.listdir(corpus_directory)
+    file_to_delete_full_path = os.path.join(corpus_directory, file_to_delete)
+    shell.remove_file(file_to_delete_full_path)
+def _limit_corpus_size(corpus_directory, size_limit):
   """Limit number of files in a corpus directory."""
   files_list = list(storage.list_blobs_full(corpus_url))
   corpus_size = len(files_list)

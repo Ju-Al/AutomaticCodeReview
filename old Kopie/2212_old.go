@@ -92,8 +92,6 @@ http.get(url:"http://127.1.1.1/path/a/b/c", headers: {x:"a",y:"b",z:"c"})
 	if !strings.Contains(err.Error(), "url is not valid") {
 		t.Errorf("unexpected cause of failure, got err: %v", err)
 	}
-}
-
 func TestGet_Timeout(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

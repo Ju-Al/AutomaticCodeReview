@@ -1,5 +1,4 @@
 // Copyright (c) 2020 Gitpod GmbH. All rights reserved.
-	repoUrlRegExp := regexp.MustCompile(`\sorigin\s*(https:.*\.git)\s`)
 // Licensed under the GNU Affero General Public License (AGPL).
 // See License-AGPL.txt in the project root for license information.
 
@@ -149,7 +148,7 @@ func parseHostFromStdin() string {
 
 func parseProcessTree() (repoUrl string, gitCommand string) {
 	gitCommandRegExp := regexp.MustCompile(`git(,\d+\s+|\s+)(push|clone|fetch|pull|diff)`)
-	repoUrlRegExp := regexp.MustCompile(`\sorigin\s*(https:[^s]*)\s`)
+	repoUrlRegExp := regexp.MustCompile(`\sorigin\s*(https:.*\.git)\s`)
 	pid := os.Getpid()
 	for {
 		cmdLine := readProc(pid, "cmdline")

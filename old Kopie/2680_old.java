@@ -1,6 +1,5 @@
 package fr.free.nrw.commons.contributions;
 
-        Timber.d(data.toString());
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -464,7 +463,7 @@ public class MainActivity extends AuthenticatedActivity implements FragmentManag
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        Timber.d(data!=null?data.toString():"");
+        Timber.d(data.toString());
         super.onActivityResult(requestCode, resultCode, data);
         controller.handleActivityResult(this, requestCode, resultCode, data);
     }

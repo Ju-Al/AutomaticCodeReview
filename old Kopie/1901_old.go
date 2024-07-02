@@ -1,2474 +1,1279 @@
-// Package byzcoin implements the ByzCoin ledger.
-		if s.catchingUp {
-			log.Warn(s.ServerIdentity(), "Got new block while catching up - ignoring block for now")
-			return nil
-		}
-package byzcoin
+/*
+Copyright 2017, 2019 the Velero contributors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package restore
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
-	"errors"
+	go_context "context"
+	"encoding/json"
 	"fmt"
-	"math"
-	"net"
-	"net/http"
-	"regexp"
+	"io"
+	"io/ioutil"
+	"path/filepath"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 
-	"go.dedis.ch/cothority/v3"
-	"go.dedis.ch/cothority/v3/blscosi/protocol"
-	"go.dedis.ch/cothority/v3/byzcoin/trie"
-	"go.dedis.ch/cothority/v3/byzcoin/viewchange"
-	"go.dedis.ch/cothority/v3/darc"
-	"go.dedis.ch/cothority/v3/skipchain"
-	"go.dedis.ch/kyber/v3/pairing"
-	"go.dedis.ch/kyber/v3/sign/schnorr"
-	"go.dedis.ch/kyber/v3/suites"
-	"go.dedis.ch/kyber/v3/util/random"
-	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/log"
-	"go.dedis.ch/onet/v3/network"
-	"go.dedis.ch/protobuf"
-	bbolt "go.etcd.io/bbolt"
-	uuid "gopkg.in/satori/go.uuid.v1"
+	"github.com/pkg/errors"
+	uuid "github.com/satori/go.uuid"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubeerrs "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	velerov1api "github.com/heptio/velero/pkg/apis/velero/v1"
+	"github.com/heptio/velero/pkg/archive"
+	"github.com/heptio/velero/pkg/client"
+	"github.com/heptio/velero/pkg/discovery"
+	listers "github.com/heptio/velero/pkg/generated/listers/velero/v1"
+	"github.com/heptio/velero/pkg/kuberesource"
+	"github.com/heptio/velero/pkg/label"
+	"github.com/heptio/velero/pkg/plugin/velero"
+	"github.com/heptio/velero/pkg/restic"
+	"github.com/heptio/velero/pkg/util/boolptr"
+	"github.com/heptio/velero/pkg/util/collections"
+	"github.com/heptio/velero/pkg/util/filesystem"
+	"github.com/heptio/velero/pkg/util/kube"
+	velerosync "github.com/heptio/velero/pkg/util/sync"
+	"github.com/heptio/velero/pkg/volume"
 )
 
-var pairingSuite = suites.MustFind("bn256.adapter").(*pairing.SuiteBn256)
-
-// This is to boost the acceptable timestamp window when dealing with
-// very short block intervals, like in testing. If a production ByzCoin
-// had a block interval of 30 seconds, for example, this minimum will
-// not trigger, and the acceptable window would be ± 30 sec.
-var minTimestampWindow = 10 * time.Second
-
-// For tests to influence when the whole trie will be downloaded if
-// some blocks are missing.
-var catchupDownloadAll = 100
-
-// How much minimum time between two catch up requests
-var catchupMinimumInterval = 10 * time.Minute
-
-// How many blocks it should fetch in one go.
-var catchupFetchBlocks = 10
-
-// How many DB-entries to download in one go.
-var catchupFetchDBEntries = 100
-
-const defaultRotationWindow time.Duration = 10
-
-const noTimeout time.Duration = 0
-
-const collectTxProtocol = "CollectTxProtocol"
-
-const viewChangeSubFtCosi = "viewchange_sub_ftcosi"
-const viewChangeFtCosi = "viewchange_ftcosi"
-
-var viewChangeMsgID network.MessageTypeID
-
-// ByzCoinID can be used to refer to this service.
-var ByzCoinID onet.ServiceID
-
-// Verify is the verifier ID for ByzCoin skipchains.
-var Verify = skipchain.VerifierID(uuid.NewV5(uuid.NamespaceURL, "ByzCoin"))
-
-func init() {
-	var err error
-	ByzCoinID, err = onet.RegisterNewServiceWithSuite(ServiceName, pairingSuite, newService)
-	log.ErrFatal(err)
-	network.RegisterMessages(&bcStorage{}, &DataHeader{}, &DataBody{})
-	viewChangeMsgID = network.RegisterMessage(&viewchange.InitReq{})
+type VolumeSnapshotterGetter interface {
+	GetVolumeSnapshotter(name string) (velero.VolumeSnapshotter, error)
 }
 
-// GenNonce returns a random nonce.
-func GenNonce() (n Nonce) {
-	random.Bytes(n[:], random.New())
-	return n
+type Request struct {
+	*velerov1api.Restore
+
+	Log              logrus.FieldLogger
+	Backup           *velerov1api.Backup
+	PodVolumeBackups []*velerov1api.PodVolumeBackup
+	VolumeSnapshots  []*volume.Snapshot
+	BackupReader     io.Reader
 }
 
-// Service is the ByzCoin service.
-type Service struct {
-	// We need to embed the ServiceProcessor, so that incoming messages
-	// are correctly handled.
-	*onet.ServiceProcessor
-	// stateTries contains a reference to all the tries that the service is
-	// responsible for, one for each skipchain.
-	stateTries     map[string]*stateTrie
-	stateTriesLock sync.Mutex
-	// We need to store the state changes for keeping track
-	// of the history of an instance
-	stateChangeStorage *stateChangeStorage
-	// notifications is used for client transaction and block notification
-	notifications bcNotifications
-
-	// pollChan maintains a map of channels that can be used to stop the
-	// polling go-routing.
-	pollChan    map[string]chan bool
-	pollChanMut sync.Mutex
-	pollChanWG  sync.WaitGroup
-
-	// NOTE: If we have a lot of skipchains, then using mutex most likely
-	// will slow down our service, an improvement is to go-routines to
-	// store transactions. But there is more management overhead, e.g.,
-	// restarting after shutdown, answer getTxs requests and so on.
-	txBuffer txBuffer
-
-	heartbeats             heartbeats
-	heartbeatsTimeout      chan string
-	closeLeaderMonitorChan chan bool
-
-	// contracts map kinds to kind specific verification functions
-	contracts map[string]ContractFn
-
-	storage *bcStorage
-
-	createSkipChainMut sync.Mutex
-
-	darcToSc    map[string]skipchain.SkipBlockID
-	darcToScMut sync.Mutex
-
-	stateChangeCache stateChangeCache
-
-	closed        bool
-	closedMutex   sync.Mutex
-	working       sync.WaitGroup
-	viewChangeMan viewChangeManager
-
-	streamingMan streamingManager
-
-	updateTrieLock        sync.Mutex
-	catchingLock          sync.Mutex
-	catchingUp            bool
-	catchingUpHistory     map[string]time.Time
-	catchingUpHistoryLock sync.Mutex
-
-	downloadState downloadState
-
-	rotationWindow time.Duration
+// Restorer knows how to restore a backup.
+type Restorer interface {
+	// Restore restores the backup data from backupReader, returning warnings and errors.
+	Restore(req Request,
+		actions []velero.RestoreItemAction,
+		snapshotLocationLister listers.VolumeSnapshotLocationLister,
+		volumeSnapshotterGetter VolumeSnapshotterGetter,
+	) (Result, Result)
 }
 
-type downloadState struct {
-	id    skipchain.SkipBlockID
-	nonce uint64
-	read  chan DBKeyValue
-	stop  chan bool
+// kubernetesRestorer implements Restorer for restoring into a Kubernetes cluster.
+type kubernetesRestorer struct {
+	discoveryHelper            discovery.Helper
+	dynamicFactory             client.DynamicFactory
+	namespaceClient            corev1.NamespaceInterface
+	resticRestorerFactory      restic.RestorerFactory
+	resticTimeout              time.Duration
+	resourceTerminatingTimeout time.Duration
+	resourcePriorities         []string
+	fileSystem                 filesystem.Interface
+	pvRenamer                  func(string) string
+	logger                     logrus.FieldLogger
 }
 
-// storageID reflects the data we're storing - we could store more
-// than one structure.
-var storageID = []byte("ByzCoin")
+// prioritizeResources returns an ordered, fully-resolved list of resources to restore based on
+// the provided discovery helper, resource priorities, and included/excluded resources.
+func prioritizeResources(helper discovery.Helper, priorities []string, includedResources *collections.IncludesExcludes, logger logrus.FieldLogger) ([]schema.GroupResource, error) {
+	var ret []schema.GroupResource
 
-// defaultInterval is used if the BlockInterval field in the genesis
-// transaction is not set.
-const defaultInterval = 5 * time.Second
+	// set keeps track of resolved GroupResource names
+	set := sets.NewString()
 
-// defaultMaxBlockSize is used when the config cannot be loaded.
-const defaultMaxBlockSize = 4 * 1e6
-
-// bcStorage is used to save our data locally.
-type bcStorage struct {
-	// PropTimeout is used when sending the request to integrate a new block
-	// to all nodes.
-	PropTimeout time.Duration
-
-	sync.Mutex
-}
-
-// CreateGenesisBlock asks the service to create a new skipchain ready to
-// store key/value pairs. If it is given exactly one writer, this writer will
-// be stored in the skipchain.
-// For faster access, all data is also stored locally in the Service.storage
-// structure.
-func (s *Service) CreateGenesisBlock(req *CreateGenesisBlock) (
-	*CreateGenesisBlockResponse, error) {
-	// We use a big mutex here because we do not want to allow concurrent
-	// creation of genesis blocks.
-	// TODO an optimisation would be to lock on the skipchainID.
-	s.createSkipChainMut.Lock()
-	defer s.createSkipChainMut.Unlock()
-
-	if req.Version != CurrentVersion {
-		return nil, fmt.Errorf("version mismatch - got %d but need %d", req.Version, CurrentVersion)
-	}
-	if req.Roster.List == nil {
-		return nil, errors.New("must provide a roster")
-	}
-
-	darcBuf, err := req.GenesisDarc.ToProto()
-	if err != nil {
-		return nil, err
-	}
-	if req.GenesisDarc.Verify(true) != nil ||
-		req.GenesisDarc.Rules.Count() == 0 {
-		return nil, errors.New("invalid genesis darc")
-	}
-
-	if req.BlockInterval == 0 {
-		req.BlockInterval = defaultInterval
-	}
-	intervalBuf := make([]byte, 8)
-	binary.PutVarint(intervalBuf, int64(req.BlockInterval))
-
-	if req.MaxBlockSize == 0 {
-		req.MaxBlockSize = defaultMaxBlockSize
-	}
-	bsBuf := make([]byte, 8)
-	binary.PutVarint(bsBuf, int64(req.MaxBlockSize))
-
-	rosterBuf, err := protobuf.Encode(&req.Roster)
-	if err != nil {
-		return nil, err
-	}
-
-	// The user must include at least one contract that can be parsed as a
-	// DARC and it must exist.
-	if len(req.DarcContractIDs) == 0 {
-		return nil, errors.New("must provide at least one DARC contract")
-	}
-	for _, c := range req.DarcContractIDs {
-		if _, ok := s.GetContractConstructor(c); !ok {
-			return nil, errors.New("the given contract \"" + c + "\" does not exist")
-		}
-	}
-
-	dcIDs := darcContractIDs{
-		IDs: req.DarcContractIDs,
-	}
-	darcContractIDsBuf, err := protobuf.Encode(&dcIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	// This is the nonce for the trie.
-	// TODO this nonce is picked by the root, how to make sure it's secure?
-	nonce := GenNonce()
-
-	spawn := &Spawn{
-		ContractID: ContractConfigID,
-		Args: Arguments{
-			{Name: "darc", Value: darcBuf},
-			{Name: "block_interval", Value: intervalBuf},
-			{Name: "max_block_size", Value: bsBuf},
-			{Name: "roster", Value: rosterBuf},
-			{Name: "trie_nonce", Value: nonce[:]},
-			{Name: "darc_contracts", Value: darcContractIDsBuf},
-		},
-	}
-
-	// Create the genesis-transaction with a special key, it acts as a
-	// reference to the actual genesis transaction.
-	ctx := ClientTransaction{
-		Instructions: []Instruction{{
-			InstanceID: ConfigInstanceID,
-			Spawn:      spawn,
-		}},
-	}
-
-	sb, err := s.createNewBlock(nil, &req.Roster, NewTxResults(ctx))
-	if err != nil {
-		return nil, err
-	}
-
-	return &CreateGenesisBlockResponse{
-		Version:   CurrentVersion,
-		Skipblock: sb,
-	}, nil
-}
-
-// AddTransaction requests to apply a new transaction to the ledger.
-func (s *Service) AddTransaction(req *AddTxRequest) (*AddTxResponse, error) {
-	if req.Version != CurrentVersion {
-		return nil, errors.New("version mismatch")
-	}
-
-	if len(req.Transaction.Instructions) == 0 {
-		return nil, errors.New("no transactions to add")
-	}
-
-	gen := s.db().GetByID(req.SkipchainID)
-	if gen == nil || gen.Index != 0 {
-		return nil, errors.New("skipchain ID is does not exist")
-	}
-
-	latest, err := s.db().GetLatest(gen)
-	if err != nil {
-		if latest == nil {
+	// start by resolving priorities into GroupResources and adding them to ret
+	for _, r := range priorities {
+		gvr, _, err := helper.ResourceFor(schema.ParseGroupResource(r).WithVersion(""))
+		if err != nil {
 			return nil, err
 		}
-		log.Warn("Got block, but with an error:", err)
-	}
-	if i, _ := latest.Roster.Search(s.ServerIdentity().ID); i < 0 {
-		return nil, errors.New("refusing to accept transaction for a chain we're not part of")
+		gr := gvr.GroupResource()
+
+		if !includedResources.ShouldInclude(gr.String()) {
+			logger.WithField("groupResource", gr).Info("Not including resource")
+			continue
+		}
+		ret = append(ret, gr)
+		set.Insert(gr.String())
 	}
 
-	_, maxsz, err := s.LoadBlockInfo(req.SkipchainID)
-	if err != nil {
-		return nil, err
-	}
-	txsz := txSize(TxResult{ClientTransaction: req.Transaction})
-	if txsz > maxsz {
-		return nil, errors.New("transaction too large")
-	}
-
-	for i, instr := range req.Transaction.Instructions {
-		log.Lvlf2("Instruction[%d]: %s", i, instr.Action())
-	}
-
-	// Note to my future self: s.txBuffer.add used to be out here. It used to work
-	// even. But while investigating other race conditions, we realized that
-	// IF there will be a wait channel, THEN it must exist before the call to add().
-	// If add() comes first, there's a race condition where the block could theoretically
-	// be created and (not) notified before the wait channel is created. Moving
-	// add() after createWaitChannel() solves this, but then we need a second add() for the
-	// no inclusion wait case.
-
-	if req.InclusionWait > 0 {
-		// Wait for InclusionWait new blocks and look if our transaction is in it.
-		interval, _, err := s.LoadBlockInfo(req.SkipchainID)
+	// go through everything we got from discovery and add anything not in "set" to byName
+	var byName []schema.GroupResource
+	for _, resourceGroup := range helper.Resources() {
+		// will be something like storage.k8s.io/v1
+		groupVersion, err := schema.ParseGroupVersion(resourceGroup.GroupVersion)
 		if err != nil {
-			return nil, errors.New("couldn't get block info: " + err.Error())
+			return nil, err
 		}
 
-		ctxHash := req.Transaction.Instructions.Hash()
-		ch := s.notifications.createWaitChannel(ctxHash)
-		defer s.notifications.deleteWaitChannel(ctxHash)
+		for _, resource := range resourceGroup.APIResources {
+			gr := groupVersion.WithResource(resource.Name).GroupResource()
 
-		blockCh := make(chan skipchain.SkipBlockID, 10)
-		z := s.notifications.registerForBlocks(blockCh)
-		defer s.notifications.unregisterForBlocks(z)
+			if !includedResources.ShouldInclude(gr.String()) {
+				logger.WithField("groupResource", gr.String()).Info("Not including resource")
+				continue
+			}
 
-		s.txBuffer.add(string(req.SkipchainID), req.Transaction)
-
-		// In case we don't have any blocks, because there are no transactions,
-		// have a hard timeout in twice the minimal expected time to create the
-		// blocks.
-		tooLongDur := time.Duration(req.InclusionWait) * interval * 2
-		tooLong := time.After(tooLongDur)
-
-		blocksLeft := req.InclusionWait
-
-		for found := false; !found; {
-			select {
-			case success := <-ch:
-				if !success {
-					return nil, errors.New("transaction is in block, but got refused")
-				}
-				found = true
-			case id := <-blockCh:
-				if id.Equal(req.SkipchainID) {
-					blocksLeft--
-				}
-				if blocksLeft == 0 {
-					return nil, fmt.Errorf("did not find transaction after %v blocks", req.InclusionWait)
-				}
-			case <-tooLong:
-				return nil, fmt.Errorf("transaction didn't get included after %v (2 * t_block * %d)", tooLongDur, req.InclusionWait)
+			if !set.Has(gr.String()) {
+				byName = append(byName, gr)
 			}
 		}
-	} else {
-		s.txBuffer.add(string(req.SkipchainID), req.Transaction)
 	}
 
-	return &AddTxResponse{
-		Version: CurrentVersion,
+	// sort byName by name
+	sort.Slice(byName, func(i, j int) bool {
+		return byName[i].String() < byName[j].String()
+	})
+
+	// combine prioritized with by-name
+	ret = append(ret, byName...)
+
+	return ret, nil
+}
+
+// NewKubernetesRestorer creates a new kubernetesRestorer.
+func NewKubernetesRestorer(
+	discoveryHelper discovery.Helper,
+	dynamicFactory client.DynamicFactory,
+	resourcePriorities []string,
+	namespaceClient corev1.NamespaceInterface,
+	resticRestorerFactory restic.RestorerFactory,
+	resticTimeout time.Duration,
+	resourceTerminatingTimeout time.Duration,
+	logger logrus.FieldLogger,
+) (Restorer, error) {
+	return &kubernetesRestorer{
+		discoveryHelper:            discoveryHelper,
+		dynamicFactory:             dynamicFactory,
+		namespaceClient:            namespaceClient,
+		resticRestorerFactory:      resticRestorerFactory,
+		resticTimeout:              resticTimeout,
+		resourceTerminatingTimeout: resourceTerminatingTimeout,
+		resourcePriorities:         resourcePriorities,
+		logger:                     logger,
+		pvRenamer:                  func(string) string { return "velero-clone-" + uuid.NewV4().String() },
+		fileSystem:                 filesystem.NewFileSystem(),
 	}, nil
 }
 
-// GetProof searches for a key and returns a proof of the
-// presence or the absence of this key.
-func (s *Service) GetProof(req *GetProof) (resp *GetProofResponse, err error) {
-	s.catchingLock.Lock()
-	s.updateTrieLock.Lock()
-
-	defer func() {
-		s.updateTrieLock.Unlock()
-		s.catchingLock.Unlock()
-	}()
-
-	if req.Version != CurrentVersion {
-		return nil, errors.New("version mismatch")
+// Restore executes a restore into the target Kubernetes cluster according to the restore spec
+// and using data from the provided backup/backup reader. Returns a warnings and errors RestoreResult,
+// respectively, summarizing info about the restore.
+func (kr *kubernetesRestorer) Restore(
+	req Request,
+	actions []velero.RestoreItemAction,
+	snapshotLocationLister listers.VolumeSnapshotLocationLister,
+	volumeSnapshotterGetter VolumeSnapshotterGetter,
+) (Result, Result) {
+	// metav1.LabelSelectorAsSelector converts a nil LabelSelector to a
+	// Nothing Selector, i.e. a selector that matches nothing. We want
+	// a selector that matches everything. This can be accomplished by
+	// passing a non-nil empty LabelSelector.
+	ls := req.Restore.Spec.LabelSelector
+	if ls == nil {
+		ls = &metav1.LabelSelector{}
 	}
 
-	log.Lvlf2("Returning proof for %x from chain '%x'", req.Key, req.ID)
-
-	sb := s.db().GetByID(req.ID)
-	if sb == nil {
-		err = errors.New("cannot find skipblock while getting proof")
-		return
-	}
-	st, err := s.GetReadOnlyStateTrie(sb.SkipChainID())
+	selector, err := metav1.LabelSelectorAsSelector(ls)
 	if err != nil {
-		return nil, err
+		return Result{}, Result{Velero: []string{err.Error()}}
 	}
-	proof, err := NewProof(st, s.db(), req.ID, req.Key)
+
+	// get resource includes-excludes
+	resourceIncludesExcludes := getResourceIncludesExcludes(kr.discoveryHelper, req.Restore.Spec.IncludedResources, req.Restore.Spec.ExcludedResources)
+	prioritizedResources, err := prioritizeResources(kr.discoveryHelper, kr.resourcePriorities, resourceIncludesExcludes, req.Log)
 	if err != nil {
-		log.Error(s.ServerIdentity(), err)
-		return
+		return Result{}, Result{Velero: []string{err.Error()}}
 	}
 
-	// Sanity check
-	if err = proof.Verify(sb.SkipChainID()); err != nil {
-		return
-	}
+	// get namespace includes-excludes
+	namespaceIncludesExcludes := collections.NewIncludesExcludes().
+		Includes(req.Restore.Spec.IncludedNamespaces...).
+		Excludes(req.Restore.Spec.ExcludedNamespaces...)
 
-	_, v := proof.InclusionProof.KeyValue()
-	log.Lvlf3("value is %x", v)
-	resp = &GetProofResponse{
-		Version: CurrentVersion,
-		Proof:   *proof,
-	}
-	return
-}
-
-// CheckAuthorization verifies whether a given combination of identities can
-// fulfill a given rule of a given darc. Because all darcs are now used in
-// an online fashion, we need to offer this check.
-func (s *Service) CheckAuthorization(req *CheckAuthorization) (resp *CheckAuthorizationResponse, err error) {
-	if req.Version != CurrentVersion {
-		return nil, errors.New("version mismatch")
-	}
-	log.Lvlf2("%s getting authorizations of darc %x", s.ServerIdentity(), req.DarcID)
-
-	resp = &CheckAuthorizationResponse{}
-	st, err := s.GetReadOnlyStateTrie(req.ByzCoinID)
+	resolvedActions, err := resolveActions(actions, kr.discoveryHelper)
 	if err != nil {
-		return nil, err
+		return Result{}, Result{Velero: []string{err.Error()}}
 	}
-	d, err := LoadDarcFromTrie(st, req.DarcID)
-	if err != nil {
-		return nil, errors.New("couldn't find darc: " + err.Error())
-	}
-	getDarcs := func(s string, latest bool) *darc.Darc {
-		if !latest {
-			log.Error("cannot handle intermediate darcs")
-			return nil
-		}
-		id, err := hex.DecodeString(strings.Replace(s, "darc:", "", 1))
-		if err != nil || len(id) != 32 {
-			log.Error("invalid darc id", s, len(id), err)
-			return nil
-		}
-		d, err := LoadDarcFromTrie(st, id)
+
+	podVolumeTimeout := kr.resticTimeout
+	if val := req.Restore.Annotations[velerov1api.PodVolumeOperationTimeoutAnnotation]; val != "" {
+		parsed, err := time.ParseDuration(val)
 		if err != nil {
-			log.Error("didn't find darc")
-			return nil
-		}
-		return d
-	}
-	var ids []string
-	for _, i := range req.Identities {
-		ids = append(ids, i.String())
-	}
-	for _, r := range d.Rules.List {
-		err = darc.EvalExprDarc(r.Expr, getDarcs, true, ids...)
-		if err == nil {
-			resp.Actions = append(resp.Actions, r.Action)
+			req.Log.WithError(errors.WithStack(err)).Errorf("Unable to parse pod volume timeout annotation %s, using server value.", val)
+		} else {
+			podVolumeTimeout = parsed
 		}
 	}
-	return resp, nil
+
+	ctx, cancelFunc := go_context.WithTimeout(go_context.Background(), podVolumeTimeout)
+	defer cancelFunc()
+
+	var resticRestorer restic.Restorer
+	if kr.resticRestorerFactory != nil {
+		resticRestorer, err = kr.resticRestorerFactory.NewRestorer(ctx, req.Restore)
+		if err != nil {
+			return Result{}, Result{Velero: []string{err.Error()}}
+		}
+	}
+
+	pvRestorer := &pvRestorer{
+		logger:                  req.Log,
+		backup:                  req.Backup,
+		snapshotVolumes:         req.Backup.Spec.SnapshotVolumes,
+		restorePVs:              req.Restore.Spec.RestorePVs,
+		volumeSnapshots:         req.VolumeSnapshots,
+		volumeSnapshotterGetter: volumeSnapshotterGetter,
+		snapshotLocationLister:  snapshotLocationLister,
+	}
+
+	restoreCtx := &context{
+		backup:                     req.Backup,
+		backupReader:               req.BackupReader,
+		restore:                    req.Restore,
+		resourceIncludesExcludes:   resourceIncludesExcludes,
+		namespaceIncludesExcludes:  namespaceIncludesExcludes,
+		prioritizedResources:       prioritizedResources,
+		selector:                   selector,
+		log:                        req.Log,
+		dynamicFactory:             kr.dynamicFactory,
+		fileSystem:                 kr.fileSystem,
+		namespaceClient:            kr.namespaceClient,
+		actions:                    resolvedActions,
+		volumeSnapshotterGetter:    volumeSnapshotterGetter,
+		resticRestorer:             resticRestorer,
+		pvsToProvision:             sets.NewString(),
+		pvRestorer:                 pvRestorer,
+		volumeSnapshots:            req.VolumeSnapshots,
+		podVolumeBackups:           req.PodVolumeBackups,
+		resourceTerminatingTimeout: kr.resourceTerminatingTimeout,
+		resourceClients:            make(map[resourceClientKey]client.Dynamic),
+		restoredItems:              make(map[velero.ResourceIdentifier]struct{}),
+		renamedPVs:                 make(map[string]string),
+		pvRenamer:                  kr.pvRenamer,
+	}
+
+	return restoreCtx.execute()
 }
 
-// GetSignerCounters gets the latest signer counters for the given identities.
-func (s *Service) GetSignerCounters(req *GetSignerCounters) (*GetSignerCountersResponse, error) {
-	st, err := s.GetReadOnlyStateTrie(req.SkipchainID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]uint64, len(req.SignerIDs))
+// getResourceIncludesExcludes takes the lists of resources to include and exclude, uses the
+// discovery helper to resolve them to fully-qualified group-resource names, and returns an
+// IncludesExcludes list.
+func getResourceIncludesExcludes(helper discovery.Helper, includes, excludes []string) *collections.IncludesExcludes {
+	resources := collections.GenerateIncludesExcludes(
+		includes,
+		excludes,
+		func(item string) string {
+			gvr, _, err := helper.ResourceFor(schema.ParseGroupResource(item).WithVersion(""))
+			if err != nil {
+				return ""
+			}
 
-	for i := range req.SignerIDs {
-		key := publicVersionKey(req.SignerIDs[i])
-		buf, _, _, _, err := st.GetValues(key)
-		if err == errKeyNotSet {
-			out[i] = 0
+			gr := gvr.GroupResource()
+			return gr.String()
+		},
+	)
+
+	return resources
+}
+
+type resolvedAction struct {
+	velero.RestoreItemAction
+
+	resourceIncludesExcludes  *collections.IncludesExcludes
+	namespaceIncludesExcludes *collections.IncludesExcludes
+	selector                  labels.Selector
+}
+
+func resolveActions(actions []velero.RestoreItemAction, helper discovery.Helper) ([]resolvedAction, error) {
+	var resolved []resolvedAction
+
+	for _, action := range actions {
+		resourceSelector, err := action.AppliesTo()
+		if err != nil {
+			return nil, err
+		}
+
+		resources := getResourceIncludesExcludes(helper, resourceSelector.IncludedResources, resourceSelector.ExcludedResources)
+		namespaces := collections.NewIncludesExcludes().Includes(resourceSelector.IncludedNamespaces...).Excludes(resourceSelector.ExcludedNamespaces...)
+
+		selector := labels.Everything()
+		if resourceSelector.LabelSelector != "" {
+			if selector, err = labels.Parse(resourceSelector.LabelSelector); err != nil {
+				return nil, err
+			}
+		}
+
+		res := resolvedAction{
+			RestoreItemAction:         action,
+			resourceIncludesExcludes:  resources,
+			namespaceIncludesExcludes: namespaces,
+			selector:                  selector,
+		}
+
+		resolved = append(resolved, res)
+	}
+
+	return resolved, nil
+}
+
+type context struct {
+	backup                     *velerov1api.Backup
+	backupReader               io.Reader
+	restore                    *velerov1api.Restore
+	restoreDir                 string
+	resourceIncludesExcludes   *collections.IncludesExcludes
+	namespaceIncludesExcludes  *collections.IncludesExcludes
+	prioritizedResources       []schema.GroupResource
+	selector                   labels.Selector
+	log                        logrus.FieldLogger
+	dynamicFactory             client.DynamicFactory
+	fileSystem                 filesystem.Interface
+	namespaceClient            corev1.NamespaceInterface
+	actions                    []resolvedAction
+	volumeSnapshotterGetter    VolumeSnapshotterGetter
+	resticRestorer             restic.Restorer
+	globalWaitGroup            velerosync.ErrorGroup
+	pvsToProvision             sets.String
+	pvRestorer                 PVRestorer
+	volumeSnapshots            []*volume.Snapshot
+	podVolumeBackups           []*velerov1api.PodVolumeBackup
+	resourceTerminatingTimeout time.Duration
+	resourceClients            map[resourceClientKey]client.Dynamic
+	restoredItems              map[velero.ResourceIdentifier]struct{}
+	renamedPVs                 map[string]string
+	pvRenamer                  func(string) string
+}
+
+type resourceClientKey struct {
+	resource  schema.GroupResource
+	namespace string
+}
+
+func (ctx *context) execute() (Result, Result) {
+	warnings, errs := Result{}, Result{}
+
+	ctx.log.Infof("Starting restore of backup %s", kube.NamespaceAndName(ctx.backup))
+
+	dir, err := archive.NewExtractor(ctx.log, ctx.fileSystem).UnzipAndExtractBackup(ctx.backupReader)
+	if err != nil {
+		ctx.log.Infof("error unzipping and extracting: %v", err)
+		addVeleroError(&errs, err)
+		return warnings, errs
+	}
+	defer ctx.fileSystem.RemoveAll(dir)
+
+	// need to set this for additionalItems to be restored
+	ctx.restoreDir = dir
+
+	backupResources, err := archive.NewParser(ctx.log, ctx.fileSystem).Parse(ctx.restoreDir)
+	if err != nil {
+		addVeleroError(&errs, errors.Wrap(err, "error parsing backup contents"))
+		return warnings, errs
+	}
+
+	existingNamespaces := sets.NewString()
+
+	for _, resource := range ctx.prioritizedResources {
+		// we don't want to explicitly restore namespace API objs because we'll handle
+		// them as a special case prior to restoring anything into them
+		if resource == kuberesource.Namespaces {
 			continue
 		}
 
-		if err != nil {
-			return nil, err
-		}
-		out[i] = binary.LittleEndian.Uint64(buf)
-	}
-	resp := GetSignerCountersResponse{
-		Counters: out,
-	}
-	return &resp, nil
-}
-
-// DownloadState creates a snapshot of the current state and then returns the
-// instances in small chunks.
-func (s *Service) DownloadState(req *DownloadState) (resp *DownloadStateResponse, err error) {
-	s.catchingLock.Lock()
-	defer s.catchingLock.Unlock()
-	if req.Length <= 0 {
-		return nil, errors.New("length must be bigger than 0")
-	}
-
-	if req.Nonce == 0 {
-		log.Lvl2("Creating new download")
-		if !s.downloadState.id.IsNull() {
-			log.Lvlf2("Aborting download of nonce %x", s.downloadState.nonce)
-			close(s.downloadState.stop)
-		}
-		sb := s.db().GetByID(req.ByzCoinID)
-		if sb == nil || sb.Index > 0 {
-			return nil, errors.New("unknown byzcoinID")
-		}
-		s.downloadState.id = req.ByzCoinID
-		s.downloadState.read = make(chan DBKeyValue)
-		s.downloadState.stop = make(chan bool)
-		nonce := binary.LittleEndian.Uint64(random.Bits(64, true, random.New()))
-		s.downloadState.nonce = nonce
-		go func(ds downloadState) {
-			idStr := fmt.Sprintf("%x", ds.id)
-			db, bucketName := s.GetAdditionalBucket([]byte(idStr))
-			err := db.View(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket(bucketName)
-				return bucket.ForEach(func(k []byte, v []byte) error {
-					key := make([]byte, len(k))
-					copy(key, k)
-					value := make([]byte, len(v))
-					copy(value, v)
-					select {
-					case ds.read <- DBKeyValue{key, value}:
-					case <-ds.stop:
-						return errors.New("closed")
-					case <-time.After(time.Minute):
-						return errors.New("timed out while waiting for next read")
-					}
-					return nil
-				})
-			})
-			if err != nil {
-				log.Error("while serving current database:", err)
-			}
-			close(ds.read)
-		}(s.downloadState)
-	} else if !s.downloadState.id.Equal(req.ByzCoinID) || req.Nonce != s.downloadState.nonce {
-		return nil, errors.New("download has been aborted in favor of another download")
-	}
-
-	resp = &DownloadStateResponse{
-		Nonce: s.downloadState.nonce,
-	}
-query:
-	for i := 0; i < req.Length; i++ {
-		select {
-		case kv, ok := <-s.downloadState.read:
-			if !ok {
-				break query
-			}
-			resp.KeyValues = append(resp.KeyValues, kv)
-		}
-	}
-	return
-}
-
-func entryToResponse(sce *StateChangeEntry, ok bool, err error) (*GetInstanceVersionResponse, error) {
-	if !ok {
-		err = errKeyNotSet
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetInstanceVersionResponse{
-		StateChange: sce.StateChange,
-		BlockIndex:  sce.BlockIndex,
-	}, nil
-}
-
-// GetInstanceVersion looks for the version of a given instance and responds
-// with the state change and the block index
-func (s *Service) GetInstanceVersion(req *GetInstanceVersion) (*GetInstanceVersionResponse, error) {
-	sce, ok, err := s.stateChangeStorage.getByVersion(req.InstanceID[:], req.Version, req.SkipChainID)
-
-	return entryToResponse(&sce, ok, err)
-}
-
-// GetLastInstanceVersion looks for the last version of an instance and
-// responds with the state change and the block when it hits
-func (s *Service) GetLastInstanceVersion(req *GetLastInstanceVersion) (*GetInstanceVersionResponse, error) {
-	sce, ok, err := s.stateChangeStorage.getLast(req.InstanceID[:], req.SkipChainID)
-
-	return entryToResponse(&sce, ok, err)
-}
-
-// GetAllInstanceVersion looks for all the state changes of an instance
-// and responds with both the state change and the block index for
-// each version
-func (s *Service) GetAllInstanceVersion(req *GetAllInstanceVersion) (res *GetAllInstanceVersionResponse, err error) {
-	sces, err := s.stateChangeStorage.getAll(req.InstanceID[:], req.SkipChainID)
-	if err != nil {
-		return nil, err
-	}
-
-	scs := make([]GetInstanceVersionResponse, len(sces))
-	for i, e := range sces {
-		scs[i].StateChange = e.StateChange
-		scs[i].BlockIndex = e.BlockIndex
-	}
-
-	return &GetAllInstanceVersionResponse{StateChanges: scs}, nil
-}
-
-// CheckStateChangeValidity gets the list of state changes belonging to the same
-// block as the targeted one so that a hash can be computed and compared to the
-// one stored in the block
-func (s *Service) CheckStateChangeValidity(req *CheckStateChangeValidity) (*CheckStateChangeValidityResponse, error) {
-	sce, ok, err := s.stateChangeStorage.getByVersion(req.InstanceID[:], req.Version, req.SkipChainID)
-	if !ok {
-		err = errKeyNotSet
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	sb, err := s.skService().GetSingleBlockByIndex(&skipchain.GetSingleBlockByIndex{
-		Genesis: req.SkipChainID,
-		Index:   sce.BlockIndex,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	sces, err := s.stateChangeStorage.getByBlock(req.SkipChainID, sce.BlockIndex)
-	if err != nil {
-		return nil, err
-	}
-
-	scs := make(StateChanges, len(sces))
-	for i, e := range sces {
-		scs[i] = e.StateChange.Copy()
-	}
-
-	return &CheckStateChangeValidityResponse{
-		StateChanges: scs,
-		BlockID:      sb.SkipBlock.Hash,
-	}, nil
-}
-
-type leafNode struct {
-	Prefix []bool
-	Key    []byte
-	Value  []byte
-}
-
-// ProcessClientRequest implements onet.Service. We override the version
-// we normally get from embedding onet.ServiceProcessor in order to
-// hook it and get a look at the http.Request.
-func (s *Service) ProcessClientRequest(req *http.Request, path string, buf []byte) ([]byte, *onet.StreamingTunnel, error) {
-	if path == "Debug" {
-		h, _, err := net.SplitHostPort(req.RemoteAddr)
-		if err != nil {
-			return nil, nil, err
-		}
-		ip := net.ParseIP(h)
-
-		if !ip.IsLoopback() {
-			return nil, nil, errors.New("the 'debug'-endpoint is only allowed on loopback")
-		}
-	}
-
-	return s.ServiceProcessor.ProcessClientRequest(req, path, buf)
-}
-
-// Debug can be used to dump things from a byzcoin service. If byzcoinID is nil, it will return all
-// existing byzcoin instances. If byzcoinID is given, it will return all instances for that ID.
-func (s *Service) Debug(req *DebugRequest) (resp *DebugResponse, err error) {
-	resp = &DebugResponse{}
-	if len(req.ByzCoinID) != 32 {
-		rep, err := s.skService().GetAllSkipChainIDs(nil)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, scID := range rep.IDs {
-			latest, err := s.db().GetLatestByID(scID)
-			if err != nil {
-				continue
-			}
-			if !s.hasByzCoinVerification(skipchain.SkipBlockID(latest.SkipChainID())) {
-				continue
-			}
-			genesis := s.db().GetByID(latest.SkipChainID())
-			resp.Byzcoins = append(resp.Byzcoins, DebugResponseByzcoin{
-				ByzCoinID: latest.SkipChainID(),
-				Genesis:   genesis,
-				Latest:    latest,
-			})
-		}
-		return resp, nil
-	}
-	st, err := s.getStateTrie(skipchain.SkipBlockID(req.ByzCoinID))
-	if err != nil {
-		return nil, errors.New("didn't find this byzcoin instance: " + err.Error())
-	}
-	err = st.DB().View(func(b trie.Bucket) error {
-		err := b.ForEach(func(k, v []byte) error {
-			if len(k) == 32 {
-				if v[0] == byte(3) {
-					ln := leafNode{}
-					err = protobuf.Decode(v[1:], &ln)
-					if err != nil {
-						log.Error(err)
-						// Not all key/value pairs are valid statechanges
-						return nil
-					}
-					scb := StateChangeBody{}
-					err = protobuf.Decode(ln.Value, &scb)
-					resp.Dump = append(resp.Dump, DebugResponseState{Key: ln.Key, State: scb})
-				}
-			}
-			return nil
-		})
-		return err
-	})
-	return
-}
-
-// DebugRemove deletes an existing byzcoin-instance from the conode.
-func (s *Service) DebugRemove(req *DebugRemoveRequest) (*DebugResponse, error) {
-	if err := schnorr.Verify(cothority.Suite, s.ServerIdentity().Public, req.ByzCoinID, req.Signature); err != nil {
-		log.Error("Signature failure:", err)
-		return nil, err
-	}
-	idStr := string(req.ByzCoinID)
-	if s.heartbeats.exists(idStr) {
-		log.Lvl2("Removing heartbeat")
-		s.heartbeats.stop(idStr)
-	}
-
-	s.pollChanMut.Lock()
-	pc, exists := s.pollChan[idStr]
-	if exists {
-		log.Lvl2("Closing polling-channel")
-		close(pc)
-		delete(s.pollChan, idStr)
-	}
-	s.pollChanMut.Unlock()
-
-	s.stateTriesLock.Lock()
-	idStrHex := fmt.Sprintf("%x", req.ByzCoinID)
-	_, exists = s.stateTries[idStrHex]
-	if exists {
-		log.Lvl2("Removing state-trie")
-		db, bn := s.GetAdditionalBucket([]byte(idStrHex))
-		if db == nil {
-			return nil, errors.New("didn't find trie for this byzcoin-ID")
-		}
-		err := db.Update(func(tx *bbolt.Tx) error {
-			return tx.DeleteBucket(bn)
-		})
-		if err != nil {
-			return nil, err
-		}
-		delete(s.stateTries, idStr)
-		err = s.db().RemoveSkipchain(req.ByzCoinID)
-		if err != nil {
-			log.Error("couldn't remove the whole chain:", err)
-		}
-	}
-	s.stateTriesLock.Unlock()
-
-	s.darcToScMut.Lock()
-	for k, sc := range s.darcToSc {
-		if sc.Equal(skipchain.SkipBlockID(req.ByzCoinID)) {
-			log.Lvl2("Removing darc-to-skipchain mapping")
-			delete(s.darcToSc, k)
-		}
-	}
-	s.darcToScMut.Unlock()
-
-	log.Lvl2("Stopping view change monitor")
-	s.viewChangeMan.stop(skipchain.SkipBlockID(req.ByzCoinID))
-
-	s.save()
-	return &DebugResponse{}, nil
-}
-
-// SetPropagationTimeout overrides the default propagation timeout that is used
-// when a new block is announced to the nodes as well as the skipchain
-// propagation timeout.
-func (s *Service) SetPropagationTimeout(p time.Duration) {
-	s.storage.Lock()
-	s.storage.PropTimeout = p
-	s.storage.Unlock()
-	s.save()
-	s.skService().SetPropTimeout(p)
-}
-
-// createNewBlock creates a new block and proposes it to the
-// skipchain-service. Once the block has been created, we
-// inform all nodes to update their internal trie
-// to include the new transactions.
-func (s *Service) createNewBlock(scID skipchain.SkipBlockID, r *onet.Roster, tx []TxResult) (*skipchain.SkipBlock, error) {
-	var sb *skipchain.SkipBlock
-	var mr []byte
-	var sst *stagingStateTrie
-
-	if scID.IsNull() {
-		// For a genesis block, we create a throwaway staging trie.
-		// There is no need to verify the darc because the caller does
-		// it.
-		if r == nil {
-			return nil, errors.New("need roster for genesis block")
-		}
-		sb = skipchain.NewSkipBlock()
-		sb.MaximumHeight = 32
-		sb.BaseHeight = 4
-		// We have to register the verification functions in the genesis block
-		sb.VerifierIDs = []skipchain.VerifierID{skipchain.VerifyBase, Verify}
-
-		nonce, err := s.loadNonceFromTxs(tx)
-		if err != nil {
-			return nil, err
-		}
-		et, err := newMemStagingStateTrie(nonce)
-		if err != nil {
-			return nil, err
-		}
-		sst = et
-	} else {
-		// For all other blocks, we try to verify the signature using
-		// the darcs and remove those that do not have a valid
-		// signature before continuing.
-		sbLatest, err := s.db().GetLatestByID(scID)
-		if err != nil {
-			return nil, errors.New(
-				"Could not get latest block from the skipchain: " + err.Error())
-		}
-		log.Lvlf3("Creating block #%d with %d transactions", sbLatest.Index+1,
-			len(tx))
-		sb = sbLatest.Copy()
-
-		st, err := s.getStateTrie(scID)
-		if err != nil {
-			return nil, err
-		}
-		sst = st.MakeStagingStateTrie()
-	}
-
-	// Create header of skipblock containing only hashes
-	var scs StateChanges
-	var err error
-	var txRes TxResults
-
-	log.Lvl3("Creating state changes")
-	mr, txRes, scs, _ = s.createStateChanges(sst, scID, tx, noTimeout)
-	if len(txRes) == 0 {
-		return nil, errors.New("no transactions")
-	}
-
-	// Store transactions in the body
-	body := &DataBody{TxResults: txRes}
-	sb.Payload, err = protobuf.Encode(body)
-	if err != nil {
-		return nil, errors.New("Couldn't marshal data: " + err.Error())
-	}
-
-	header := &DataHeader{
-		TrieRoot:              mr,
-		ClientTransactionHash: txRes.Hash(),
-		StateChangesHash:      scs.Hash(),
-		Timestamp:             time.Now().UnixNano(),
-	}
-	sb.Data, err = protobuf.Encode(header)
-	if err != nil {
-		return nil, errors.New("Couldn't marshal data: " + err.Error())
-	}
-
-	if r != nil {
-		sb.Roster = r
-	}
-	var ssb = skipchain.StoreSkipBlock{
-		NewBlock:          sb,
-		TargetSkipChainID: scID,
-	}
-
-	log.Lvlf3("Storing skipblock with %d transactions.", len(txRes))
-	var ssbReply *skipchain.StoreSkipBlockReply
-
-	if sb.Roster.List[0].Equal(s.ServerIdentity()) {
-		ssbReply, err = s.skService().StoreSkipBlockInternal(&ssb)
-	} else {
-		log.Lvl2("Sending new block to other node", sb.Roster.List[0])
-		ssbReply = &skipchain.StoreSkipBlockReply{}
-		err = skipchain.NewClient().SendProtobuf(sb.Roster.List[0], &ssb, ssbReply)
-		if err != nil {
-			return nil, err
-		}
-
-		if ssbReply.Latest == nil {
-			return nil, errors.New("got an empty reply")
-		}
-
-		// we're not doing more verification because the block should not be used
-		// as is. It's up to the client to fetch the forward link of the previous
-		// block to insure the new one has been validated but at this moment we
-		// can't do it because it might not be propagated to this node yet
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	// State changes are cached only when the block is confirmed
-	err = s.stateChangeStorage.append(scs, ssbReply.Latest)
-	if err != nil {
-		log.Error(err)
-	}
-
-	return ssbReply.Latest, nil
-}
-
-// downloadDB downloads the full database over the network from a remote block.
-// It does so by copying the bboltDB database entry by entry over the network,
-// and recreating it on the remote side.
-// sb is a block in the byzcoin instance that we want
-// to download.
-func (s *Service) downloadDB(sb *skipchain.SkipBlock) error {
-	log.Lvlf2("%s: downloading DB", s.ServerIdentity())
-	idStr := fmt.Sprintf("%x", sb.SkipChainID())
-
-	// Loop over all nodes that are not the leader and
-	// not subleaders, to avoid overloading those nodes.
-	nodes := len(sb.Roster.List)
-	subLeaders := int(math.Ceil(math.Pow(float64(nodes), 1./3.)))
-	for ri := 1 + subLeaders; ri < nodes; ri++ {
-		// Create a roster with just the node we want to
-		// download from.
-		roster := onet.NewRoster(sb.Roster.List[ri : ri+1])
-
-		err := func() error {
-			// First delete an existing stateTrie. There
-			// cannot be another write-access to the
-			// database because of catchingLock.
-			_, err := s.getStateTrie(sb.SkipChainID())
-			if err == nil {
-				// Suppose we _do_ have a statetrie
-				db, stBucket := s.GetAdditionalBucket(sb.SkipChainID())
-				err := db.Update(func(tx *bbolt.Tx) error {
-					return tx.DeleteBucket(stBucket)
-				})
-				if err != nil {
-					log.Error("Cannot delete existing trie while trying to download:", err)
-				}
-				s.stateTriesLock.Lock()
-				delete(s.stateTries, idStr)
-				s.stateTriesLock.Unlock()
-			}
-
-			// Then start downloading the stateTrie over the network.
-			cl := NewClient(sb.SkipChainID(), *roster)
-			var db *bbolt.DB
-			var bucketName []byte
-			var nonce uint64
-			for {
-				// Note: we trust the chain therefore even if the reply is corrupted,
-				// it will be detected by difference in the root hash
-				resp, err := cl.DownloadState(sb.SkipChainID(), nonce, catchupFetchDBEntries)
-				if err != nil {
-					return errors.New("cannot download trie: " + err.Error())
-				}
-				if db == nil {
-					db, bucketName = s.GetAdditionalBucket([]byte(idStr))
-					nonce = resp.Nonce
-				}
-				// And store all entries in our local database.
-				err = db.Update(func(tx *bbolt.Tx) error {
-					bucket := tx.Bucket(bucketName)
-					for _, kv := range resp.KeyValues {
-						err := bucket.Put(kv.Key, kv.Value)
-						if err != nil {
-							return err
-						}
-					}
-					return nil
-				})
-				if err != nil {
-					log.Error("Couldn't store entries:", err)
-				}
-				if len(resp.KeyValues) < catchupFetchDBEntries {
-					break
-				}
-			}
-
-			// Check the new trie is correct
-			st, err := loadStateTrie(db, bucketName)
-			if err != nil {
-				return errors.New("couldn't load state trie: " + err.Error())
-			}
-			if sb.Index != st.GetIndex() {
-				log.Lvl2("Downloading corresponding block")
-				skCl := skipchain.NewClient()
-				// TODO: add a client API to fetch a specific block and its proof
-				search, err := skCl.GetSingleBlockByIndex(roster, sb.SkipChainID(), st.GetIndex())
-				if err != nil {
-					return errors.New("couldn't get correct block for verification: " + err.Error())
-				}
-				sb = search.SkipBlock
-			}
-			var header DataHeader
-			err = protobuf.Decode(sb.Data, &header)
-			if err != nil {
-				return errors.New("couldn't unmarshal header: " + err.Error())
-			}
-			if !bytes.Equal(st.GetRoot(), header.TrieRoot) {
-				return errors.New("got wrong database, merkle roots don't work out")
-			}
-
-			// Finally initialize the stateTrie using the new database.
-			s.stateTriesLock.Lock()
-			s.stateTries[idStr] = st
-			s.stateTriesLock.Unlock()
-			log.Lvlf1("%s: successfully downloaded database for chain %s", s.ServerIdentity(),
-				idStr)
-			return nil
-		}()
-		if err == nil {
-			return nil
-		}
-		log.Errorf("Couldn't load database from %s - got error %s", roster.List[0], err)
-	}
-	return errors.New("none of the non-leader and non-subleader nodes were able to give us a copy of the state")
-}
-
-// catchupAll calls catchup for every byzcoin instance stored in this system.
-func (s *Service) catchupAll() error {
-	s.closedMutex.Lock()
-	if s.closed {
-		s.closedMutex.Unlock()
-		return errors.New("cannot sync all while closing")
-	}
-	s.working.Add(1)
-	defer s.working.Done()
-	s.closedMutex.Unlock()
-
-	s.catchingLock.Lock()
-	s.updateTrieLock.Lock()
-	s.catchingUp = true
-	s.updateTrieLock.Unlock()
-
-	defer func() {
-		s.updateTrieLock.Lock()
-		s.catchingUp = false
-		s.updateTrieLock.Unlock()
-		s.catchingLock.Unlock()
-	}()
-
-	gas := &skipchain.GetAllSkipChainIDs{}
-	gasr, err := s.skService().GetAllSkipChainIDs(gas)
-	if err != nil {
-		return err
-	}
-
-	for _, scID := range gasr.IDs {
-		if !s.hasByzCoinVerification(scID) {
+		resourceList := backupResources[resource.String()]
+		if resourceList == nil {
 			continue
 		}
 
-		sb, err := s.db().GetLatestByID(scID)
-		if err != nil {
-			return err
-		}
-
-		cl := skipchain.NewClient()
-		// Get the latest block known by the Cothority.
-		reply, err := cl.GetUpdateChain(sb.Roster, sb.Hash)
-		if err != nil {
-			return err
-		}
-
-		if len(reply.Update) == 0 {
-			return errors.New("no block found in chain update")
-		}
-
-		s.catchUp(reply.Update[len(reply.Update)-1])
-	}
-	return nil
-}
-
-// catchupFromID takes a roster and a skipchain-ID, and then searches to update this
-// skipchain. This is useful in case there is no block stored yet in the system, but
-// we get a roster, e.g., from getTxs.
-// To prevent distributed denial-of-service, we first check that the skipchain is
-// known and then we limit the number of catch up requests per skipchain by waiting
-// for a minimal amount of time.
-func (s *Service) catchupFromID(r *onet.Roster, scID skipchain.SkipBlockID, sbID skipchain.SkipBlockID) error {
-	s.catchingLock.Lock()
-	s.updateTrieLock.Lock()
-	s.catchingUp = true
-	s.updateTrieLock.Unlock()
-
-	defer func() {
-		s.updateTrieLock.Lock()
-		s.catchingUp = false
-		s.updateTrieLock.Unlock()
-		s.catchingLock.Unlock()
-	}()
-
-	// Catch up only friendly skipchains to avoid unnecessary requests
-	if s.db().GetByID(scID) == nil {
-		log.Lvlf3("got asked for unknown skipchain: %x", scID)
-		return nil
-	}
-
-	// The size of the map is limited here by the number of known skipchains
-	s.catchingUpHistoryLock.Lock()
-	ts := s.catchingUpHistory[string(scID)]
-	if ts.After(time.Now()) {
-		s.catchingUpHistoryLock.Unlock()
-		return errors.New("catch up request already processed recently")
-	}
-
-	s.catchingUpHistory[string(scID)] = time.Now().Add(catchupMinimumInterval)
-	s.catchingUpHistoryLock.Unlock()
-
-	log.Lvlf1("catching up with chain %x", scID)
-
-	cl := skipchain.NewClient()
-	sb, err := cl.GetSingleBlock(r, sbID)
-	if err != nil {
-		return err
-	}
-
-	// catch up the intermediate missing blocks
-	s.catchUp(sb)
-	return nil
-}
-
-// catchUp takes a skipblock as reference for the roster, the current index,
-// and the skipchainID to download either new blocks if it's less than
-// `catchupDownloadAll` behind, or calls downloadDB to start the download of
-// the full DB over the network.
-func (s *Service) catchUp(sb *skipchain.SkipBlock) {
-	log.Lvlf2("%v Catching up %x / %d", s.ServerIdentity(), sb.SkipChainID(), sb.Index)
-
-	// Load the trie.
-	download := false
-	st, err := s.getStateTrie(sb.SkipChainID())
-	if err != nil {
-		log.Warn(s.ServerIdentity(), "problem with trie:", err)
-		download = true
-	} else {
-		download = sb.Index-st.GetIndex() > catchupDownloadAll
-	}
-
-	// Check if we are updating the right index.
-	if download {
-		log.Lvl2(s.ServerIdentity(), "Downloading whole DB for catching up")
-		err := s.downloadDB(sb)
-		if err != nil {
-			log.Error("Error while downloading trie:", err)
-		}
-
-		// Note: in that case we don't get the previous blocks and therefore we can't
-		// recreate the state changes. The storage will then be filled with new
-		// incoming blocks
-		return
-	}
-
-	// Get the latest block known and processed by the conode
-	trieIndex := st.GetIndex()
-	req, err := s.skService().GetSingleBlockByIndex(&skipchain.GetSingleBlockByIndex{
-		Genesis: sb.SkipChainID(),
-		Index:   trieIndex,
-	})
-	if err != nil {
-		// because we rely on the trie index, this should never happen because we're only
-		// asking locally to get the block associated with the index (thus processed already)
-		log.Errorf("%v cannot find latest block to catch up", s.ServerIdentity())
-		return
-	}
-
-	latest := req.SkipBlock
-
-	// Fetch all missing blocks to fill the hole
-	cl := skipchain.NewClient()
-	for trieIndex < sb.Index {
-		log.Lvlf1("%s: our index: %d - latest known index: %d", s.ServerIdentity(), trieIndex, sb.Index)
-		updates, err := cl.GetUpdateChainLevel(sb.Roster, latest.Hash, 1, catchupFetchBlocks)
-		if err != nil {
-			log.Error("Couldn't update blocks: " + err.Error())
-			return
-		}
-
-		// This will call updateTrieCallback with the next block to add
-		_, err = s.db().StoreBlocks(updates)
-		if err != nil {
-			log.Error("Got an invalid, unlinkable block: " + err.Error())
-			return
-		}
-		latest = updates[len(updates)-1]
-		trieIndex = latest.Index
-	}
-	log.Lvlf2("%v Done catch up %x / %d", s.ServerIdentity(), sb.SkipChainID(), trieIndex)
-}
-
-// updateTrieCallback is registered in skipchain and is called after a
-// skipblock is updated. When this function is called, it is not always after
-// the addition of a new block, but an updates to forward links, for example.
-// Hence, we need to figure out when a new block is added. This can be done by
-// looking at the latest skipblock cache from Service.state.
-func (s *Service) updateTrieCallback(sbID skipchain.SkipBlockID) error {
-	s.updateTrieLock.Lock()
-	defer s.updateTrieLock.Unlock()
-
-	s.closedMutex.Lock()
-	defer s.closedMutex.Unlock()
-	if s.closed {
-		return nil
-	}
-
-	defer log.Lvlf4("%s updated trie for %x", s.ServerIdentity(), sbID)
-
-	// Verification it's really a skipchain for us.
-	if !s.hasByzCoinVerification(sbID) {
-		log.Lvl4("Not our chain...")
-		return nil
-	}
-	sb := s.db().GetByID(sbID)
-	if sb == nil {
-		panic("This should never happen because the callback runs " +
-			"only after the skipblock is stored. There is a " +
-			"programmer error if you see this message.")
-	}
-
-	// Create the trie for the genesis block if it has not been
-	// created yet.
-	// We don't need to wrap the check and use another
-	// lock because the callback is already locked and we only
-	// create state trie here.
-	if sb.Index == 0 && !s.hasStateTrie(sb.SkipChainID()) {
-		var body DataBody
-		err := protobuf.Decode(sb.Payload, &body)
-		if err != nil {
-			log.Error(s.ServerIdentity(), "could not unmarshal body for genesis block", err)
-			return errors.New("couldn't unmarshal body for genesis block")
-		}
-		nonce, err := s.loadNonceFromTxs(body.TxResults)
-		if err != nil {
-			return err
-		}
-		// We don't care about the state trie that is returned in this
-		// function because we load the trie again in getStateTrie
-		// right afterwards.
-		_, err = s.createStateTrie(sb.SkipChainID(), nonce)
-		if err != nil {
-			return fmt.Errorf("could not create trie: %v", err)
-		}
-	}
-
-	// Load the trie.
-	st, err := s.getStateTrie(sb.SkipChainID())
-	if err != nil {
-		return fmt.Errorf("could not load trie: %v", err)
-	}
-
-	// Check if we are updating the right index.
-	trieIndex := st.GetIndex()
-	if sb.Index <= trieIndex {
-		// This is because skipchains will inform us about new forwardLinks, but we
-		// don't need to update the trie in that case.
-		log.Lvlf4("%v updating trie for block %d refused, current trie block is %d", s.ServerIdentity(), sb.Index, trieIndex)
-		return nil
-	} else if sb.Index > trieIndex+1 {
-		log.Warn(s.ServerIdentity(), "Got new block while catching up - ignoring block for now")
-		go func() {
-			// This new block will catch up at the end of the current catch up (if any)
-			// and be ignored if the block is already known.
-			s.catchingLock.Lock()
-			s.catchUp(sb)
-			s.catchingLock.Unlock()
-		}()
-
-		return nil
-	}
-
-	// Get the DataHeader and the DataBody of the block.
-	var header DataHeader
-	err = protobuf.Decode(sb.Data, &header)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "could not unmarshal header", err)
-		return errors.New("couldn't unmarshal header")
-	}
-
-	var body DataBody
-	err = protobuf.Decode(sb.Payload, &body)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "could not unmarshal body", err)
-		return errors.New("couldn't unmarshal body")
-	}
-
-	log.Lvlf2("%s Updating transactions for %x on index %v", s.ServerIdentity(), sb.SkipChainID(), sb.Index)
-	_, _, scs, _ := s.createStateChanges(st.MakeStagingStateTrie(), sb.SkipChainID(), body.TxResults, noTimeout)
-
-	log.Lvlf3("%s Storing index %d with %d state changes %v", s.ServerIdentity(), sb.Index, len(scs), scs.ShortStrings())
-	// Update our global state using all state changes.
-	if err = st.VerifiedStoreAll(scs, sb.Index, header.TrieRoot); err != nil {
-		return err
-	}
-
-	err = s.stateChangeStorage.append(scs, sb)
-	if err != nil {
-		panic("Couldn't append the state changes to the storage - this might " +
-			"mean that the db is broken. Error: " + err.Error())
-	}
-
-	// Notify all waiting channels for processed ClientTransactions.
-	for _, t := range body.TxResults {
-		s.notifications.informWaitChannel(t.ClientTransaction.Instructions.Hash(), t.Accepted)
-	}
-	s.notifications.informBlock(sb.SkipChainID())
-
-	// If we are adding a genesis block, then look into it for the darc ID
-	// and add it to the darcToSc hash map.
-	if sb.Index == 0 {
-		// the information should already be in the trie
-		d, err := s.LoadGenesisDarc(sb.SkipChainID())
-		if err != nil {
-			return err
-		}
-		s.darcToScMut.Lock()
-		s.darcToSc[string(d.GetBaseID())] = sb.SkipChainID()
-		s.darcToScMut.Unlock()
-	}
-
-	// Get the latest configuration of the global state, which includes the latest
-	// ClientTransactions received.
-	bcConfig, err := s.LoadConfig(sb.SkipChainID())
-	if err != nil {
-		panic("Couldn't get configuration of the block - this might " +
-			"mean that the db is broken. Error: " + err.Error())
-	}
-
-	// Variables for easy understanding what's being tested. Node in this context
-	// is this node.
-	i, _ := bcConfig.Roster.Search(s.ServerIdentity().ID)
-	nodeInNew := i >= 0
-	nodeIsLeader := bcConfig.Roster.List[0].Equal(s.ServerIdentity())
-	initialDur, err := s.computeInitialDuration(sb.Hash)
-	if err != nil {
-		return err
-	}
-	// Check if the polling needs to be updated.
-	s.pollChanMut.Lock()
-	scIDstr := string(sb.SkipChainID())
-	if nodeIsLeader && !s.catchingUp {
-		if _, ok := s.pollChan[scIDstr]; !ok {
-			log.Lvlf2("%s new leader started polling for %x", s.ServerIdentity(), sb.SkipChainID())
-			s.pollChan[scIDstr] = s.startPolling(sb.SkipChainID())
-		}
-	} else {
-		if c, ok := s.pollChan[scIDstr]; ok {
-			log.Lvlf2("%s old leader stopped polling for %x", s.ServerIdentity(), sb.SkipChainID())
-			close(c)
-			delete(s.pollChan, scIDstr)
-		}
-	}
-	s.pollChanMut.Unlock()
-
-	// Check if viewchange needs to be started/stopped
-	// Check whether the heartbeat monitor exists, if it doesn't we start a
-	// new one
-	interval, _, err := s.LoadBlockInfo(sb.SkipChainID())
-	if err != nil {
-		return err
-	}
-	if nodeInNew && !s.catchingUp {
-		// Update or start heartbeats
-		if s.heartbeats.exists(string(sb.SkipChainID())) {
-			log.Lvlf3("%s sending heartbeat monitor for %x with window %v", s.ServerIdentity(), sb.SkipChainID(), interval*s.rotationWindow)
-			s.heartbeats.updateTimeout(string(sb.SkipChainID()), interval*s.rotationWindow)
-		} else {
-			log.Lvlf2("%s starting heartbeat monitor for %x with window %v", s.ServerIdentity(), sb.SkipChainID(), interval*s.rotationWindow)
-			err = s.heartbeats.start(string(sb.SkipChainID()), interval*s.rotationWindow, s.heartbeatsTimeout)
-			if err != nil {
-				log.Errorf("%s heartbeat failed to start with error: %s", s.ServerIdentity(), err.Error())
-			}
-		}
-
-		// If it is a view-change transaction, confirm it's done
-		view := isViewChangeTx(body.TxResults)
-
-		if s.viewChangeMan.started(sb.SkipChainID()) && view != nil {
-			s.viewChangeMan.done(*view)
-		} else {
-			// clean previous states as a new block has been added in the mean time
-			// making them thus invalid
-			s.viewChangeMan.stop(sb.SkipChainID())
-
-			// Start viewchange monitor that will fire if we don't get updates in time.
-			log.Lvlf2("%s started viewchangeMonitor for %x", s.ServerIdentity(), sb.SkipChainID())
-			s.viewChangeMan.add(s.sendViewChangeReq, s.sendNewView, s.isLeader, string(sb.SkipChainID()))
-			s.viewChangeMan.start(s.ServerIdentity().ID, sb.SkipChainID(), initialDur, s.getFaultThreshold(sb.Hash))
-		}
-	} else {
-		if s.heartbeats.exists(scIDstr) {
-			log.Lvlf2("%s stopping heartbeat monitor for %x with window %v", s.ServerIdentity(), sb.SkipChainID(), interval*s.rotationWindow)
-			s.heartbeats.stop(scIDstr)
-		}
-	}
-	if !nodeInNew && s.viewChangeMan.started(sb.SkipChainID()) {
-		log.Lvlf2("%s not in roster, but viewChangeMonitor started - stopping now for %x", s.ServerIdentity(), sb.SkipChainID())
-		s.viewChangeMan.stop(sb.SkipChainID())
-	}
-
-	// At this point everything should be stored.
-	s.streamingMan.notify(string(sb.SkipChainID()), sb)
-
-	log.Lvlf4("%s updated trie for %x with root %x", s.ServerIdentity(), sb.SkipChainID(), st.GetRoot())
-	return nil
-}
-
-func isViewChangeTx(txs TxResults) *viewchange.View {
-	if len(txs) != 1 {
-		// view-change block must only have one transaction
-		return nil
-	}
-	if len(txs[0].ClientTransaction.Instructions) != 1 {
-		// view-change transaction must have one instruction
-		return nil
-	}
-
-	invoke := txs[0].ClientTransaction.Instructions[0].Invoke
-	if invoke == nil {
-		return nil
-	}
-	if invoke.Command != "view_change" {
-		return nil
-	}
-	var req viewchange.NewViewReq
-	if err := protobuf.Decode(invoke.Args.Search("newview"), &req); err != nil {
-		log.Error("failed to decode new-view req")
-		return nil
-	}
-	return req.GetView()
-}
-
-// GetReadOnlyStateTrie returns a read-only accessor to the trie for the given
-// skipchain.
-func (s *Service) GetReadOnlyStateTrie(scID skipchain.SkipBlockID) (ReadOnlyStateTrie, error) {
-	return s.getStateTrie(scID)
-}
-
-func (s *Service) hasStateTrie(id skipchain.SkipBlockID) bool {
-	s.stateTriesLock.Lock()
-	defer s.stateTriesLock.Unlock()
-
-	idStr := fmt.Sprintf("%x", id)
-	_, ok := s.stateTries[idStr]
-
-	return ok
-}
-
-func (s *Service) getStateTrie(id skipchain.SkipBlockID) (*stateTrie, error) {
-	if len(id) == 0 {
-		return nil, errors.New("no skipchain ID")
-	}
-	s.stateTriesLock.Lock()
-	defer s.stateTriesLock.Unlock()
-	idStr := fmt.Sprintf("%x", id)
-	col := s.stateTries[idStr]
-	if col == nil {
-		db, name := s.GetAdditionalBucket([]byte(idStr))
-		st, err := loadStateTrie(db, name)
-		if err != nil {
-			return nil, err
-		}
-		s.stateTries[idStr] = st
-		return s.stateTries[idStr], nil
-	}
-	return col, nil
-}
-
-func (s *Service) createStateTrie(id skipchain.SkipBlockID, nonce []byte) (*stateTrie, error) {
-	if len(id) == 0 {
-		return nil, errors.New("no skipchain ID")
-	}
-	s.stateTriesLock.Lock()
-	defer s.stateTriesLock.Unlock()
-	idStr := fmt.Sprintf("%x", id)
-	if s.stateTries[idStr] != nil {
-		return nil, errors.New("state trie already exists")
-	}
-	db, name := s.GetAdditionalBucket([]byte(idStr))
-	st, err := newStateTrie(db, name, nonce)
-	if err != nil {
-		return nil, err
-	}
-	s.stateTries[idStr] = st
-	return s.stateTries[idStr], nil
-}
-
-// interface to skipchain.Service
-func (s *Service) skService() *skipchain.Service {
-	return s.Service(skipchain.ServiceName).(*skipchain.Service)
-}
-
-func (s *Service) isLeader(view viewchange.View) bool {
-	if view.LeaderIndex < 0 {
-		// no guaranties on the leader index value
-		return false
-	}
-
-	sb := s.db().GetByID(view.ID)
-
-	idx := view.LeaderIndex % len(sb.Roster.List)
-	sid := sb.Roster.List[idx]
-	return sid.ID.Equal(s.ServerIdentity().ID)
-}
-
-// gives us access to the skipchain's database, so we can get blocks by ID
-func (s *Service) db() *skipchain.SkipBlockDB {
-	return s.skService().GetDB()
-}
-
-// LoadConfig loads the configuration from a skipchain ID.
-func (s *Service) LoadConfig(scID skipchain.SkipBlockID) (*ChainConfig, error) {
-	st, err := s.GetReadOnlyStateTrie(scID)
-	if err != nil {
-		return nil, err
-	}
-	return LoadConfigFromTrie(st)
-}
-
-// LoadGenesisDarc loads the genesis darc of the given skipchain ID.
-func (s *Service) LoadGenesisDarc(scID skipchain.SkipBlockID) (*darc.Darc, error) {
-	st, err := s.GetReadOnlyStateTrie(scID)
-	if err != nil {
-		return nil, err
-	}
-	config, err := s.LoadConfig(scID)
-	if err != nil {
-		return nil, err
-	}
-	return getInstanceDarc(st, ConfigInstanceID, config.DarcContractIDs)
-}
-
-// LoadBlockInfo loads the block interval and the maximum size from the
-// skipchain ID. If the config instance does not exist, it will return the
-// default values without an error.
-func (s *Service) LoadBlockInfo(scID skipchain.SkipBlockID) (time.Duration, int, error) {
-	if scID == nil {
-		return defaultInterval, defaultMaxBlockSize, nil
-	}
-	st, err := s.GetReadOnlyStateTrie(scID)
-	if err != nil {
-		return defaultInterval, defaultMaxBlockSize, nil
-	}
-	config, err := LoadConfigFromTrie(st)
-	if err != nil {
-		if err == errKeyNotSet {
-			err = nil
-		}
-		return defaultInterval, defaultMaxBlockSize, err
-	}
-	return config.BlockInterval, config.MaxBlockSize, nil
-}
-
-func (s *Service) startPolling(scID skipchain.SkipBlockID) chan bool {
-	pipeline := txPipeline{
-		processor: &defaultTxProcessor{
-			stopCollect: make(chan bool),
-			scID:        scID,
-			Service:     s,
-		},
-	}
-	st, err := s.getStateTrie(scID)
-	if err != nil {
-		panic("the state trie must exist because we only start polling after creating/loading the skipchain")
-	}
-	initialState := txProcessorState{
-		sst: st.MakeStagingStateTrie(),
-	}
-
-	stopChan := make(chan bool)
-	go func() {
-		s.pollChanWG.Add(1)
-		defer s.pollChanWG.Done()
-
-		s.closedMutex.Lock()
-		if s.closed {
-			s.closedMutex.Unlock()
-			return
-		}
-
-		s.working.Add(1)
-		defer s.working.Done()
-		s.closedMutex.Unlock()
-
-		pipeline.start(&initialState, stopChan)
-	}()
-
-	return stopChan
-}
-
-// We use the ByzCoin as a receiver (as is done in the identity service),
-// so we can access e.g. the StateTrie of the service.
-func (s *Service) verifySkipBlock(newID []byte, newSB *skipchain.SkipBlock) bool {
-	start := time.Now()
-	defer func() {
-		log.Lvlf3("%s Verify done after %s", s.ServerIdentity(), time.Now().Sub(start))
-	}()
-
-	var header DataHeader
-	err := protobuf.Decode(newSB.Data, &header)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "verifySkipblock: couldn't unmarshal header")
-		return false
-	}
-
-	// Check the contents of the DataHeader before proceeding.
-	// We'll check the timestamp later, once we have the config loaded.
-	err = func() error {
-		if len(header.TrieRoot) != sha256.Size {
-			return errors.New("trie root is wrong size")
-		}
-		if len(header.ClientTransactionHash) != sha256.Size {
-			return errors.New("client transaction hash is wrong size")
-		}
-		if len(header.StateChangesHash) != sha256.Size {
-			return errors.New("state changes hash is wrong size")
-		}
-		return nil
-	}()
-
-	if err != nil {
-		log.Errorf("data header failed check: %v", err)
-		return false
-	}
-
-	var body DataBody
-	err = protobuf.Decode(newSB.Payload, &body)
-	if err != nil {
-		log.Error("verifySkipblock: couldn't unmarshal body")
-		return false
-	}
-
-	if s.viewChangeMan.waiting(string(newSB.SkipChainID())) && isViewChangeTx(body.TxResults) == nil {
-		log.Error(s.ServerIdentity(), "we are not accepting blocks when a view-change is in progress")
-		return false
-	}
-
-	// Load/create a staging trie to add the state changes to it and
-	// compute the Merkle root.
-	var sst *stagingStateTrie
-	if newSB.Index == 0 {
-		nonce, err := s.loadNonceFromTxs(body.TxResults)
-		if err != nil {
-			log.Error(s.ServerIdentity(), err)
-			return false
-		}
-		sst, err = newMemStagingStateTrie(nonce)
-		if err != nil {
-			log.Error(s.ServerIdentity(), err)
-			return false
-		}
-	} else {
-		st, err := s.getStateTrie(newSB.SkipChainID())
-		if err != nil {
-			log.Error(s.ServerIdentity(), err)
-			return false
-		}
-		sst = st.MakeStagingStateTrie()
-	}
-	mtr, txOut, scs, _ := s.createStateChanges(sst, newSB.SkipChainID(), body.TxResults, noTimeout)
-
-	// Check that the locally generated list of accepted/rejected txs match the list
-	// the leader proposed.
-	if len(txOut) != len(body.TxResults) {
-		log.Lvl2(s.ServerIdentity(), "transaction list length mismatch after execution")
-		return false
-	}
-
-	for i := range txOut {
-		if txOut[i].Accepted != body.TxResults[i].Accepted {
-			log.Lvl2(s.ServerIdentity(), "Client Transaction accept mistmatch on tx", i)
-			return false
-		}
-	}
-
-	// Check that the hashes in DataHeader are right.
-	if bytes.Compare(header.ClientTransactionHash, txOut.Hash()) != 0 {
-		log.Lvl2(s.ServerIdentity(), "Client Transaction Hash doesn't verify")
-		return false
-	}
-
-	if bytes.Compare(header.TrieRoot, mtr) != 0 {
-		log.Lvl2(s.ServerIdentity(), "Trie root doesn't verify")
-		return false
-	}
-	if bytes.Compare(header.StateChangesHash, scs.Hash()) != 0 {
-		log.Lvl2(s.ServerIdentity(), "State Changes hash doesn't verify")
-		return false
-	}
-
-	// Compute the new state and check whether the roster in newSB matches
-	// the config.
-	if err := sst.StoreAll(scs); err != nil {
-		log.Error(s.ServerIdentity(), err)
-		return false
-	}
-
-	config, err := LoadConfigFromTrie(sst)
-	if err != nil {
-		log.Error(s.ServerIdentity(), err)
-		return false
-	}
-	if newSB.Index > 0 {
-		if err := config.checkNewRoster(*newSB.Roster); err != nil {
-			log.Error("Didn't accept the new roster:", err)
-			return false
-		}
-	}
-
-	window := 4 * config.BlockInterval
-	if window < minTimestampWindow {
-		window = minTimestampWindow
-	}
-
-	now := time.Now()
-	t1 := now.Add(-window)
-	t2 := now.Add(window)
-	ts := time.Unix(0, header.Timestamp)
-	if ts.Before(t1) || ts.After(t2) {
-		log.Errorf("timestamp %v is outside the acceptable range %v to %v", ts, t1, t2)
-		return false
-	}
-
-	log.Lvl4(s.ServerIdentity(), "verification completed")
-	return true
-}
-
-func txSize(txr ...TxResult) (out int) {
-	// It's too bad to have to marshal this and throw it away just to know
-	// how big it would be. Protobuf should support finding the length without
-	// copying the data.
-	for _, x := range txr {
-		buf, err := protobuf.Encode(&x)
-		if err != nil {
-			// It's fairly inconceivable that we're going to be getting
-			// error from this Encode() but return a big number in case,
-			// so that the caller will reject whatever this bad input is.
-			return math.MaxInt32
-		}
-		out += len(buf)
-	}
-	return
-}
-
-// createStateChanges goes through all the proposed transactions one by one,
-// creating the appropriate StateChanges, by sorting out which transactions can
-// be run, which fail, and which cannot be attempted yet (due to timeout).
-//
-// If timeout is not 0, createStateChanges will stop running instructions after
-// that long, in order for the caller to determine how many instructions fit in
-// a block interval.
-//
-// State caching is implemented here, which is critical to performance, because
-// on the leader it reduces the number of contract executions by 1/3 and on
-// followers by 1/2.
-func (s *Service) createStateChanges(sst *stagingStateTrie, scID skipchain.SkipBlockID, txIn TxResults, timeout time.Duration) (merkleRoot []byte, txOut TxResults, states StateChanges, sstTemp *stagingStateTrie) {
-	// If what we want is in the cache, then take it from there. Otherwise
-	// ignore the error and compute the state changes.
-	var err error
-	merkleRoot, txOut, states, err = s.stateChangeCache.get(scID, txIn.Hash())
-	if err == nil {
-		log.Lvlf3("%s: loaded state changes %x from cache", s.ServerIdentity(), scID)
-		return
-	}
-	log.Lvl3(s.ServerIdentity(), "state changes from cache: MISS")
-	err = nil
-
-	var maxsz, blocksz int
-	_, maxsz, err = s.LoadBlockInfo(scID)
-	// no error or expected "no trie" err, so keep going with the
-	// maxsz we got.
-	err = nil
-
-	deadline := time.Now().Add(timeout)
-
-	sstTemp = sst.Clone()
-
-	for _, tx := range txIn {
-		txsz := txSize(tx)
-
-		var sstTempC *stagingStateTrie
-		var statesTemp StateChanges
-		statesTemp, sstTempC, err = s.processOneTx(sstTemp, tx.ClientTransaction)
-		if err != nil {
-			tx.Accepted = false
-			txOut = append(txOut, tx)
-			log.Error(s.ServerIdentity(), err)
-		} else {
-			// We would like to be able to check if this txn is so big it could never fit into a block,
-			// and if so, drop it. But we can't with the current API of createStateChanges.
-			// For now, the only thing we can do is accept or refuse them, but they will go into a block
-			// one way or the other.
-			// TODO: In issue #1409, we will refactor things such that we can drop transactions in here.
-			//if txsz > maxsz {
-			//	log.Errorf("%s transaction size %v is bigger than one block (%v), dropping it.", s.ServerIdentity(), txsz, maxsz)
-			//	continue clientTransactions
-			//}
-
-			// Planning mode:
-			//
-			// Timeout is used when the leader calls createStateChanges as
-			// part of planning which transactions fit into one block.
-			if timeout != noTimeout {
-				if time.Now().After(deadline) {
-					log.Warnf("%s ran out of time after %v", s.ServerIdentity(), timeout)
-					return
-				}
-
-				// If the last txn would have made the state changes too big, return
-				// just like we do for a timeout. The caller will make a block with
-				// what's in txOut.
-				if blocksz+txsz > maxsz {
-					log.Lvlf3("stopping block creation when %v > %v, with len(txOut) of %v", blocksz+txsz, maxsz, len(txOut))
-					return
-				}
+		for namespace, items := range resourceList.ItemsByNamespace {
+			if namespace != "" && !ctx.namespaceIncludesExcludes.ShouldInclude(namespace) {
+				ctx.log.Infof("Skipping namespace %s", namespace)
+				continue
 			}
 
-			tx.Accepted = true
-			sstTemp = sstTempC
-			blocksz += txsz
-			states = append(states, statesTemp...)
-			txOut = append(txOut, tx)
+			// get target namespace to restore into, if different
+			// from source namespace
+			targetNamespace := namespace
+			if target, ok := ctx.restore.Spec.NamespaceMapping[namespace]; ok {
+				targetNamespace = target
+			}
+
+			// if we don't know whether this namespace exists yet, attempt to create
+			// it in order to ensure it exists. Try to get it from the backup tarball
+			// (in order to get any backed-up metadata), but if we don't find it there,
+			// create a blank one.
+			if namespace != "" && !existingNamespaces.Has(targetNamespace) {
+				logger := ctx.log.WithField("namespace", namespace)
+				ns := getNamespace(logger, getItemFilePath(ctx.restoreDir, "namespaces", "", namespace), targetNamespace)
+				if _, err := kube.EnsureNamespaceExistsAndIsReady(ns, ctx.namespaceClient, ctx.resourceTerminatingTimeout); err != nil {
+					addVeleroError(&errs, err)
+					continue
+				}
+
+				// keep track of namespaces that we know exist so we don't
+				// have to try to create them multiple times
+				existingNamespaces.Insert(targetNamespace)
+			}
+
+			w, e := ctx.restoreResource(resource.String(), targetNamespace, namespace, items)
+			merge(&warnings, &w)
+			merge(&errs, &e)
 		}
 	}
 
-	// Store the result in the cache before returning.
-	merkleRoot = sstTemp.GetRoot()
-	if len(states) != 0 && len(txOut) != 0 {
-		s.stateChangeCache.update(scID, txOut.Hash(), merkleRoot, txOut, states)
+	// TODO timeout?
+	ctx.log.Debug("Waiting on global wait group")
+	waitErrs := ctx.globalWaitGroup.Wait()
+	ctx.log.Debug("Done waiting on global wait group")
+
+	for _, err := range waitErrs {
+		// TODO not ideal to be adding these to Velero-level errors
+		// rather than a specific namespace, but don't have a way
+		// to track the namespace right now.
+		errs.Velero = append(errs.Velero, err.Error())
 	}
-	return
+
+	return warnings, errs
 }
 
-// processOneTx takes one transaction and creates a set of StateChanges. It also returns the temporary StateTrie
-// with the StateChanges applied.
-func (s *Service) processOneTx(sst *stagingStateTrie, tx ClientTransaction) (StateChanges, *stagingStateTrie, error) {
-	// Make a new trie for each instruction. If the instruction is
-	// sucessfully implemented and changes applied, then keep it
-	// otherwise dump it.
-	sst = sst.Clone()
-	h := tx.Instructions.Hash()
-	var statesTemp StateChanges
-	var cin []Coin
-	for _, instr := range tx.Instructions {
-		scs, cout, err := s.executeInstruction(sst, cin, instr, h)
-		if err != nil {
-			_, _, cid, _, err2 := sst.GetValues(instr.InstanceID.Slice())
-			if err2 != nil {
-				err = fmt.Errorf("%s - while getting value: %s", err, err2)
-			}
-			return nil, nil, fmt.Errorf("%s Contract %s got Instruction %s and returned error: %s", s.ServerIdentity(), cid, instr, err)
-		}
-		var counterScs StateChanges
-		if counterScs, err = incrementSignerCounters(sst, instr.SignerIdentities); err != nil {
-			return nil, nil, fmt.Errorf("%s failed to update signature counters: %s", s.ServerIdentity(), err)
-		}
-
-		// Verify the validity of the state-changes:
-		//  - refuse to update non-existing instances
-		//  - refuse to create existing instances
-		//  - refuse to delete non-existing instances
-		for _, sc := range scs {
-			var reason string
-			switch sc.StateAction {
-			case Create:
-				if v, err := sst.Get(sc.InstanceID); err != nil || v != nil {
-					reason = "tried to create existing instanceID"
-				}
-			case Update:
-				if v, err := sst.Get(sc.InstanceID); err != nil || v == nil {
-					reason = "tried to update non-existing instanceID"
-				}
-			case Remove:
-				if v, err := sst.Get(sc.InstanceID); err != nil || v == nil {
-					reason = "tried to remove non-existing instanceID"
-				}
-			}
-			if reason != "" {
-				_, _, contractID, _, err := sst.GetValues(instr.InstanceID.Slice())
-				if err != nil {
-					return nil, nil, fmt.Errorf("%s couldn't get contractID from instruction %+v", s.ServerIdentity(), instr)
-				}
-				return nil, nil, fmt.Errorf("%s: contract %s %s", s.ServerIdentity(), contractID, reason)
-			}
-			log.Lvlf2("StateChange %s for id %x - contract: %s", sc.StateAction, sc.InstanceID, sc.ContractID)
-			err = sst.StoreAll(StateChanges{sc})
-			if err != nil {
-				return nil, nil, fmt.Errorf("%s StoreAll failed: %s", s.ServerIdentity(), err)
-			}
-		}
-		if err = sst.StoreAll(counterScs); err != nil {
-			return nil, nil, fmt.Errorf("%s StoreAll failed to add counter changes: %s", s.ServerIdentity(), err)
-		}
-		statesTemp = append(statesTemp, scs...)
-		statesTemp = append(statesTemp, counterScs...)
-		cin = cout
-	}
-	if len(cin) != 0 {
-		log.Warn(s.ServerIdentity(), "Leftover coins detected, discarding.")
-	}
-	return statesTemp, sst, nil
-}
-
-// GetContractConstructor gets the contract constructor of the contract
-// contractName.
-func (s *Service) GetContractConstructor(contractName string) (ContractFn, bool) {
-	fn, exists := s.contracts[contractName]
-	return fn, exists
-}
-
-func (s *Service) executeInstruction(st ReadOnlyStateTrie, cin []Coin, instr Instruction, ctxHash []byte) (scs StateChanges, cout []Coin, err error) {
-	defer func() {
-		if re := recover(); re != nil {
-			err = fmt.Errorf("%s", re)
-		}
-	}()
-
-	contents, _, contractID, _, err := st.GetValues(instr.InstanceID.Slice())
-	if err != errKeyNotSet && err != nil {
-		err = errors.New("Couldn't get contract type of instruction: " + err.Error())
-		return
-	}
-
-	contractFactory, exists := s.contracts[contractID]
-	if !exists && ConfigInstanceID.Equal(instr.InstanceID) {
-		// Special case: first time call to genesis-configuration must return
-		// correct contract type.
-		contractFactory, exists = s.contracts[ContractConfigID]
-	}
-
-	// If the leader does not have a verifier for this contract, it drops the
-	// transaction.
-	if !exists {
-		err = fmt.Errorf("leader is dropping instruction of unknown contract \"%s\" on instance \"%x\"", contractID, instr.InstanceID.Slice())
-		return
-	}
-	// Now we call the contract function with the data of the key.
-	log.Lvlf3("%s Calling contract '%s'", s.ServerIdentity(), contractID)
-
-	c, err := contractFactory(contents)
-	if err != nil {
-		return nil, nil, err
-	}
-	if c == nil {
-		return nil, nil, errors.New("contract factory returned nil contract instance")
-	}
-
-	err = c.VerifyInstruction(st, instr, ctxHash)
-	if err != nil {
-		return nil, nil, fmt.Errorf("instruction verification failed: %v", err)
-	}
-
-	switch instr.GetType() {
-	case SpawnType:
-		scs, cout, err = c.Spawn(st, instr, cin)
-	case InvokeType:
-		scs, cout, err = c.Invoke(st, instr, cin)
-	case DeleteType:
-		scs, cout, err = c.Delete(st, instr, cin)
+func getItemFilePath(rootDir, groupResource, namespace, name string) string {
+	switch namespace {
+	case "":
+		return filepath.Join(rootDir, velerov1api.ResourcesDir, groupResource, velerov1api.ClusterScopedDir, name+".json")
 	default:
-		return nil, nil, errors.New("unexpected contract type")
+		return filepath.Join(rootDir, velerov1api.ResourcesDir, groupResource, velerov1api.NamespaceScopedDir, namespace, name+".json")
 	}
-
-	// As the InstanceID of each sc is not necessarily the same as the
-	// instruction, we need to get the version from the trie
-	vv := make(map[string]uint64)
-	for i, sc := range scs {
-		ver, ok := vv[hex.EncodeToString(sc.InstanceID)]
-		if !ok {
-			_, ver, _, _, err = st.GetValues(sc.InstanceID)
-		}
-
-		// this is done at this scope because we must increase
-		// the version only when it's not the first one
-		if err == errKeyNotSet {
-			ver = 0
-			err = nil
-		} else if err != nil {
-			return
-		} else {
-			ver++
-		}
-
-		scs[i].Version = ver
-		vv[hex.EncodeToString(sc.InstanceID)] = ver
-	}
-
-	return
 }
 
-func (s *Service) getLeader(scID skipchain.SkipBlockID) (*network.ServerIdentity, error) {
-	scConfig, err := s.LoadConfig(scID)
+// getNamespace returns a namespace API object that we should attempt to
+// create before restoring anything into it. It will come from the backup
+// tarball if it exists, else will be a new one. If from the tarball, it
+// will retain its labels, annotations, and spec.
+func getNamespace(logger logrus.FieldLogger, path, remappedName string) *v1.Namespace {
+	var nsBytes []byte
+	var err error
+
+	if nsBytes, err = ioutil.ReadFile(path); err != nil {
+		return &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: remappedName,
+			},
+		}
+	}
+
+	var backupNS v1.Namespace
+	if err := json.Unmarshal(nsBytes, &backupNS); err != nil {
+		logger.Warnf("Error unmarshalling namespace from backup, creating new one.")
+		return &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: remappedName,
+			},
+		}
+	}
+
+	return &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        remappedName,
+			Labels:      backupNS.Labels,
+			Annotations: backupNS.Annotations,
+		},
+		Spec: backupNS.Spec,
+	}
+}
+
+// merge combines two RestoreResult objects into one
+// by appending the corresponding lists to one another.
+func merge(a, b *Result) {
+	a.Cluster = append(a.Cluster, b.Cluster...)
+	a.Velero = append(a.Velero, b.Velero...)
+	for k, v := range b.Namespaces {
+		if a.Namespaces == nil {
+			a.Namespaces = make(map[string][]string)
+		}
+		a.Namespaces[k] = append(a.Namespaces[k], v...)
+	}
+}
+
+// addVeleroError appends an error to the provided RestoreResult's Velero list.
+func addVeleroError(r *Result, err error) {
+	r.Velero = append(r.Velero, err.Error())
+}
+
+// addToResult appends an error to the provided RestoreResult, either within
+// the cluster-scoped list (if ns == "") or within the provided namespace's
+// entry.
+func addToResult(r *Result, ns string, e error) {
+	if ns == "" {
+		r.Cluster = append(r.Cluster, e.Error())
+	} else {
+		if r.Namespaces == nil {
+			r.Namespaces = make(map[string][]string)
+		}
+		r.Namespaces[ns] = append(r.Namespaces[ns], e.Error())
+	}
+}
+
+func (ctx *context) getApplicableActions(groupResource schema.GroupResource, namespace string) []resolvedAction {
+	var actions []resolvedAction
+	for _, action := range ctx.actions {
+		if !action.resourceIncludesExcludes.ShouldInclude(groupResource.String()) {
+			continue
+		}
+
+		if namespace != "" && !action.namespaceIncludesExcludes.ShouldInclude(namespace) {
+			continue
+		}
+
+		if namespace == "" && !action.namespaceIncludesExcludes.IncludeEverything() {
+			continue
+		}
+
+		actions = append(actions, action)
+	}
+
+	return actions
+}
+
+func (ctx *context) shouldRestore(name string, pvClient client.Dynamic) (bool, error) {
+	pvLogger := ctx.log.WithField("pvName", name)
+
+	var shouldRestore bool
+	err := wait.PollImmediate(time.Second, ctx.resourceTerminatingTimeout, func() (bool, error) {
+		unstructuredPV, err := pvClient.Get(name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			pvLogger.Debug("PV not found, safe to restore")
+			// PV not found, can safely exit loop and proceed with restore.
+			shouldRestore = true
+			return true, nil
+		}
+		if err != nil {
+			return false, errors.Wrapf(err, "could not retrieve in-cluster copy of PV %s", name)
+		}
+
+		clusterPV := new(v1.PersistentVolume)
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredPV.Object, clusterPV); err != nil {
+			return false, errors.Wrap(err, "error converting PV from unstructured")
+		}
+
+		if clusterPV.Status.Phase == v1.VolumeReleased || clusterPV.DeletionTimestamp != nil {
+			// PV was found and marked for deletion, or it was released; wait for it to go away.
+			pvLogger.Debugf("PV found, but marked for deletion, waiting")
+			return false, nil
+		}
+
+		// Check for the namespace and PVC to see if anything that's referencing the PV is deleting.
+		// If either the namespace or PVC is in a deleting/terminating state, wait for them to finish before
+		// trying to restore the PV
+		// Not doing so may result in the underlying PV disappearing but not restoring due to timing issues,
+		// then the PVC getting restored and showing as lost.
+		if clusterPV.Spec.ClaimRef == nil {
+			pvLogger.Debugf("PV is not marked for deletion and is not claimed by a PVC")
+			return true, nil
+		}
+
+		namespace := clusterPV.Spec.ClaimRef.Namespace
+		pvcName := clusterPV.Spec.ClaimRef.Name
+
+		// Have to create the PVC client here because we don't know what namespace we're using til we get to this point.
+		// Using a dynamic client since it's easier to mock for testing
+		pvcResource := metav1.APIResource{Name: "persistentvolumeclaims", Namespaced: true}
+		pvcClient, err := ctx.dynamicFactory.ClientForGroupVersionResource(schema.GroupVersion{Group: "", Version: "v1"}, pvcResource, namespace)
+		if err != nil {
+			return false, errors.Wrapf(err, "error getting pvc client")
+		}
+
+		pvc, err := pvcClient.Get(pvcName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			pvLogger.Debugf("PVC %s for PV not found, waiting", pvcName)
+			// PVC wasn't found, but the PV still exists, so continue to wait.
+			return false, nil
+		}
+		if err != nil {
+			return false, errors.Wrapf(err, "error getting claim %s for persistent volume", pvcName)
+		}
+
+		if pvc != nil && pvc.GetDeletionTimestamp() != nil {
+			pvLogger.Debugf("PVC for PV marked for deletion, waiting")
+			// PVC is still deleting, continue to wait.
+			return false, nil
+		}
+
+		// Check the namespace associated with the claimRef to see if it's deleting/terminating before proceeding
+		ns, err := ctx.namespaceClient.Get(namespace, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			pvLogger.Debugf("namespace %s for PV not found, waiting", namespace)
+			// namespace not found but the PV still exists, so continue to wait
+			return false, nil
+		}
+		if err != nil {
+			return false, errors.Wrapf(err, "error getting namespace %s associated with PV %s", namespace, name)
+		}
+
+		if ns != nil && (ns.GetDeletionTimestamp() != nil || ns.Status.Phase == v1.NamespaceTerminating) {
+			pvLogger.Debugf("namespace %s associated with PV is deleting, waiting", namespace)
+			// namespace is in the process of deleting, keep looping
+			return false, nil
+		}
+
+		// None of the PV, PVC, or NS are marked for deletion, break the loop.
+		pvLogger.Debug("PV, associated PVC and namespace are not marked for deletion")
+		return true, nil
+	})
+
+	if err == wait.ErrWaitTimeout {
+		pvLogger.Debug("timeout reached waiting for persistent volume to delete")
+	}
+
+	return shouldRestore, err
+}
+
+// restoreResource restores the specified cluster or namespace scoped resource. If namespace is
+// empty we are restoring a cluster level resource, otherwise into the specified namespace.
+func (ctx *context) restoreResource(resource, targetNamespace, originalNamespace string, items []string) (Result, Result) {
+	warnings, errs := Result{}, Result{}
+
+	if targetNamespace == "" && boolptr.IsSetToFalse(ctx.restore.Spec.IncludeClusterResources) {
+		ctx.log.Infof("Skipping resource %s because it's cluster-scoped", resource)
+		return warnings, errs
+	}
+
+	if targetNamespace != "" {
+		ctx.log.Infof("Restoring resource '%s' into namespace '%s'", resource, targetNamespace)
+	} else {
+		ctx.log.Infof("Restoring cluster level resource '%s'", resource)
+	}
+
+	if len(items) == 0 {
+		return warnings, errs
+	}
+
+	groupResource := schema.ParseGroupResource(resource)
+
+	for _, item := range items {
+		itemPath := getItemFilePath(ctx.restoreDir, resource, originalNamespace, item)
+
+		obj, err := ctx.unmarshal(itemPath)
+		if err != nil {
+			addToResult(&errs, targetNamespace, fmt.Errorf("error decoding %q: %v", strings.Replace(itemPath, ctx.restoreDir+"/", "", -1), err))
+			continue
+		}
+
+		if !ctx.selector.Matches(labels.Set(obj.GetLabels())) {
+			continue
+		}
+
+		w, e := ctx.restoreItem(obj, groupResource, targetNamespace)
+		merge(&warnings, &w)
+		merge(&errs, &e)
+	}
+
+	return warnings, errs
+}
+
+func (ctx *context) getResourceClient(groupResource schema.GroupResource, obj *unstructured.Unstructured, namespace string) (client.Dynamic, error) {
+	key := resourceClientKey{
+		resource:  groupResource,
+		namespace: namespace,
+	}
+
+	if client, ok := ctx.resourceClients[key]; ok {
+		return client, nil
+	}
+
+	// initialize client for this Resource. we need
+	// metadata from an object to do this.
+	ctx.log.Infof("Getting client for %v", obj.GroupVersionKind())
+
+	resource := metav1.APIResource{
+		Namespaced: len(namespace) > 0,
+		Name:       groupResource.Resource,
+	}
+
+	client, err := ctx.dynamicFactory.ClientForGroupVersionResource(obj.GroupVersionKind().GroupVersion(), resource, namespace)
 	if err != nil {
 		return nil, err
 	}
-	if len(scConfig.Roster.List) < 1 {
-		return nil, errors.New("roster is empty")
-	}
-	return scConfig.Roster.List[0], nil
+
+	ctx.resourceClients[key] = client
+	return client, nil
 }
 
-// getTxs is primarily used as a callback in the CollectTx protocol to retrieve
-// a set of pending transactions. However, it is a very useful way to piggy
-// back additional functionalities that need to be executed at every interval,
-// such as updating the heartbeat monitor and synchronising the state.
-func (s *Service) getTxs(leader *network.ServerIdentity, roster *onet.Roster, scID skipchain.SkipBlockID, latestID skipchain.SkipBlockID) []ClientTransaction {
-	s.closedMutex.Lock()
-	if s.closed {
-		s.closedMutex.Unlock()
-		return nil
+func getResourceID(groupResource schema.GroupResource, namespace, name string) string {
+	if namespace == "" {
+		return fmt.Sprintf("%s/%s", groupResource.String(), name)
 	}
-	s.working.Add(1)
-	s.closedMutex.Unlock()
-	defer s.working.Done()
 
-	// First we check if we are up-to-date with this chain (and that we know it)
-	latestSB, doCatchUp := s.skService().WaitBlock(scID, latestID)
-	if latestSB == nil {
-		if doCatchUp {
-			// The function will prevent multiple request to catch up so we can securely call it here
-			err := s.catchupFromID(roster, scID, latestID)
-			if err != nil {
-				log.Error(s.ServerIdentity(), err)
-			}
+	return fmt.Sprintf("%s/%s/%s", groupResource.String(), namespace, name)
+}
+
+func (ctx *context) restoreItem(obj *unstructured.Unstructured, groupResource schema.GroupResource, namespace string) (Result, Result) {
+	warnings, errs := Result{}, Result{}
+	resourceID := getResourceID(groupResource, namespace, obj.GetName())
+
+	// Check if group/resource should be restored. We need to do this here since
+	// this method may be getting called for an additional item which is a group/resource
+	// that's excluded.
+	if !ctx.resourceIncludesExcludes.ShouldInclude(groupResource.String()) {
+		ctx.log.WithFields(logrus.Fields{
+			"namespace":     obj.GetNamespace(),
+			"name":          obj.GetName(),
+			"groupResource": groupResource.String(),
+		}).Info("Not restoring item because resource is excluded")
+		return warnings, errs
+	}
+
+	// Check if namespace/cluster-scoped resource should be restored. We need
+	// to do this here since this method may be getting called for an additional
+	// item which is in a namespace that's excluded, or which is cluster-scoped
+	// and should be excluded.
+	if namespace != "" {
+		if !ctx.namespaceIncludesExcludes.ShouldInclude(namespace) {
+			ctx.log.WithFields(logrus.Fields{
+				"namespace":     obj.GetNamespace(),
+				"name":          obj.GetName(),
+				"groupResource": groupResource.String(),
+			}).Info("Not restoring item because namespace is excluded")
+			return warnings, errs
 		}
-
-		// Give up the current request and wait for the next one, and keep skipping requests
-		// until the catching up is done
-		return []ClientTransaction{}
-	}
-
-	// Then we make sure who's the leader
-	actualLeader, err := s.getLeader(scID)
-	if err != nil {
-		log.Lvlf2("%s: could not find a leader on %x with error: %s", s.ServerIdentity(), scID, err)
-		return []ClientTransaction{}
-	}
-	if !leader.Equal(actualLeader) {
-		log.Warn(s.ServerIdentity(), "getTxs came from a wrong leader", leader,
-			"should be", actualLeader)
-		return []ClientTransaction{}
-	}
-
-	s.heartbeats.beat(string(scID))
-
-	return s.txBuffer.take(string(scID))
-}
-
-// loadNonceFromTxs gets the nonce from a TxResults. This only works for the genesis-block.
-func (s *Service) loadNonceFromTxs(txs TxResults) ([]byte, error) {
-	if len(txs) == 0 {
-		return nil, errors.New("no transactions")
-	}
-	instrs := txs[0].ClientTransaction.Instructions
-	if len(instrs) != 1 {
-		return nil, fmt.Errorf("expected 1 instruction, got %v", len(instrs))
-	}
-	if instrs[0].Spawn == nil {
-		return nil, errors.New("first instruction is not a Spawn")
-	}
-	nonce := instrs[0].Spawn.Args.Search("trie_nonce")
-	if len(nonce) == 0 {
-		return nil, errors.New("nonce is empty")
-	}
-	return nonce, nil
-}
-
-// TestClose closes the go-routines that are polling for transactions. It is
-// exported because we need it in tests, it should not be used in non-test code
-// outside of this package.
-func (s *Service) TestClose() {
-	s.closedMutex.Lock()
-	if !s.closed {
-		s.closed = true
-		s.closedMutex.Unlock()
-		s.cleanupGoroutines()
-		s.working.Wait()
 	} else {
-		s.closedMutex.Unlock()
-	}
-}
-
-func (s *Service) cleanupGoroutines() {
-	log.Lvl1(s.ServerIdentity(), "closing go-routines")
-	s.heartbeats.closeAll()
-	s.closeLeaderMonitorChan <- true
-	s.viewChangeMan.closeAll()
-
-	s.pollChanMut.Lock()
-	for k, c := range s.pollChan {
-		close(c)
-		delete(s.pollChan, k)
-	}
-	s.pollChanMut.Unlock()
-	s.pollChanWG.Wait()
-}
-
-func (s *Service) monitorLeaderFailure() {
-	s.closedMutex.Lock()
-	if s.closed {
-		s.closedMutex.Unlock()
-		return
-	}
-	s.working.Add(1)
-	defer s.working.Done()
-	s.closedMutex.Unlock()
-
-	go func() {
-		for {
-			select {
-			case key := <-s.heartbeatsTimeout:
-				log.Lvlf3("%s: missed heartbeat for %x", s.ServerIdentity(), key)
-				gen := []byte(key)
-
-				genBlock := s.db().GetByID(gen)
-				if genBlock == nil {
-					// This should not happen as the heartbeats are started after
-					// a new skipchain is created or when the conode starts ..
-					log.Error("heartbeat monitors are started after " +
-						"the creation of the genesis block, " +
-						"so the block should always exist")
-					// .. but just in case we stop the heartbeat
-					s.heartbeats.stop(key)
-				}
-
-				latest, err := s.db().GetLatestByID(gen)
-				if err != nil {
-					log.Errorf("failed to get the latest block: %v", err)
-				} else {
-					// Send only if the latest block is consistent as it wouldn't
-					// anyway if we're out of sync with the chain
-					req := viewchange.InitReq{
-						SignerID: s.ServerIdentity().ID,
-						View: viewchange.View{
-							ID:          latest.Hash,
-							Gen:         gen,
-							LeaderIndex: 1,
-						},
-					}
-					s.viewChangeMan.addReq(req)
-				}
-			case <-s.closeLeaderMonitorChan:
-				log.Lvl2(s.ServerIdentity(), "closing heartbeat timeout monitor")
-				return
-			}
+		if boolptr.IsSetToFalse(ctx.restore.Spec.IncludeClusterResources) {
+			ctx.log.WithFields(logrus.Fields{
+				"namespace":     obj.GetNamespace(),
+				"name":          obj.GetName(),
+				"groupResource": groupResource.String(),
+			}).Info("Not restoring item because it's cluster-scoped")
+			return warnings, errs
 		}
-	}()
-}
-
-// registerContract stores the contract in a map and will
-// call it whenever a contract needs to be done.
-func (s *Service) registerContract(contractID string, c ContractFn) error {
-	s.contracts[contractID] = c
-	return nil
-}
-
-// startAllChains loads the configuration, updates the data in the service if
-// it finds a valid config-file and synchronises skipblocks if it can contact
-// other nodes.
-func (s *Service) startAllChains() error {
-	s.closedMutex.Lock()
-	if !s.closed {
-		s.closedMutex.Unlock()
-		return errors.New("can only call startAllChains if the service has been closed before")
 	}
-	s.closedMutex.Unlock()
-	// Why ??
-	// s.SetPropagationTimeout(120 * time.Second)
-	msg, err := s.Load(storageID)
+
+	// make a copy of object retrieved from backup
+	// to make it available unchanged inside restore actions
+	itemFromBackup := obj.DeepCopy()
+
+	complete, err := isCompleted(obj, groupResource)
 	if err != nil {
-		return err
+		addToResult(&errs, namespace, fmt.Errorf("error checking completion of %q: %v", resourceID, err))
+		return warnings, errs
 	}
-	if msg != nil {
-		var ok bool
-		s.storage, ok = msg.(*bcStorage)
-		if !ok {
-			return errors.New("data of wrong type")
-		}
+	if complete {
+		ctx.log.Infof("%s is complete - skipping", kube.NamespaceAndName(obj))
+		return warnings, errs
 	}
-	s.stateTries = make(map[string]*stateTrie)
-	s.notifications = bcNotifications{
-		waitChannels: make(map[string]chan bool),
+
+	name := obj.GetName()
+
+	// Check if we've already restored this
+	itemKey := velero.ResourceIdentifier{
+		GroupResource: groupResource,
+		Namespace:     namespace,
+		Name:          name,
 	}
-	s.closedMutex.Lock()
-	s.closed = false
-	s.closedMutex.Unlock()
+	if _, exists := ctx.restoredItems[itemKey]; exists {
+		ctx.log.Infof("Skipping %s because it's already been restored.", resourceID)
+		return warnings, errs
+	}
+	ctx.restoredItems[itemKey] = struct{}{}
 
-	// Recreate the polling channles.
-	s.pollChanMut.Lock()
-	s.pollChan = make(map[string]chan bool)
-	s.pollChanMut.Unlock()
+	// TODO: move to restore item action if/when we add a ShouldRestore() method to the interface
+	if groupResource == kuberesource.Pods && obj.GetAnnotations()[v1.MirrorPodAnnotationKey] != "" {
+		ctx.log.Infof("Not restoring pod because it's a mirror pod")
+		return warnings, errs
+	}
 
-	// All the logic necessary to start the chains is delayed to a goroutine so that
-	// the other services can start immediately and are not blocked by Byzcoin.
-	go func() {
-		s.working.Add(1)
-		defer s.working.Done()
+	resourceClient, err := ctx.getResourceClient(groupResource, obj, namespace)
+	if err != nil {
+		addVeleroError(&errs, fmt.Errorf("error getting resource client for namespace %q, resource %q: %v", namespace, &groupResource, err))
+		return warnings, errs
+	}
 
-		// Catch up is done before starting the chains to prevent undesired events
-		err = s.catchupAll()
-		if err != nil {
-			log.Errorf("%v couldn't sync: %s", s.ServerIdentity(), err.Error())
-			return
-		}
-
-		gas := &skipchain.GetAllSkipChainIDs{}
-		gasr, err := s.skService().GetAllSkipChainIDs(gas)
-		if err != nil {
-			log.Errorf("%v couldn't get the skipchains: %s", s.ServerIdentity(), err.Error())
-			return
-		}
-
-		for _, gen := range gasr.IDs {
-			err := s.startChain(gen)
+	if groupResource == kuberesource.PersistentVolumes {
+		switch {
+		case hasSnapshot(name, ctx.volumeSnapshots):
+			shouldRenamePV, err := shouldRenamePV(ctx, obj, resourceClient)
 			if err != nil {
-				log.Error("catch up error: ", err)
+				addToResult(&errs, namespace, err)
+				return warnings, errs
 			}
+
+			var shouldRestoreSnapshot bool
+			if !shouldRenamePV {
+				// Check if the PV exists in the cluster before attempting to create
+				// a volume from the snapshot, in order to avoid orphaned volumes (GH #609)
+				shouldRestoreSnapshot, err = ctx.shouldRestore(name, resourceClient)
+				if err != nil {
+					addToResult(&errs, namespace, errors.Wrapf(err, "error waiting on in-cluster persistentvolume %s", name))
+					return warnings, errs
+				}
+			} else {
+				// if we're renaming the PV, we're going to give it a new random name,
+				// so we can assume it doesn't already exist in the cluster and therefore
+				// we should proceed with restoring from snapshot.
+				shouldRestoreSnapshot = true
+			}
+
+			if shouldRestoreSnapshot {
+				// even if we're renaming the PV, obj still has the old name here, because the pvRestorer
+				// uses the original name to look up metadata about the snapshot.
+				ctx.log.Infof("Restoring persistent volume from snapshot.")
+				updatedObj, err := ctx.pvRestorer.executePVAction(obj)
+				if err != nil {
+					addToResult(&errs, namespace, fmt.Errorf("error executing PVAction for %s: %v", resourceID, err))
+					return warnings, errs
+				}
+				obj = updatedObj
+			}
+
+			if shouldRenamePV {
+				// give obj a new name, and record the mapping between the old and new names
+				oldName := obj.GetName()
+				newName := ctx.pvRenamer(oldName)
+
+				ctx.renamedPVs[oldName] = newName
+				obj.SetName(newName)
+
+				// add the original PV name as an annotation
+				annotations := obj.GetAnnotations()
+				if annotations == nil {
+					annotations = map[string]string{}
+				}
+				annotations["velero.io/original-pv-name"] = oldName
+				obj.SetAnnotations(annotations)
+			}
+
+		case hasResticBackup(obj, ctx):
+			ctx.log.Infof("Dynamically re-provisioning persistent volume because it has a restic backup to be restored.")
+			ctx.pvsToProvision.Insert(name)
+
+			// return early because we don't want to restore the PV itself, we want to dynamically re-provision it.
+			return warnings, errs
+
+		case hasDeleteReclaimPolicy(obj.Object):
+			ctx.log.Infof("Dynamically re-provisioning persistent volume because it doesn't have a snapshot and its reclaim policy is Delete.")
+			ctx.pvsToProvision.Insert(name)
+
+			// return early because we don't want to restore the PV itself, we want to dynamically re-provision it.
+			return warnings, errs
+
+		default:
+			ctx.log.Infof("Restoring persistent volume as-is because it doesn't have a snapshot and its reclaim policy is not Delete.")
+
+			// we call the pvRestorer here to clear out the PV's claimRef, so it can be re-claimed
+			// when its PVC is restored.
+			updatedObj, err := ctx.pvRestorer.executePVAction(obj)
+			if err != nil {
+				addToResult(&errs, namespace, fmt.Errorf("error executing PVAction for %s: %v", resourceID, err))
+				return warnings, errs
+			}
+			obj = updatedObj
+		}
+	}
+
+	// clear out non-core metadata fields & status
+	if obj, err = resetMetadataAndStatus(obj); err != nil {
+		addToResult(&errs, namespace, err)
+		return warnings, errs
+	}
+
+	for _, action := range ctx.getApplicableActions(groupResource, namespace) {
+		if !action.selector.Matches(labels.Set(obj.GetLabels())) {
+			return warnings, errs
 		}
 
-		s.monitorLeaderFailure()
-	}()
+		ctx.log.Infof("Executing item action for %v", &groupResource)
 
-	return nil
+		executeOutput, err := action.Execute(&velero.RestoreItemActionExecuteInput{
+			Item:           obj,
+			ItemFromBackup: itemFromBackup,
+			Restore:        ctx.restore,
+		})
+		if err != nil {
+			addToResult(&errs, namespace, fmt.Errorf("error preparing %s: %v", resourceID, err))
+			return warnings, errs
+		}
+
+		if executeOutput.SkipRestore {
+			ctx.log.Infof("Skipping restore of %s: %v because a registered plugin discarded it", obj.GroupVersionKind().Kind, name)
+			return warnings, errs
+		}
+		unstructuredObj, ok := executeOutput.UpdatedItem.(*unstructured.Unstructured)
+		if !ok {
+			addToResult(&errs, namespace, fmt.Errorf("%s: unexpected type %T", resourceID, executeOutput.UpdatedItem))
+			return warnings, errs
+		}
+
+		obj = unstructuredObj
+
+		for _, additionalItem := range executeOutput.AdditionalItems {
+			itemPath := getItemFilePath(ctx.restoreDir, additionalItem.GroupResource.String(), additionalItem.Namespace, additionalItem.Name)
+
+			if _, err := ctx.fileSystem.Stat(itemPath); err != nil {
+				ctx.log.WithError(err).WithFields(logrus.Fields{
+					"additionalResource":          additionalItem.GroupResource.String(),
+					"additionalResourceNamespace": additionalItem.Namespace,
+					"additionalResourceName":      additionalItem.Name,
+				}).Warn("unable to restore additional item")
+				addToResult(&warnings, additionalItem.Namespace, err)
+
+				continue
+			}
+
+			additionalResourceID := getResourceID(additionalItem.GroupResource, additionalItem.Namespace, additionalItem.Name)
+			additionalObj, err := ctx.unmarshal(itemPath)
+			if err != nil {
+				addToResult(&errs, namespace, errors.Wrapf(err, "error restoring additional item %s", additionalResourceID))
+			}
+
+			additionalItemNamespace := additionalItem.Namespace
+			if additionalItemNamespace != "" {
+				if remapped, ok := ctx.restore.Spec.NamespaceMapping[additionalItemNamespace]; ok {
+					additionalItemNamespace = remapped
+				}
+			}
+
+			w, e := ctx.restoreItem(additionalObj, additionalItem.GroupResource, additionalItemNamespace)
+			merge(&warnings, &w)
+			merge(&errs, &e)
+		}
+	}
+
+	// This comes after running item actions because we have built-in actions that restore
+	// a PVC's associated PV (if applicable). As part of the PV being restored, the 'pvsToProvision'
+	// set may be inserted into, and this needs to happen *before* running the following block of logic.
+	//
+	// The side effect of this is that it's impossible for a user to write a restore item action that
+	// adjusts this behavior (i.e. of resetting the PVC for dynamic provisioning if it claims a PV with
+	// a reclaim policy of Delete and no snapshot). If/when that becomes an issue for users, we can
+	// revisit. This would be easier with a multi-pass restore process.
+	if groupResource == kuberesource.PersistentVolumeClaims {
+		pvc := new(v1.PersistentVolumeClaim)
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pvc); err != nil {
+			addToResult(&errs, namespace, err)
+			return warnings, errs
+		}
+
+		if pvc.Spec.VolumeName != "" && ctx.pvsToProvision.Has(pvc.Spec.VolumeName) {
+			ctx.log.Infof("Resetting PersistentVolumeClaim %s/%s for dynamic provisioning because its PV %v has a reclaim policy of Delete", namespace, name, pvc.Spec.VolumeName)
+
+			// use the unstructured helpers here since we're only deleting and
+			// the unstructured converter will add back (empty) fields for metadata
+			// and status that we removed earlier.
+			unstructured.RemoveNestedField(obj.Object, "spec", "volumeName")
+			annotations := obj.GetAnnotations()
+			delete(annotations, "pv.kubernetes.io/bind-completed")
+			delete(annotations, "pv.kubernetes.io/bound-by-controller")
+			obj.SetAnnotations(annotations)
+		}
+
+		if newName, ok := ctx.renamedPVs[pvc.Spec.VolumeName]; ok {
+			ctx.log.Infof("Updating persistent volume claim %s/%s to reference renamed persistent volume (%s -> %s)", namespace, name, pvc.Spec.VolumeName, newName)
+			if err := unstructured.SetNestedField(obj.Object, newName, "spec", "volumeName"); err != nil {
+				addToResult(&errs, namespace, err)
+				return warnings, errs
+			}
+		}
+	}
+
+	// necessary because we may have remapped the namespace
+	// if the namespace is blank, don't create the key
+	originalNamespace := obj.GetNamespace()
+	if namespace != "" {
+		obj.SetNamespace(namespace)
+	}
+
+	// label the resource with the restore's name and the restored backup's name
+	// for easy identification of all cluster resources created by this restore
+	// and which backup they came from
+	addRestoreLabels(obj, ctx.restore.Name, ctx.restore.Spec.BackupName)
+
+	ctx.log.Infof("Attempting to restore %s: %v", obj.GroupVersionKind().Kind, name)
+	createdObj, restoreErr := resourceClient.Create(obj)
+	if apierrors.IsAlreadyExists(restoreErr) {
+		fromCluster, err := resourceClient.Get(name, metav1.GetOptions{})
+		if err != nil {
+			ctx.log.Infof("Error retrieving cluster version of %s: %v", kube.NamespaceAndName(obj), err)
+			addToResult(&warnings, namespace, err)
+			return warnings, errs
+		}
+		// Remove insubstantial metadata
+		fromCluster, err = resetMetadataAndStatus(fromCluster)
+		if err != nil {
+			ctx.log.Infof("Error trying to reset metadata for %s: %v", kube.NamespaceAndName(obj), err)
+			addToResult(&warnings, namespace, err)
+			return warnings, errs
+		}
+
+		// We know the object from the cluster won't have the backup/restore name labels, so
+		// copy them from the object we attempted to restore.
+		labels := obj.GetLabels()
+		addRestoreLabels(fromCluster, labels[velerov1api.RestoreNameLabel], labels[velerov1api.BackupNameLabel])
+
+		if !equality.Semantic.DeepEqual(fromCluster, obj) {
+			switch groupResource {
+			case kuberesource.ServiceAccounts:
+				desired, err := mergeServiceAccounts(fromCluster, obj)
+				if err != nil {
+					ctx.log.Infof("error merging secrets for ServiceAccount %s: %v", kube.NamespaceAndName(obj), err)
+					addToResult(&warnings, namespace, err)
+					return warnings, errs
+				}
+
+				patchBytes, err := generatePatch(fromCluster, desired)
+				if err != nil {
+					ctx.log.Infof("error generating patch for ServiceAccount %s: %v", kube.NamespaceAndName(obj), err)
+					addToResult(&warnings, namespace, err)
+					return warnings, errs
+				}
+
+				if patchBytes == nil {
+					// In-cluster and desired state are the same, so move on to the next item
+					return warnings, errs
+				}
+
+				_, err = resourceClient.Patch(name, patchBytes)
+				if err != nil {
+					addToResult(&warnings, namespace, err)
+				} else {
+					ctx.log.Infof("ServiceAccount %s successfully updated", kube.NamespaceAndName(obj))
+				}
+			default:
+				e := errors.Errorf("not restored: %s and is different from backed up version.", restoreErr)
+				addToResult(&warnings, namespace, e)
+			}
+			return warnings, errs
+		}
+
+		ctx.log.Infof("Restore of %s, %v skipped: it already exists in the cluster and is the same as the backed up version", obj.GroupVersionKind().Kind, name)
+		return warnings, errs
+	}
+
+	// Error was something other than an AlreadyExists
+	if restoreErr != nil {
+		ctx.log.Infof("error restoring %s: %v", name, restoreErr)
+		addToResult(&errs, namespace, fmt.Errorf("error restoring %s: %v", resourceID, restoreErr))
+		return warnings, errs
+	}
+
+	if groupResource == kuberesource.Pods && len(restic.GetVolumeBackupsForPod(ctx.podVolumeBackups, obj)) > 0 {
+		restorePodVolumeBackups(ctx, createdObj, originalNamespace)
+	}
+
+	return warnings, errs
 }
 
-func (s *Service) startChain(genesisID skipchain.SkipBlockID) error {
-	if !s.hasByzCoinVerification(genesisID) {
-		return nil
+// shouldRenamePV returns a boolean indicating whether a persistent volume should be given a new name
+// before being restored, or an error if this cannot be determined. A persistent volume will be
+// given a new name if and only if (a) a PV with the original name already exists in-cluster, and
+// (b) in the backup, the PV is claimed by a PVC in a namespace that's being remapped during the
+// restore.
+func shouldRenamePV(ctx *context, obj *unstructured.Unstructured, client client.Dynamic) (bool, error) {
+	if len(ctx.restore.Spec.NamespaceMapping) == 0 {
+		ctx.log.Debugf("Persistent volume does not need to be renamed because restore is not remapping any namespaces")
+		return false, nil
 	}
 
-	interval, _, err := s.LoadBlockInfo(genesisID)
-	if err != nil {
-		return fmt.Errorf("%s Ignoring chain %x because we can't load blockInterval: %s",
-			s.ServerIdentity(), genesisID, err)
+	pv := new(v1.PersistentVolume)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, pv); err != nil {
+		return false, errors.Wrapf(err, "error converting persistent volume to structured")
 	}
 
-	if s.db().GetByID(genesisID) == nil {
-		return fmt.Errorf("%s ignoring chain with missing genesis-block %x",
-			s.ServerIdentity(), genesisID)
-	}
-	latest, err := s.db().GetLatestByID(genesisID)
-	if err != nil {
-		return fmt.Errorf("%s ignoring chain %x where latest block cannot be found: %s",
-			s.ServerIdentity(), genesisID, err)
+	if pv.Spec.ClaimRef == nil {
+		ctx.log.Debugf("Persistent volume does not need to be renamed because it's not claimed")
+		return false, nil
 	}
 
-	leader, err := s.getLeader(genesisID)
-	if err != nil {
-		return fmt.Errorf("getLeader should not return an error if roster is initialised: %s",
-			err.Error())
-	}
-	if leader.Equal(s.ServerIdentity()) {
-		log.Lvlf2("%s: Starting as a leader for chain %x", s.ServerIdentity(), latest.SkipChainID())
-		s.pollChanMut.Lock()
-		s.pollChan[string(genesisID)] = s.startPolling(genesisID)
-		s.pollChanMut.Unlock()
+	if _, ok := ctx.restore.Spec.NamespaceMapping[pv.Spec.ClaimRef.Namespace]; !ok {
+		ctx.log.Debugf("Persistent volume does not need to be renamed because it's not claimed by a PVC in a namespace that's being remapped")
+		return false, nil
 	}
 
-	// populate the darcID to skipchainID mapping
-	d, err := s.LoadGenesisDarc(genesisID)
-	if err != nil {
-		return err
+	_, err := client.Get(pv.Name, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+		ctx.log.Debugf("Persistent volume does not need to be renamed because it does not exist in the cluster")
+		return false, nil
+	case err != nil:
+		return false, errors.Wrapf(err, "error checking if persistent volume exists in the cluster")
 	}
-	s.darcToScMut.Lock()
-	s.darcToSc[string(d.GetBaseID())] = genesisID
-	s.darcToScMut.Unlock()
 
-	// start the heartbeat
-	if s.heartbeats.exists(string(genesisID)) {
-		return errors.New("we are just starting the service, there should be no existing heartbeat monitors")
-	}
-	log.Lvlf2("%s started heartbeat monitor for block %d of %x", s.ServerIdentity(), latest.Index, genesisID)
-	s.heartbeats.start(string(genesisID), interval*s.rotationWindow, s.heartbeatsTimeout)
-
-	// initiate the view-change manager
-	initialDur, err := s.computeInitialDuration(genesisID)
-	if err != nil {
-		return err
-	}
-	s.viewChangeMan.add(s.sendViewChangeReq, s.sendNewView, s.isLeader, string(genesisID))
-	s.viewChangeMan.start(s.ServerIdentity().ID, genesisID, initialDur, s.getFaultThreshold(genesisID))
-
-	return nil
+	// no error returned: the PV was found in-cluster, so we need to rename it
+	return true, nil
 }
 
-// checks that a given chain has a verifier we recognize
-func (s *Service) hasByzCoinVerification(gen skipchain.SkipBlockID) bool {
-	sb := s.db().GetByID(gen)
-	if sb == nil {
-		// Not finding this ID should not happen, but
-		// if it does, just say "not ours".
-		return false
+// restorePodVolumeBackups restores the PodVolumeBackups for the given restored pod
+func restorePodVolumeBackups(ctx *context, createdObj *unstructured.Unstructured, originalNamespace string) {
+	if ctx.resticRestorer == nil {
+		ctx.log.Warn("No restic restorer, not restoring pod's volumes")
+	} else {
+		ctx.globalWaitGroup.GoErrorSlice(func() []error {
+			pod := new(v1.Pod)
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(createdObj.UnstructuredContent(), &pod); err != nil {
+				ctx.log.WithError(err).Error("error converting unstructured pod")
+				return []error{err}
+			}
+
+			data := restic.RestoreData{
+				Restore:          ctx.restore,
+				Pod:              pod,
+				PodVolumeBackups: ctx.podVolumeBackups,
+				SourceNamespace:  originalNamespace,
+				BackupLocation:   ctx.backup.Spec.StorageLocation,
+			}
+			if errs := ctx.resticRestorer.RestorePodVolumes(data); errs != nil {
+				ctx.log.WithError(kubeerrs.NewAggregate(errs)).Error("unable to successfully complete restic restores of pod's volumes")
+				return errs
+			}
+
+			return nil
+		})
 	}
-	for _, x := range sb.VerifierIDs {
-		if x.Equal(Verify) {
+}
+
+func hasSnapshot(pvName string, snapshots []*volume.Snapshot) bool {
+	for _, snapshot := range snapshots {
+		if snapshot.Spec.PersistentVolumeName == pvName {
 			return true
 		}
 	}
+
 	return false
 }
 
-// saves this service's config information
-func (s *Service) save() {
-	s.storage.Lock()
-	defer s.storage.Unlock()
-	err := s.Save(storageID, s.storage)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "Couldn't save file:", err)
+func hasResticBackup(unstructuredPV *unstructured.Unstructured, ctx *context) bool {
+	if len(ctx.podVolumeBackups) == 0 {
+		return false
 	}
+
+	pv := new(v1.PersistentVolume)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredPV.Object, pv); err != nil {
+		ctx.log.WithError(err).Warnf("Unable to convert PV from unstructured to structured")
+		return false
+	}
+
+	if pv.Spec.ClaimRef == nil {
+		return false
+	}
+
+	var found bool
+	for _, pvb := range ctx.podVolumeBackups {
+		if pvb.Spec.Pod.Namespace == pv.Spec.ClaimRef.Namespace && pvb.GetAnnotations()[restic.PVCNameAnnotation] == pv.Spec.ClaimRef.Name {
+			found = true
+			break
+		}
+	}
+
+	return found
 }
 
-// getBlockTx fetches the block with the given id and then decodes the payload
-// to return the list of transactions
-func (s *Service) getBlockTx(sid skipchain.SkipBlockID) (TxResults, *skipchain.SkipBlock, error) {
-	sb, err := s.skService().GetSingleBlock(&skipchain.GetSingleBlock{ID: sid})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var body DataBody
-	err = protobuf.Decode(sb.Payload, &body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return body.TxResults, sb, nil
+func hasDeleteReclaimPolicy(obj map[string]interface{}) bool {
+	policy, _, _ := unstructured.NestedString(obj, "spec", "persistentVolumeReclaimPolicy")
+	return policy == string(v1.PersistentVolumeReclaimDelete)
 }
 
-var existingDB = regexp.MustCompile(`^ByzCoin_[0-9a-f]+$`)
-
-// newService receives the context that holds information about the node it's
-// running on. Saving and loading can be done using the context. The data will
-// be stored in memory for tests and simulations, and on disk for real
-// deployments.
-func newService(c *onet.Context) (onet.Service, error) {
-	s := &Service{
-		ServiceProcessor:       onet.NewServiceProcessor(c),
-		contracts:              make(map[string]ContractFn),
-		txBuffer:               newTxBuffer(),
-		storage:                &bcStorage{},
-		darcToSc:               make(map[string]skipchain.SkipBlockID),
-		stateChangeCache:       newStateChangeCache(),
-		stateChangeStorage:     newStateChangeStorage(c),
-		heartbeatsTimeout:      make(chan string, 1),
-		closeLeaderMonitorChan: make(chan bool, 1),
-		heartbeats:             newHeartbeats(),
-		viewChangeMan:          newViewChangeManager(),
-		streamingMan:           streamingManager{},
-		closed:                 true,
-		catchingUpHistory:      make(map[string]time.Time),
-		rotationWindow:         defaultRotationWindow,
+func resetMetadataAndStatus(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	res, ok := obj.Object["metadata"]
+	if !ok {
+		return nil, errors.New("metadata not found")
+	}
+	metadata, ok := res.(map[string]interface{})
+	if !ok {
+		return nil, errors.Errorf("metadata was of type %T, expected map[string]interface{}", res)
 	}
 
-	err := s.RegisterHandlers(
-		s.CreateGenesisBlock,
-		s.AddTransaction,
-		s.GetProof,
-		s.CheckAuthorization,
-		s.GetSignerCounters,
-		s.DownloadState,
-		s.GetInstanceVersion,
-		s.GetLastInstanceVersion,
-		s.GetAllInstanceVersion,
-		s.CheckStateChangeValidity,
-		s.Debug,
-		s.DebugRemove)
-	if err != nil {
-		return nil, err
+	for k := range metadata {
+		switch k {
+		case "name", "namespace", "labels", "annotations":
+		default:
+			delete(metadata, k)
+		}
 	}
 
-	if err := s.RegisterStreamingHandlers(s.StreamTransactions); err != nil {
-		return nil, err
-	}
-	s.RegisterProcessorFunc(viewChangeMsgID, s.handleViewChangeReq)
+	// Never restore status
+	delete(obj.UnstructuredContent(), "status")
 
-	err = s.registerContract(ContractConfigID, contractConfigFromBytes)
-	if err != nil {
-		return nil, err
-	}
-	err = s.registerContract(ContractDarcID, s.contractSecureDarcFromBytes)
-	if err != nil {
-		return nil, err
-	}
-	err = s.registerContract(ContractDeferredID, s.contractDeferredFromBytes)
-	if err != nil {
-		return nil, err
+	return obj, nil
+}
+
+// addRestoreLabels labels the provided object with the restore name and
+// the restored backup's name.
+func addRestoreLabels(obj metav1.Object, restoreName, backupName string) {
+	labels := obj.GetLabels()
+
+	if labels == nil {
+		labels = make(map[string]string)
 	}
 
-	skipchain.RegisterVerification(c, Verify, s.verifySkipBlock)
-	if _, err := s.ProtocolRegister(collectTxProtocol, NewCollectTxProtocol(s.getTxs)); err != nil {
-		return nil, err
-	}
-	s.skService().RegisterStoreSkipblockCallback(s.updateTrieCallback)
+	labels[velerov1api.BackupNameLabel] = label.GetValidName(backupName)
+	labels[velerov1api.RestoreNameLabel] = label.GetValidName(restoreName)
 
-	// Register the view-change cosi protocols.
-	_, err = s.ProtocolRegister(viewChangeSubFtCosi, func(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return protocol.NewSubBlsCosi(n, s.verifyViewChange, pairingSuite)
-	})
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.ProtocolRegister(viewChangeFtCosi, func(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return protocol.NewBlsCosi(n, s.verifyViewChange, viewChangeSubFtCosi, pairingSuite)
-	})
-	if err != nil {
-		return nil, err
-	}
+	obj.SetLabels(labels)
+}
 
-	ver, err := s.LoadVersion()
-	if err != nil {
-		return nil, err
-	}
-	switch ver {
-	case 0:
-		// Version 0 means it hasn't been set yet. If there are any ByzCoin_[0-9af]+
-		// buckets, then they must be old format.
-		db, _ := s.GetAdditionalBucket([]byte("check-db-version"))
-
-		// Look for a bucket that has a byzcoin database in it.
-		err := db.View(func(tx *bbolt.Tx) error {
-			c := tx.Cursor()
-			for k, _ := c.First(); k != nil; k, _ = c.Next() {
-				log.Lvlf4("looking for old ByzCoin data in bucket %v", string(k))
-				if existingDB.Match(k) {
-					return fmt.Errorf("database format is too old; rm '%v' to lose all data and make a new database", db.Path())
-				}
-			}
-			return nil
-		})
+// isCompleted returns whether or not an object is considered completed.
+// Used to identify whether or not an object should be restored. Only Jobs or Pods are considered
+func isCompleted(obj *unstructured.Unstructured, groupResource schema.GroupResource) (bool, error) {
+	switch groupResource {
+	case kuberesource.Pods:
+		phase, _, err := unstructured.NestedString(obj.UnstructuredContent(), "status", "phase")
 		if err != nil {
-			return nil, err
+			return false, errors.WithStack(err)
+		}
+		if phase == string(v1.PodFailed) || phase == string(v1.PodSucceeded) {
+			return true, nil
 		}
 
-		// Otherwise set the db version to 1, because we've confirmed there are
-		// no old-style ones.
-		err = s.SaveVersion(1)
+	case kuberesource.Jobs:
+		ct, found, err := unstructured.NestedString(obj.UnstructuredContent(), "status", "completionTime")
 		if err != nil {
-			return nil, err
+			return false, errors.WithStack(err)
 		}
-	case 1:
-		// This is where any necessary future migration fron version 1 -> 2 will happen.
-	default:
-		return nil, fmt.Errorf("unknown db version number %v", ver)
+		if found && ct != "" {
+			return true, nil
+		}
 	}
+	// Assume any other resource isn't complete and can be restored
+	return false, nil
+}
 
-	// initialize the stats of the storage
-	s.stateChangeStorage.calculateSize()
+// unmarshal reads the specified file, unmarshals the JSON contained within it
+// and returns an Unstructured object.
+func (ctx *context) unmarshal(filePath string) (*unstructured.Unstructured, error) {
+	var obj unstructured.Unstructured
 
-	if err := s.startAllChains(); err != nil {
+	bytes, err := ctx.fileSystem.ReadFile(filePath)
+	if err != nil {
 		return nil, err
 	}
-	return s, nil
+
+	err = json.Unmarshal(bytes, &obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return &obj, nil
 }

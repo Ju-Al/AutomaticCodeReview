@@ -1,5 +1,4 @@
 /*
-			storedPeerList, err := cml.GetPeerList()
 Package main deals with weave-net peers on the cluster.
 
 This involves peer management, such as getting the latest peers or removing defunct peers from the cluster
@@ -173,7 +172,7 @@ func reclaimPeer(weave weaveClient, cml *configMapAnnotations, peerName string, 
 		if existingAnnotation == myPeerName {
 			okToRemove = true
 		} else {
-			storedPeerList, err := getRefreshedPeerList(cml)
+			storedPeerList, err := cml.GetPeerList()
 			if err != nil {
 				return false, err
 			}

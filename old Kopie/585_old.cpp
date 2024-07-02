@@ -4416,12 +4416,6 @@ void CommandGetVersion::procresult()
                 if (!client->json.storeobject())
                 {
                     return client->app->getversion_result(0, NULL, API_EINTERNAL);
-                }
-        }
-    }
-}
-
-CommandGetLocalSSLCertificate::CommandGetLocalSSLCertificate(MegaClient *client)
 {
     this->client = client;
     cmd("lc");

@@ -421,7 +421,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 			return nil
 		}
 
-		// detect connection timeout to the upstream and respond with 504
 		switch e, ok := proxyErr.(net.Error); ok {
 		case e.Timeout():
 			return caddyhttp.Error(http.StatusGatewayTimeout, proxyErr)

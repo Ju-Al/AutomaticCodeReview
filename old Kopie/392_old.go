@@ -1,5 +1,4 @@
 package io
-
 import (
 	"fmt"
 	"io/ioutil"

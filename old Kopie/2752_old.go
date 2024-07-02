@@ -52,7 +52,6 @@ const (
 	deleteSecretFlag      = "delete-secret"
 	svcPortFlag           = "port"
 
-	noSubscriptionFlag = "no-subscriptions"
 	subscribeFlag      = "subscribe"
 
 	storageTypeFlag              = "storage-type"

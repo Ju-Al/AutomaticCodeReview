@@ -1,5 +1,4 @@
 from itertools import product
-from unittest.mock import patch
 
 import torch
 import torch.nn as nn

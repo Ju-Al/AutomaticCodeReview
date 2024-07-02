@@ -1,24 +1,5 @@
 package aws
 
-	// scan all output
-	out := ""
-	scanner := bufio.NewScanner(stdout)
-
-	for scanner.Scan() {
-		text := scanner.Text()
-		out += text + "\n"
-
-		p.kinesis().PutRecord(&kinesis.PutRecordInput{
-			Data:         []byte(text),
-			PartitionKey: aws.String(string(time.Now().UnixNano())),
-			StreamName:   aws.String(a.Outputs["Kinesis"]),
-		})
-	}
-	if err := scanner.Err(); err != nil {
-		helpers.Error(nil, err) // send internal error to rollbar
-	}
-	// and wait for a return code
-	werr := cmd.Wait()
 import (
 	"bufio"
 	"bytes"
@@ -618,8 +599,26 @@ func (p *AWSProvider) buildRun(a *structs.App, b *structs.Build, args []string, 
 }
 
 func (p *AWSProvider) buildWait(a *structs.App, b *structs.Build, cmd *exec.Cmd, stdout io.ReadCloser) {
+	// scan all output
+	out := ""
+	scanner := bufio.NewScanner(stdout)
 
-	outText := make(chan string)
+	for scanner.Scan() {
+		text := scanner.Text()
+		out += text + "\n"
+
+		p.kinesis().PutRecord(&kinesis.PutRecordInput{
+			Data:         []byte(text),
+			PartitionKey: aws.String(string(time.Now().UnixNano())),
+			StreamName:   aws.String(a.Outputs["Kinesis"]),
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		helpers.Error(nil, err) // send internal error to rollbar
+	}
+
+	// and wait for a return code
+	werr := cmd.Wait()
 
 	go func() {
 		// scan all output

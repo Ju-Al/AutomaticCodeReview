@@ -1,5 +1,4 @@
 // Copyright (c) Jupyter Development Team.
-        }
 // Distributed under the terms of the Modified BSD License.
 
 // How to pick action names:
@@ -438,7 +437,7 @@ define(function(require){
                 $('.header-bar').toggle();
                 events.trigger('resize-header.Page');
             }
-        },
+        }
         'escape': {
             help : 'close the pager or unmark all cells',
             handler : function(env) {

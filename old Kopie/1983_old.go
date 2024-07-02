@@ -1,9 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-func (h *harness) Close() {
-	h.close()
-}
-	// Start a new test server.
-	c, cleanup := testVaultServer(t)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +45,11 @@ func (h *harness) MakeDriver(ctx context.Context) (driver.Keeper, driver.Keeper,
 	return &keeper{keyID: keyID1, client: h.client}, &keeper{keyID: keyID2, client: h.client}, nil
 }
 
-func (h *harness) Close() {}
+func (h *harness) Close() {
+	h.close()
+	// Start a new test server.
+	c, cleanup := testVaultServer(t)
+}
 
 func newHarness(ctx context.Context, t *testing.T) (drivertest.Harness, error) {
 	c, err := Dial(ctx, &Config{

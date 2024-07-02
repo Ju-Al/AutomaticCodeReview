@@ -259,7 +259,6 @@ HypreABecLap::loadVectors (MultiFab& soln, const MultiFab& rhs)
     soln.setVal(0.0);
 
     MultiFab rhs_diag(rhs.boxArray(), rhs.DistributionMap(), 1, 0);
-
 #ifdef AMREX_USE_GPU
     if (Gpu::inLaunchRegion() && rhs_diag.isFusingCandidate()) {
         auto const& rhs_diag_ma = rhs_diag.arrays();

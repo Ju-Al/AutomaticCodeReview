@@ -482,8 +482,6 @@ Blockly.Toolbox.prototype.scrollToCategoryByName = function(name) {
     }
   }
 };
-
-/**
  * Scroll to a category by id.
  * @param {string} id The id of the category to scroll to.
  * @package

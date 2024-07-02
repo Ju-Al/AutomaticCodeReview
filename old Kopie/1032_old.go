@@ -66,7 +66,6 @@ func NewHandler(config HandlerConfig) *Handler {
 func (h *Handler) Attest(stream node.Node_AttestServer) (err error) {
 	counter := telemetry_server.StartNodeAPIAttestCall(h.c.Metrics)
 	defer counter.Done(&err)
-	errCode := codes.OK
 	defer telemetry_common.AddErrorClass(counter, &errCode)
 
 	log := h.c.Log

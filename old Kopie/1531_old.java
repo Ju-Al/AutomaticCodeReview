@@ -404,7 +404,6 @@ public class MiniAccumuloClusterImpl implements AccumuloCluster {
       zooCfg.setProperty("maxClientCnxns", "1000");
       zooCfg.setProperty("dataDir", config.getZooKeeperDir().getAbsolutePath());
       zooCfg.setProperty("4lw.commands.whitelist", "ruok");
-      zooCfg.setProperty("admin.enableServer", "false");
       zooCfg.store(fileWriter, null);
 
       fileWriter.close();

@@ -109,8 +109,6 @@ func (sm *SigningMessage) UnmarshalBinary(data []byte) error {
 	cons[reflect.TypeOf(&secret).Elem()] = func() interface{} { return msgSuite.Secret() }
 	return protobuf.DecodeWithConstructors(data, sm, cons)
 }
-
-type JSONdata struct{
 		Len int64
 		Data []byte
 }

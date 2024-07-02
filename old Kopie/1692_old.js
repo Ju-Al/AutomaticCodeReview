@@ -1,7 +1,4 @@
 // @flow
-    return this.state.walletType === WALLET_RESTORE_TYPES.REGULAR;
-    return this.state.walletType === WALLET_RESTORE_TYPES.LEGACY;
-  onSelectWalletType = (walletType: string, shouldResetForm?: boolean) => {
 import React, { Component, Fragment } from 'react';
 import { join } from 'lodash';
 import { observer } from 'mobx-react';
@@ -559,7 +556,9 @@ export default class WalletRestoreDialog extends Component<Props, State> {
   }
 
   isRegular() {
-    return (
+    return this.state.walletType === WALLET_RESTORE_TYPES.LEGACY;
+  onSelectWalletType = (walletType: string, shouldResetForm?: boolean) => {
+    return this.state.walletType === WALLET_RESTORE_TYPES.REGULAR;
       this.state.walletType === WALLET_RESTORE_TYPES.REGULAR &&
       this.state.mnemonics === WALLET_RECOVERY_PHRASE_WORD_COUNT
     );

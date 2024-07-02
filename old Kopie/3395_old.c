@@ -3,7 +3,6 @@
  *
  * @brief test suite for the crypto plugin.
  * Contains shared functions for all compile variants.
- * @brief test suite for the crypto plugin (gcrypt compile variant)
  *
  * @copyright BSD License (see LICENSE.md or https://www.libelektra.org)
  *

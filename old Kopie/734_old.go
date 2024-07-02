@@ -1,6 +1,5 @@
 package ingestion
 
-		chunk := generateChunk(i, startState, endState, collectionID, blockID)
 import (
 	"context"
 	"encoding/hex"
@@ -1079,7 +1078,7 @@ func (e *Engine) saveExecutionResults(
 			collectionID = flow.ZeroID
 		}
 
-		chunk := generateChunk(i, startState, endState, collectionID, blockID, result.Events[i].Hash())
+		chunk := generateChunk(i, startState, endState, collectionID, blockID)
 
 		// chunkDataPack
 		chdps[i] = generateChunkDataPack(chunk, collectionID, result.Proofs[i])

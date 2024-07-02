@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-            const SimTK::Transform& X_BF = marker.getReferenceFrame().getTransformInMobilizedBody();
  *                   OpenSim:  InverseKinematicsSolver.cpp                    *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -234,7 +233,7 @@ void InverseKinematicsSolver::setupGoals(SimTK::State &s)
             const SimTK::MobilizedBody& mobod =
                 marker.getReferenceFrame().getMobilizedBody();
 
-            const SimTK::Transform& X_BF = marker.getReferenceFrame().findTransformInBaseFrame();
+            const SimTK::Transform& X_BF = marker.getReferenceFrame().getTransformInMobilizedBody();
             _markerAssemblyCondition->
                 addMarker(marker.getName(), mobod, X_BF*marker.get_location(),
 

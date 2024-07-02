@@ -1,10 +1,5 @@
 import unittest
 
-    def test_raise_a_positive_rational_to_the_power_of_zero(self):
-    def test_raise_a_negative_rational_to_the_power_of_zero(self):
-    # Test exponentiation of a real number to a rational number
-    def test_raise_a_real_number_to_a_positive_rational(self):
-        self.assertAlmostEqual(8 ** Rational(4, 3), 16.0, places=8)
 from rational_numbers import Rational
 
 # Tests adapted from `problem-specifications//canonical-data.json` @ v1.1.0
@@ -111,7 +106,11 @@ class RationalNumbersTest(unittest.TestCase):
     def test_raise_one_to_an_integer_power(self):
         self.assertEqual(Rational(1, 1) ** 4, Rational(1, 1))
 
-    def test_raise_a_positive_rational_number_to_the_power_of_zero(self):
+    def test_raise_a_negative_rational_to_the_power_of_zero(self):
+    # Test exponentiation of a real number to a rational number
+    def test_raise_a_real_number_to_a_positive_rational(self):
+        self.assertAlmostEqual(8 ** Rational(4, 3), 16.0, places=8)
+    def test_raise_a_positive_rational_to_the_power_of_zero(self):
         self.assertEqual(Rational(1, 2) ** 0, Rational(1, 1))
 
     def test_raise_a_negative_rational_number_to_the_power_of_zero(self):

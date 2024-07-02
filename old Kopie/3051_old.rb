@@ -1,6 +1,4 @@
 module Pod
-      # Updates the source repositories unless the config indicates to skip it.
-            sources.each { |source| SourcesManager.update(source.name) }
   class Installer
     # Analyzes the Podfile, the Lockfile, and the sandbox manifest to generate
     # the information relative to a CocoaPods installation.
@@ -165,7 +163,8 @@ module Pod
         end
       end
 
-      # Updates the git source repositories unless the config indicates to skip it.
+            sources.each { |source| SourcesManager.update(source.name) }
+      # Updates the source repositories unless the config indicates to skip it.
       #
       def update_repositories_if_needed
         unless config.skip_repo_update?

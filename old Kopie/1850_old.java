@@ -135,7 +135,6 @@ public class FutureUtils {
           return null;
         });
   }
-
   /**
    * Creates a {@link CompletableFuture} that is completed when any of the provided
    * CompletableFutures completes and matches the supplied predicate.

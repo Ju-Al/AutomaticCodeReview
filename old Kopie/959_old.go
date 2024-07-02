@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-		BlockFactory:   blockFactory,
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -231,7 +230,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
-		BlockFactory:   blockFactory{TransactionPool: node.transactionPool},
+		BlockFactory:   blockFactory,
 		BlockValidator: blockValidator,
 		KeyManager:     node.accountManager,
 		RandomSource:   node,

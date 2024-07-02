@@ -1,12 +1,5 @@
 package node
 
-		// TODO: Fix complexity
-			mapEntryRequest := &datastore.CreateNodeResolverMapEntryRequest{
-				NodeResolverMapEntry: &datastore.NodeResolverMapEntry{
-					BaseSpiffeId: baseSpiffeID,
-					Selector:     selector,
-				},
-			_, err = dataStore.CreateNodeResolverMapEntry(ctx, mapEntryRequest)
 import (
 	"crypto/x509"
 	"errors"
@@ -423,8 +416,14 @@ func (h *Handler) updateNodeResolverMap(ctx context.Context,
 	}
 
 	if selectors, ok := response.Map[baseSpiffeID]; ok {
+		// TODO: Fix complexity
 		for _, selector := range selectors.Entries {
-			err := h.createNodeResolverMapEntry(ctx, baseSpiffeID, selector)
+			mapEntryRequest := &datastore.CreateNodeResolverMapEntryRequest{
+				NodeResolverMapEntry: &datastore.NodeResolverMapEntry{
+					BaseSpiffeId: baseSpiffeID,
+					Selector:     selector,
+			_, err = dataStore.CreateNodeResolverMapEntry(ctx, mapEntryRequest)
+				},
 			if err != nil {
 				return err
 			}

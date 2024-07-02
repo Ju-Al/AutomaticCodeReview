@@ -1,6 +1,4 @@
 // Copyright 2020 Dolthub, Inc.
-
-	roots, ok := dSess.GetRoots(dbName)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +60,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(nil, dbName)
+
+	roots, ok := dSess.GetRoots(dbName)
 	if !ok {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}

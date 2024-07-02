@@ -1,20 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-	"go.etcd.io/etcd/embed"
-	etcd    *embed.Etcd
-	etcdErr error
-	cfg := embed.NewConfig()
-	cfg.Dir = "default.etcd"
-	etcd, etcdErr = embed.StartEtcd(cfg)
-	if etcdErr != nil {
-		return
-	}
-	select {
-	case <-etcd.Server.ReadyNotify():
-type harness struct {
-	client *clientv3.Client
-}
-	if etcdErr != nil {
-		return nil, etcdErr
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,13 +23,27 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/embed"
 	"go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes"
 	"gocloud.dev/runtimevar"
 	"gocloud.dev/runtimevar/driver"
 	"gocloud.dev/runtimevar/drivertest"
+	etcd    *embed.Etcd
+	etcdErr error
 )
-
-// To run these tests against a local etcd server, first run ./localetcd.sh.
+	cfg := embed.NewConfig()
+	cfg.Dir = "default.etcd"
+	etcd, etcdErr = embed.StartEtcd(cfg)
+	if etcdErr != nil {
+		return
+	}
+	select {
+	case <-etcd.Server.ReadyNotify():
+type harness struct {
+	client *clientv3.Client
+}
+	if etcdErr != nil {
+		return nil, etcdErr
 // Then wait a few seconds for the server to be ready.
 
 var (

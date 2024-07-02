@@ -48,7 +48,6 @@ module RSpec
         end
       end
 
-      def self.set_up_dsl
         # sends extend to the main-Object
         TOPLEVEL_BINDING.eval('self').send(:extend, RSpec::Core::DSL)
         Module.send(:include, RSpec::Core::DSL)

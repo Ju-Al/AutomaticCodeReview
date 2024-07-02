@@ -1,6 +1,4 @@
 import aiohttp_apispec
-    @aiohttp_apispec.docs(tags=['agents'])
-    @aiohttp_apispec.response_schema(AgentSchema(partial=True))
 from aiohttp import web
 
 from app.api.v2.handlers.base_object_api import BaseObjectApi
@@ -35,7 +33,8 @@ class AgentApi(BaseObjectApi):
         agents = await self.get_all_objects(request)
         return web.json_response(agents)
 
-    @aiohttp_apispec.docs(tags=['agents'],
+    @aiohttp_apispec.response_schema(AgentSchema(partial=True))
+    @aiohttp_apispec.docs(tags=['agents'])
                           summary="Retrieve Agent by paw",
                           description="Retrieve information about a specific agent using its ID (paw). Use "
                                       "the paw field in the URL to specify matching criteria for the agent to "

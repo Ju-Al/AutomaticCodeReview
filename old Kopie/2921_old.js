@@ -1,5 +1,4 @@
 import UniqueList from './util/UniqueList';
-    // no-op for handling detach requests
 import {debounce, id, identity, truthy} from 'vega-util';
 
 let STREAM_ID = 0;
@@ -123,8 +122,8 @@ EventStream.prototype = {
   },
 
   detach() {
+    // no-op for handling detach requests
     // ensures compatibility with operators (#2753)
-    //Remove any references to other streams
     // and filter functions that may be bound to subcontexts that need to be garbage collected.
     this._filter = truthy;
     this._targets = null;

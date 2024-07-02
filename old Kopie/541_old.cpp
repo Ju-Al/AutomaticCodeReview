@@ -2476,7 +2476,6 @@ void Battle::Interface::RedrawActionAttackPart1( Unit & attacker, Unit & defende
             }
         }
     }
-    else {
         int attackAnim = ( isDoubleCell ) ? Monster_Info::RANG_FRONT : Monster_Info::MELEE_FRONT;
         if ( pos2.y < pos1.y ) {
             attackAnim -= 2;

@@ -125,7 +125,6 @@ func (r *Replacer) replace(input, empty string,
 	// iterate the input to find each placeholder
 	var lastWriteCursor int
 	for i := 0; i < len(input); i++ {
-
 		// check for the escape character
 		if i > 0 && input[i-1] == phEscape {
 			if input[i] == phClose || input[i] == phOpen {

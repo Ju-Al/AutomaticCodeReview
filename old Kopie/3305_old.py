@@ -1,9 +1,4 @@
 # Copyright (c) 2017-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-    dynamic_shape: bool, optional, default = False
-                 Whether the shape of the output of the DALI pipeline can
-                 change during execution. If True, the mxnet.ndarray will be resized accordingly
-                 if the shape of DALI returned tensors changes during execution.
-                 If False, the iterator will fail in case of change.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -180,7 +175,11 @@ class DALIGenericIterator(_DALIMXNetIteratorBase):
                  Whether the iterator should squeeze the labels before
                  copying them to the ndarray.
                  This argument is deprecated and will be removed from future releases.
-    dynamic_shape : any, optional, used only for a backward compatibility purpose
+    dynamic_shape: bool, optional, default = False
+                 Whether the shape of the output of the DALI pipeline can
+                 change during execution. If True, the mxnet.ndarray will be resized accordingly
+                 if the shape of DALI returned tensors changes during execution.
+                 If False, the iterator will fail in case of change.
     fill_last_batch : bool, optional, default = None
                 **Deprecated** Please use ``last_batch_policy`` instead
 

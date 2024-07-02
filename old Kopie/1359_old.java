@@ -1,13 +1,4 @@
 /*
-        if (methodSymbol == null) {
-            // Should only ever occur if there are errors in the AST, allow the compiler to fail later
-            return Description.NO_MATCH;
-        }
-        if (!methodSymbol.isStatic()) {
-            // Only support static invocations for the time being to avoid erroneously
-            // rewriting '() -> foo()' to 'ClassName::foo' instead of 'this::foo'
-            // or suggesting '() -> foo.doWork().bar()' should be rewritten to 'foo.doWork()::bar',
-            // which executes 'doWork' eagerly, even when the supplier is not used.
  * (c) Copyright 2019 Palantir Technologies Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -104,7 +95,15 @@ public final class LambdaMethodReference extends BugChecker implements BugChecke
             return Description.NO_MATCH;
         }
         Symbol.MethodSymbol methodSymbol = ASTHelpers.getSymbol(methodInvocation);
-        if (methodSymbol == null || shouldIgnore(methodSymbol, root, methodInvocation)) {
+        if (methodSymbol == null) {
+            // Should only ever occur if there are errors in the AST, allow the compiler to fail later
+            return Description.NO_MATCH;
+        }
+        if (!methodSymbol.isStatic()) {
+            // Only support static invocations for the time being to avoid erroneously
+            // rewriting '() -> foo()' to 'ClassName::foo' instead of 'this::foo'
+            // or suggesting '() -> foo.doWork().bar()' should be rewritten to 'foo.doWork()::bar',
+            // which executes 'doWork' eagerly, even when the supplier is not used.
             return Description.NO_MATCH;
         }
 

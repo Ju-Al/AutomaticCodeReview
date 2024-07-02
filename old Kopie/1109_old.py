@@ -1,7 +1,15 @@
 import re
 import time
+#algorithm for https://github.com/spacemeowx2/DouyuHTML5Player/blob/master/src/douyu/blackbox.js
+#python version by debugzxcv at https://gist.github.com/debugzxcv/85bb2750d8a5e29803f2686c47dc236b
+from streamlink.plugins.douyutv_blackbox import stupidMD5
+
+OAPI_URL = "http://open.douyucdn.cn/api/RoomApi/room/{0}"
+LAPI_URL = "https://www.douyu.com/lapi/live/getPlay/{0}"
+LAPI_SECRET = "a2053899224e8a92974c729dceed1cc99b3d8282"
+    "low": 540,
+    "medium": 720,
 import uuid
-import hashlib
 
 from requests.adapters import HTTPAdapter
 
@@ -9,21 +17,12 @@ from streamlink.plugin import Plugin
 from streamlink.plugin.api import http, validate, useragents
 from streamlink.stream import HTTPStream, HLSStream, RTMPStream
 
-#algorithm for https://github.com/spacemeowx2/DouyuHTML5Player/blob/master/src/douyu/blackbox.js
-#python version by debugzxcv at https://gist.github.com/debugzxcv/85bb2750d8a5e29803f2686c47dc236b
-from streamlink.plugins.douyutv_blackbox import stupidMD5
-
-OAPI_URL = "http://open.douyucdn.cn/api/RoomApi/room/{0}"
-LAPI_URL = "https://www.douyu.com/lapi/live/getPlay/{0}"
 API_URL = "https://capi.douyucdn.cn/api/v1/{0}&auth={1}"
 VAPI_URL = "https://vmobile.douyu.com/video/getInfo?vid={0}"
-LAPI_SECRET = "a2053899224e8a92974c729dceed1cc99b3d8282"
 API_SECRET = "Y237pxTx2In5ayGz"
 SHOW_STATUS_ONLINE = 1
 SHOW_STATUS_OFFLINE = 2
 STREAM_WEIGHTS = {
-    "low": 540,
-    "medium": 720,
     "middle": 720,
     "middle2": 720,
     "source": 1080

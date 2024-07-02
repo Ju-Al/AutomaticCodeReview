@@ -60,9 +60,6 @@ class InvalidGroupDefinition(Error):
 
 class InvalidOrgDefinition(Error):
     """Raised if a org definition is invalid."""
-
-
-class FirewallRuleEngine(bre.BaseRulesEngine):
     """Rules engine for firewall resources."""
 
     def __init__(self, rules_file_path, snapshot_timestamp=None):

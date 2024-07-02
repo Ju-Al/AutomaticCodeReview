@@ -215,7 +215,6 @@ public class RuleSetNodeVisitor extends AbstractNodeVisitor<RuleSetNode> {
             throw ex;
         }
     }
-
     private boolean hasClass(String className) {
         try {
             loadUnitClass(className, null);

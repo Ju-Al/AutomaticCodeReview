@@ -19,171 +19,92 @@
 
 package org.apache.iceberg;
 
-import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.iceberg.hadoop.HadoopFileIO;
+import org.apache.iceberg.encryption.EncryptionManager;
+import org.apache.iceberg.encryption.PlaintextEncryptionManager;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.LocationProvider;
-import org.apache.iceberg.io.OutputFile;
-import org.apache.iceberg.util.Tasks;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-public abstract class BaseMetastoreTableOperations implements TableOperations {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseMetastoreTableOperations.class);
+/**
+ * SPI interface to abstract table metadata access and updates.
+ */
+public interface TableOperations {
 
-  public static final String TABLE_TYPE_PROP = "table_type";
-  public static final String ICEBERG_TABLE_TYPE_VALUE = "iceberg";
-  public static final String METADATA_LOCATION_PROP = "metadata_location";
-  public static final String PREVIOUS_METADATA_LOCATION_PROP = "previous_metadata_location";
+  /**
+   * Return the currently loaded table metadata, without checking for updates.
+   *
+   * @return table metadata
+   */
+  TableMetadata current();
 
-  private static final String METADATA_FOLDER_NAME = "metadata";
-  private static final String DATA_FOLDER_NAME = "data";
+  /**
+   * Return the current table metadata after checking for updates.
+   *
+   * @return table metadata
+   */
+  TableMetadata refresh();
 
-  private final Configuration conf;
-  private final FileIO fileIo;
+  /**
+   * Replace the base table metadata with a new version.
+   * <p>
+   * This method should implement and document atomicity guarantees.
+   * <p>
+   * Implementations must check that the base metadata is current to avoid overwriting updates.
+   * Once the atomic commit operation succeeds, implementations must not perform any operations that
+   * may fail because failure in this method cannot be distinguished from commit failure.
+   *
+   * @param base     table metadata on which changes were based
+   * @param metadata new table metadata with updates
+   */
+  void commit(TableMetadata base, TableMetadata metadata);
 
-  private TableMetadata currentMetadata = null;
-  private String currentMetadataLocation = null;
-  private boolean shouldRefresh = true;
-  private int version = -1;
+  /**
+   * @return a {@link FileIO} to read and write table data and metadata files
+   */
+  FileIO io();
 
-  protected BaseMetastoreTableOperations(Configuration conf) {
-    this.conf = conf;
-    this.fileIo = new HadoopFileIO(conf);
+  /**
+   * @return a {@link org.apache.iceberg.encryption.EncryptionManager} to encrypt and decrypt
+   * data files.
+   */
+  default EncryptionManager encryption() {
+    return new PlaintextEncryptionManager();
   }
 
-  @Override
-  public TableMetadata current() {
-    if (shouldRefresh) {
-      return refresh();
-    }
-    return currentMetadata;
+  /**
+   * Given the name of a metadata file, obtain the full path of that file using an appropriate base
+   * location of the implementation's choosing.
+   * <p>
+   * The file may not exist yet, in which case the path should be returned as if it were to be created
+   * by e.g. {@link FileIO#newOutputFile(String)}.
+   */
+  String metadataFileLocation(String fileName);
+
+  /**
+   * Returns a {@link LocationProvider} that supplies locations for new new data files.
+   *
+   * @return a location provider configured for the current table state
+   */
+  LocationProvider locationProvider();
+
+  /**
+   * Create a new ID for a Snapshot
+   *
+   * @return a long snapshot ID
+   */
+  default long newSnapshotId() {
+    UUID uuid = UUID.randomUUID();
+    long mostSignificantBits = uuid.getMostSignificantBits();
+    long leastSignificantBits = uuid.getLeastSignificantBits();
+    return Math.abs(mostSignificantBits ^ leastSignificantBits);
   }
 
-  public String currentMetadataLocation() {
-    return currentMetadataLocation;
-  }
-
-  public int currentVersion() {
-    return version;
-  }
-
-  protected void requestRefresh() {
-    this.shouldRefresh = true;
-  }
-
-  protected String writeNewMetadata(TableMetadata metadata, int newVersion) {
-    String newTableMetadataFilePath = newTableMetadataFilePath(metadata, newVersion);
-    OutputFile newMetadataLocation = fileIo.newOutputFile(newTableMetadataFilePath);
-
-    // write the new metadata
-    TableMetadataParser.write(metadata, newMetadataLocation);
-
-    return newTableMetadataFilePath;
-  }
-
-  protected void refreshFromMetadataLocation(String newLocation) {
-    refreshFromMetadataLocation(newLocation, 20);
-  }
-
-  protected void refreshFromMetadataLocation(String newLocation, int numRetries) {
-    // use null-safe equality check because new tables have a null metadata location
-    if (!Objects.equal(currentMetadataLocation, newLocation)) {
-      LOG.info("Refreshing table metadata from new version: {}", newLocation);
-      int metadataVersion = parseVersion(newLocation);
-
-      AtomicReference<TableMetadata> newMetadata = new AtomicReference<>();
-      Tasks.foreach(newLocation)
-          .retry(numRetries).exponentialBackoff(100, 5000, 600000, 4.0 /* 100, 400, 1600, ... */)
-          .suppressFailureWhenFinished()
-          .run(metadataLocation -> newMetadata.set(
-              TableMetadataParser.read(this,
-                new BaseTableMetadataFile(io().newInputFile(metadataLocation), metadataVersion))));
-
-      String newUUID = newMetadata.get().uuid();
-      if (currentMetadata != null) {
-        Preconditions.checkState(newUUID == null || newUUID.equals(currentMetadata.uuid()),
-            "Table UUID does not match: current=%s != refreshed=%s", currentMetadata.uuid(), newUUID);
-      }
-
-      this.currentMetadata = newMetadata.get();
-      this.currentMetadataLocation = newLocation;
-      this.version = metadataVersion;
-    }
-    this.shouldRefresh = false;
-  }
-
-  private Path metadataLocation(TableMetadata metadata) {
-    String metadataLocation = metadata.properties().get(TableProperties.WRITE_METADATA_LOCATION);
-    return metadataLocation == null ?
-        new Path(metadata.location(), METADATA_FOLDER_NAME) :
-        new Path(metadataLocation);
-  }
-
-  private String metadataFileLocation(TableMetadata metadata, String filename) {
-    return new Path(metadataLocation(metadata), filename).toString();
-  }
-
-  @Override
-  public String metadataFileLocation(String filename) {
-    return metadataFileLocation(current(), filename);
-  }
-
-  @Override
-  public FileIO io() {
-    return fileIo;
-  }
-
-  @Override
-  public LocationProvider locationProvider() {
-    return LocationProviders.locationsFor(current().location(), current().properties());
-  }
-
-  @Override
-  public Iterable<TableMetadataFile> tableMetadataFiles() {
-    Path metadataLocation = metadataLocation(current());
-    try {
-      FileSystem fs = metadataLocation.getFileSystem(conf);
-      FileStatus[] fileStatuses = fs.listStatus(metadataLocation,
-        path -> path.getName().endsWith(TableMetadataParser.fileSuffix()));
-
-      return Stream.of(fileStatuses)
-        .map(FileStatus::getPath)
-        .map(path -> new BaseTableMetadataFile(io().newInputFile(path.toString()), parseVersion(path.toString())))
-        .filter(file -> file.version() != -1)
-        .collect(Collectors.toList());
-    } catch (IOException e) {
-      LOG.warn("Unable to list table metadata files", e);
-      return ImmutableList.of();
-    }
-  }
-
-  private String newTableMetadataFilePath(TableMetadata meta, int newVersion) {
-    String codecName = meta.property(
-        TableProperties.METADATA_COMPRESSION, TableProperties.METADATA_COMPRESSION_DEFAULT);
-    String fileExtension = TableMetadataParser.getFileExtension(codecName);
-    return metadataFileLocation(meta, String.format("%05d-%s%s", newVersion, UUID.randomUUID(), fileExtension));
-  }
-
-  private static int parseVersion(String metadataLocation) {
-    int versionStart = metadataLocation.lastIndexOf('/') + 1; // if '/' isn't found, this will be 0
-    int versionEnd = metadataLocation.indexOf('-', versionStart);
-    try {
-      return Integer.valueOf(metadataLocation.substring(versionStart, versionEnd));
-    } catch (NumberFormatException e) {
-      LOG.warn("Unable to parse version from metadata location: {}", metadataLocation, e);
-      return -1;
-    }
+   * Return {@link TableMetadataFile table metadata files} that are present in the table metadata location.
+   *
+   * @return table metadata files
+   */
+  default Iterable<TableMetadataFile> tableMetadataFiles() {
+    return ImmutableList.of();
   }
 }

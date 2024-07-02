@@ -1,7 +1,4 @@
 /***************************************************************************
-        if ( !army.isValid() || ( Battle::RESULT_RETREAT & reason ) )
-            army.Reset( false );
-        else if ( ( Battle::RESULT_LOSS & reason ) && !( Battle::RESULT_SURRENDER & reason ) )
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -1467,7 +1464,9 @@ void Heroes::SetFreeman( int reason )
             kingdom.SetLastLostHero( *this );
         }
 
-        if ( reason & Battle::RESULT_RETREAT )
+        if ( !army.isValid() || ( Battle::RESULT_RETREAT & reason ) )
+            army.Reset( false );
+        else if ( ( Battle::RESULT_LOSS & reason ) && !( Battle::RESULT_SURRENDER & reason ) )
             army.Reset( true );
         else if ( ( Battle::RESULT_LOSS & reason ) ) {
             bool isSurrender = reason & Battle::RESULT_SURRENDER;

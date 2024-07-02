@@ -1,5 +1,4 @@
 package votecollector
-				return model.NewInvalidVoteErrorf(vote, "submitted invalid signature for vote (%x) at view %d", vote.ID(), vote.View)
 
 import (
 	"errors"
@@ -31,9 +30,6 @@ type CombinedVoteProcessor struct {
 	packer           hotstuff.Packer
 	minRequiredStake uint64
 	done             atomic.Bool
-}
-
-var _ hotstuff.VoteProcessor = &CombinedVoteProcessor{}
 
 // newCombinedVoteProcessor is a helper function to perform object construction
 // no extra logic for validating proposal wasn't added

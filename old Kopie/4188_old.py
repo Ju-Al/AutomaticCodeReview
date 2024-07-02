@@ -1,7 +1,4 @@
 # coding: utf-8
-            _log_warning("Cannot compute class probabilities or labels "
-                         "due to the usage of customized objective function.\n"
-                         "Returning raw scores instead.")
 """Scikit-learn wrapper interface for LightGBM."""
 import copy
 from inspect import signature
@@ -921,7 +918,9 @@ class LGBMClassifier(LGBMModel, _LGBMClassifierBase):
         """Docstring is set after definition, using a template."""
         result = super().predict(X, raw_score, start_iteration, num_iteration, pred_leaf, pred_contrib, **kwargs)
         if callable(self._objective) and not (raw_score or pred_leaf or pred_contrib):
-            new_line = "\n"
+            _log_warning("Cannot compute class probabilities or labels "
+                         "due to the usage of customized objective function.\n"
+                         "Returning raw scores instead.")
             _log_warning(f"Cannot compute class probabilities or labels " \
                          f"due to the usage of customized objective function.{new_line}" \
                          f"Returning raw scores instead.")

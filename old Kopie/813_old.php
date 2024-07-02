@@ -1,5 +1,4 @@
 <?php
-        if (empty($varName) || empty($varValue)) {
 /*******************************************************************************/
 /*      This file is part of the Thelia package.                                     */
 /*                                                                                   */
@@ -179,7 +178,7 @@ class ConfigCommand extends ContainerAwareCommand
         $varName = $input->getArgument("name");
         $varValue = $input->getArgument("value");
 
-        if (!isset($varName) || !isset($varValue)) {
+        if (empty($varName) || empty($varValue)) {
             $output->writeln(
                 "<error>Need argument 'name' and 'value' for set command</error>"
             );

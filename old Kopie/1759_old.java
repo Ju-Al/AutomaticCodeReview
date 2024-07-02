@@ -1,7 +1,4 @@
 /*
-    Path p = tableInfo.getSplitDirsPath();
-    FileSystem fs = p.getFileSystem(master.getContext().getHadoopConf());
-    fs.delete(p, true);
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -66,7 +63,8 @@ class ChooseDir extends MasterRepo {
 
   @Override
   public void undo(long tid, Master master) throws Exception {
-    // Clean up split files if ChooseDir operation fails
+    Path p = tableInfo.getSplitDirsPath();
+    FileSystem fs = p.getFileSystem(master.getContext().getHadoopConf());
     try {
       if (tableInfo.getInitialSplitSize() > 0) {
         Path p = tableInfo.getSplitDirsPath();

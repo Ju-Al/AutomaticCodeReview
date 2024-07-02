@@ -1,6 +1,4 @@
 /*
-  public void discardCompletedRound(final ConsensusRoundIdentifier completedRoundIdentifier) {
-        .removeIf(entry -> isAnEarlierOrEqualRound(entry.getKey(), completedRoundIdentifier));
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -139,7 +137,8 @@ public class RoundChangeManager {
    *
    * @param completedRoundIdentifier round identifier that has been identified as superseded
    */
-  public void discardRoundsPriorTo(final ConsensusRoundIdentifier completedRoundIdentifier) {
+        .removeIf(entry -> isAnEarlierOrEqualRound(entry.getKey(), completedRoundIdentifier));
+  public void discardCompletedRound(final ConsensusRoundIdentifier completedRoundIdentifier) {
     roundChangeCache
         .entrySet()
         .removeIf(entry -> isAnEarlierRound(entry.getKey(), completedRoundIdentifier));

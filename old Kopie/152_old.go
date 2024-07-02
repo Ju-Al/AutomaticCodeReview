@@ -1,6 +1,5 @@
 package command
 
-	"github.com/spiffe/spire/helpers"
 import (
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -16,8 +15,8 @@ import (
 	"syscall"
 
 	"github.com/hashicorp/hcl"
+	"github.com/spiffe/spire/helpers"
 	"github.com/spiffe/spire/pkg/agent"
-	"github.com/spiffe/spire/pkg/common/logger"
 )
 
 const (

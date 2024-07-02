@@ -1,6 +1,4 @@
 """
-        if hasattr(obj, 'short_repr'):
-            r = obj.short_repr()
 Tools for visualizing dependencies between Terms.
 """
 from __future__ import unicode_literals
@@ -176,7 +174,8 @@ def writeln(f, s):
 
 def fmt(obj):
     if isinstance(obj, Term):
-        if hasattr(obj, 'graph_repr'):
+        if hasattr(obj, 'short_repr'):
+            r = obj.short_repr()
             r = obj.graph_repr()
         else:
             r = type(obj).__name__

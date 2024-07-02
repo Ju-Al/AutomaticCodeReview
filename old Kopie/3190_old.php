@@ -51,7 +51,6 @@ class Frontend extends Generator {
 		$this->setup_blog_colors();
 		$this->setup_form_fields_style();
 		$this->setup_single_post_style();
-		$this->setup_single_page_style();
 	}
 
 	/**

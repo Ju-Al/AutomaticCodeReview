@@ -2471,7 +2471,6 @@ flatpak_dir_get_removed_dir (FlatpakDir *self)
   return g_file_get_child (self->basedir, ".removed");
 }
 
-GFile *
 flatpak_dir_get_sideload_repos_dir (FlatpakDir *self)
 {
   return g_file_get_child (self->basedir, "sideload-repos");

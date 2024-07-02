@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-            try:
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -162,7 +161,7 @@ class TestUniverseCreation(object):
                                 shell=True)
             else:
                 os.chmod(temp_file, 0o200)
-
+            try:
             # Issue #3221 match by PermissionError and error number instead
             with pytest.raises(PermissionError, match="13"):
                 mda.Universe('permission.denied.tpr')

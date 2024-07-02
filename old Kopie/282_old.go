@@ -1,36 +1,4 @@
 // Copyright 2019, OpenTelemetry Authors
-	for _, profile := range profiles {
-type Numbers []core.Number
-	return (*n)[i] < (*n)[j]
-	return len(*n)
-	(*n)[i], (*n)[j] = (*n)[j], (*n)[i]
-func (n *Numbers) Sum(kind core.NumberKind) core.Number {
-	for _, num := range *n {
-		sum.AddNumber(kind, num)
-	return int64(len(*n))
-func (n *Numbers) Median(kind core.NumberKind) core.Number {
-	if !sort.IsSorted(n) {
-		panic("Sort these numbers before calling Median")
-	}
-
-	l := len(*n)
-	if l%2 == 1 {
-		return (*n)[l/2]
-	}
-
-	lower := (*n)[l/2-1]
-	upper := (*n)[l/2]
-	sum := lower
-	sum.AddNumber(kind, upper)
-	switch kind {
-	case core.Uint64NumberKind:
-		return core.NewUint64Number(sum.AsUint64() / 2)
-	case core.Int64NumberKind:
-		return core.NewInt64Number(sum.AsInt64() / 2)
-	case core.Float64NumberKind:
-		return core.NewFloat64Number(sum.AsFloat64() / 2)
-	}
-	panic("unknown number kind")
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +80,38 @@ func (m *metricBatcher) Export(context.Context, export.MetricRecord, export.Metr
 }
 
 func RunProfiles(t *testing.T, f func(*testing.T, Profile)) {
-	for _, profile := range newProfiles() {
+type Numbers []core.Number
+	return (*n)[i] < (*n)[j]
+	return len(*n)
+	(*n)[i], (*n)[j] = (*n)[j], (*n)[i]
+func (n *Numbers) Sum(kind core.NumberKind) core.Number {
+	for _, num := range *n {
+		sum.AddNumber(kind, num)
+	return int64(len(*n))
+func (n *Numbers) Median(kind core.NumberKind) core.Number {
+	if !sort.IsSorted(n) {
+		panic("Sort these numbers before calling Median")
+	}
+
+	l := len(*n)
+	if l%2 == 1 {
+		return (*n)[l/2]
+	}
+
+	lower := (*n)[l/2-1]
+	upper := (*n)[l/2]
+	sum := lower
+	sum.AddNumber(kind, upper)
+	switch kind {
+	case core.Uint64NumberKind:
+		return core.NewUint64Number(sum.AsUint64() / 2)
+	case core.Int64NumberKind:
+		return core.NewInt64Number(sum.AsInt64() / 2)
+	case core.Float64NumberKind:
+		return core.NewFloat64Number(sum.AsFloat64() / 2)
+	}
+	panic("unknown number kind")
+	for _, profile := range profiles {
 		t.Run(profile.NumberKind.String(), func(t *testing.T) {
 			f(t, profile)
 		})

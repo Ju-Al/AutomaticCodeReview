@@ -1,5 +1,4 @@
 //===-- SwiftExpressionParser.cpp -------------------------------*- C++ -*-===//
-  swift::ModuleDecl *module = &parsed_expr->module;
 //
 // This source file is part of the Swift.org open source project
 //
@@ -2038,6 +2037,7 @@ unsigned SwiftExpressionParser::Parse(DiagnosticManager &diagnostic_manager,
   if (swift_ast_ctx->HasErrors())
     return 1;
 
+  swift::ModuleDecl *module = &parsed_expr->module;
   // The Parse succeeded!  Now put this module into the context's
   // list of loaded modules, and copy the Decls that were globalized
   // as part of the parse from the staging area in the external

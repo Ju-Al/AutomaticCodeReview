@@ -196,7 +196,6 @@ void init_data_seq_random(int seed) {
   ::data_seq_generator_inited = false;
 }
 
-void init_ltfb_random(int seed) {
   if (seed == -1) {
     // Seed with a random value.
     std::random_device rd;

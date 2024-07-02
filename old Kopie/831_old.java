@@ -1,5 +1,4 @@
 /*
-        CliqueBlockInterface.insertVoteToHeaderBuilder(builder, vote);
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -98,7 +97,7 @@ public class CliqueBlockCreator extends AbstractBlockCreator<CliqueContext> {
             .getVoteProposer()
             .getVote(Util.publicKeyToAddress(nodeKeys.getPublicKey()), voteTally);
     final BlockHeaderBuilder builderIncludingProposedVotes =
-        CliqueBlockInterface.insertVoteToHeaderBuilder(
+        CliqueBlockInterface.insertVoteToHeaderBuilder(builder, vote);
             builder, epochManager, vote, sealableBlockHeader.getNumber());
 
     final CliqueExtraData sealedExtraData =

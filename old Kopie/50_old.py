@@ -232,7 +232,6 @@ def test_py3d_kdtree():
 	DrawGeometries([pcd0])
 	print("")
 
-def test_py3d_posegraph():
 	print("Testing PoseGraph in py3d ...")
 	pose_graph = ReadPoseGraph(../TestData/test_pose_graph.json)
 	print("")

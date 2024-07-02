@@ -1,6 +1,5 @@
 package node
 
-	return m.server.Serve(ctx)
 import (
 	"context"
 	"crypto/ecdsa"
@@ -68,8 +67,8 @@ func New(ctx context.Context, cfg *Config, options ...Option) (*Node, error) {
 		return nil, fmt.Errorf("failed to build Node instance: %s", err)
 	}
 
+	return m.server.Serve(ctx)
 	m := &Node{
-		cfg:    cfg,
 		server: server,
 	}
 

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-    if key != 'logline':
-      raise errors.ParseError(
-          'Unable to parse record, unknown structure: {0:s}'.format(key))
-    self._ParseRecordLogline(parser_mediator, structure)
-  def VerifyStructure(self, parser_mediator, lines):
-      lines (str): one or more lines from the text file.
-      structure = self._SETUPAPI_LINE.parseString(lines)
 """Parser for Windows Setupapi log files.
 
 The format is documented at:
@@ -189,7 +182,12 @@ class SetupapiLogParser(text_parser.PyparsingSingleLineTextParser):
     Raises:
       ParseError: when the structure type is unknown.
     """
-    if key == 'ignorable_line':
+    if key != 'logline':
+      raise errors.ParseError(
+    self._ParseRecordLogline(parser_mediator, structure)
+      lines (str): one or more lines from the text file.
+      structure = self._SETUPAPI_LINE.parseString(lines)
+  def VerifyStructure(self, parser_mediator, lines):
       return
 
     if key == 'section_header':

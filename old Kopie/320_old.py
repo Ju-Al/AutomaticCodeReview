@@ -1,8 +1,4 @@
 """Base graph class specialized for neural networks on graphs."""
-        # msg graph & frame
-        self._msg_graph = create_graph_index(multigraph=multigraph)
-        self._msg_frame = FrameRef()
-        self.reset_messages()
 from __future__ import absolute_import
 
 import networkx as nx
@@ -192,7 +188,10 @@ class DGLGraph(object):
             self._edge_frame = FrameRef(Frame(num_rows=self.number_of_edges()))
         else:
             self._edge_frame = edge_frame
-        self._msg_index = utils.zero_index(size=self.number_of_edges())
+        # msg graph & frame
+        self._msg_graph = create_graph_index(multigraph=multigraph)
+        self._msg_frame = FrameRef()
+        self.reset_messages()
         # message frame
         self._msg_frame = FrameRef(Frame(num_rows=self.number_of_edges()))
         # set initializer for message frame

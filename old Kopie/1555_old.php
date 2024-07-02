@@ -1,7 +1,4 @@
 <?php
-        $spec->setLine('ISBN', 'getISBNs');
-        $spec->setLine('ISSN', 'getISSNs');
-        $spec->setLine('DOI', 'getCleanDOI');
 /**
  * Factory for record driver data formatting view helper
  *
@@ -270,7 +267,9 @@ class RecordDataFormatterFactory implements FactoryInterface
         $spec->setLine('Awards', 'getAwards');
         $spec->setLine('Production Credits', 'getProductionCredits');
         $spec->setLine('Bibliography', 'getBibliographyNotes');
-        $spec->setLine(
+        $spec->setLine('ISBN', 'getISBNs');
+        $spec->setLine('ISSN', 'getISSNs');
+        $spec->setLine('DOI', 'getCleanDOI');
             'ISBN', 'getISBNs', null,
             ['itemPrefix' => '<span property="isbn">', 'itemSuffix' => '</span>']
         );

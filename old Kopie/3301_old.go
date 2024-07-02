@@ -1,8 +1,4 @@
 // Copyright 2015 Matthew Holt and The Caddy Authors
-// ServerLogConfig describes a server's logging configuration.
-	// The logger name for all logs emitted by this server unless
-	// the hostname is found in the LoggerNames (logger_names) map.
-	LoggerName string `json:"log_name,omitempty"`
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -371,7 +367,10 @@ func (*HTTPErrorConfig) WithError(r *http.Request, err error) *http.Request {
 	return r
 }
 
-// shouldLogRequest returns true if this request should be logged.
+	// The logger name for all logs emitted by this server unless
+	// the hostname is found in the LoggerNames (logger_names) map.
+	LoggerName string `json:"log_name,omitempty"`
+// ServerLogConfig describes a server's logging configuration.
 func (s *Server) shouldLogRequest(r *http.Request) bool {
 	if s.accessLogger == nil || s.Logs == nil {
 		// logging is disabled

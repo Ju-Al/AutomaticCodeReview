@@ -1,5 +1,4 @@
 /*
-  private static DistributionMode getDistributionMode(org.apache.iceberg.Table table) {
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -321,7 +320,7 @@ public class Spark3Util {
     }
   }
 
-  public static DistributionMode getDistributionMode(org.apache.iceberg.Table table) {
+  private static DistributionMode getDistributionMode(org.apache.iceberg.Table table) {
     boolean isSortedTable = !table.sortOrder().isUnsorted();
     String defaultModeName = isSortedTable ? WRITE_DISTRIBUTION_MODE_RANGE : WRITE_DISTRIBUTION_MODE_DEFAULT;
     String modeName = table.properties().getOrDefault(WRITE_DISTRIBUTION_MODE, defaultModeName);

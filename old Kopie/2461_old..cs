@@ -1,5 +1,4 @@
 using System;
-        public async Task<IActionResult> GetInvoices(string storeId, bool includeArchived = false)
 using System.Linq;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -49,7 +48,7 @@ namespace BTCPayServer.Controllers.GreenField
         [Authorize(Policy = Policies.CanViewInvoices,
             AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
         [HttpGet("~/api/v1/stores/{storeId}/invoices")]
-        public async Task<IActionResult> GetInvoices(string storeId, [FromQuery] string[] orderId = null, [FromQuery] string[] status = null,
+        public async Task<IActionResult> GetInvoices(string storeId, bool includeArchived = false)
             [FromQuery] DateTimeOffset? startDate = null,
             [FromQuery] DateTimeOffset? endDate = null, [FromQuery] bool includeArchived = false)
         {

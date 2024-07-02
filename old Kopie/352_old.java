@@ -176,7 +176,6 @@ public class TableInformation {
 
     this.tableState = tableState;
   }
-
   private double cleanNumber(double dirtyNumber) {
     double clean;
     if (dirtyNumber < 1)

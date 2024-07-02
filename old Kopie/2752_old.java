@@ -215,7 +215,6 @@ public class ReviewController {
                             .setProgress(0, 0, false)
                             .setOngoing(false)
                             .setPriority(NotificationCompat.PRIORITY_HIGH);
-                    /**
                      * On tapping the notification it should take to visit the Thanks Log page
                      * Thus adding a pending content to redirect to a url depending on the beta flavor*/
                     String url;

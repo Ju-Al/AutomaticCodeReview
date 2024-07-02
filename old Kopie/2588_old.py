@@ -49,7 +49,6 @@ class DGLDataset(object):
         Whether to reload the dataset. Default: False
     verbose : bool
         Whether to print out progress information
-    reverse_edge: bool
         Whether to add reverse edges in graph. Default: True
 
     Attributes

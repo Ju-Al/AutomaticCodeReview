@@ -22,7 +22,6 @@ module Travis
           sh.echo 'C# support for Travis-CI is community maintained.', ansi: :red
           sh.echo 'Please open any issues at https://github.com/travis-ci/travis-ci/issues/new and cc @joshua-anderson @akoeplinger @nterry', ansi: :red
 
-          fix_rwky_redis_ppa # See https://github.com/travis-ci/travis-ci/issues/7332.
           install_mono if is_mono_enabled
           install_dotnet if is_dotnet_enabled
         end

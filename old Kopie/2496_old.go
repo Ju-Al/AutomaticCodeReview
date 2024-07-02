@@ -22,7 +22,6 @@ type AppService struct {
 	businessLayer *Layer
 }
 
-func joinMap(m1 map[string]string, m2 map[string]string) map[string]string {
 	result := m1
 	for k, v := range m2 {
 		m1[k] = v

@@ -63,7 +63,6 @@ func (r *Reconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Check if the oam rollout annotation exists
 	if _, exist := app.GetAnnotations()[oam.AnnotationAppRollout]; exist {
 		applog.Info("The application is still in the process of rolling out")
 		app.Status.Phase = v1alpha2.ApplicationRollingOut

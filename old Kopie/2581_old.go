@@ -44,7 +44,6 @@ func (a *Args) SetConfig() error {
 	if err != nil {
 		return err
 	}
-	restConf.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(1000, 1000)
 	a.Config = restConf
 	return nil
 }

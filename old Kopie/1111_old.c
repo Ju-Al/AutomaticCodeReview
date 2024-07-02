@@ -1,6 +1,4 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    return FALSE;
  *
  * Copyright (C) 2013,2014 Colin Walters <walters@verbum.org>
  *
@@ -1910,7 +1908,8 @@ rpmostree_commit (int            rootfs_fd,
         return FALSE;
     }
 
-  /* See comment above */
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    return FALSE;
   const gboolean use_txn = getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
     !repo_is_on_netfs (repo);
 

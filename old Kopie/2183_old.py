@@ -1,5 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        self.d = donors
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -292,7 +291,6 @@ class HydrogenBondAutoCorrel(object):
 
         self.h = hydrogens
         self.a = acceptors
-        if donors is not None:
             self.d = donors
         else:
             # with fingers.crossed():

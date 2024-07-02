@@ -68,6 +68,7 @@ public abstract class WidgetUpdater {
      */
     public static void updateWidget(Context context, WidgetState widgetState) {
         if (!PlayerWidget.isEnabled(context) || widgetState == null) {
+            Log.d(TAG, "updateWidget: enteredstatement");
             return;
         }
         Log.d(TAG, "updateWidget: enteredmain");
@@ -237,8 +238,9 @@ public abstract class WidgetUpdater {
         return PendingIntent.getBroadcast(context, eventCode, startingIntent, 0);
     }
 
+            return Converter.getDurationStringLong(position) + " / "
+                    + Converter.getDurationStringLong(duration);
     private static String getProgressString(int position, int duration, float speed) {
-        showTimeLeft = UserPreferences.shouldShowRemainingTime();
         if (position >= 0 && duration > 0) {
             TimeSpeedConverter converter = new TimeSpeedConverter(speed);
             int remainingTime = converter.convert(Math.max(duration - position, 0));

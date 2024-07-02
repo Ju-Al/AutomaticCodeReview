@@ -1,10 +1,5 @@
 #include "player.h"
-        mRevealTopCard->setTitle(tr("Reveal t&op cards to..."));
-        aAlwaysLookAtTopCard->setText(tr("Al&ways look at top card"));
-        aOpenDeckInDeckEditor->setText(tr("O&pen deck in deck editor"));
-        aMoveTopToPlay->setText(tr("Play top card"));
 
-        aMoveBottomCardToGrave->setText(tr("Put bottom card &in graveyard"));
 #include "arrowitem.h"
 #include "carddatabase.h"
 #include "carditem.h"
@@ -732,7 +727,11 @@ void Player::retranslateUi()
         aViewHand->setText(tr("&View hand"));
         aViewTopCards->setText(tr("View &top cards of library..."));
         mRevealLibrary->setTitle(tr("Reveal &library to..."));
-        mRevealTopCard->setTitle(tr("Reveal &top cards to..."));
+        aAlwaysLookAtTopCard->setText(tr("Al&ways look at top card"));
+        aOpenDeckInDeckEditor->setText(tr("O&pen deck in deck editor"));
+        aMoveTopToPlay->setText(tr("Play top card"));
+        aMoveBottomCardToGrave->setText(tr("Put bottom card &in graveyard"));
+        mRevealTopCard->setTitle(tr("Reveal t&op cards to..."));
         topLibraryMenu->setTitle(tr("&Top of library..."));
         bottomLibraryMenu->setTitle(tr("&Bottom of library..."));
         aAlwaysRevealTopCard->setText(tr("&Always reveal top card"));

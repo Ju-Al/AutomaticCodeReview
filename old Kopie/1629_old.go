@@ -204,7 +204,6 @@ func (d *Dispenser) SyntaxErr(expected string) error {
 	return errors.New(msg)
 }
 
-// RewritePathErr returns an error indicating the path being rewritten to
 // is missing an initial /
 func (d *Dispenser) RewritePathErr() error {
 	msg := fmt.Sprintf("%s:%d - Syntax error: Rewrite path must begin with '/'. Provided: '%s'", d.File(), d.Line(), d.Val())

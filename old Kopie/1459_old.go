@@ -1,5 +1,4 @@
 package service
-
 import (
 	"crypto/sha256"
 	"errors"

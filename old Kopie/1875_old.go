@@ -1,12 +1,5 @@
 // Copyright (C) 2019-2021 Algorand, Inc.
-	_, err = AssembleStringWithVersion(text, 0)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
-
-	_, err = AssembleStringWithVersion(text, 2)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
-	require.NoError(t, err)// This file is part of go-algorand
+// This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -1403,7 +1396,13 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops1.Program, ops.Program)
 
-	testProg(t, text, 0, expect{1, "version mismatch..."})
+	_, err = AssembleStringWithVersion(text, 0)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "version mismatch")
+
+	_, err = AssembleStringWithVersion(text, 2)
+	require.Error(t, err)
+	require.NoError(t, err)	require.Contains(t, err.Error(), "version mismatch")
 	testProg(t, text, 2, expect{1, "version mismatch..."})
 	testProg(t, text, assemblerNoVersion)
 

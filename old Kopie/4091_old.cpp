@@ -1,6 +1,5 @@
 #include "tab_game.h"
 
-        if (spectator && !gameInfo.spectators_can_chat() && tabSupervisor->getAdminLocked()) {
 #include "abstractclient.h"
 #include "arrowitem.h"
 #include "carddatabase.h"
@@ -1820,7 +1819,7 @@ void TabGame::createMessageDock(bool bReplay)
         sayEdit->setCompleter(completer);
         actCompleterChanged();
 
-        /* Spectators can only talk if:
+        if (spectator && !gameInfo.spectators_can_chat() && tabSupervisor->getAdminLocked()) {
          * (a) the game creator allows it
          * (b) the spectator is a moderator/administrator
          * (c) the spectator is a judge

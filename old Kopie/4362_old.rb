@@ -1,5 +1,4 @@
 # encoding: utf-8
-        clients[name.to_sym] ||= Clients::Factory.create(name)
 require "mongoid/clients/factory"
 require "mongoid/clients/validators"
 require "mongoid/clients/storage_options"
@@ -62,7 +61,7 @@ module Mongoid
       #
       # @since 3.0.0
       def with_name(name)
-        name_as_symbol = name.to_sym
+        clients[name.to_sym] ||= Clients::Factory.create(name)
         return clients[name_as_symbol] if clients[name_as_symbol]
         CREATE_LOCK.synchronize do
           return clients[name_as_symbol] if clients[name_as_symbol]

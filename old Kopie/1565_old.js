@@ -1,72 +1,101 @@
 // @flow
-import { observer, inject } from 'mobx-react';
-import WalletRecoveryPhraseStep2Dialog from '../../../../components/wallet/settings/WalletRecoveryPhraseStep2Dialog';
-import WalletRecoveryPhraseStep3Dialog from '../../../../components/wallet/settings/WalletRecoveryPhraseStep3Dialog';
-import WalletRecoveryPhraseStep4Dialog from '../../../../components/wallet/settings/WalletRecoveryPhraseStep4Dialog';
-import validWords from '../../../../../../common/crypto/valid-words.en';
-import type { InjectedDialogContainerProps } from '../../../../types/injectedPropsType';
+import { action, computed, observable } from 'mobx';
+import { get } from 'lodash';
+import Store from './lib/Store';
+import { sidebarConfig } from '../config/sidebarConfig';
+import { WalletSyncStateTags } from '../domains/Wallet';
+import { formattedWalletAmount } from '../utils/formatters';
+import type { SidebarWalletType } from '../types/sidebarTypes';
 
-type Props = InjectedDialogContainerProps;
+export default class SidebarStore extends Store {
+  @observable CATEGORIES: Array<any> = sidebarConfig.CATEGORIES;
+  @observable activeSidebarCategory: string = this.CATEGORIES[0].route;
+  @observable isShowingSubMenus: boolean = true;
 
-@inject('stores', 'actions')
-@observer
-export default class WalletRecoveryPhraseStep2Container extends Component<Props> {
-  static defaultProps = {
-    actions: null,
-    stores: null,
-    children: null,
-    onClose: () => {},
-  };
+  setup() {
+    const { sidebar: sidebarActions } = this.actions;
 
-  componentWillReceiveProps(nextProps: Props) {
-    const { walletBackup, wallets } = nextProps.stores;
-    const { actions } = this.props;
-    const {
-      isRecoveryPhraseMatching: nextRecoveryPhraseMatching,
-      getWalletIdAndBalanceRequest: getWalletIdAndBalanceRequestNext,
-    } = walletBackup;
+    sidebarActions.showSubMenus.listen(this._showSubMenus);
+    sidebarActions.toggleSubMenus.listen(this._toggleSubMenus);
+    sidebarActions.activateSidebarCategory.listen(
+      this._onActivateSidebarCategory
+    );
+    sidebarActions.walletSelected.listen(this._onWalletSelected);
 
-    let dialog;
-    if (getWalletIdAndBalanceRequestNext.wasExecuted) {
-      if (nextRecoveryPhraseMatching) {
-        dialog = WalletRecoveryPhraseStep3Dialog;
-        const activeWallet = wallets.active;
-        if (activeWallet) activeWallet.updateWalletLocalData();
-      } else {
-        dialog = WalletRecoveryPhraseStep4Dialog;
-      }
-      actions.dialogs.open.trigger({
-        dialog,
-      });
-      actions.walletBackup.resetRecoveryPhraseCheck.trigger();
-    }
+    this.registerReactions([this._syncSidebarRouteWithRouter]);
+    this._configureCategories();
   }
 
-  handleVerify = (recoveryPhrase: Array<string>) => {
-    this.props.actions.walletBackup.checkRecoveryPhrase.trigger({
-      recoveryPhrase,
+  @computed get wallets(): Array<SidebarWalletType> {
+    const { networkStatus, wallets } = this.stores;
+    return wallets.all.map(w => ({
+      id: w.id,
+      title: w.name,
+      info: formattedWalletAmount(w.amount),
+      isConnected: networkStatus.isConnected,
+      isRestoreActive:
+        get(w, 'syncState.tag') === WalletSyncStateTags.RESTORING,
+      restoreProgress: get(w, 'syncState.data.percentage.quantity', 0),
+      isLegacy: w.isLegacy,
+      mnemonicsConfirmationStatus: w.mnemonicsConfirmationStatus,
+      mnemonicsConfirmationStatusType: w.mnemonicsConfirmationStatusType,
+      blah: true,
+    }));
+  }
+
+  @action _configureCategories = () => {
+    if (this.stores.networkStatus.environment.isDev) {
+      this.CATEGORIES = sidebarConfig.CATEGORIES_WITH_STAKING;
+    }
+  };
+
+  @action _onActivateSidebarCategory = (params: {
+    category: string,
+    showSubMenu?: boolean,
+  }) => {
+    const { category, showSubMenu } = params;
+    if (category !== this.activeSidebarCategory) {
+      this.activeSidebarCategory = category;
+      if (showSubMenu != null) this.isShowingSubMenus = showSubMenu;
+      this.actions.router.goToRoute.trigger({ route: category });
+    } else if (showSubMenu == null || this.isShowingSubMenus !== showSubMenu) {
+      // If no explicit preferred state is given -> toggle sub menus
+      this._toggleSubMenus();
+    } else {
+      this.isShowingSubMenus = showSubMenu;
+    }
+  };
+
+  @action _onWalletSelected = ({ walletId }: { walletId: string }) => {
+    this.stores.wallets.goToWalletRoute(walletId);
+  };
+
+  @action _setActivateSidebarCategory = (category: string) => {
+    this.activeSidebarCategory = category;
+  };
+
+  @action _resetActivateSidebarCategory = () => {
+    this.activeSidebarCategory = '';
+  };
+
+  @action _showSubMenus = () => {
+    this.isShowingSubMenus = true;
+  };
+
+  @action _hideSubMenus = () => {
+    this.isShowingSubMenus = false;
+  };
+
+  @action _toggleSubMenus = () => {
+    this.isShowingSubMenus = !this.isShowingSubMenus;
+  };
+
+  _syncSidebarRouteWithRouter = () => {
+    const route = this.stores.app.currentRoute;
+    this.CATEGORIES.forEach(category => {
+      // If the current route starts with the root of the category
+      if (route.indexOf(category.route) === 0)
+        this._setActivateSidebarCategory(category.route);
     });
   };
-
-  render() {
-    const { stores } = this.props;
-    const { wallets, walletBackup } = stores;
-    const { isValidMnemonic } = wallets;
-    const { getWalletIdAndBalanceRequest } = walletBackup;
-    const { closeActiveDialog } = this.props.actions.dialogs;
-
-    const isVerifying =
-      getWalletIdAndBalanceRequest.isExecuting ||
-      getWalletIdAndBalanceRequest.wasExecuted;
-
-    return (
-      <WalletRecoveryPhraseStep2Dialog
-        mnemonicValidator={mnemonic => isValidMnemonic(mnemonic)}
-        suggestedMnemonics={validWords}
-        isVerifying={isVerifying}
-        onVerify={this.handleVerify}
-        onClose={closeActiveDialog.trigger}
-      />
-    );
-  }
 }

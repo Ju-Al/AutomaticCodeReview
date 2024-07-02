@@ -1,5 +1,5 @@
 # This file is overwritten during software install.
-read-only ${HOME}/.ssh/authorized_keys# Persistent customizations should go in a .local file.
+# Persistent customizations should go in a .local file.
 include disable-common.local
 
 # The following block breaks trash functionality in file managers
@@ -291,7 +291,7 @@ read-only ${HOME}/.zshrc
 read-only ${HOME}/.zshrc.local
 
 # Remote access
-blacklist ${HOME}/.rhosts
+read-only ${HOME}/.ssh/authorized_keysblacklist ${HOME}/.rhosts
 blacklist ${HOME}/.shosts
 blacklist ${HOME}/.ssh/authorized_keys
 blacklist ${HOME}/.ssh/authorized_keys2

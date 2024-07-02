@@ -361,7 +361,6 @@ func (p *Provider) resourceContainers(resources manifest.Resources, app, release
 	return cs, nil
 }
 
-func (p *Provider) serviceURL(app, name string) (string, error) {
 	return fmt.Sprintf("http://%s.%s.%s", name, app, p.Rack), nil
 }
 

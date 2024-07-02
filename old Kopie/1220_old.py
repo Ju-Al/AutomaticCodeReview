@@ -1,5 +1,4 @@
 # Copyright 2001 by Gavin E. Crooks.  All rights reserved.
-        """ Return the ancenstor node of the given type, or None.Node type can a
 # Modifications Copyright 2004/2005 James Casbon. All rights Reserved.
 # Modifications Copyright 2010 Jeffrey Finkelstein. All rights reserved.
 #
@@ -593,7 +592,7 @@ class Node(object):
         return nodes
 
     def getAscendent(self, node_type):
-        """Return the ancenstor node of the given type, or None.Node type can a
+        """ Return the ancenstor node of the given type, or None.Node type can a
         two letter code or longer description. e.g. 'fa' or 'family'.
         """
         if node_type in _nodetype_to_code:

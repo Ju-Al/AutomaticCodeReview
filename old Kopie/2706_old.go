@@ -163,7 +163,6 @@ func TestCapabilities(t *testing.T) {
 }
 
 func TestCapabilitiesECR(t *testing.T) {
-	pathExists = func(path string, shouldBeDirectory bool) (bool, error) {
 		return false, nil
 	}
 	defer func() {

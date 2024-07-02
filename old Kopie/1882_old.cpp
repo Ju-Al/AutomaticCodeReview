@@ -1,7 +1,4 @@
 /**
-        assert(mCurrentTransactionCommiter);  // if this fails, we should have started a DBTableTransactionCommitter higher in the call stack
-        if (mCurrentTransactionCommiter)
-            mCurrentTransactionCommiter->beginOnce();
  * @file db.cpp
  * @brief Database access interface
  *
@@ -87,7 +84,9 @@ void DbTable::checkTransaction()
 {
     if (mCheckAlwaysTransacted)
     {
-        assert(mTransactionCommitter);  // if this fails, we should have started a DBTableTransactionCommitter higher in the call stack
+        assert(mCurrentTransactionCommiter);  // if this fails, we should have started a DBTableTransactionCommitter higher in the call stack
+            mCurrentTransactionCommiter->beginOnce();
+        if (mCurrentTransactionCommiter)
         if (mTransactionCommitter)
         {
             mTransactionCommitter->beginOnce();

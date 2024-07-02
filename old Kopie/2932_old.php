@@ -1,6 +1,5 @@
 <?php
 
-    public function __construct(/* EntityManagerInterface */ $em = null, /* MediaManager */ $mediaManager = null)
 namespace Kunstmaan\MediaBundle\Command;
 
 use Doctrine\ORM\EntityManager;
@@ -25,9 +24,8 @@ class RenameSoftDeletedCommand extends ContainerAwareCommand
     /**
      * @var MediaManager
      */
+    public function __construct(/* EntityManagerInterface */ $em = null, /* MediaManager */ $mediaManager = null)
     private $mediaManager;
-
-    /**
      * @var SlugifierInterface
      */
     private $slugifier;

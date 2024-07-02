@@ -1,23 +1,4 @@
 /*
-	// If GCP ServiceAccount is provided, configure workload identity.
-	if storage.Spec.ServiceAccount != nil {
-		// Create corresponding k8s ServiceAccount if doesn't exist, and add ownerReference to it.
-		kServiceAccountName := psresources.GenerateServiceAccountName(storage.Spec.ServiceAccount)
-		kServiceAccount, err := r.serviceAccountLister.ServiceAccounts(storage.Namespace).Get(kServiceAccountName)
-		if err != nil {
-			if !apierrs.IsNotFound(err) {
-				logging.FromContext(ctx).Desugar().Error("Failed to get k8s service account", zap.Error(err))
-				return reconciler.NewEvent(corev1.EventTypeWarning, workloadIdentityFailedReason, "Getting k8s service account failed with: %s", err)
-			}
-			kServiceAccount = nil
-		}
-		kServiceAccount, event := r.CreateServiceAccount(ctx, storage, kServiceAccount)
-		if event != nil {
-			return event
-		}
-		// Add iam policy binding to GCP ServiceAccount.
-		if err := psresources.AddIamPolicyBinding(ctx, storage.Spec.Project, storage.Spec.ServiceAccount, kServiceAccount); err != nil {
-			return reconciler.NewEvent(corev1.EventTypeWarning, workloadIdentityFailedReason, "Adding iam policy binding failed with: %s", err)
 Copyright 2019 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -108,7 +89,25 @@ func (r *Reconciler) ReconcileKind(ctx context.Context, storage *v1alpha1.CloudS
 	storage.Status.InitializeConditions()
 	storage.Status.ObservedGeneration = storage.Generation
 
-	// If GCP ServiceAccount is provided, reconcile workload identity.
+	// If GCP ServiceAccount is provided, configure workload identity.
+	if storage.Spec.ServiceAccount != nil {
+		// Create corresponding k8s ServiceAccount if doesn't exist, and add ownerReference to it.
+		kServiceAccountName := psresources.GenerateServiceAccountName(storage.Spec.ServiceAccount)
+		kServiceAccount, err := r.serviceAccountLister.ServiceAccounts(storage.Namespace).Get(kServiceAccountName)
+		if err != nil {
+			if !apierrs.IsNotFound(err) {
+				logging.FromContext(ctx).Desugar().Error("Failed to get k8s service account", zap.Error(err))
+				return reconciler.NewEvent(corev1.EventTypeWarning, workloadIdentityFailedReason, "Getting k8s service account failed with: %s", err)
+			}
+			kServiceAccount = nil
+		}
+		kServiceAccount, event := r.CreateServiceAccount(ctx, storage, kServiceAccount)
+		if event != nil {
+			return event
+		}
+		// Add iam policy binding to GCP ServiceAccount.
+		if err := psresources.AddIamPolicyBinding(ctx, storage.Spec.Project, storage.Spec.ServiceAccount, kServiceAccount); err != nil {
+			return reconciler.NewEvent(corev1.EventTypeWarning, workloadIdentityFailedReason, "Adding iam policy binding failed with: %s", err)
 	if storage.Spec.ServiceAccount != "" {
 		if _, err := r.Identity.ReconcileWorkloadIdentity(ctx, storage.Spec.Project, storage.Namespace, storage); err != nil {
 			return reconciler.NewEvent(corev1.EventTypeWarning, workloadIdentityFailed, "Failed to reconcile CloudStorageSource workload identity: %s", err.Error())

@@ -185,7 +185,6 @@ module.exports = {
     options.removeFilters = (options.defaultRemoveFilters || [ 'published' ])
       .concat(options.removeFilters || []);
 
-    options.removeColumns = (options.defaultRemoveColumns || [ 'published' ])
       .concat(options.removeColumns || []);
 
     options.arrangeFields = [

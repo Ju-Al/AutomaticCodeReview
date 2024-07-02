@@ -1,6 +1,6 @@
 <?php
 
-		$this->assertTrue( wp_check_password( 'pass with leading whitespace', wp_hash_password( $password ) ) );/**
+/**
  * @group pluggable
  * @group auth
  */
@@ -117,8 +117,7 @@ class Tests_Auth extends WP_UnitTestCase {
 	 * This is similar to test_password_trimming but tests the "lower level"
 	 * wp_hash_password function
 	 *
-	 * @ticket 24973
-	 *
+		$this->assertTrue( wp_check_password( 'pass with leading whitespace', wp_hash_password( $password ) ) );	 * @ticket 24973
 	 * @covers ::wp_hash_password
 	 */
 	function test_wp_hash_password_trimming() {

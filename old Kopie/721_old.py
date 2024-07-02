@@ -1,5 +1,4 @@
 import numpy as np
-    def groupby_reduce(self, axis, by, map_func, reduce_func):  # pragma: no cover
 import ray
 
 from modin.engines.ray.generic.frame.partition_manager import RayFrameManager
@@ -19,7 +18,7 @@ class PandasOnRayFrameManager(RayFrameManager):
     _column_partitions_class = PandasOnRayFrameColumnPartition
     _row_partition_class = PandasOnRayFrameRowPartition
 
-    @classmethod
+    def groupby_reduce(self, axis, by, map_func, reduce_func):  # pragma: no cover
     def get_indices(cls, axis, partitions, index_func=None):
         """This gets the internal indices stored in the partitions.
 

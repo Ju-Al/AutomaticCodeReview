@@ -1,13 +1,4 @@
 // Copyright The OpenTelemetry Authors
-func (ci *correctnessIntegrator) CheckpointSet() export.CheckpointSet {
-	ci.t.Fatal("Should not be called")
-	return nil
-}
-
-func (*correctnessIntegrator) FinishedCollection() {
-}
-
-func (ci *correctnessIntegrator) Process(record export.Record) error {
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,7 +101,15 @@ func newSDK(t *testing.T) (metric.Meter, *metricsdk.Accumulator, *correctnessInt
 	return meter, accum, integrator
 }
 
-func (ci *correctnessIntegrator) Process(record export.Accumulation) error {
+func (ci *correctnessIntegrator) CheckpointSet() export.CheckpointSet {
+	ci.t.Fatal("Should not be called")
+	return nil
+}
+
+func (*correctnessIntegrator) FinishedCollection() {
+}
+
+func (ci *correctnessIntegrator) Process(record export.Record) error {
 	ci.records = append(ci.records, record)
 	return nil
 }

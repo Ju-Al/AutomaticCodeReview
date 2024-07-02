@@ -1,13 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-            // Loop through the entries and if we're POSTing with an ID in the fullUrl then set an ID for it and add it to our dictionary.
-                string persistedId = default;
-
-                HttpContext httpContext = new DefaultHttpContext { RequestServices = _requestServices };
-                // For resources within a transaction, we need to resolve any intrabundle references and potentially persist any internally assigned ids
-                if (_bundleType == BundleType.Transaction && entry.Resource != null)
-                {
-                    var requestUrl = (entry.Request != null) ? entry.Request.Url : null;
-                    await _referenceResolver.ResolveReferencesAsync(entry.Resource, _referenceIdDictionary, requestUrl, cancellationToken);
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -244,7 +235,15 @@ namespace Microsoft.Health.Fhir.Api.Features.Resources.Bundle
             _requestCount = bundleEntries.Count;
 
             // For a transaction, we need to resolve any references between resources.
-            // Loop through the entries and if we're POSTing with an ID in the fullUrl or doing a conditional create then set an ID for it and add it to our dictionary.
+                string persistedId = default;
+
+                HttpContext httpContext = new DefaultHttpContext { RequestServices = _requestServices };
+                // For resources within a transaction, we need to resolve any intrabundle references and potentially persist any internally assigned ids
+                if (_bundleType == BundleType.Transaction && entry.Resource != null)
+                {
+                    var requestUrl = (entry.Request != null) ? entry.Request.Url : null;
+                    await _referenceResolver.ResolveReferencesAsync(entry.Resource, _referenceIdDictionary, requestUrl, cancellationToken);
+            // Loop through the entries and if we're POSTing with an ID in the fullUrl then set an ID for it and add it to our dictionary.
             if (_bundleType == BundleType.Transaction)
             {
                 PopulateReferenceIdDictionary(bundleEntries, _referenceIdDictionary);

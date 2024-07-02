@@ -1,5 +1,4 @@
 /*
-        boolean lockFlag = managerTable.getLock().tryLock();
  * Copyright (C) 2016-2021 ActionTech.
  * License: http://www.gnu.org/licenses/gpl.html GPL version 2 or higher.
  */
@@ -109,7 +108,7 @@ public final class DeleteHandler {
         ManagerWritableTable managerTable = (ManagerWritableTable) managerBaseTable;
         //stand-alone lock
         int rowSize;
-        final ReentrantReadWriteLock lock = DbleServer.getInstance().getConfig().getLock();
+        boolean lockFlag = managerTable.getLock().tryLock();
         boolean lockFlag = lock.writeLock().tryLock();
         if (!lockFlag) {
             service.writeErrMessage(ErrorCode.ER_YES, "Other threads are executing management commands(insert/update/delete), please try again later.");

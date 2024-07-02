@@ -1,19 +1,5 @@
 package java
 
-	publisher += fmt.Sprintf(tab+"private static final String DELIMITER = \"%s\";\n\n", globals.TopicDelimiter)
-	publisher += fmt.Sprintf(tab+"private final Internal%sPublisher target;\n", scopeTitle)
-	publisher += fmt.Sprintf(tab+"private final Internal%sPublisher proxy;\n\n", scopeTitle)
-	publisher += fmt.Sprintf(tab+"public %sPublisher(FScopeProvider provider, ServiceMiddleware... middleware) {\n", scopeTitle)
-	publisher += fmt.Sprintf(tabtab+"target = new Internal%sPublisher(provider);\n", scopeTitle)
-	publisher += fmt.Sprintf(tabtab+"proxy = (Internal%sPublisher) InvocationHandler.composeMiddlewareClass(target, Internal%sPublisher.class, middleware);\n",
-		scopeTitle, scopeTitle)
-	publisher += tab + "}\n\n"
-	publisher += tab + "public void open() throws TException {\n"
-	publisher += tabtab + "target.open();\n"
-	publisher += tab + "}\n\n"
-	publisher += tab + "public void close() throws TException {\n"
-	publisher += tabtab + "target.close();\n"
-	publisher += tab + "}\n\n"
 import (
 	"fmt"
 	"os"
@@ -2393,6 +2379,20 @@ func (g *Generator) generateWriteFieldRec(field *parser.Field, first bool, succi
 ", accessPrefix, field.Name)
 	} else if underlyingType.IsContainer() {
 		iterElem := g.GetElem()
+	publisher += fmt.Sprintf(tab+"private static final String DELIMITER = \"%s\";\n\n", globals.TopicDelimiter)
+	publisher += fmt.Sprintf(tab+"private final Internal%sPublisher target;\n", scopeTitle)
+	publisher += fmt.Sprintf(tab+"private final Internal%sPublisher proxy;\n\n", scopeTitle)
+	publisher += fmt.Sprintf(tab+"public %sPublisher(FScopeProvider provider, ServiceMiddleware... middleware) {\n", scopeTitle)
+	publisher += fmt.Sprintf(tabtab+"target = new Internal%sPublisher(provider);\n", scopeTitle)
+	publisher += fmt.Sprintf(tabtab+"proxy = (Internal%sPublisher) InvocationHandler.composeMiddlewareClass(target, Internal%sPublisher.class, middleware);\n",
+		scopeTitle, scopeTitle)
+	publisher += tab + "}\n\n"
+	publisher += tab + "public void open() throws TException {\n"
+	publisher += tabtab + "target.open();\n"
+	publisher += tab + "}\n\n"
+	publisher += tab + "public void close() throws TException {\n"
+	publisher += tabtab + "target.close();\n"
+	publisher += tab + "}\n\n"
 		valJavaType := g.getJavaTypeFromThriftType(underlyingType.ValueType)
 		valTType := g.getTType(underlyingType.ValueType)
 

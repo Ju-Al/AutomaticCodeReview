@@ -1,5 +1,4 @@
 package defclient
-
 import (
 	"context"
 	"encoding/json"

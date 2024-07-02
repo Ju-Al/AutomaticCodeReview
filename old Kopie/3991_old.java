@@ -1,6 +1,4 @@
 /**
-    part.setInProgress(false);
-    values.put(IN_PROGRESS, false);
  * Copyright (C) 2011 Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
@@ -504,7 +502,8 @@ public class PartDatabase extends Database {
     ContentValues  values   = new ContentValues(1);
     SQLiteDatabase database = databaseHelper.getWritableDatabase();
 
-    part.setTransferProgress(TRANSFER_PROGRESS_DONE);
+    part.setInProgress(false);
+    values.put(IN_PROGRESS, false);
     values.put(TRANSFER_STATE, TRANSFER_PROGRESS_DONE);
     database.update(TABLE_NAME, values, PART_ID_WHERE, part.getPartId().toStrings());
 

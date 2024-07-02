@@ -71,7 +71,6 @@ type MDServerRemote struct {
 	serverOffsetMu    sync.RWMutex
 	serverOffsetKnown bool
 	serverOffset      time.Duration
-
 	reconnectBackoff *CancelableRandomBackoff
 }
 

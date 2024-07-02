@@ -1,6 +1,4 @@
 // @flow
- * Enforces passwords without spaces and a minimum of 10 characters.
-  return password.length >= 10;
 import BigNumber from 'bignumber.js';
 import isInt from 'validator/lib/isInt';
 import { every } from 'lodash';
@@ -55,7 +53,8 @@ export const isUnicaseString = (password: string) =>
   every(password.split(''), (char) => isCaselessString(char));
 
 /**
- * Enforces passwords without spaces and a minimum of 10 characters and a maximum of 255 characters.
+  return password.length >= 10;
+ * Enforces passwords without spaces and a minimum of 10 characters.
  */
 export const isValidSpendingPassword = (password: string): boolean => {
   // Should contain at least 10 characters

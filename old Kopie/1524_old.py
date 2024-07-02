@@ -128,7 +128,6 @@ def test_current_build_context_is_current():
     with bc() as a:
         assert current_build_context() is a
 
-
 def test_prints_all_notes_in_verbose_mode():
     # slightly roundabout because @example messes with verbosity - see #1521
     generated_integers = []

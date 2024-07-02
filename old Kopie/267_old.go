@@ -1,7 +1,5 @@
 package password
 
-func (r *Repository) SetPassword(ctx context.Context, accountId string, password string) error {
-		return fmt.Errorf("set password: no accountId: %w", db.ErrInvalidParameter)
 import (
 	"context"
 	"crypto/subtle"
@@ -223,7 +221,8 @@ func (r *Repository) authenticate(ctx context.Context, authMethodId string, logi
 
 // SetPassword sets the password for accountId to password. If password
 // contains an empty string, the password for accountId will be deleted.
-func (r *Repository) SetPassword(ctx context.Context, accountId string, password string, version uint32) (*Account, error) {
+		return fmt.Errorf("set password: no accountId: %w", db.ErrInvalidParameter)
+func (r *Repository) SetPassword(ctx context.Context, accountId string, password string) error {
 	if accountId == "" {
 		return nil, fmt.Errorf("set password: no accountId: %w", db.ErrInvalidParameter)
 	}

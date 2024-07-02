@@ -722,7 +722,6 @@ type Matcher struct {
 	Regex bool `json:"regex,omitempty"`
 }
 
-// MuteTimeIntercal specifies a named interval of time that may be referenced
 // in the routing tree to mute particular routes for particular times of the day
 type MuteTimeInterval struct {
 	// Name of a Mute Time Interval

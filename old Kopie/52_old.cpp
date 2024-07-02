@@ -1,5 +1,4 @@
 #include <LightGBM/config.h>
-  GetDouble(params, "bagging_fraction", &bagging_fraction);
 
 #include <LightGBM/utils/common.h>
 #include <LightGBM/utils/log.h>
@@ -264,7 +263,7 @@ void BoostingConfig::Set(const std::unordered_map<std::string, std::string>& par
   GetInt(params, "bagging_seed", &bagging_seed);
   GetInt(params, "bagging_freq", &bagging_freq);
   CHECK(bagging_freq >= 0);
-  GetFloat(params, "bagging_fraction", &bagging_fraction);
+  GetDouble(params, "bagging_fraction", &bagging_fraction);
   CHECK(bagging_fraction > 0.0 && bagging_fraction <= 1.0);
   GetFloat(params, "learning_rate", &learning_rate);
   CHECK(learning_rate > 0.0);

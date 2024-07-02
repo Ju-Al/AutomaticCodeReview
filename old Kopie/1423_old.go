@@ -151,7 +151,6 @@ func (o *initJobOpts) Ask() error {
 
 // Execute writes the job's manifest file and stores the name in SSM.
 func (o *initJobOpts) Execute() error {
-	app, err := o.store.GetApplication(o.appName)
 	if err != nil {
 		return fmt.Errorf("get application %s: %w", o.appName, err)
 	}

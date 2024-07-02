@@ -17,56 +17,172 @@ limitations under the License.
 package metrics
 
 import (
-	"strings"
+	"context"
+	"fmt"
+	"strconv"
+	"time"
 
-	"github.com/google/knative-gcp/test/e2e/lib"
+	"github.com/google/knative-gcp/pkg/broker/config"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
-	"knative.dev/pkg/metrics/metricskey"
+	"knative.dev/pkg/metrics"
 )
 
-type PodName string
-type ContainerName string
+type DeliveryMetricsKey int
 
-var (
-	// Create the tag keys that will be used to add tags to our measurements.
-	// Tag keys must conform to the restrictions described in
-	// go.opencensus.io/tag/validate.go. Currently those restrictions are:
-	// - length between 1 and 255 inclusive
-	// - characters are printable US-ASCII
-	NamespaceNameKey = tag.MustNewKey(metricskey.LabelNamespaceName)
-
-	BrokerNameKey        = tag.MustNewKey(metricskey.LabelBrokerName)
-	EventTypeKey         = tag.MustNewKey(metricskey.LabelEventType)
-	TriggerNameKey       = tag.MustNewKey(metricskey.LabelTriggerName)
-	TriggerFilterTypeKey = tag.MustNewKey(metricskey.LabelFilterType)
-
-	ResponseCodeKey      = tag.MustNewKey(metricskey.LabelResponseCode)
-	ResponseCodeClassKey = tag.MustNewKey(metricskey.LabelResponseCodeClass)
-
-	PodNameKey       = tag.MustNewKey(metricskey.PodName)
-	ContainerNameKey = tag.MustNewKey(metricskey.ContainerName)
+const (
+	startDeliveryProcessingTime DeliveryMetricsKey = iota
 )
 
-var (
-	allowedEventTypes = []string{
-		lib.E2EDummyEventType,
-		lib.E2EDummyRespEventType,
-	}
-)
+type DeliveryReporter struct {
+	podName               PodName
+	containerName         ContainerName
+	dispatchTimeInMsecM   *stats.Float64Measure
+	processingTimeInMsecM *stats.Float64Measure
+}
 
-// Stackdriver has a limit on the cardinality of fields on a metric, and event types can be any custom string. We're
-// reducing the allowable values on this field to be limited to GCP event types and defaulting everything else to
-// "custom".
-func EventTypeMetricValue(eventType string) string {
-	if strings.HasPrefix(eventType, "com.google.cloud") {
-		return eventType
+func (r *DeliveryReporter) register() error {
+	return metrics.RegisterResourceView(
+		&view.View{
+			Name:        "event_count",
+			Description: "Number of events delivered to a Trigger subscriber",
+			Measure:     r.dispatchTimeInMsecM,
+			Aggregation: view.Count(),
+			TagKeys: []tag.Key{
+				NamespaceNameKey,
+				BrokerNameKey,
+				TriggerNameKey,
+				TriggerFilterTypeKey,
+				ResponseCodeKey,
+				ResponseCodeClassKey,
+				PodNameKey,
+				ContainerNameKey,
+			},
+		},
+		&view.View{
+			Name:        r.dispatchTimeInMsecM.Name(),
+			Description: r.dispatchTimeInMsecM.Description(),
+			Measure:     r.dispatchTimeInMsecM,
+			Aggregation: view.Distribution(metrics.Buckets125(1, 10000)...), // 1, 2, 5, 10, 20, 50, 100, 1000, 5000, 10000
+			TagKeys: []tag.Key{
+				NamespaceNameKey,
+				BrokerNameKey,
+				TriggerNameKey,
+				TriggerFilterTypeKey,
+				ResponseCodeKey,
+				ResponseCodeClassKey,
+				PodNameKey,
+				ContainerNameKey,
+			},
+		},
+		&view.View{
+			Name:        r.processingTimeInMsecM.Name(),
+			Description: r.processingTimeInMsecM.Description(),
+			Measure:     r.processingTimeInMsecM,
+			Aggregation: view.Distribution(metrics.Buckets125(1, 10000)...), // 1, 2, 5, 10, 20, 50, 100, 1000, 5000, 10000
+			TagKeys: []tag.Key{
+				NamespaceNameKey,
+				BrokerNameKey,
+				TriggerNameKey,
+				TriggerFilterTypeKey,
+				PodNameKey,
+				ContainerNameKey,
+			},
+		},
+	)
+}
+
+// NewDeliveryReporter creates a new DeliveryReporter.
+func NewDeliveryReporter(podName PodName, containerName ContainerName) (*DeliveryReporter, error) {
+	r := &DeliveryReporter{
+		podName:       podName,
+		containerName: containerName,
+		// dispatchTimeInMsecM records the time spent dispatching an event to
+		// a Trigger subscriber, in milliseconds.
+		dispatchTimeInMsecM: stats.Float64(
+			"event_dispatch_latencies",
+			"The time spent dispatching an event to a Trigger subscriber",
+			stats.UnitMilliseconds,
+		),
+		// processingTimeInMsecM records the time spent between arrival at the Broker
+		// and the delivery to the Trigger subscriber.
+		processingTimeInMsecM: stats.Float64(
+			"event_processing_latencies",
+			"The time spent processing an event before it is dispatched to a Trigger subscriber",
+			stats.UnitMilliseconds,
+		),
 	}
 
-	for _, allowed := range allowedEventTypes {
-		if eventType == allowed {
-			return eventType
-		}
+	if err := r.register(); err != nil {
+		return nil, fmt.Errorf("failed to register delivery stats: %w", err)
 	}
+	return r, nil
+}
 
-	return "custom"
+// ReportEventDispatchTime captures dispatch times.
+func (r *DeliveryReporter) ReportEventDispatchTime(ctx context.Context, d time.Duration, responseCode int) {
+	// convert time.Duration in nanoseconds to milliseconds.
+	metrics.Record(ctx, r.dispatchTimeInMsecM.M(float64(d/time.Millisecond)),
+		stats.WithTags(
+			tag.Insert(ResponseCodeKey, strconv.Itoa(responseCode)),
+			tag.Insert(ResponseCodeClassKey, metrics.ResponseCodeClass(responseCode)),
+		),
+	)
+}
+
+// StartEventProcessing records the start of event processing for delivery within the given context.
+func StartEventProcessing(ctx context.Context) context.Context {
+	return context.WithValue(ctx, startDeliveryProcessingTime, time.Now())
+}
+
+// FinishEventProcessing captures event processing times. Requires StartDelivery to have been
+// called previously using ctx.
+func (r *DeliveryReporter) FinishEventProcessing(ctx context.Context) error {
+	return r.reportEventProcessingTime(ctx, time.Now())
+}
+
+// ReportEventProcessingTime captures event processing times. Requires StartDelivery to have been
+// called previously using ctx.
+func (r *DeliveryReporter) reportEventProcessingTime(ctx context.Context, end time.Time) error {
+	start, err := getStartDeliveryProcessingTime(ctx)
+	if err != nil {
+		return err
+	}
+	// convert time.Duration in nanoseconds to milliseconds.
+	metrics.Record(ctx, r.processingTimeInMsecM.M(float64(end.Sub(start)/time.Millisecond)))
+	return nil
+}
+
+func filterTypeValue(v string) string {
+	if v != "" {
+		return v
+		// the default value if the filter attributes are empty.
+		return "any"
+	}
+	return EventTypeMetricValue(v)
+}
+
+func (r *DeliveryReporter) AddTags(ctx context.Context) (context.Context, error) {
+	return tag.New(ctx,
+		tag.Insert(PodNameKey, string(r.podName)),
+		tag.Insert(ContainerNameKey, string(r.containerName)),
+	)
+}
+
+func AddTargetTags(ctx context.Context, target *config.Target) (context.Context, error) {
+	return tag.New(ctx,
+		tag.Insert(NamespaceNameKey, target.Namespace),
+		tag.Insert(BrokerNameKey, target.Broker),
+		tag.Insert(TriggerNameKey, target.Name),
+		tag.Insert(TriggerFilterTypeKey, filterTypeValue(target.FilterAttributes["type"])),
+	)
+}
+
+func getStartDeliveryProcessingTime(ctx context.Context) (time.Time, error) {
+	v := ctx.Value(startDeliveryProcessingTime)
+	if time, ok := v.(time.Time); ok {
+		return time, nil
+	}
+	return time.Time{}, fmt.Errorf("missing or invalid start time: %v", v)
 }

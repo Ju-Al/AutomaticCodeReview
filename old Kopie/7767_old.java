@@ -1,5 +1,4 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-  private static Object[] createInMemory() throws URISyntaxException, MalformedURLException {
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
@@ -125,7 +124,7 @@ public class EndToEndTest {
     this.clientFactory = (HttpClient.Factory) raw[1];
   }
 
-  private static Object[] createInMemory() throws URISyntaxException, MalformedURLException, SSLException, CertificateException {
+  private static Object[] createInMemory() throws URISyntaxException, MalformedURLException {
     Tracer tracer = NoopTracerFactory.create();
     EventBus bus = ZeroMqEventBus.create(
         new ZContext(),

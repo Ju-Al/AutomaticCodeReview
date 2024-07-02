@@ -1,9 +1,5 @@
 package complete
 
-	err = l.wal.RecordUpdate(trieUpdate)
-	if err != nil {
-		return nil, fmt.Errorf("cannot update state, error while writing LedgerWAL: %w", err)
-	}
 import (
 	"bufio"
 	"bytes"
@@ -159,7 +155,10 @@ func (l *Ledger) Set(update *ledger.Update) (newState ledger.State, err error) {
 	l.metrics.UpdateCount()
 	l.metrics.UpdateValuesNumber(uint64(len(trieUpdate.Paths)))
 
-	walChan := make(chan error)
+	err = l.wal.RecordUpdate(trieUpdate)
+	if err != nil {
+		return nil, fmt.Errorf("cannot update state, error while writing LedgerWAL: %w", err)
+	}
 
 	go func() {
 		walChan <- l.wal.RecordUpdate(trieUpdate)

@@ -1,7 +1,4 @@
 # Copyright 2019 Google LLC
-                             ['engine_asan', 'libfuzzer', 'prune'])
-                             ['engine_msan', 'libfuzzer'])
-                              ['engine_ubsan', 'libfuzzer'])
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,7 +101,9 @@ class JobInfo(object):
 # The order of templates is important here. Later templates override settings in
 # the earlier ones. An engine template may override vars set for a sanitizer.
 LIBFUZZER_ASAN_JOB = JobInfo('libfuzzer_asan_', 'libfuzzer', 'address',
-                             ['libfuzzer', 'engine_asan', 'prune'])
+                             ['engine_msan', 'libfuzzer'])
+                              ['engine_ubsan', 'libfuzzer'])
+                             ['engine_asan', 'libfuzzer', 'prune'])
 LIBFUZZER_MSAN_JOB = JobInfo('libfuzzer_msan_', 'libfuzzer', 'memory',
                              ['libfuzzer', 'engine_msan'])
 LIBFUZZER_UBSAN_JOB = JobInfo('libfuzzer_ubsan_', 'libfuzzer', 'undefined',

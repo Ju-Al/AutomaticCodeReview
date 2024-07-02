@@ -98,7 +98,6 @@ class UserRestController extends WallabagRestController
                 ->setStatusCode(JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        // create a default client
         $client = new Client($user);
         $client->setName('Default client');
 

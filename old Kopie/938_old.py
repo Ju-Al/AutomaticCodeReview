@@ -1,30 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        'AtomGroup', GB, AtomGroup)
-        'ResidueGroup', GB, ResidueGroup)
-        'SegmentGroup', GB, SegmentGroup)
-        'Atom', Atom)
-        'Residue', Residue)
-        'Segment', Segment)
-
-    # Define relationships between these classes
-    # with Level objects
-    Atomlevel = levels.Level('atom', A, AG)
-    Residuelevel = levels.Level('residue', R, RG)
-    Segmentlevel = levels.Level('segment', S, SG)
-
-    Atomlevel.parent = Residuelevel
-    Atomlevel.child = None
-    Residuelevel.parent = Segmentlevel
-    Residuelevel.child = Atomlevel
-    Segmentlevel.parent = None
-    Segmentlevel.child = Residuelevel
-
-    A.level = Atomlevel
-    AG.level = Atomlevel
-    R.level = Residuelevel
-    RG.level = Residuelevel
-    S.level = Segmentlevel
-    SG.level = Segmentlevel
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- http://www.MDAnalysis.org
@@ -68,8 +42,33 @@ def make_classes():
     def copy_class(newname, *parents):
         return type(newname, tuple(parents), {})
 
+        'AtomGroup', GB, AtomGroup)
+        'ResidueGroup', GB, ResidueGroup)
+        'SegmentGroup', GB, SegmentGroup)
+        'Atom', Atom)
+        'Residue', Residue)
+        'Segment', Segment)
+
+    # Define relationships between these classes
+    # with Level objects
+    Atomlevel = levels.Level('atom', A, AG)
+    Residuelevel = levels.Level('residue', R, RG)
+    Segmentlevel = levels.Level('segment', S, SG)
+
+    Atomlevel.parent = Residuelevel
+    Atomlevel.child = None
+    Residuelevel.parent = Segmentlevel
+    Residuelevel.child = Atomlevel
+    Segmentlevel.parent = None
+    Segmentlevel.child = Residuelevel
+
+    A.level = Atomlevel
+    AG.level = Atomlevel
+    R.level = Residuelevel
+    RG.level = Residuelevel
+    S.level = Segmentlevel
+    SG.level = Segmentlevel
     classdict = {}
-    # The 'GB' middle man is needed so that a single topologyattr
     #  patching applies automatically to all groups.
     GB = classdict['group'] = copy_class(
         'Group', GroupBase)

@@ -3367,7 +3367,6 @@ void CommandGetUserData::procresult()
                     case MAKENAMEID5('a', 'p', 'l', 'v', 'p'):   // apple VOIP push enabled
                         aplvp = bool(client->json.getint());
                         break;
-                    case MAKENAMEID5('s', 'm', 's', 'v', 'e'):   // 2 = Opt-in and unblock SMS allowed 1 = Only unblock SMS allowed 0 = No SMS allowed
                         smsve = int(client->json.getint());
                         break;
                     case EOO:

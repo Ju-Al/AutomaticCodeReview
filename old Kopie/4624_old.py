@@ -381,7 +381,6 @@ class FDst(_Rex):
         return f.server_conn.address and self.re.search(r)
 
 
-class FDstIP(_Rex):
     code = "ip"
     help = "Match destination ip address"
     is_binary = False

@@ -151,7 +151,6 @@ type Props = {
   disableDownloadLogs: boolean,
 };
 
-@inject('actions')
 @observer
 export default class Loading extends Component<Props, State> {
   static contextTypes = {

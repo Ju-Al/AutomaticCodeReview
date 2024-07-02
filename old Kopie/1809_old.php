@@ -1,5 +1,4 @@
 <?php
-			'rocket_first_install_options', array(
 use WP_Rocket\Logger\Logger;
 
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
@@ -161,7 +160,7 @@ function rocket_first_install() {
 		 * @param array Array of default rocket options
 		 */
 		apply_filters(
-			'rocket_first_install_options',
+			'rocket_first_install_options', array(
 			array(
 				'secret_cache_key'            => $secret_cache_key,
 				'cache_mobile'                => 1,

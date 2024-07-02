@@ -96,8 +96,6 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
     def get_first_if(self):
         return self._get_net_info()[:2]
-
-    @staticmethod
     def read_route_table():
         """
         Return a list of strings comprising the route table as in the Linux /proc/net/route format. The input taken is from FreeBSDs

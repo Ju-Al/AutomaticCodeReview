@@ -109,7 +109,6 @@ function fetchRoute(opts) {
     })
         .then(res => res.json())
         .then(res => {
-            if(res.urlResolver == null && checkCount < 1) {
                 checkCount+=1;
                 opts.route.replace('.html', '');
                 fetchRoute(opts)

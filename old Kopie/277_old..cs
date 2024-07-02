@@ -544,7 +544,6 @@ namespace Microsoft.Recognizers.Definitions.English
 			{ "christmaseve", new string[] { "christmaseve" } },
 			{ "newyeareve", new string[] { "newyearseve", "newyeareve" } }
 		};
-		public static readonly Dictionary<string, int> WrittenDecades = new Dictionary<string, int>
 		{
 			{ "twenties", 20 },
 			{ "thirties", 30 },

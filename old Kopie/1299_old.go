@@ -1,7 +1,5 @@
 // Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
-	nextIndex int
-	links     map[string]linkModel
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -42,7 +40,8 @@ type netlinkTest struct {
 	addrUpdates    chan netlink.AddrUpdate
 	userSubscribed chan int
 
-	nextIndex  int
+	nextIndex int
+	links     map[string]linkModel
 	links      map[string]linkModel
 	linksMutex *sync.Mutex
 }

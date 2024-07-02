@@ -1,5 +1,4 @@
 // Copyright (c) Jupyter Development Team.
-          emptyTemplate: "No results found for <pre>{{query}}</pre>",
 // Distributed under the terms of the Modified BSD License.
 
 define(function(require){
@@ -165,7 +164,7 @@ define(function(require){
         // now src is the right structure for typeahead
 
         input.typeahead({
-          emptyTemplate: function(query) {
+          emptyTemplate: "No results found for <pre>{{query}}</pre>",
             return $('<div>').text("Nao results found for").append(
                 $('<pre>').text(query)
             );

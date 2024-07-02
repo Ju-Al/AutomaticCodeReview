@@ -1,5 +1,4 @@
 const path = require('path');
-const loader = require.resolve('./rendererCollectionLoader');
 
 const isRCR = mod =>
     mod.resource ===

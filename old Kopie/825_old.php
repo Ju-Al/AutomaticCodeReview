@@ -1,13 +1,5 @@
 <?php
 
-     * @param string $couponName
-    public function applyCoupon($couponName)
-        $couponField = $this->webDriver->findElement(WebDriverBy::cssSelector('#js-promo-code-input'));
-        $this->tester->fillFieldByElement($couponField, $couponName);
-        $this->tester->pressKeysByElement($couponField, WebDriverKeys::ENTER);
-    public function removeCoupon()
-        $removeCouponButton = $this->webDriver->findElement(WebDriverBy::cssSelector('.box-promo-code__added__remove'));
-        $this->tester->clickByElement($removeCouponButton);
 namespace Tests\ShopBundle\Acceptance\acceptance\PageObject\Front;
 
 use Facebook\WebDriver\WebDriverBy;
@@ -138,7 +130,14 @@ class CartPage extends AbstractPage
     }
 
     /**
-     * @param string $promoCodeName
+    public function applyCoupon($couponName)
+        $couponField = $this->webDriver->findElement(WebDriverBy::cssSelector('#js-promo-code-input'));
+        $this->tester->fillFieldByElement($couponField, $couponName);
+        $this->tester->pressKeysByElement($couponField, WebDriverKeys::ENTER);
+    public function removeCoupon()
+        $removeCouponButton = $this->webDriver->findElement(WebDriverBy::cssSelector('.box-promo-code__added__remove'));
+        $this->tester->clickByElement($removeCouponButton);
+     * @param string $couponName
      */
     public function applyPromoCode($promoCodeName)
     {

@@ -1,524 +1,298 @@
 <?php
-
+	$where = 'WHERE 1=1';
+		$where .= " AND l.username='".$db->escape_string($mybb->input['username'])."'";
+	if($mybb->input['email'] > 0)
+		$where .= " AND l.email='".$db->escape_string($mybb->input['email'])."'";
+	if($mybb->input['email'] > 0)
 /**
- * Abstract factory for SOLR backends.
- *
- * PHP version 7
- *
- * Copyright (C) Villanova University 2013.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * @category VuFind
- * @package  Search
- * @author   David Maus <maus@hab.de>
- * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org Main Site
+ * MyBB 1.8
+ * Copyright 2014 MyBB Group, All Rights Reserved
+ * Website: http://www.mybb.com
+ * License: http://www.mybb.com/about/license
+
  */
-namespace VuFind\Search\Factory;
 
-use Interop\Container\ContainerInterface;
-
-use Laminas\Config\Config;
-use Laminas\ServiceManager\Factory\FactoryInterface;
-use VuFind\Search\Solr\DeduplicationListener;
-use VuFind\Search\Solr\FilterFieldConversionListener;
-use VuFind\Search\Solr\HideFacetValueListener;
-use VuFind\Search\Solr\HierarchicalFacetListener;
-use VuFind\Search\Solr\InjectConditionalFilterListener;
-use VuFind\Search\Solr\InjectHighlightingListener;
-use VuFind\Search\Solr\InjectSpellingListener;
-use VuFind\Search\Solr\MultiIndexListener;
-
-use VuFind\Search\Solr\V3\ErrorListener as LegacyErrorListener;
-use VuFind\Search\Solr\V4\ErrorListener;
-use VuFindSearch\Backend\BackendInterface;
-use VuFindSearch\Backend\Solr\Backend;
-use VuFindSearch\Backend\Solr\Connector;
-use VuFindSearch\Backend\Solr\HandlerMap;
-use VuFindSearch\Backend\Solr\LuceneSyntaxHelper;
-
-use VuFindSearch\Backend\Solr\QueryBuilder;
-
-use VuFindSearch\Backend\Solr\SimilarBuilder;
-
-/**
- * Abstract factory for SOLR backends.
- *
- * @category VuFind
- * @package  Search
- * @author   David Maus <maus@hab.de>
- * @license  http://opensource.org/licenses/gpl-2.0.php GNU General Public License
- * @link     https://vufind.org Main Site
- */
-abstract class AbstractSolrBackendFactory implements FactoryInterface
+// Disallow direct access to this file for security reasons
+if(!defined("IN_MYBB"))
 {
-    /**
-     * Logger.
-     *
-     * @var \Laminas\Log\LoggerInterface
-     */
-    protected $logger;
+	die("Direct initialization of this file is not allowed.<br /><br />Please make sure IN_MYBB is defined.");
+}
 
-    /**
-     * Superior service manager.
-     *
-     * @var ContainerInterface
-     */
-    protected $serviceLocator;
+$page->add_breadcrumb_item($lang->spam_logs, "index.php?module=tools-spamlog");
 
-    /**
-     * Primary configuration file identifier.
-     *
-     * @var string
-     */
-    protected $mainConfig = 'config';
+$sub_tabs['spam_logs'] = array(
+	'title' => $lang->spam_logs,
+	'link' => "index.php?module=tools-spamlog",
+	'description' => $lang->spam_logs_desc
+);
+$sub_tabs['prune_spam_logs'] = array(
+	'title' => $lang->prune_spam_logs,
+	'link' => "index.php?module=tools-spamlog&amp;action=prune",
+	'description' => $lang->prune_spam_logs_desc
+);
 
-    /**
-     * Search configuration file identifier.
-     *
-     * @var string
-     */
-    protected $searchConfig;
+$plugins->run_hooks("admin_tools_spamlog_begin");
 
-    /**
-     * Facet configuration file identifier.
-     *
-     * @var string
-     */
-    protected $facetConfig;
+if($mybb->input['action'] == 'prune')
+{
+	if(!is_super_admin($mybb->user['uid']))
+	{
+		flash_message($lang->cannot_perform_action_super_admin_general, 'error');
+		admin_redirect("index.php?module=tools-spamlog");
+	}
 
-    /**
-     * YAML searchspecs filename.
-     *
-     * @var string
-     */
-    protected $searchYaml;
+	$plugins->run_hooks("admin_tools_spamlog_prune");
 
-    /**
-     * VuFind configuration reader
-     *
-     * @var \VuFind\Config\PluginManager
-     */
-    protected $config;
+	if($mybb->request_method == 'post')
+	{
+		$is_today = false;
+		if($mybb->input['older_than'] <= 0)
+		{
+			$is_today = true;
+			$mybb->input['older_than'] = 1;
+		}
+		$where = 'dateline < '.(TIME_NOW-($mybb->get_input('older_than', MyBB::INPUT_INT)*86400));
 
-    /**
-     * Solr core name
-     *
-     * @var string
-     */
-    protected $solrCore = '';
+		// Searching for entries in a specific module
+		if($mybb->input['filter_username'])
+		{
+			$where .= " AND username='".$db->escape_string($mybb->input['filter_username'])."'";
+		}
+		
+		// Searching for entries in a specific module
+		if($mybb->input['filter_email'])
+		{
+			$where .= " AND email='".$db->escape_string($mybb->input['filter_email'])."'";
+		}
 
-    /**
-     * Solr field used to store unique identifiers
-     *
-     * @var string
-     */
-    protected $uniqueKey = 'id';
+		$query = $db->delete_query("spamlog", $where);
+		$num_deleted = $db->affected_rows();
 
-    /**
-     * Solr connector class
-     *
-     * @var string
-     */
-    protected $connectorClass = Connector::class;
+		$plugins->run_hooks("admin_tools_spamlog_prune_commit");
 
-    /**
-     * Solr backend class
-     *
-     * @var string
-     */
-    protected $backendClass = Backend::class;
+		// Log admin action
+		log_admin_action($mybb->input['older_than'], $mybb->input['filter_username'], $mybb->input['filter_email'], $num_deleted);
 
-    /**
-     * Constructor
-     */
-    public function __construct()
-    {
-    }
+		$success = $lang->success_pruned_spam_logs;
+		if($is_today == true && $num_deleted > 0)
+		{
+			$success .= ' '.$lang->note_logs_locked;
+		}
+		elseif($is_today == true && $num_deleted == 0)
+		{
+			flash_message($lang->note_logs_locked, 'error');
+			admin_redirect('index.php?module=tools-spamlog');
+		}
+		flash_message($success, 'success');
+		admin_redirect('index.php?module=tools-spamlog');
+	}
+	$page->add_breadcrumb_item($lang->prune_spam_logs, 'index.php?module=tools-spamlog&amp;action=prune');
+	$page->output_header($lang->prune_spam_logs);
+	$page->output_nav_tabs($sub_tabs, 'prune_spam_logs');
 
-    /**
-     * Create service
-     *
-     * @param ContainerInterface $sm      Service manager
-     * @param string             $name    Requested service name (unused)
-     * @param array              $options Extra options (unused)
-     *
-     * @return Backend
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function __invoke(ContainerInterface $sm, $name, array $options = null)
-    {
-        $this->serviceLocator = $sm;
-        $this->config = $this->serviceLocator
-            ->get(\VuFind\Config\PluginManager::class);
-        if ($this->serviceLocator->has(\VuFind\Log\Logger::class)) {
-            $this->logger = $this->serviceLocator->get(\VuFind\Log\Logger::class);
-        }
-        $connector = $this->createConnector();
-        $backend   = $this->createBackend($connector);
-        $this->createListeners($backend);
-        return $backend;
-    }
+	// Fetch filter options
+	$sortbysel[$mybb->input['sortby']] = 'selected="selected"';
+	$ordersel[$mybb->input['order']] = 'selected="selected"';
 
-    /**
-     * Create the SOLR backend.
-     *
-     * @param Connector $connector Connector
-     *
-     * @return Backend
-     */
-    protected function createBackend(Connector $connector)
-    {
-        $config = $this->config->get($this->mainConfig);
-        $backend = new $this->backendClass($connector);
-        $backend->setPageSize($config->Index->record_batch_size);
-        $backend->setQueryBuilder($this->createQueryBuilder());
-        $backend->setSimilarBuilder($this->createSimilarBuilder());
-        if ($this->logger) {
-            $backend->setLogger($this->logger);
-        }
-        return $backend;
-    }
+	$form = new Form("index.php?module=tools-spamlog&amp;action=prune", "post");
+	$form_container = new FormContainer($lang->prune_spam_logs);
+	$form_container->output_row($lang->spam_username, "", $form->generate_text_box('filter_username', $mybb->input['filter_username'], array('id' => 'filter_username')), 'filter_username');
+	$form_container->output_row($lang->spam_email, "", $form->generate_text_box('filter_email', $mybb->input['filter_email'], array('id' => 'filter_email')), 'filter_email');
+	if(!$mybb->input['older_than'])
+	{
+		$mybb->input['older_than'] = '30';
+	}
+	$form_container->output_row($lang->date_range, "", $lang->older_than.$form->generate_numeric_field('older_than', $mybb->input['older_than'], array('id' => 'older_than', 'style' => 'width: 30px'))." {$lang->days}", 'older_than');
+	$form_container->end();
+	$buttons[] = $form->generate_submit_button($lang->prune_spam_logs);
+	$form->output_submit_wrapper($buttons);
+	$form->end();
 
-    /**
-     * Create listeners.
-     *
-     * @param Backend $backend Backend
-     *
-     * @return void
-     */
-    protected function createListeners(Backend $backend)
-    {
-        $events = $this->serviceLocator->get('SharedEventManager');
+	$page->output_footer();
+}
 
-        // Load configurations:
-        $config = $this->config->get($this->mainConfig);
-        $search = $this->config->get($this->searchConfig);
-        $facet = $this->config->get($this->facetConfig);
+if(!$mybb->input['action'])
+{
+	$plugins->run_hooks("admin_tools_spamlog_start");
 
-        // Highlighting
-        $this->getInjectHighlightingListener($backend, $search)->attach($events);
+	$page->output_header($lang->spam_logs);
 
-        // Conditional Filters
-        if (isset($search->ConditionalHiddenFilters)
-            && $search->ConditionalHiddenFilters->count() > 0
-        ) {
-            $this->getInjectConditionalFilterListener($search)->attach($events);
-        }
+	$page->output_nav_tabs($sub_tabs, 'spam_logs');
+	
+	$perpage = $mybb->get_input('perpage', MyBB::INPUT_INT);
+	if(!$perpage)
+	{
+		$perpage = 20;
+	}
 
-        // Spellcheck
-        if ($config->Spelling->enabled ?? true) {
-            $dictionaries = ($config->Spelling->simple ?? false)
-                ? ['basicSpell'] : ['default', 'basicSpell'];
-            $spellingListener = new InjectSpellingListener($backend, $dictionaries);
-            $spellingListener->attach($events);
-        }
+	$where = '1=1';
 
-        // Apply field stripping if applicable:
-        if (isset($search->StripFields) && isset($search->IndexShards)) {
-            $strip = $search->StripFields->toArray();
-            foreach ($strip as $k => $v) {
-                $strip[$k] = array_map('trim', explode(',', $v));
-            }
-            $mindexListener = new MultiIndexListener(
-                $backend,
-                $search->IndexShards->toArray(),
-                $strip,
-                $this->loadSpecs()
-            );
-            $mindexListener->attach($events);
-        }
+	$additional_criteria = array();
 
-        // Apply deduplication if applicable:
-        if (isset($search->Records->deduplication)) {
-            $this->getDeduplicationListener(
-                $backend, $search->Records->deduplication
-            )->attach($events);
-        }
+	// Searching for entries witha  specific username
+	if($mybb->input['username'])
+	{
+		$where .= " AND username='".$db->escape_string($mybb->input['username'])."'";
+		$additional_criteria[] = "username=".urlencode($mybb->input['username']);
+	}
 
-        // Attach hierarchical facet listener:
-        $this->getHierarchicalFacetListener($backend)->attach($events);
+	// Searching for entries with a specific email
+	if($mybb->input['email'])
+	{
+		$where .= " AND email='".$db->escape_string($mybb->input['email'])."'";
+		$additional_criteria[] = "email=".urlencode($mybb->input['email']);
+	}
+	
+	// Searching for entries with a specific IP
+	if($mybb->input['ipaddress'] > 0)
+	{
+		$where .= " AND ipaddress='".$db->escape_binary(my_inet_pton($mybb->input['ipaddress']))."'";
+		$additional_criteria[] = "ipaddress=".urlencode($mybb->input['ipaddress']);
+	}
 
-        // Apply legacy filter conversion if necessary:
-        $facets = $this->config->get($this->facetConfig);
-        if (!empty($facets->LegacyFields)) {
-            $filterFieldConversionListener = new FilterFieldConversionListener(
-                $facets->LegacyFields->toArray()
-            );
-            $filterFieldConversionListener->attach($events);
-        }
+	if($additional_criteria)
+	{
+		$additional_criteria = "&amp;".implode("&amp;", $additional_criteria);
+	}
+	else
+	{
+		$additional_criteria = '';
+	}
 
-        // Attach hide facet value listener:
-        if ($hfvListener = $this->getHideFacetValueListener($backend, $facet)) {
-            $hfvListener->attach($events);
-        }
+	// Order?
+	switch($mybb->input['sortby'])
+	{
+		case "username":
+			$sortby = "username";
+			break;
+		case "email":
+			$sortby = "email";
+			break;
+		case "ipaddress":
+			$sortby = "ipaddress";
+			break;
+		default:
+			$sortby = "dateline";
+	}
+	$order = $mybb->input['order'];
+	if($order != "asc")
+	{
+		$order = "desc";
+	}
 
-        // Attach error listeners for Solr 3.x and Solr 4.x (for backward
-        // compatibility with VuFind 1.x instances).
-        $legacyErrorListener = new LegacyErrorListener($backend);
-        $legacyErrorListener->attach($events);
-        $errorListener = new ErrorListener($backend);
-        $errorListener->attach($events);
-    }
+	$query = $db->simple_select("spamlog", "COUNT(sid) AS count", $where);
+	$rescount = $db->fetch_field($query, "count");
 
-    /**
-     * Get the Solr core.
-     *
-     * @return string
-     */
-    protected function getSolrCore()
-    {
-        return $this->solrCore;
-    }
+	// Figure out if we need to display multiple pages.
+	if($mybb->input['page'] != "last")
+	{
+		$pagecnt = $mybb->get_input('page', MyBB::INPUT_INT);
+	}
 
-    /**
-     * Get the Solr URL.
-     *
-     * @param string $config name of configuration file (null for default)
-     *
-     * @return string|array
-     */
-    protected function getSolrUrl($config = null)
-    {
-        $url = $this->config->get($config ?? $this->mainConfig)->Index->url;
-        $core = $this->getSolrCore();
-        if (is_object($url)) {
-            return array_map(
-                function ($value) use ($core) {
-                    return "$value/$core";
-                },
-                $url->toArray()
-            );
-        }
-        return "$url/$core";
-    }
+	$logcount = (int)$rescount;
+	$pages = $logcount / $perpage;
+	$pages = ceil($pages);
 
-    /**
-     * Get all hidden filter settings.
-     *
-     * @return array
-     */
-    protected function getHiddenFilters()
-    {
-        $search = $this->config->get($this->searchConfig);
-        $hf = [];
+	if($mybb->input['page'] == "last")
+	{
+		$pagecnt = $pages;
+	}
 
-        // Hidden filters
-        if (isset($search->HiddenFilters)) {
-            foreach ($search->HiddenFilters as $field => $value) {
-                $hf[] = sprintf('%s:"%s"', $field, $value);
-            }
-        }
+	if($pagecnt > $pages)
+	{
+		$pagecnt = 1;
+	}
 
-        // Raw hidden filters
-        if (isset($search->RawHiddenFilters)) {
-            foreach ($search->RawHiddenFilters as $filter) {
-                $hf[] = $filter;
-            }
-        }
+	if($pagecnt)
+	{
+		$start = ($pagecnt-1) * $perpage;
+	}
+	else
+	{
+		$start = 0;
+		$pagecnt = 1;
+	}
 
-        return $hf;
-    }
+	$table = new Table;
+	$table->construct_header($lang->spam_username, array('width' => '20%'));
+	$table->construct_header($lang->spam_email, array("class" => "align_center", 'width' => '20%'));
+	$table->construct_header($lang->spam_ip, array("class" => "align_center", 'width' => '20%'));
+	$table->construct_header($lang->spam_date, array("class" => "align_center", 'width' => '20%'));
+	$table->construct_header($lang->spam_confidence, array("class" => "align_center", 'width' => '20%'));
 
-    /**
-     * Create the SOLR connector.
-     *
-     * @return Connector
-     */
-    protected function createConnector()
-    {
-        $config = $this->config->get($this->mainConfig);
-        $searchConfig = $this->config->get($this->searchConfig);
-        $defaultFields = $searchConfig->General->default_record_fields ?? '*';
+	$query = $db->simple_select("spamlog", "*", $where, array('order_by' => $sortby, 'order_dir' => $order, 'limit_start' => $start, 'limit' => $perpage));
+	while($row = $db->fetch_array($query))
+	{
+		$username   = htmlspecialchars_uni($row['username']);
+		$email      = htmlspecialchars_uni($row['email']);
+		$ip_address = my_inet_ntop($db->unescape_binary($row['ipaddress']));
 
-        $handlers = [
-            'select' => [
-                'fallback' => true,
-                'defaults' => ['fl' => $defaultFields],
-                'appends'  => ['fq' => []],
-            ],
-            'terms' => [
-                'functions' => ['terms'],
-            ],
-        ];
+		$dateline = '';
+		if($row['dateline'] > 0)
+		{
+			$dateline = my_date('relative', $row['dateline']);
+		}
 
-        foreach ($this->getHiddenFilters() as $filter) {
-            array_push($handlers['select']['appends']['fq'], $filter);
-        }
+		$confidence = '0%';
+		$data       = @my_unserialize($row['data']);
+		if(is_array($data) && !empty($data))
+		{
+			if(isset($data['confidence']))
+			{
+				$confidence = (double)$data['confidence'].'%';
+			}
+		}
 
-        $connector = new $this->connectorClass(
-            $this->getSolrUrl(), new HandlerMap($handlers), $this->uniqueKey
-        );
-        $connector->setTimeout(
-            isset($config->Index->timeout) ? $config->Index->timeout : 30
-        );
+		$table->construct_cell($username);
+		$table->construct_cell($email);
+		$table->construct_cell($ip_address);
+		$table->construct_cell($dateline);
+		$table->construct_cell($confidence);
+		$table->construct_row();
+	}
 
-        if ($this->logger) {
-            $connector->setLogger($this->logger);
-        }
-        if ($this->serviceLocator->has(\VuFindHttp\HttpService::class)) {
-            $connector->setProxy(
-                $this->serviceLocator->get(\VuFindHttp\HttpService::class)
-            );
-        }
-        return $connector;
-    }
+	if($table->num_rows() == 0)
+	{
+		$table->construct_cell($lang->no_spam_logs, array("colspan" => "5"));
+		$table->construct_row();
+	}
 
-    /**
-     * Create the query builder.
-     *
-     * @return QueryBuilder
-     */
-    protected function createQueryBuilder()
-    {
-        $specs   = $this->loadSpecs();
-        $config = $this->config->get($this->mainConfig);
-        $defaultDismax = isset($config->Index->default_dismax_handler)
-            ? $config->Index->default_dismax_handler : 'dismax';
-        $builder = new QueryBuilder($specs, $defaultDismax);
+	$table->output($lang->spam_logs);
 
-        // Configure builder:
-        $search = $this->config->get($this->searchConfig);
-        $caseSensitiveBooleans
-            = isset($search->General->case_sensitive_bools)
-            ? $search->General->case_sensitive_bools : true;
-        $caseSensitiveRanges
-            = isset($search->General->case_sensitive_ranges)
-            ? $search->General->case_sensitive_ranges : true;
-        $helper = new LuceneSyntaxHelper(
-            $caseSensitiveBooleans, $caseSensitiveRanges
-        );
-        $builder->setLuceneHelper($helper);
+	// Do we need to construct the pagination?
+	if($rescount > $perpage)
+	{
+		echo draw_admin_pagination($pagecnt, $perpage, $rescount, "index.php?module=tools-spamlog&amp;perpage={$perpage}{$additional_criteria}&amp;sortby={$mybb->input['sortby']}&amp;order={$order}")."<br />";
+	}
 
-        return $builder;
-    }
+	// Fetch filter options
+	$sortbysel[$mybb->input['sortby']] = "selected=\"selected\"";
+	$ordersel[$mybb->input['order']] = "selected=\"selected\"";
 
-    /**
-     * Create the similar records query builder.
-     *
-     * @return SimilarBuilder
-     */
-    protected function createSimilarBuilder()
-    {
-        return new SimilarBuilder(
-            $this->config->get($this->searchConfig), $this->uniqueKey
-        );
-    }
+	$sort_by = array(
+		'dateline' => $lang->spam_date,
+		'username' => $lang->spam_username,
+		'email' => $lang->spam_email,
+		'ipaddress' => $lang->spam_ip,
+	);
 
-    /**
-     * Load the search specs.
-     *
-     * @return array
-     */
-    protected function loadSpecs()
-    {
-        return $this->serviceLocator->get(\VuFind\Config\SearchSpecsReader::class)
-            ->get($this->searchYaml);
-    }
+	$order_array = array(
+		'asc' => $lang->asc,
+		'desc' => $lang->desc
+	);
 
-    /**
-     * Get a deduplication listener for the backend
-     *
-     * @param BackendInterface $backend Search backend
-     * @param bool             $enabled Whether deduplication is enabled
-     *
-     * @return DeduplicationListener
-     */
-    protected function getDeduplicationListener(BackendInterface $backend, $enabled)
-    {
-        return new DeduplicationListener(
-            $backend,
-            $this->serviceLocator,
-            $this->searchConfig,
-            'datasources',
-            $enabled
-        );
-    }
+	$form = new Form("index.php?module=tools-spamlog", "post");
+	$form_container = new FormContainer($lang->filter_spam_logs);
+	$form_container->output_row($lang->spam_username, "", $form->generate_text_box('username', $mybb->input['username'], array('id' => 'username')), 'suername');
+	$form_container->output_row($lang->spam_email, "", $form->generate_text_box('email', $mybb->input['email'], array('id' => 'email')), 'email');
+	$form_container->output_row($lang->spam_ip, "", $form->generate_text_box('ipaddress', $mybb->input['ipaddress'], array('id' => 'ipaddress')), 'ipaddress');
+	$form_container->output_row($lang->sort_by, "", $form->generate_select_box('sortby', $sort_by, $mybb->input['sortby'], array('id' => 'sortby'))." {$lang->in} ".$form->generate_select_box('order', $order_array, $order, array('id' => 'order'))." {$lang->order}", 'order');
+	$form_container->output_row($lang->results_per_page, "", $form->generate_numeric_field('perpage', $perpage, array('id' => 'perpage')), 'perpage');
 
-    /**
-     * Get a hide facet value listener for the backend
-     *
-     * @param BackendInterface $backend Search backend
-     * @param Config           $facet   Configuration of facets
-     *
-     * @return mixed null|HideFacetValueListener
-     */
-    protected function getHideFacetValueListener(
-        BackendInterface $backend,
-        Config $facet
-    ) {
-        if (!isset($facet->HideFacetValue)
-            || ($facet->HideFacetValue->count()) == 0
-        ) {
-            return null;
-        }
-        return new HideFacetValueListener(
-            $backend,
-            $facet->HideFacetValue->toArray()
-        );
-    }
+	$form_container->end();
+	$buttons[] = $form->generate_submit_button($lang->filter_spam_logs);
+	$form->output_submit_wrapper($buttons);
+	$form->end();
 
-    /**
-     * Get a hierarchical facet listener for the backend
-     *
-     * @param BackendInterface $backend Search backend
-     *
-     * @return HierarchicalFacetListener
-     */
-    protected function getHierarchicalFacetListener(BackendInterface $backend)
-    {
-        return new HierarchicalFacetListener(
-            $backend,
-            $this->serviceLocator,
-            $this->facetConfig
-        );
-    }
-
-    /**
-     * Get a highlighting listener for the backend
-     *
-     * @param BackendInterface $backend Search backend
-     * @param Config           $search  Search configuration
-     *
-     * @return InjectHighlightingListener
-     */
-    protected function getInjectHighlightingListener(BackendInterface $backend,
-        Config $search
-    ) {
-        $fl = isset($search->General->highlighting_fields)
-            ? $search->General->highlighting_fields : '*';
-        return new InjectHighlightingListener($backend, $fl);
-    }
-
-    /**
-     * Get a Conditional Filter Listener
-     *
-     * @param Config $search Search configuration
-     *
-     * @return InjectConditionalFilterListener
-     */
-    protected function getInjectConditionalFilterListener(Config $search)
-    {
-        $listener = new InjectConditionalFilterListener(
-            $search->ConditionalHiddenFilters->toArray()
-        );
-        $listener->setAuthorizationService(
-            $this->serviceLocator
-                ->get(\LmcRbacMvc\Service\AuthorizationService::class)
-        );
-        return $listener;
-    }
+	$page->output_footer();
 }

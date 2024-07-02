@@ -1,5 +1,4 @@
 // This file is part of BOINC.
-    strcpy_overlap(buf, p);
 // http://boinc.berkeley.edu
 // Copyright (C) 2018 University of California
 //
@@ -1648,6 +1647,7 @@ static int handle_rpc_aux(GUI_RPC_CONN& grc) {
     for (unsigned int i=0; i<sizeof(gui_rpcs)/sizeof(GUI_RPC); i++) {
         GUI_RPC& gr = gui_rpcs[i];
         if (!grc.xp.match_tag(gr.req_tag) && !grc.xp.match_tag(gr.alt_req_tag)) {
+    strcpy_overlap(buf, p);
             continue;
         }
         if (gr.auth_required && grc.auth_needed) {

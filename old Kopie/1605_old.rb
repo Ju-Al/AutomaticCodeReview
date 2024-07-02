@@ -1,24 +1,4 @@
 [ 'host_prebuilt_steps' ].each do |lib|
-      return unless @options[:configure]
-      run_in_parallel = run_in_parallel? opts, @options, 'configure'
-      block_on @hosts, { :run_in_parallel => run_in_parallel} do |host|
-        if host[:timesync]
-          timesync(host, @options)
-      end
-      if @options[:root_keys]
-        sync_root_keys(@hosts, @options)
-      end
-      if @options[:add_el_extras]
-        add_el_extras(@hosts, @options)
-      end
-      if @options[:disable_iptables]
-        disable_iptables @hosts, @options
-      end
-      if @options[:set_env]
-        set_env(@hosts, @options)
-      end
-      if @options[:disable_updates]
-        disable_updates(@hosts, @options)
   require "beaker/#{lib}"
 end
 
@@ -102,7 +82,25 @@ module Beaker
     #Default configuration steps to be run for a given hypervisor.  Any additional configuration to be done
     #to the provided SUT for test execution to be successful.
     def configure(opts = {})
-      begin
+      return unless @options[:configure]
+      run_in_parallel = run_in_parallel? opts, @options, 'configure'
+      block_on @hosts, { :run_in_parallel => run_in_parallel} do |host|
+      end
+      if @options[:root_keys]
+        sync_root_keys(@hosts, @options)
+      end
+      if @options[:add_el_extras]
+        add_el_extras(@hosts, @options)
+      end
+      if @options[:disable_iptables]
+        disable_iptables @hosts, @options
+      end
+      if @options[:set_env]
+        set_env(@hosts, @options)
+      end
+      if @options[:disable_updates]
+        disable_updates(@hosts, @options)
+        if host[:timesync]
         return unless @options[:configure]
         run_in_parallel = run_in_parallel? opts, @options, 'configure'
         block_on @hosts, { :run_in_parallel => run_in_parallel} do |host|

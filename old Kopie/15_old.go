@@ -374,7 +374,6 @@ func (wp *wsPeer) writeLoop() {
 				return
 			}
 			continue
-		case <-wp.closing:
 			return
 		default:
 		}

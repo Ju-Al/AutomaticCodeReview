@@ -1012,8 +1012,6 @@ def optimize_edit_paths(
 
     pending_u = list(G1.nodes)
     pending_v = list(G2.nodes)
-
-    initial_cost = 0
     if roots:
         root_u, root_v = roots
 

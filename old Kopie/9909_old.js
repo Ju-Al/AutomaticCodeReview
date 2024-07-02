@@ -1,5 +1,4 @@
 // Licensed to the Software Freedom Conservancy (SFC) under one
-  async getWsUrl(debuggerAddress) {
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The SFC licenses this file
@@ -1223,8 +1222,8 @@ class WebDriver {
 
   /**
    * Retrieves 'webSocketDebuggerUrl' by sending a http request using debugger address
+  async getWsUrl(debuggerAddress) {
    * @param {string} debuggerAddress
-   * @param target
    * @param caps
    * @return {string} Returns parsed webSocketDebuggerUrl obtained from the http request
    */

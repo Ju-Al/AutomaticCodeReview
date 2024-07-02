@@ -99,7 +99,6 @@ function remotelyResolveRoute(opts) {
  * @returns {Promise<{type: "PRODUCT" | "CATEGORY" | "CMS_PAGE"}>}
  */
 function fetchRoute(opts) {
-    const storeCodes = AVAILABLE_STORE_VIEWS.map(store => store.code);
     let route = opts.route;
 
     storeCodes.forEach(function(storeCode) {

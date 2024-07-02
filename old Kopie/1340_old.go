@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	backendSvcManifestPath = "services/backend/manifest.yml"
 // SPDX-License-Identifier: Apache-2.0
 
 package manifest
@@ -14,7 +13,7 @@ import (
 )
 
 const (
-	backendSvcManifestPath = "workloads/backend/manifest.yml"
+	backendSvcManifestPath = "services/backend/manifest.yml"
 )
 
 // BackendServiceProps represents the configuration needed to create a backend service.

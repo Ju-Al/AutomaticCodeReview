@@ -1,6 +1,4 @@
 // Copyright 2018 The Go Cloud Development Kit Authors
-	lastBatchRecv    time.Time     // time when the last ReceiveBatch finished
-	lastBatchNumMsgs int           // actual number of msgs received in the last ReceiveBatch
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -317,7 +315,8 @@ type Subscription struct {
 	err              error         // permanent error
 	waitc            chan struct{} // for goroutines waiting on ReceiveBatch
 	runningBatchSize float64       // running number of messages to request via ReceiveBatch
-	throughputStart  time.Time     // start time for throughput measurement, or zeroTime if queue is empty
+	lastBatchRecv    time.Time     // time when the last ReceiveBatch finished
+	lastBatchNumMsgs int           // actual number of msgs received in the last ReceiveBatch
 	throughputEnd    time.Time     // end time for throughput measurement, or zeroTime if queue is not empty
 	throughputCount  int           // number of msgs given out via Receive since throughputStart
 

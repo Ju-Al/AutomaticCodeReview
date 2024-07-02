@@ -1,92 +1,162 @@
-const constants = require('../constants');
-const Events = require('./eventsWrapper');
-
-// Override process.chdir so that we have a partial-implementation PWD for Windows
-const realChdir = process.chdir;
-process.chdir = (...args) => {
-  if (!process.env.PWD) {
-    process.env.PWD = process.cwd();
-  }
-  realChdir(...args);
-};
-
-class ProcessWrapper {
-
-  /**
-   * Class from which process extend. Should not be instantiated alone.
-   * Manages the log interception so that all console.* get sent back to the parent process
-   * Also creates an Events instance. To use it, just do `this.events.[on|request]`
-   *
-   * @param {Options}     _options    Nothing for now
-   */
-  constructor(_options) {
-    this.interceptLogs();
-    this.events = new Events();
-
-    this.pingParent();
-  }
-
-  // Ping parent to see if it is still alive. Otherwise, let's die
-  pingParent() {
-    const self = this;
-    self.retries = 0;
-    function error() {
-      if (self.retries > 2) {
-          self.kill();
-          process.exit();
-      }
-      self.retries++;
+const actions = {
+  importNotebook(newState) {
+    return {
+      type: 'IMPORT_NOTEBOOK',
+      newState,
     }
-    setInterval(() => {
-      try {
-        self.send({action: 'ping'});
-      } catch (e) {
-        error();
-      }
-    }, 2000);
-  }
-
-  interceptLogs() {
-    const context = {};
-    context.console = console;
-
-    context.console.log = this._log.bind(this, 'log');
-    context.console.warn = this._log.bind(this, 'warn');
-    context.console.error = this._log.bind(this, 'error');
-    context.console.info = this._log.bind(this, 'info');
-    context.console.debug = this._log.bind(this, 'debug');
-    context.console.trace = this._log.bind(this, 'trace');
-    context.console.dir = this._log.bind(this, 'dir');
-  }
-
-  _log(type, ...messages) {
-    const isHardSource = messages.some(message => {
-      return (typeof message === 'string' && message.indexOf('hard-source') > -1);
-    });
-    if (isHardSource) {
-      return;
+  },
+  exportNotebook(exportAsReport = false) {
+    return {
+      type: 'EXPORT_NOTEBOOK',
+      exportAsReport,
     }
-    if (!process.connected) {
-      return;
+  },
+  saveNotebook(title = undefined, autosave = false) {
+    return {
+      type: 'SAVE_NOTEBOOK',
+      title,
+      autosave,
     }
-    process.send({result: constants.process.log, message: messages, type});
-  }
-
-  send() {
-    if (!process.connected) {
-      return;
+  },
+  loadNotebook(title) {
+    return {
+      type: 'LOAD_NOTEBOOK',
+      title,
     }
-    process.send(...arguments);
-  }
-
-  kill() {
-    // Should be implemented by derived class
-    console.log('Process killed');
-  }
+  },
+  deleteNotebook(title) {
+    return {
+      type: 'DELETE_NOTEBOOK',
+      title,
+    }
+  },
+  newNotebook() {
+    return {
+      type: 'NEW_NOTEBOOK',
+    }
+  },
+  clearVariables() {
+    return {
+      type: 'CLEAR_VARIABLES',
+    }
+  },
+  changePageTitle(title) {
+    return {
+      type: 'CHANGE_PAGE_TITLE',
+      title,
+    }
+  },
+  changeMode(mode) {
+    return {
+      type: 'CHANGE_MODE',
+      mode,
+    }
+  },
+  setViewMode(viewMode) {
+    return {
+      type: 'SET_VIEW_MODE',
+      viewMode,
+    }
+  },
+  updateInputContent(text) {
+    return {
+      type: 'UPDATE_INPUT_CONTENT',
+      content: text,
+    }
+  },
+  changeCellType(cellType) {
+    return {
+      type: 'CHANGE_CELL_TYPE',
+      cellType,
+      language,
+    }
+  },
+  evaluateCell(cellId) {
+    return {
+      type: 'EVALUATE_CELL',
+      cellId,
+    }
+  },
+  setCellRowCollapsedState(viewMode, rowType, rowOverflow, cellId) {
+    return {
+      type: 'SET_CELL_ROW_COLLAPSE_STATE',
+      viewMode,
+      rowType,
+      rowOverflow,
+      cellId,
+    }
+  },
+  markCellNotRendered() {
+    return {
+      type: 'MARK_CELL_NOT_RENDERED',
+    }
+  },
+  cellUp() {
+    return {
+      type: 'CELL_UP',
+    }
+  },
+  cellDown() {
+    return {
+      type: 'CELL_DOWN',
+    }
+  },
+  insertCell(cellType, direction) {
+    return {
+      type: 'INSERT_CELL',
+      cellType,
+      direction,
+    }
+  },
+  addCell(cellType) {
+    return {
+      type: 'ADD_CELL',
+      cellType,
+    }
+  },
+  selectCell(cellID, scrollToCell = false) {
+    return {
+      type: 'SELECT_CELL',
+      id: cellID,
+      scrollToCell,
+    }
+  },
+  deleteCell() {
+    return {
+      type: 'DELETE_CELL',
+    }
+  },
+  changeElementType(elementType) {
+    return {
+      type: 'CHANGE_ELEMENT_TYPE',
+      elementType,
+    }
+  },
+  changeDOMElementID(elemID) {
+    return {
+      type: 'CHANGE_DOM_ELEMENT_ID',
+      elemID,
+    }
+  },
+  changeSidePaneMode(mode) {
+    return {
+      type: 'CHANGE_SIDE_PANE_MODE',
+      mode,
+    }
+  },
+  addLanguage(languageId, evaluate, displayName, codeMirrorName, keybinding) {
+    return {
+      type: 'ADD_LANGUAGE',
+      languageId,
+      languageDefinition: {
+        languageId,
+        evaluate,
+        displayName,
+        codeMirrorName,
+        keybinding,
+      },
+    }
+  },
 }
 
-process.on('exit', () => {
-  process.exit(0);
-});
-
-module.exports = ProcessWrapper;
+export default actions

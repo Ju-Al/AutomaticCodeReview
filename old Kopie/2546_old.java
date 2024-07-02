@@ -304,7 +304,6 @@ public class HostReactor {
 
     public class UpdateTask implements Runnable {
         long lastRefTime = Long.MAX_VALUE;
-        long delayTime = -1;
         private String clusters;
         private String serviceName;
 

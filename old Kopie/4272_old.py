@@ -638,6 +638,7 @@ class FlagList(List):
                 out.append((json.dumps(combination), ''))
         return out
 
+    def __repr__(self):
         return utils.get_repr(self, none_ok=self.none_ok, valtype=self.valtype,
                               length=self.length)
 
@@ -1446,7 +1447,6 @@ class ShellCommand(List):
                                             "{file}-placeholder.")
         return value
 
-    def __repr__(self):
         return utils.get_repr(self, none_ok=self.none_ok,
                               placeholder=self.placeholder,
                               valtype=self.valtype)

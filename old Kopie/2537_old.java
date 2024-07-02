@@ -1,6 +1,4 @@
 package de.test.antennapod.util.service.download;
-                            value = disposition.get("filename");
-                            value = value.substring(1, value.length() - 1);
 
 import android.support.v4.util.ArrayMap;
 
@@ -1156,6 +1154,8 @@ public abstract class NanoHTTPD {
                                     }
                                 }
                             }
+                            value = disposition.get("filename");
+                            value = value.substring(1, value.length() - 1);
                         } else {
                             if (boundarycount > bpositions.length) {
                                 throw new ResponseException(Response.Status.INTERNAL_ERROR, "Error processing request");

@@ -1,7 +1,4 @@
 /*
-	if err = def.FromCUEString(cueString + "abc"); err == nil {
-	if err = def.FromCUEString(parts[0]); err == nil {
-	if err = def.FromCUEString("import \"strconv\"\n" + cueString); err == nil {
 Copyright 2021 The KubeVela Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,7 +59,9 @@ func TestDefinitionBasicFunctions(t *testing.T) {
 	if err = c.Create(context.Background(), trait); err != nil {
 		t.Fatalf("unexpected error when creating new definition with fake client: %v", err)
 	}
-	if err = def.FromCUEString("abc:]{xa}", nil); err == nil {
+	if err = def.FromCUEString(parts[0]); err == nil {
+	if err = def.FromCUEString("import \"strconv\"\n" + cueString); err == nil {
+	if err = def.FromCUEString(cueString + "abc"); err == nil {
 		t.Fatalf("should encounter invalid cue string but not found error")
 	}
 	if err = def.FromCUEString(cueString+"abc: {xa}", nil); err == nil {

@@ -1,5 +1,4 @@
 import { LightningElement, track } from 'lwc';
-
 export default class SyncNodeRemoval extends LightningElement {
     @track errorMessage;
     handleClick() {

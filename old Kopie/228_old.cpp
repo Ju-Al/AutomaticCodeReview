@@ -207,7 +207,6 @@ void Component::disconnect()
 	reset();
 }
 
-void Component::addToSystem(SimTK::MultibodySystem& system) const
 {
     baseAddToSystem(system);
     doAddToSystem(system);

@@ -1,137 +1,173 @@
 /**
-      *sql_ << "SAVEPOINT savepoint_";
-
-      auto function_executed = std::forward<Function>(function)();
-
-      if (function_executed) {
-        *sql_ << "RELEASE SAVEPOINT savepoint_";
-      } else {
-        *sql_ << "ROLLBACK TO SAVEPOINT savepoint_";
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "ametsuchi/impl/mutable_storage_impl.hpp"
+#include "ametsuchi/impl/temporary_wsv_impl.hpp"
 
-#include <boost/variant/apply_visitor.hpp>
-#include "ametsuchi/impl/peer_query_wsv.hpp"
-#include "ametsuchi/impl/postgres_block_index.hpp"
+#include <boost/format.hpp>
 #include "ametsuchi/impl/postgres_command_executor.hpp"
-#include "ametsuchi/impl/postgres_wsv_command.hpp"
-#include "ametsuchi/impl/postgres_wsv_query.hpp"
+#include "cryptography/public_key.hpp"
 #include "interfaces/commands/command.hpp"
-#include "interfaces/common_objects/common_objects_factory.hpp"
+#include "interfaces/permission_to_string.hpp"
+#include "interfaces/transaction.hpp"
 
 namespace iroha {
   namespace ametsuchi {
-    MutableStorageImpl::MutableStorageImpl(
-        shared_model::interface::types::HashType top_hash,
-        std::shared_ptr<PostgresCommandExecutor> cmd_executor,
+    TemporaryWsvImpl::TemporaryWsvImpl(
         std::unique_ptr<soci::session> sql,
-        std::shared_ptr<shared_model::interface::CommonObjectsFactory> factory)
-        : top_hash_(top_hash),
-          sql_(std::move(sql)),
-          peer_query_(std::make_unique<PeerQueryWsv>(
-              std::make_shared<PostgresWsvQuery>(*sql_, std::move(factory)))),
-          block_index_(std::make_unique<PostgresBlockIndex>(*sql_)),
-          command_executor_(std::move(cmd_executor)),
-          committed(false),
-          log_(logger::log("MutableStorage")) {
-      try {
+        std::shared_ptr<shared_model::interface::CommonObjectsFactory> factory,
+        std::shared_ptr<shared_model::interface::PermissionToString>
+            perm_converter)
+        : sql_(std::move(sql)),
+          command_executor_(std::make_unique<PostgresCommandExecutor>(
+              *sql_, std::move(perm_converter))),
+          log_(logger::log("TemporaryWSV")) {
         *sql_ << "BEGIN";
       } catch (std::exception &e) {
-        log_->error("Mutable storage initialization has been failed");
+        log_->error("Temporary wsv was not initialized. Reason: {}", e.what());
       }
     }
 
-    bool MutableStorageImpl::apply(const shared_model::interface::Block &block,
-                                   MutableStoragePredicate predicate) {
-      auto execute_transaction = [this](auto &transaction) {
-        command_executor_->setCreatorAccountId(transaction.creatorAccountId());
-        command_executor_->doValidation(false);
+    expected::Result<void, validation::CommandError>
+    TemporaryWsvImpl::validateSignatures(
+        const shared_model::interface::Transaction &transaction) {
+      auto keys_range = transaction.signatures()
+          | boost::adaptors::transformed(
+                            [](const auto &s) { return s.publicKey().hex(); });
+      auto keys = std::accumulate(
+          std::next(std::begin(keys_range)),
+          std::end(keys_range),
+          keys_range.front(),
+          [](auto acc, const auto &val) { return acc + "'), ('" + val; });
+      // not using bool since it is not supported by SOCI
+      boost::optional<uint8_t> signatories_valid;
 
-        auto execute_command = [this](const auto &command) {
-          auto command_applied =
-              boost::apply_visitor(*command_executor_, command.get());
+      boost::format query(R"(SELECT sum(count) = :signatures_count
+                          AND sum(quorum) <= :signatures_count
+                  FROM
+                      (SELECT count(public_key)
+                      FROM ( VALUES ('%s') ) AS CTE1(public_key)
+                      WHERE public_key IN
+                          (SELECT public_key
+                          FROM account_has_signatory
+                          WHERE account_id = :account_id ) ) AS CTE2(count),
+                          (SELECT quorum
+                          FROM account
+                          WHERE account_id = :account_id) AS CTE3(quorum))");
 
-          return command_applied.match(
-              [](expected::Value<void> &) { return true; },
-              [&](expected::Error<CommandError> &e) {
-                log_->error(e.error.toString());
-                return false;
-              });
-        };
+      try {
+        *sql_ << (query % keys).str(), soci::into(signatories_valid),
+            soci::use(boost::size(keys_range), "signatures_count"),
+            soci::use(transaction.creatorAccountId(), "account_id");
+      } catch (const std::exception &e) {
+        auto error_str = "Transaction " + transaction.toString()
+            + " failed signatures validation with db error: " + e.what();
+        // TODO [IR-1816] Akvinikym 29.10.18: substitute error code magic number
+        // with named constant
+        return expected::makeError(validation::CommandError{
+            "signatures validation", 1, error_str, false});
+      }
 
-        return std::all_of(transaction.commands().begin(),
-                           transaction.commands().end(),
-                           execute_command);
+      if (signatories_valid and *signatories_valid) {
+        return {};
+      } else {
+        auto error_str = "Transaction " + transaction.toString()
+            + " failed signatures validation";
+        // TODO [IR-1816] Akvinikym 29.10.18: substitute error code magic number
+        // with named constant
+        return expected::makeError(validation::CommandError{
+            "signatures validation", 2, error_str, false});
+      }
+    }
+
+    expected::Result<void, validation::CommandError> TemporaryWsvImpl::apply(
+        const shared_model::interface::Transaction &transaction) {
+      const auto &tx_creator = transaction.creatorAccountId();
+      command_executor_->setCreatorAccountId(tx_creator);
+      command_executor_->doValidation(true);
+      auto execute_command =
+          [this](auto &command) -> expected::Result<void, CommandError> {
+        // Validate and execute command
+        return boost::apply_visitor(*command_executor_, command.get());
       };
 
-      log_->info("Applying block: height {}, hash {}",
-                 block.height(),
-                 block.hash().hex());
+      auto savepoint_wrapper = createSavepoint("savepoint_temp_wsv");
 
-      auto block_applied = predicate(block, *peer_query_, top_hash_)
-          and std::all_of(block.transactions().begin(),
-                          block.transactions().end(),
-                          execute_transaction);
-      if (block_applied) {
-        block_store_.insert(std::make_pair(block.height(), clone(block)));
-        block_index_->index(block);
-
-        top_hash_ = block.hash();
-      }
-
-      return block_applied;
+      return validateSignatures(transaction) |
+                 [savepoint = std::move(savepoint_wrapper),
+                  &execute_command,
+                  &transaction]()
+                 -> expected::Result<void, validation::CommandError> {
+        // check transaction's commands validity
+        const auto &commands = transaction.commands();
+        validation::CommandError cmd_error;
+        for (size_t i = 0; i < commands.size(); ++i) {
+          // in case of failed command, rollback and return
+          auto cmd_is_valid =
+              execute_command(commands[i])
+                  .match([](expected::Value<void> &) { return true; },
+                         [i, &cmd_error](expected::Error<CommandError> &error) {
+                           cmd_error = {error.error.command_name,
+                                        error.error.error_code,
+                                        error.error.error_extra,
+                                        true,
+                                        i};
+                           return false;
+                         });
+          if (not cmd_is_valid) {
+            return expected::makeError(cmd_error);
+          }
+        }
+        // success
+        savepoint->release();
+        return {};
+      };
     }
 
-    template <typename Function>
-    bool MutableStorageImpl::withSavepoint(Function &&function) {
+    std::unique_ptr<TemporaryWsv::SavepointWrapper>
+    TemporaryWsvImpl::createSavepoint(const std::string &name) {
+      return std::make_unique<TemporaryWsvImpl::SavepointWrapperImpl>(
+          SavepointWrapperImpl(*this, name));
+    }
+
+    TemporaryWsvImpl::~TemporaryWsvImpl() {
       try {
-        *sql_ << "SAVEPOINT savepoint_";
-
-        auto function_executed = std::forward<Function>(function)();
-
-        if (function_executed) {
-          *sql_ << "RELEASE SAVEPOINT savepoint_";
-        } else {
-          *sql_ << "ROLLBACK TO SAVEPOINT savepoint_";
-        }
-        return function_executed;
+        *sql_ << "ROLLBACK";
       } catch (std::exception &e) {
-        log_->warn("Apply has been failed. Reason: {}", e.what());
-        return false;
+        log_->error("Rollback did not happen: {}", e.what());
       }
     }
 
-    bool MutableStorageImpl::apply(
-        const shared_model::interface::Block &block) {
-      return withSavepoint([&] {
-        return this->apply(
-            block, [](const auto &, auto &, const auto &) { return true; });
-      });
+    TemporaryWsvImpl::SavepointWrapperImpl::SavepointWrapperImpl(
+        const iroha::ametsuchi::TemporaryWsvImpl &wsv,
+        std::string savepoint_name)
+        : sql_{*wsv.sql_},
+          savepoint_name_{std::move(savepoint_name)},
+          is_released_{false},
+          log_(logger::log("Temporary wsv's svaepoint wrapper")) {
+      try {
+        sql_ << "SAVEPOINT " + savepoint_name_ + ";";
+      } catch (std::exception &e) {
+        log_->error("Savepoint did not happen: {}", e.what());
+      }
     }
 
-    bool MutableStorageImpl::apply(
-        rxcpp::observable<std::shared_ptr<shared_model::interface::Block>>
-            blocks,
-        MutableStoragePredicate predicate) {
-      return withSavepoint([&] {
-        return blocks
-            .all([&](auto block) { return this->apply(*block, predicate); })
-            .as_blocking()
-            .first();
-      });
+    void TemporaryWsvImpl::SavepointWrapperImpl::release() {
+      is_released_ = true;
     }
 
-    MutableStorageImpl::~MutableStorageImpl() {
-      if (not committed) {
-        try {
-          *sql_ << "ROLLBACK";
-        } catch (std::exception &e) {
-          log_->warn("Apply has been failed. Reason: {}", e.what());
+    TemporaryWsvImpl::SavepointWrapperImpl::~SavepointWrapperImpl() {
+      try {
+        if (not is_released_) {
+          sql_ << "ROLLBACK TO SAVEPOINT " + savepoint_name_ + ";";
+        } else {
+          sql_ << "RELEASE SAVEPOINT " + savepoint_name_ + ";";
         }
+      } catch (std::exception &e) {
+        log_->error("SQL error. Reason: {}", e.what());
       }
     }
+
   }  // namespace ametsuchi
 }  // namespace iroha

@@ -1,6 +1,4 @@
 // 
-            Write(LogLevel.Fatal, message, null);
-        private static void Write(LogLevel level, string message, object[] args)
 // Copyright (c) 2004-2011 Jaroslaw Kowalski <jaak@jkowalski.net>
 // 
 // All rights reserved.
@@ -337,7 +335,8 @@ namespace NLog.Common
         /// <param name="message">Log message.</param>
         public static void Fatal([Localizable(false)] string message)
         {
-            Write(LogLevel.Fatal, message, true, null);
+        private static void Write(LogLevel level, string message, object[] args)
+            Write(LogLevel.Fatal, message, null);
         }
 
         private static void Write(LogLevel level, string message, bool respectExceptions, object[] args)

@@ -186,7 +186,6 @@ void kfac_block_bn<Device>::update_kronecker_inverse(
         << std::endl;
     std::cout << oss.str();
   }
-}
 
 template <El::Device Device>
 void kfac_block_bn<Device>::compute_preconditioned_gradients(

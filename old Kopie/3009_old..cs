@@ -890,7 +890,6 @@ namespace Mirror
         // players on a single client
         static void OnCommandMessage(NetworkConnection conn, CommandMessage msg, int channelId)
         {
-            if (!conn.isReady)
             {
                 // Clients may be set NotReady due to scene change or other game logic by user, e.g. respawning.
                 // Ignore commands that may have been in flight before client received NotReadyMessage message.

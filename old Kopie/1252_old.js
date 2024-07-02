@@ -1,5 +1,4 @@
 /* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
 
 ABOUT THIS NODE.JS EXAMPLE: This example works with Version 3 (V3) of the AWS JavaScript SDK,
 which is scheduled for release later in 2020. The prerelease version of the SDK is available

@@ -1,209 +1,201 @@
-package fr.free.nrw.commons.upload.depicts;
+package fr.free.nrw.commons.upload;
 
-        presenter.verifyDepictions();
-import android.app.Application;
-import android.os.Bundle;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import butterknife.BindView;
-import butterknife.ButterKnife;
-import butterknife.OnClick;
-import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
-import com.jakewharton.rxbinding2.view.RxView;
-import com.jakewharton.rxbinding2.widget.RxTextView;
-import fr.free.nrw.commons.R;
-import fr.free.nrw.commons.upload.UploadBaseFragment;
+import android.content.Context;
+import android.net.Uri;
+import fr.free.nrw.commons.auth.SessionManager;
+import fr.free.nrw.commons.contributions.Contribution;
+import fr.free.nrw.commons.filepicker.UploadableFile;
+import fr.free.nrw.commons.kvstore.JsonKvStore;
+import fr.free.nrw.commons.nearby.Place;
+import fr.free.nrw.commons.settings.Prefs;
+import fr.free.nrw.commons.upload.depicts.DepictsFragment;
 import fr.free.nrw.commons.upload.structure.depictions.DepictedItem;
-import fr.free.nrw.commons.utils.DialogUtil;
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.disposables.Disposable;
+import io.reactivex.Observable;
+import io.reactivex.Single;
+import io.reactivex.disposables.CompositeDisposable;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 import javax.inject.Inject;
-import kotlin.Unit;
+import javax.inject.Named;
+import javax.inject.Singleton;
+import org.jetbrains.annotations.NotNull;
 import timber.log.Timber;
 
+@Singleton
+public class UploadModel {
 
-/**
- * Fragment for showing depicted items list in Upload activity after media details
- */
-public class DepictsFragment extends UploadBaseFragment implements DepictsContract.View {
+    private final JsonKvStore store;
+    private final List<String> licenses;
+    private final Context context;
+    private String license;
+    private final Map<String, String> licensesByName;
+    private final List<UploadItem> items = new ArrayList<>();
+    private final CompositeDisposable compositeDisposable = new CompositeDisposable();
 
-    @BindView(R.id.depicts_title)
-    TextView depictsTitle;
-    @BindView(R.id.depicts_search_container)
-    TextInputLayout depictsSearchContainer;
-    @BindView(R.id.depicts_search)
-    TextInputEditText depictsSearch;
-    @BindView(R.id.depictsSearchInProgress)
-    ProgressBar depictsSearchInProgress;
-    @BindView(R.id.depicts_recycler_view)
-    RecyclerView depictsRecyclerView;
-    @BindView(R.id.tooltip)
-    ImageView tooltip;
+    private final SessionManager sessionManager;
+    private final FileProcessor fileProcessor;
+    private final ImageProcessingService imageProcessingService;
+    private final List<String> selectedCategories = new ArrayList<>();
+    private final List<DepictedItem> selectedDepictions = new ArrayList<>();
 
     @Inject
-    DepictsContract.UserActionListener presenter;
-    private UploadDepictsAdapter adapter;
-    private Disposable subscribe;
-    public static ArrayList<DepictedItem>selectedDepictedItem;
-
-    @Nullable
-    @Override
-    public android.view.View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                                          @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.upload_depicts_fragment, container, false);
-    }
-
-    @Override
-    public void onViewCreated(@NonNull android.view.View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        ButterKnife.bind(this, view);
-        selectedDepictedItem=new ArrayList<DepictedItem>();
-        init();
-        presenter.getDepictedItems().observe(getViewLifecycleOwner(), this::setDepictsList);
+    UploadModel(@Named("licenses") final List<String> licenses,
+            @Named("default_preferences") final JsonKvStore store,
+            @Named("licenses_by_name") final Map<String, String> licensesByName,
+            final Context context,
+            final SessionManager sessionManager,
+            final FileProcessor fileProcessor,
+            final ImageProcessingService imageProcessingService) {
+        this.licenses = licenses;
+        this.store = store;
+        this.license = store.getString(Prefs.DEFAULT_LICENSE, Prefs.Licenses.CC_BY_SA_3);
+        this.licensesByName = licensesByName;
+        this.context = context;
+        this.sessionManager = sessionManager;
+        this.fileProcessor = fileProcessor;
+        this.imageProcessingService = imageProcessingService;
     }
 
     /**
-     * Initialize presenter and views
+     * cleanup the resources, I am Singleton, preparing for fresh upload
      */
-    private void init() {
-        depictsTitle.setText(getString(R.string.step_count, callback.getIndexInViewFlipper(this) + 1,
-                callback.getTotalNumberOfSteps(), getString(R.string.depicts_step_title)));
-        tooltip.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                DialogUtil.showAlertDialog(getActivity(), getString(R.string.depicts_step_title), getString(R.string.depicts_tooltip), getString(android.R.string.ok), null, true);
+    public void cleanUp() {
+        compositeDisposable.clear();
+        fileProcessor.cleanup();
+        items.clear();
+        selectedCategories.clear();
+        selectedDepictions.clear();
+    }
+
+    public void setSelectedCategories(List<String> selectedCategories) {
+        this.selectedCategories.clear();
+        this.selectedCategories.addAll(selectedCategories);
+    }
+
+    /**
+     * pre process a one item at a time
+     */
+    public Observable<UploadItem> preProcessImage(final UploadableFile uploadableFile,
+        final Place place,
+        final SimilarImageInterface similarImageInterface) {
+        return Observable.just(
+            createAndAddUploadItem(uploadableFile, place, similarImageInterface));
+    }
+
+    public Single<Integer> getImageQuality(final UploadItem uploadItem) {
+        return imageProcessingService.validateImage(uploadItem);
+    }
+
+    private UploadItem createAndAddUploadItem(final UploadableFile uploadableFile,
+        final Place place,
+        final SimilarImageInterface similarImageInterface) {
+        final UploadableFile.DateTimeWithSource dateTimeWithSource = uploadableFile
+                .getFileCreatedDate(context);
+        long fileCreatedDate = -1;
+        String createdTimestampSource = "";
+        if (dateTimeWithSource != null) {
+            fileCreatedDate = dateTimeWithSource.getEpochDate();
+            createdTimestampSource = dateTimeWithSource.getSource();
+        }
+        Timber.d("File created date is %d", fileCreatedDate);
+        final ImageCoordinates imageCoordinates = fileProcessor
+                .processFileCoordinates(similarImageInterface, uploadableFile.getFilePath());
+        final UploadItem uploadItem = new UploadItem(
+            Uri.parse(uploadableFile.getFilePath()),
+                uploadableFile.getMimeType(context), imageCoordinates, place, fileCreatedDate,
+                createdTimestampSource);
+        if (place != null) {
+            uploadItem.getUploadMediaDetails().set(0, new UploadMediaDetail(place));
+        }
+        if (!items.contains(uploadItem)) {
+            items.add(uploadItem);
+        }
+        return uploadItem;
+    }
+
+    public int getCount() {
+        return items.size();
+    }
+
+    public List<UploadItem> getUploads() {
+        return items;
+    }
+
+    public List<String> getLicenses() {
+        return licenses;
+    }
+
+    public String getSelectedLicense() {
+        return license;
+    }
+
+    public void setSelectedLicense(final String licenseName) {
+        this.license = licensesByName.get(licenseName);
+        store.putString(Prefs.DEFAULT_LICENSE, license);
+    }
+
+    public Observable<Contribution> buildContributions() {
+        return Observable.fromIterable(items).map(item ->
+        {
+            final Contribution contribution = new Contribution(
+                item, sessionManager, newListOf(selectedDepictions), newListOf(selectedCategories));
+
+            contribution.setHasInvalidLocation(item.hasInvalidLocation());
+
+            Timber.d("Created timestamp while building contribution is %s, %s",
+                item.getCreatedTimestamp(),
+                new Date(item.getCreatedTimestamp()));
+
+            if (item.getCreatedTimestamp() != -1L) {
+                contribution.setDateCreated(new Date(item.getCreatedTimestamp()));
+                contribution.setDateCreatedSource(item.getCreatedTimestampSource());
+                //Set the date only if you have it, else the upload service is gonna try it the other way
             }
+            return contribution;
         });
-        presenter.onAttachView(this);
-        initRecyclerView();
-        addTextChangeListenerToSearchBox();
     }
 
-    /**
-     * Initialise recyclerView and set adapter
-     */
-    private void initRecyclerView() {
-        adapter = new UploadDepictsAdapter(item -> {
-            presenter.onDepictItemClicked(item);
-            return Unit.INSTANCE;
-        });
-        depictsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        depictsRecyclerView.setAdapter(adapter);
+    public void deletePicture(final String filePath) {
+        final Iterator<UploadItem> iterator = items.iterator();
+        while (iterator.hasNext()) {
+            if (iterator.next().getMediaUri().toString().contains(filePath)) {
+                iterator.remove();
+                break;
+            }
+        }
+        if (items.isEmpty()) {
+            cleanUp();
+        }
     }
 
-    @Override
-    public void goToNextScreen() {
-        callback.onNextButtonClicked(callback.getIndexInViewFlipper(this));
+    public List<UploadItem> getItems() {
+        return items;
     }
 
-    @Override
-    public void goToPreviousScreen() {
-        callback.onPreviousButtonClicked(callback.getIndexInViewFlipper(this));
-    }
-
-    @Override
-    public void noDepictionSelected() {
-        DialogUtil.showAlertDialog(getActivity(),
-            getString(R.string.no_depictions_selected),
-            getString(R.string.no_depictions_selected_warning_desc),
-            getString(R.string.continue_message),
-            getString(R.string.cancel),
-            this::goToNextScreen,
-            null
-        );
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        presenter.onDetachView();
-        subscribe.dispose();
-    }
-
-    @Override
-    public void showProgress(boolean shouldShow) {
-        depictsSearchInProgress.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
-    }
-
-    @Override
-    public void showError(Boolean value) {
-        if (value) {
-            depictsSearchContainer.setError(getString(R.string.no_depiction_found));
+    public void onDepictItemClicked(DepictedItem depictedItem) {
+        if (depictedItem.isSelected()) {
+            selectedDepictions.add(depictedItem);
         } else {
-            depictsSearchContainer.setErrorEnabled(false);
+            selectedDepictions.remove(depictedItem);
+            DepictsFragment.selectedDepictedItem.remove(depictedItem);
         }
     }
 
-    @Override
-    public void setDepictsList(List<DepictedItem> depictedItemList) {
-        adapter.setItems(depictedItemList);
+    @NotNull
+    private <T> List<T> newListOf(final List<T> items) {
+        return items != null ? new ArrayList<>(items) : new ArrayList<>();
     }
 
-    @OnClick(R.id.depicts_next)
-    public void onNextButtonClicked() {
-        presenter.verifyDepictions(getActivity().getApplication());
+    public void useSimilarPictureCoordinates(final ImageCoordinates imageCoordinates, final int uploadItemIndex) {
+        fileProcessor.prePopulateCategoriesAndDepictionsBy(imageCoordinates);
+        items.get(uploadItemIndex).setGpsCoords(imageCoordinates);
     }
 
-    @OnClick(R.id.depicts_previous)
-    public void onPreviousButtonClicked() {
-        callback.onPreviousButtonClicked(callback.getIndexInViewFlipper(this));
+    public List<DepictedItem> getSelectedDepictions() {
+        return selectedDepictions;
     }
 
-    /**
-     * Text change listener for the edit text view of depicts
-     */
-    private void addTextChangeListenerToSearchBox() {
-        subscribe = RxTextView.textChanges(depictsSearch)
-                .doOnEach(v -> depictsSearchContainer.setError(null))
-                .takeUntil(RxView.detaches(depictsSearch))
-                .debounce(500, TimeUnit.MILLISECONDS)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(filter -> searchForDepictions(filter.toString()), Timber::e);
-    }
-
-    /**
-     * Search for depictions for the following query
-     *
-     * @param query query string
-     */
-    private void searchForDepictions(final String query) {
-        // set  recent depictsItem  of DepictsRoomDotaBase to recyclerview when query is emapty
-        if (query.isEmpty()) {
-            adapter.clear();
-            adapter.setItems(getRecentDepictesItem(getActivity().getApplication()));
-            return;
-        } else {
-            presenter.searchForDepictions(query);
-            adapter.clear();
-        }
-        presenter.searchForDepictions(query);
-    }
-
-    /**
-     * Get the depictesItem form DepictsRoomdataBase
-     */
-    List<DepictedItem> getRecentDepictesItem(final Application application) {
-        final List<DepictedItem> depictedItemList = new ArrayList<>();
-        final handleDepictsDoa modelDepicts = new handleDepictsDoa(application);
-        depictedItemList.addAll(selectedDepictedItem);
-        for (int i = 0; i < modelDepicts.allDepicts.size(); i++) {
-            final DepictedItem depictedItem = modelDepicts.allDepicts.get(i).getItem();
-            depictedItem.setSelected(false);
-            depictedItemList.add(depictedItem);
-        }
-        return depictedItemList;
-    }
 }

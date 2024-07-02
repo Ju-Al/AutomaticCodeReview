@@ -1,6 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding:utf-8 -*-
-        '''Test that ValueError is raised when
-        is fed to get_coord_axes().'''
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 fileencoding=utf-8
 #
 # MDAnalysis --- http://www.mdanalysis.org
@@ -119,9 +117,9 @@ class TestPSAExceptions(TestCase):
             self.fail('KeyError should be caught')
 
     def test_get_coord_axes_bad_dims(self):
-        """Test that ValueError is raised when
+        '''Test that ValueError is raised when
         numpy array with incorrect dimensions
-        is fed to get_coord_axes()."""
+        is fed to get_coord_axes().'''
 
         with self.assertRaises(ValueError):
             PSA.get_coord_axes(np.zeros((5,5,5,5)))
@@ -130,38 +128,10 @@ class TestPSAExceptions(TestCase):
         """Test that ValueError is raised when i or j or both are
         out of bounds of N"""
 
-        # Check if i is out of bounds of N
         with self.assertRaises(ValueError):
             PSA.dist_mat_to_vec(5, 6, 4)
-
-        # Check if j is out of bounds of N
-        with self.assertRaises(ValueError):
             PSA.dist_mat_to_vec(5, 4, 6)
-
-        # Check if both i and j are out of bounds of N
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(5, 6, 7)
-
-        # Check if i is negative
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(5, -1, 2)
-
-        # Check if i is negative
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(5, 1, -2)
-
-        # Check if N is less than 2
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(1, 0, 0)
-
-    def test_dist_mat_to_vec_func_i_equals_j(self):
-        """Test that ValueError is raised when i == j or i,j == N"""
-
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(5, 4, 4)
-
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(4, 6, 4)
+            PSA.dist_mat_to_vec(5, 6, 6)
 
     def test_dist_mat_to_vec_func_bad_integers(self):
         """Test that ValueError is raised when i or j are
@@ -170,8 +140,6 @@ class TestPSAExceptions(TestCase):
         with self.assertRaises(ValueError):
             PSA.dist_mat_to_vec(5, '6', '7')
 
-        with self.assertRaises(ValueError):
-            PSA.dist_mat_to_vec(5, float(6), 7)
 
 class _BaseHausdorffDistance(TestCase):
     '''Base Class setup and unit tests

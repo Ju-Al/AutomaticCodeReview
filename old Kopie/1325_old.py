@@ -91,7 +91,6 @@ class TestHydrogenBondAnalysis(object):
         assert_array_equal(h.table.donor_resid, self.values['donor_resid'])
         assert_array_equal(h.table.acceptor_resnm, self.values['acceptor_resnm'])
 
-    def test_atoms_too_far(self):
         pdb = '''TITLE     Two atoms far away
 CRYST1   52.763   52.763   52.763  90.00  90.00  90.00 P 1           1
 MODEL         1

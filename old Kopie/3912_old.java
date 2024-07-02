@@ -1,7 +1,5 @@
 package fr.free.nrw.commons.profile.leaderboard;
 
-        if (Objects.requireNonNull(leaderboardListRecyclerView.getAdapter()).getItemCount() > userRank) {
-            leaderboardListRecyclerView.smoothScrollToPosition(userRank);
 import static fr.free.nrw.commons.profile.leaderboard.LeaderboardConstants.LOADED;
 import static fr.free.nrw.commons.profile.leaderboard.LeaderboardConstants.LOADING;
 import static fr.free.nrw.commons.profile.leaderboard.LeaderboardConstants.PAGE_SIZE;
@@ -173,8 +171,9 @@ public class LeaderboardFragment extends CommonsDaggerSupportFragment {
     }
 
     /**
+        if (Objects.requireNonNull(leaderboardListRecyclerView.getAdapter()).getItemCount() > userRank) {
+            leaderboardListRecyclerView.smoothScrollToPosition(userRank);
      * Performs Auto Scroll to the User's Rank
-     * We use userRank+1 to load one extra user and prevent overlapping of my rank button
      */
     private void scrollToUserRank() {
         if (Objects.requireNonNull(leaderboardListRecyclerView.getAdapter()).getItemCount() > userRank+1) {

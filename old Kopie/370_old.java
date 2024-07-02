@@ -1,5 +1,4 @@
 /*
-
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -251,13 +250,13 @@ public class CreateTableCommand extends Command {
         "prevent users from writing data they cannot read.  When enabling this, consider disabling bulk import and alter table.");
     createTableOptFormatter = new Option("f", "formatter", true, "default formatter to set");
     createTableOptInitProp = new Option("prop", "init-properties", true, "user defined initial properties");
+
     createTableOptCopyConfig.setArgName("table");
     createTableOptCopySplits.setArgName("table");
     createTableOptSplit.setArgName("filename");
     createTableOptFormatter.setArgName("className");
     createTableOptInitProp.setArgName("properties");
 
-    createTableOptLocalityProps = new Option("l", "locality", true, "create locality groups at table creation");
     createTableOptLocalityProps.setArgName("group=col_fam[,col_fam]");
     createTableOptLocalityProps.setArgs(Option.UNLIMITED_VALUES);
 

@@ -428,7 +428,6 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 	}
 }
 
-// sendServiceAccounts sends all known ServiceAccounts to the endpoint
 func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
 	for _, update := range p.serviceAccountByID {
 		log.WithFields(log.Fields{

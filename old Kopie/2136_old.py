@@ -1,5 +1,4 @@
 import tvm
-from tvm import te
 from tvm import topi
 from .util import binary_op_map, reduce_op_map
 

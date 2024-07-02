@@ -88,8 +88,6 @@ func (componentParams *ComponentParameters) ValidateAutoscalingSpecification(fie
 				fieldErrors = fieldErrors.Also(invalidValueError)
 			}
 		}
-	}
-	// At least one of the autoscaling metrics should be specified
 	isAvgMemoryUsageSpecified := componentParams.AvgMemoryUsage != nil && *componentParams.AvgMemoryUsage != ""
 	if componentParams.AvgCPUUtilization == nil && !isAvgMemoryUsageSpecified {
 		invalidValueError := apis.ErrInvalidValue(nil, componentPath)

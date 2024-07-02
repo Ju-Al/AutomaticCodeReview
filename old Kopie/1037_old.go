@@ -1,16 +1,4 @@
 // Copyright Amazon.com, Inc or its affiliates. All rights reserved.
-func (o *initStorageOpts) askDynamoAttributes() error {
-	// Extra attributes have been specified by flags.
-	if len(o.attributes) != 0 {
-	// If --no-lsi has been specified, there is no need to ask for more attributes
-
-	// If --no-sort has been specified, there is no need to ask for more attributes
-	attributeTypePrompt := fmt.Sprintf(fmtStorageInitDDBKeyTypePrompt, color.Emphasize(ddbAttributeString))
-	attributeTypeHelp := fmt.Sprintf(fmtStorageInitDDBKeyTypeHelp, ddbAttributeString)
-		moreAtt, err := o.prompt.Confirm(storageInitDDBMoreAttributesPrompt, storageInitDDBMoreAttributesHelp, prompt.WithFinalMessage("Additional attributes?"))
-		if err != nil {
-			return fmt.Errorf("confirm add more attributes: %w", err)
-		if !moreAtt {
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -390,7 +378,18 @@ func (o *initStorageOpts) askDynamoSortKey() error {
 	o.sortKey = key + ":" + keyType
 	return nil
 }
-func (o *initStorageOpts) askDynamoLSIConfig() error {
+func (o *initStorageOpts) askDynamoAttributes() error {
+	// Extra attributes have been specified by flags.
+	// If --no-lsi has been specified, there is no need to ask for more attributes
+
+	// If --no-sort has been specified, there is no need to ask for more attributes
+	attributeTypePrompt := fmt.Sprintf(fmtStorageInitDDBKeyTypePrompt, color.Emphasize(ddbAttributeString))
+	attributeTypeHelp := fmt.Sprintf(fmtStorageInitDDBKeyTypeHelp, ddbAttributeString)
+		moreAtt, err := o.prompt.Confirm(storageInitDDBMoreAttributesPrompt, storageInitDDBMoreAttributesHelp, prompt.WithFinalMessage("Additional attributes?"))
+		if err != nil {
+			return fmt.Errorf("confirm add more attributes: %w", err)
+		if !moreAtt {
+	if len(o.attributes) != 0 {
 	// LSI has already been specified by flags.
 	if len(o.lsiSorts) > 0 {
 		return nil

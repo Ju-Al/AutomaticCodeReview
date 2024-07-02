@@ -1,5 +1,4 @@
 # Copyright BigchainDB GmbH and BigchainDB contributors
-def get_validator_set_by_election_id(conn, election_id):
 # SPDX-License-Identifier: (Apache-2.0 AND CC-BY-4.0)
 # Code is Apache-2.0 and docs are CC-BY-4.0
 
@@ -301,7 +300,7 @@ def get_validator_set(conn, height=None):
 
 
 @register_query(LocalMongoDBConnection)
-def get_result_by_election_id(conn, election_id, table):
+def get_validator_set_by_election_id(conn, election_id):
     query = {'election_id': election_id}
 
     cursor = conn.run(

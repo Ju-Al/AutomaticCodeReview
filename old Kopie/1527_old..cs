@@ -1,5 +1,4 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-            return buffer;
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Buffers;
@@ -34,7 +33,7 @@ namespace System.IO.Pipelines
             global::System.Buffer.BlockCopy(_buffer.Array, _buffer.Offset + offset, buffer, 0, length);
             newStart = 0;
             newEnd = length;
-            return (OwnedArray<byte>)buffer;
+            return buffer;
         }
 
 // In kestrel both MemoryPoolBlock and OwnedBuffer end up in the same assembly so

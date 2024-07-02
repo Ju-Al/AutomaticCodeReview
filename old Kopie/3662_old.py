@@ -439,7 +439,6 @@ class PandasDataframe(object):
         self._row_lengths_cache = [r for r in self._row_lengths if r != 0]
 
     def synchronize_labels(self, axis=None):
-        """
         Set the deferred axes variables for the ``PandasDataframe``.
 
         Parameters

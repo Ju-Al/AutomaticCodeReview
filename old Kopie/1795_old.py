@@ -1,5 +1,4 @@
 import argparse
-    print(torch.cuda.get_device_name(0))
 import os
 import time
 import random
@@ -94,7 +93,7 @@ def main(args):
         val_mask = val_mask.cuda()
         test_mask = test_mask.cuda()
 
-    # print(torch.cuda.get_device_name(0))
+    print(torch.cuda.get_device_name(0))
 
     g.ndata['features'] = features
     g.ndata['labels'] = labels

@@ -1,5 +1,4 @@
 package iam
-			return nil, fmt.Errorf("create group: group %s already exists in scope %s", group.Name, group.ScopeId)
 
 import (
 	"context"
@@ -26,7 +25,7 @@ func (r *Repository) CreateGroup(ctx context.Context, group *Group, opt ...Optio
 	resource, err := r.create(ctx, g)
 	if err != nil {
 		if db.IsUniqueError(err) {
-			return nil, fmt.Errorf("create group: group %s already exists in scope %s: %w", group.Name, group.ScopeId, err)
+			return nil, fmt.Errorf("create group: group %s already exists in scope %s", group.Name, group.ScopeId)
 		}
 		return nil, fmt.Errorf("create group: %w for %s", err, g.PublicId)
 	}

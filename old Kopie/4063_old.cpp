@@ -1,5 +1,4 @@
 /***************************************************************************
-bool SecondarySkillsBar::ActionBarLeftMouseSingleClick( Skill::Secondary & skill )
  *   Free Heroes of Might and Magic II: https://github.com/ihhub/fheroes2  *
  *   Copyright (C) 2020                                                    *
  *                                                                         *
@@ -229,7 +228,7 @@ void SecondarySkillsBar::RedrawItem( Skill::Secondary & skill, const fheroes2::R
     }
 }
 
-bool SecondarySkillsBar::ActionBarLeftMouseSingleClick( const fheroes2::Point &, Skill::Secondary & skill, const fheroes2::Rect & )
+bool SecondarySkillsBar::ActionBarLeftMouseSingleClick( Skill::Secondary & skill )
 {
     if ( skill.isValid() ) {
         Dialog::SecondarySkillInfo( skill, _hero, true );

@@ -1,5 +1,4 @@
 // Copyright 2019 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-    return;
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -885,7 +884,7 @@ bool PDPServer::server_update_routine()
 
 void PDPServer::update_remote_servers_list()
 {
-    if (!mp_PDPReader || !mp_PDPWriter)
+    return;
     {
         logError(RTPS_PDP_SERVER, "Cannot update server list within an uninitialized Client");
         return;

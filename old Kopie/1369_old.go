@@ -2,422 +2,293 @@ package worker
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/tls"
-	"crypto/x509"
-	"errors"
-	"fmt"
-	"strings"
-	"sync"
+	"math/rand"
+	"os"
+	"strconv"
 	"time"
 
 	pbs "github.com/hashicorp/boundary/internal/gen/controller/servers/services"
-	"github.com/hashicorp/boundary/internal/session"
+	"github.com/hashicorp/boundary/internal/servers"
+	"github.com/hashicorp/boundary/internal/types/resource"
+	"google.golang.org/grpc/resolver"
 )
 
+// In the future we could make this configurable
 const (
-	validateSessionTimeout              = 90 * time.Second
-	errMakeSessionCloseInfoNilCloseInfo = "nil closeInfo supplied to makeSessionCloseInfo, this is a bug, please report it"
+	statusInterval           = 2 * time.Second
+	statusTimeout            = 10 * time.Second
+	defaultStatusGracePeriod = 30 * time.Second
+	statusGracePeriodEnvVar  = "BOUNDARY_STATUS_GRACE_PERIOD"
 )
 
-type connInfo struct {
-	id         string
-	connCtx    context.Context
-	connCancel context.CancelFunc
-	status     pbs.CONNECTIONSTATUS
-	closeTime  time.Time
+// statusGracePeriod returns the status grace period setting for this
+// worker, in seconds.
+//
+// The grace period is the length of time we allow connections to run
+// on a worker in the event of an error sending status updates. The
+// period is defined the length of time since the last successful
+// update.
+//
+// The setting is derived from one of the following:
+//
+//   * BOUNDARY_STATUS_GRACE_PERIOD, if defined, can be set to an
+//   integer value to define the setting.
+//   * If this is missing, the default (30 seconds) is used.
+//
+func (w *Worker) statusGracePeriod() time.Duration {
+	if v := os.Getenv(statusGracePeriodEnvVar); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			w.logger.Error("could not read setting for BOUNDARY_STATUS_GRACE_PERIOD, using default",
+				"err", err,
+				"value", v,
+			)
+			return defaultStatusGracePeriod
+		}
+
+		if n < 1 {
+			w.logger.Error("invalid setting for BOUNDARY_STATUS_GRACE_PERIOD, using default", "value", v)
+			return defaultStatusGracePeriod
+		}
+
+		return time.Second * time.Duration(n)
+	}
+
+	return defaultStatusGracePeriod
 }
 
-type sessionInfo struct {
-	sync.RWMutex
-	id                    string
-	sessionTls            *tls.Config
-	status                pbs.SESSIONSTATUS
-	lookupSessionResponse *pbs.LookupSessionResponse
-	connInfoMap           map[string]*connInfo
+type LastStatusInformation struct {
+	*pbs.StatusResponse
+	StatusTime time.Time
 }
 
-func (w *Worker) getSessionTls(hello *tls.ClientHelloInfo) (*tls.Config, error) {
-	var sessionId string
-	switch {
-	case strings.HasPrefix(hello.ServerName, "s_"):
-		w.logger.Trace("got valid session in SNI", "session_id", hello.ServerName)
-		sessionId = hello.ServerName
-	default:
-		w.logger.Trace("invalid session in SNI", "session_id", hello.ServerName)
-		return nil, fmt.Errorf("could not find session ID in SNI")
-	}
+func (w *Worker) startStatusTicking(cancelCtx context.Context) {
+	go func() {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		// This function exists to desynchronize calls to controllers from
+		// workers so we aren't always getting status updates at the exact same
+		// intervals, to ease the load on the DB.
+		getRandomInterval := func() time.Duration {
+			// 0 to 0.5 adjustment to the base
+			f := r.Float64() / 2
+			// Half a chance to be faster, not slower
+			if r.Float32() > 0.5 {
+				f = -1 * f
+			}
+			return statusInterval + time.Duration(f*float64(time.Second))
+		}
 
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		w.logger.Trace("could not get a controller client", "session_id", sessionId)
-		return nil, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		w.logger.Trace("could not cast controller client to the real thing", "session_id", sessionId)
-		return nil, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		w.logger.Trace("controller client is nil", "session_id", sessionId)
-		return nil, errors.New("controller client is nil")
-	}
+		timer := time.NewTimer(0)
+		for {
+			select {
+			case <-cancelCtx.Done():
+				w.logger.Info("status ticking shutting down")
+				return
 
-	timeoutContext, cancel := context.WithTimeout(w.baseContext, validateSessionTimeout)
-	defer cancel()
+			case <-timer.C:
+				w.sendWorkerStatus(cancelCtx)
+				timer.Reset(getRandomInterval())
+			}
+		}
+	}()
+}
 
-	w.logger.Trace("looking up session", "session_id", sessionId)
-	resp, err := conn.LookupSession(timeoutContext, &pbs.LookupSessionRequest{
-		ServerId:  w.conf.RawConfig.Worker.Name,
-		SessionId: sessionId,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error validating session: %w", err)
-	}
+// LastStatusSuccess reports the last time we sent a successful
+// status request.
+func (w *Worker) LastStatusSuccess() *LastStatusInformation {
+	return w.lastStatusSuccess.Load().(*LastStatusInformation)
+}
 
-	if resp.GetExpiration().AsTime().Before(time.Now()) {
-		return nil, fmt.Errorf("session is expired")
-	}
+func (w *Worker) sendWorkerStatus(cancelCtx context.Context) {
+	// First send info as-is. We'll perform cleanup duties after we
+	// get cancel/job change info back.
+	var activeJobs []*pbs.JobStatus
 
-	parsedCert, err := x509.ParseCertificate(resp.GetAuthorization().Certificate)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing session certificate: %w", err)
-	}
-
-	if len(parsedCert.DNSNames) != 1 {
-		return nil, fmt.Errorf("invalid length of DNS names (%d) in parsed certificate", len(parsedCert.DNSNames))
-	}
-
-	certPool := x509.NewCertPool()
-	certPool.AddCert(parsedCert)
-
-	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{
-			{
-				Certificate: [][]byte{resp.GetAuthorization().Certificate},
-				PrivateKey:  ed25519.PrivateKey(resp.GetAuthorization().PrivateKey),
-				Leaf:        parsedCert,
+	// Range over known sessions and collect info
+	w.sessionInfoMap.Range(func(key, value interface{}) bool {
+		var jobInfo pbs.SessionJobInfo
+		sessionId := key.(string)
+		si := value.(*sessionInfo)
+		si.RLock()
+		status := si.status
+		connections := make([]*pbs.Connection, 0, len(si.connInfoMap))
+		for k, v := range si.connInfoMap {
+			connections = append(connections, &pbs.Connection{
+				ConnectionId: k,
+				Status:       v.status,
+			})
+		}
+		si.RUnlock()
+		jobInfo.SessionId = sessionId
+		activeJobs = append(activeJobs, &pbs.JobStatus{
+			Job: &pbs.Job{
+				Type: pbs.JOBTYPE_JOBTYPE_SESSION,
+				JobInfo: &pbs.Job_SessionInfo{
+					SessionInfo: &pbs.SessionJobInfo{
+						SessionId:   sessionId,
+						Status:      status,
+						Connections: connections,
+					},
+				},
 			},
+		})
+		return true
+	})
+
+	// Send status information
+	client := w.controllerStatusConn.Load().(pbs.ServerCoordinationServiceClient)
+	var tags map[string]*servers.TagValues
+	// If we're not going to request a tag update, no reason to have these
+	// marshaled on every status call.
+	if w.updateTags.Load() {
+		tags = w.tags.Load().(map[string]*servers.TagValues)
+	}
+	statusCtx, statusCancel := context.WithTimeout(cancelCtx, statusTimeout)
+	defer statusCancel()
+	result, err := client.Status(statusCtx, &pbs.StatusRequest{
+		Jobs: activeJobs,
+		Worker: &servers.Server{
+			PrivateId:   w.conf.RawConfig.Worker.Name,
+			Type:        resource.Worker.String(),
+			Description: w.conf.RawConfig.Worker.Description,
+			Address:     w.conf.RawConfig.Worker.PublicAddr,
+			Tags:        tags,
 		},
-		ServerName: parsedCert.DNSNames[0],
-		ClientAuth: tls.RequireAndVerifyClientCert,
-		ClientCAs:  certPool,
-		MinVersion: tls.VersionTLS13,
-	}
-
-	si := &sessionInfo{
-		id:                    resp.GetAuthorization().GetSessionId(),
-		sessionTls:            tlsConf,
-		lookupSessionResponse: resp,
-		status:                resp.GetStatus(),
-		connInfoMap:           make(map[string]*connInfo),
-	}
-	// TODO: Periodicially clean this up. We can't rely on things in here but
-	// not in cancellation because they could be on the way to being
-	// established. However, since cert lifetimes are short, we can simply range
-	// through and remove values that are expired.
-	actualSiRaw, loaded := w.sessionInfoMap.LoadOrStore(sessionId, si)
-	if loaded {
-		// Update the response to the latest
-		actualSi := actualSiRaw.(*sessionInfo)
-		actualSi.Lock()
-		actualSi.lookupSessionResponse = resp
-		actualSi.Unlock()
-	}
-
-	w.logger.Trace("returning TLS configuration", "session_id", sessionId)
-	return tlsConf, nil
-}
-
-func (w *Worker) activateSession(ctx context.Context, sessionId, tofuToken string, version uint32) (pbs.SESSIONSTATUS, error) {
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("controller client is nil")
-	}
-
-	resp, err := conn.ActivateSession(ctx, &pbs.ActivateSessionRequest{
-		SessionId: sessionId,
-		TofuToken: tofuToken,
-		Version:   version,
-		WorkerId:  w.conf.RawConfig.Worker.Name,
+		UpdateTags: w.updateTags.Load(),
 	})
 	if err != nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, fmt.Errorf("error activating session: %w", err)
-	}
-	return resp.GetStatus(), nil
-}
+		w.logger.Error("error making status request to controller", "error", err)
+		// Check for last successful status. Ignore nil last status, this probably
+		// means that we've never connected to a controller, and as such probably
+		// don't have any sessions to worry about anyway.
+		//
+		// If a length of time has passed since we've been able to communicate, we
+		// want to start terminating all sessions as a "break glass" kind of
+		// scenario, as there will be no way we can really tell if these
+		// connections should continue to exist.
 
-func (w *Worker) cancelSession(ctx context.Context, sessionId string) (pbs.SESSIONSTATUS, error) {
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, errors.New("controller client is nil")
-	}
+		if isPastGrace, lastStatusTime, gracePeriod := w.isPastGrace(); isPastGrace {
+			w.logger.Warn("status error grace period has expired, canceling all sessions on worker",
+				"last_status_time", lastStatusTime.String(),
+				"grace_period", gracePeriod,
+			)
 
-	resp, err := conn.CancelSession(ctx, &pbs.CancelSessionRequest{
-		SessionId: sessionId,
-	})
-	if err != nil {
-		return pbs.SESSIONSTATUS_SESSIONSTATUS_UNSPECIFIED, fmt.Errorf("error canceling session: %w", err)
-	}
-	return resp.GetStatus(), nil
-}
-
-func (w *Worker) authorizeConnection(ctx context.Context, sessionId string) (*connInfo, int32, error) {
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		return nil, 0, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		return nil, 0, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		return nil, 0, errors.New("controller client is nil")
-	}
-
-	resp, err := conn.AuthorizeConnection(ctx, &pbs.AuthorizeConnectionRequest{
-		SessionId: sessionId,
-		WorkerId:  w.conf.RawConfig.Worker.Name,
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("error authorizing connection: %w", err)
-	}
-
-	return &connInfo{
-		id:     resp.ConnectionId,
-		status: resp.GetStatus(),
-	}, resp.GetConnectionsLeft(), nil
-}
-
-func (w *Worker) connectConnection(ctx context.Context, req *pbs.ConnectConnectionRequest) (pbs.CONNECTIONSTATUS, error) {
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		return pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_UNSPECIFIED, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		return pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_UNSPECIFIED, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		return pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_UNSPECIFIED, errors.New("controller client is nil")
-	}
-
-	resp, err := conn.ConnectConnection(ctx, req)
-	if err != nil {
-		return pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_UNSPECIFIED, err
-	}
-
-	if resp.GetStatus() != pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_CONNECTED {
-		return pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_UNSPECIFIED, fmt.Errorf("unexpected state returned: %v", resp.GetStatus().String())
-	}
-
-	return resp.GetStatus(), nil
-}
-
-func (w *Worker) closeConnection(ctx context.Context, req *pbs.CloseConnectionRequest) (*pbs.CloseConnectionResponse, error) {
-	rawConn := w.controllerSessionConn.Load()
-	if rawConn == nil {
-		return nil, errors.New("could not get a controller client")
-	}
-	conn, ok := rawConn.(pbs.SessionServiceClient)
-	if !ok {
-		return nil, errors.New("could not cast atomic controller client to the real thing")
-	}
-	if conn == nil {
-		return nil, errors.New("controller client is nil")
-	}
-
-	resp, err := conn.CloseConnection(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if len(resp.GetCloseResponseData()) != len(req.GetCloseRequestData()) {
-		w.logger.Warn("mismatched number of states returned on connection closed", "expected", len(req.GetCloseRequestData()), "got", len(resp.GetCloseResponseData()))
-	}
-
-	return resp, nil
-}
-
-// closeConnections is a helper worker function that sends connection
-// close requests to the controller, and sets close times within the
-// worker. It is called during the worker status loop and on
-// connection exit on the proxy.
-//
-// closeInfo is a map of connections mapped to their individual
-// session.
-func (w *Worker) closeConnections(ctx context.Context, closeInfo map[string]string) {
-	if closeInfo == nil {
-		// This should not happen, but it's a no-op if it does. Just
-		// return.
-		return
-	}
-
-	w.logger.Trace("marking connections as closed", "session_and_connection_ids", fmt.Sprintf("%#v", closeInfo))
-	response, err := w.closeConnection(ctx, w.makeCloseConnectionRequest(closeInfo))
-	// How we handle close info depends on whether or not we succeeded with
-	// marking them closed on the controller.
-	var sessionCloseInfo map[string][]*pbs.CloseConnectionResponseData
-
-	// TODO: This, along with the status call to the controller, probably needs a
-	// bit of formalization in terms of how we handle timeouts. For now, this
-	// just ensures consistency with the same status call in that it times out
-	// within an adequate period of time.
-	closeConnCtx, closeConnCancel := context.WithTimeout(ctx, statusTimeout)
-	defer closeConnCancel()
-	response, err := w.closeConnection(closeConnCtx, w.makeCloseConnectionRequest(closeInfo))
-	if err != nil {
-		w.logger.Error("error marking connections closed", "error", err)
-		w.logger.Warn(
-			"error contacting controller, connections will be closed only on worker",
-			"session_and_connection_ids", fmt.Sprintf("%#v", closeInfo),
-		)
-
-		// Since we could not reach the controller, we have to make a "fake" response set.
-		sessionCloseInfo = w.makeFakeSessionCloseInfo(closeInfo)
+			// Run a "cleanup" for all sessions that will not be caught by
+			// our standard cleanup routine.
+			w.cleanupConnections(cancelCtx, true)
+		}
 	} else {
-		// Connection succeeded, so we can proceed with making the sessionCloseInfo
-		// off of the response data.
-		sessionCloseInfo = w.makeSessionCloseInfo(closeInfo, response)
-	}
+		w.logger.Trace("successfully sent status to controller")
+		w.updateTags.Store(false)
+		addrs := make([]resolver.Address, 0, len(result.Controllers))
+		strAddrs := make([]string, 0, len(result.Controllers))
+		for _, v := range result.Controllers {
+			addrs = append(addrs, resolver.Address{Addr: v.Address})
+			strAddrs = append(strAddrs, v.Address)
+		}
+		w.logger.Trace("found controllers", "addresses", strAddrs)
+		switch len(strAddrs) {
+		case 0:
+			w.logger.Warn("got no controller addresses from controller; possibly prior to first status save, not persisting")
+		default:
+			w.Resolver().UpdateState(resolver.State{Addresses: addrs})
+		}
+		w.lastStatusSuccess.Store(&LastStatusInformation{StatusResponse: result, StatusTime: time.Now()})
 
-	// Mark connections as closed
-	closedIds, errs := w.setCloseTimeForResponse(sessionCloseInfo)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			w.logger.Error("error marking connection closed in state", "err", err)
+		for _, request := range result.GetJobsRequests() {
+			switch request.GetRequestType() {
+			case pbs.CHANGETYPE_CHANGETYPE_UPDATE_STATE:
+				switch request.GetJob().GetType() {
+				case pbs.JOBTYPE_JOBTYPE_SESSION:
+					sessInfo := request.GetJob().GetSessionInfo()
+					sessionId := sessInfo.GetSessionId()
+					siRaw, ok := w.sessionInfoMap.Load(sessionId)
+					if !ok {
+						w.logger.Warn("asked to cancel session but could not find a local information for it", "session_id", sessionId)
+						continue
+					}
+					si := siRaw.(*sessionInfo)
+					si.Lock()
+					si.status = sessInfo.GetStatus()
+					si.Unlock()
+				}
+			}
 		}
 	}
 
-	w.logger.Trace("connections successfully marked closed", "connection_ids", closedIds)
+	// Standard cleanup: Run through current jobs. Cancel connections
+	// for any canceling session or any session that is expired.
+	w.cleanupConnections(cancelCtx, false)
 }
 
-// makeCloseConnectionRequest creates a CloseConnectionRequest for
-// use with closing connections.
+// cleanupConnections walks all sessions and shuts down connections.
+// Additionally, sessions without connections are cleaned up from the
+// local worker's state.
 //
-// closeInfo is a map, indexed by connection ID, to the individual
-// sessions IDs that those connections belong to. The values are
-// ignored; the parameter is expected as such just for convenience of
-// its caller.
-func (w *Worker) makeCloseConnectionRequest(closeInfo map[string]string) *pbs.CloseConnectionRequest {
-	closeData := make([]*pbs.CloseConnectionRequestData, 0, len(closeInfo))
-	for connId := range closeInfo {
-		closeData = append(closeData, &pbs.CloseConnectionRequestData{
-			ConnectionId: connId,
-			Reason:       session.UnknownReason.String(),
-		})
-	}
-
-	return &pbs.CloseConnectionRequest{
-		CloseRequestData: closeData,
-	}
-}
-
-// makeSessionCloseInfo takes the response from CloseConnections and
-// our original closeInfo map and makes a map of slices, indexed by
-// session ID, of all of the connection responses. This allows us to
-// easily lock on session once for all connections in
-// setCloseTimeForResponse.
-func (w *Worker) makeSessionCloseInfo(
-	closeInfo map[string]string,
-	response *pbs.CloseConnectionResponse,
-) map[string][]*pbs.CloseConnectionResponseData {
-	if closeInfo == nil {
-		// Should never happen, panic if it does. Results will be
-		// undefined.
-		panic(errMakeSessionCloseInfoNilCloseInfo)
-	}
-
-	result := make(map[string][]*pbs.CloseConnectionResponseData)
-	for _, v := range response.GetCloseResponseData() {
-		result[closeInfo[v.GetConnectionId()]] = append(result[closeInfo[v.GetConnectionId()]], v)
-	}
-
-	return result
-}
-
-// makeFakeSessionCloseInfo makes a "fake" makeFakeSessionCloseInfo, intended
-// for use when we can't contact the controller.
-func (w *Worker) makeFakeSessionCloseInfo(
-	closeInfo map[string]string,
-) map[string][]*pbs.CloseConnectionResponseData {
-	if closeInfo == nil {
-		// Should never happen, panic if it does. Results will be
-		// undefined.
-		panic(errMakeSessionCloseInfoNilCloseInfo)
-	}
-
-	result := make(map[string][]*pbs.CloseConnectionResponseData)
-	for connectionId, sessionId := range closeInfo {
-		result[sessionId] = append(result[sessionId], &pbs.CloseConnectionResponseData{
-			ConnectionId: connectionId,
-			Status:       pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_CLOSED,
-		})
-	}
-
-	return result
-}
-
-// setCloseTimeForResponse iterates a CloseConnectionResponse and
-// sets the close time for any connection found to be closed to the
-// current time.
-//
-// sessionCloseInfo can be derived from the closeInfo supplied to
-// makeCloseConnectionRequest through reverseCloseInfo, which creates
-// a session ID to connection ID mapping.
-//
-// A non-zero error count does not necessarily mean the operation
-// failed, as some connections may have been marked as closed. The
-// actual list of connection IDs closed is returned as the first
-// return value.
-func (w *Worker) setCloseTimeForResponse(sessionCloseInfo map[string][]*pbs.CloseConnectionResponseData) ([]string, []error) {
-	closedIds := make([]string, 0)
-	var errors []error
-	for sessionId, responses := range sessionCloseInfo {
-		siRaw, ok := w.sessionInfoMap.Load(sessionId)
-		if !ok {
-			errors = append(errors, fmt.Errorf("could not find session ID %q in local state after closing connections", sessionId))
-			continue
-		}
-
-		si := siRaw.(*sessionInfo)
+// Use ignoreSessionState to ignore the state checks, this closes all
+// connections, regardless of whether or not the session is still
+// active.
+func (w *Worker) cleanupConnections(cancelCtx context.Context, ignoreSessionState bool) {
+	closeInfo := make(map[string]string)
+	cleanSessionIds := make([]string, 0)
+	w.sessionInfoMap.Range(func(key, value interface{}) bool {
+		si := value.(*sessionInfo)
 		si.Lock()
-
-		for _, response := range responses {
-			ci, ok := si.connInfoMap[response.GetConnectionId()]
-			if !ok {
-				errors = append(errors,
-					fmt.Errorf(
-						"could not find connection ID %q for session ID %q in local state after closing connections",
-						response.GetConnectionId(),
-						sessionId,
-					),
-				)
-				continue
+		defer si.Unlock()
+		switch {
+		case ignoreSessionState,
+			si.status == pbs.SESSIONSTATUS_SESSIONSTATUS_CANCELING,
+			si.status == pbs.SESSIONSTATUS_SESSIONSTATUS_TERMINATED,
+			time.Until(si.lookupSessionResponse.Expiration.AsTime()) < 0:
+			var toClose int
+			for k, v := range si.connInfoMap {
+				if v.closeTime.IsZero() {
+					toClose++
+					v.connCancel()
+					w.logger.Info("terminated connection due to cancellation or expiration", "session_id", si.id, "connection_id", k)
+					closeInfo[k] = si.id
+				}
 			}
-
-			ci.status = response.GetStatus()
-			if ci.status == pbs.CONNECTIONSTATUS_CONNECTIONSTATUS_CLOSED {
-				ci.closeTime = time.Now()
-				closedIds = append(closedIds, ci.id)
+			// closeTime is marked by closeConnections iff the
+			// status is returned for that connection as closed. If
+			// the session is no longer valid and all connections
+			// are marked closed, clean up the session.
+			if toClose == 0 {
+				cleanSessionIds = append(cleanSessionIds, si.id)
 			}
 		}
 
-		si.Unlock()
+		return true
+	})
+
+	// Note that we won't clean these from the info map until the
+	// next time we run this function
+	if len(closeInfo) > 0 {
+		// Call out to a helper to send the connection close requests to the
+		// controller, and set the close time. This functionality is shared with
+		// post-close functionality in the proxy handler.
+		w.closeConnections(cancelCtx, closeInfo)
 	}
 
-	return closedIds, errors
+	// Forget sessions where the session is expired/canceled and all
+	// connections are canceled and marked closed
+	for _, v := range cleanSessionIds {
+		w.sessionInfoMap.Delete(v)
+	}
+}
+
+func (w *Worker) lastSuccessfulStatusTime() time.Time {
+	lastStatus := w.LastStatusSuccess()
+	if lastStatus == nil {
+		return w.workerStartTime
+	}
+
+	return lastStatus.StatusTime
+}
+
+func (w *Worker) isPastGrace() (bool, time.Time, time.Duration) {
+	t := w.lastSuccessfulStatusTime()
+	u := w.statusGracePeriod()
+	v := time.Since(t)
+	return v > u, t, u
 }

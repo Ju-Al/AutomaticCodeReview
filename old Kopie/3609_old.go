@@ -302,7 +302,6 @@ func MakeReport() Report {
 			WithTag(Camera).
 			WithLabel("volume snapshot data", "volume snapshot data"),
 
-		Job: MakeTopology().
 			WithShape(StorageSheet).
 			WithLabel("job", "jobs"),
 

@@ -1,6 +1,4 @@
 /*
-
-			target(this.serverUri, this.userName, this.password);
  * Copyright 2014-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -285,11 +283,12 @@ public class ConfigCommands implements CommandMarker,
 		return sb.toString();
 	}
 
+
 	@Override
 	public void onApplicationEvent(ApplicationReadyEvent event) {
 		//Only invoke if the shell is executing in the same application context as the data flow server.
 		if (!initialized) {
-			target(this.serverUri, this.userName, this.password, isSkipSslValidation(this.environment));
+			target(this.serverUri, this.userName, this.password);
 		}
 	}
 

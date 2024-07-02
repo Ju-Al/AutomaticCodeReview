@@ -1,5 +1,4 @@
 <?php
-/**
  * Slim Framework (https://slimframework.com)
  *
  * @link      https://github.com/slimphp/Slim

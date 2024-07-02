@@ -1,10 +1,5 @@
 #include "gbdt.h"
 
-double LabelAverage(const float* label, data_size_t num_data) {
-  double sum_label = 0.0f;
-  #pragma omp parallel for schedule(static) reduction(+:sum_label)
-  for (data_size_t i = 0; i < num_data; ++i) {
-    sum_label += label[i];
 #include <LightGBM/utils/openmp_wrapper.h>
 
 #include <LightGBM/utils/common.h>
@@ -398,7 +393,11 @@ void GBDT::UpdateScoreOutOfBag(const Tree* tree, const int cur_tree_id) {
   #endif
 }
 
-/* If the custom "average" is implemented it will be used inplace of the label average (if enabled)
+double LabelAverage(const float* label, data_size_t num_data) {
+  double sum_label = 0.0f;
+  #pragma omp parallel for schedule(static) reduction(+:sum_label)
+  for (data_size_t i = 0; i < num_data; ++i) {
+    sum_label += label[i];
  *
  * An improvement to this is to have options to explicitly choose
  * (i) standard average

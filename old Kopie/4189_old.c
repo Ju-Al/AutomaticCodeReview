@@ -1352,7 +1352,6 @@ retry_request:
         flb_plg_debug(ctx->ins, "PutLogEvents http status=%d", c->resp.status);
 
         if (c->resp.status == 200) {
-            if (c->resp.data == NULL || c->resp.data_len == 0 || strstr(c->resp.data, AMZN_REQUEST_ID_HEADER) == NULL) {
                 /* code was 200, but response is invalid, treat as failure */
                 if (retry == FLB_TRUE) {
                     flb_plg_debug(ctx->ins, "Recieved code 200 but response was invalid, %s header not found",

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding: utf-8
 # pylint: disable=C0103, C0111, E1101, W0612
 """Implementation of MPNN model."""
 

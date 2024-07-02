@@ -98,7 +98,6 @@ func (c *Aggregator) Update(_ context.Context, number core.Number, desc *export.
 	c.current.count.AddUint64Atomic(1)
 	c.current.sum.AddNumberAtomic(kind, number)
 
-	c.first.Do(func() {
 		c.current.max.SetNumberAtomic(number)
 	})
 	for {

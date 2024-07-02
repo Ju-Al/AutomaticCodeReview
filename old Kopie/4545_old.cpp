@@ -1,7 +1,4 @@
 /***************************************************************************
-    else
-        // to coast action
-        if ( hero.isShipMaster() && next.GetObject() == MP2::OBJ_COAST )
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -393,7 +390,9 @@ bool isNeedStayFrontObject( const Heroes & hero, const Maps::Tiles & next )
         const Castle * castle = world.getCastleEntrance( next.GetCenter() );
         return castle && !hero.isFriends( castle->GetColor() ) && castle->GetActualArmy().isValid();
     }
-    else if ( hero.isShipMaster() && next.GetObject() == MP2::OBJ_COAST ) {
+    else
+        // to coast action
+        if ( hero.isShipMaster() && next.GetObject() == MP2::OBJ_COAST )
         return true;
     }
     else if ( !hero.isShipMaster() && next.GetObject() == MP2::OBJ_SHIPWRECK ) {

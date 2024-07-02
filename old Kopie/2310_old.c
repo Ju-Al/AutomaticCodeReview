@@ -43,7 +43,6 @@ See the file COPYING for details.
 	)); \
 } while (false)
 
-//Stores select query before evaluation
 struct jx *select_expr = NULL;
 
 static struct jx *jx_check_errors(struct jx *j);

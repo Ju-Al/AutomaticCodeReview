@@ -1,5 +1,4 @@
 package dfunctions
-
 import (
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/expression/function"

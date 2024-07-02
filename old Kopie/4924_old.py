@@ -1,5 +1,4 @@
 """
-    shortest_path = nx.shortest_path(G)
 Link prediction algorithms.
 """
 
@@ -276,7 +275,7 @@ def common_neighbor_centrality(G, ebunch=None, alpha=0.8):
            Sci Rep 10, 364 (2020).
            https://doi.org/10.1038/s41598-019-57304-y
     """
-
+    shortest_path = nx.shortest_path(G)
     if not 0 <= alpha <= 1:
         raise nx.NetworkXAlgorithmError("Alpha must be between 0 and 1")
 

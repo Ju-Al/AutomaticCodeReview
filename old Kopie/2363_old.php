@@ -268,7 +268,6 @@ class Installer
             } elseif ($innodb && $dynamic) {
                 if (false === stripos($tableOptions->Create_options, 'row_format=dynamic')) {
                     $command = 'ALTER TABLE '.$tableName.' ENGINE = '.$engine.' ROW_FORMAT = DYNAMIC';
-
                     if (false !== stripos($tableOptions->Create_options, 'key_block_size=')) {
                         $command .= ', KEY_BLOCK_SIZE=0';
                     }

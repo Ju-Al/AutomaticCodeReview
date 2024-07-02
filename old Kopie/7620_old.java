@@ -1,5 +1,4 @@
 /*
-      menu.findItem(R.id.menu_context_copy).setVisible(!actionMessage && !mediaMessage);
  * Copyright (C) 2015 Open Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
@@ -236,7 +235,7 @@ public class ConversationFragment extends Fragment
 
       menu.findItem(R.id.menu_context_forward).setVisible(!actionMessage);
       menu.findItem(R.id.menu_context_details).setVisible(!actionMessage);
-      menu.findItem(R.id.menu_context_copy).setVisible(!actionMessage && messageRecord.getBody().length() > 0);
+      menu.findItem(R.id.menu_context_copy).setVisible(!actionMessage && !mediaMessage);
     }
   }
 

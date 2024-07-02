@@ -763,10 +763,6 @@ public class JetCommandLine implements Runnable {
                 return e.getCause();
             }
             return e;
-        }
-    }
-
-    /**
      * A parser for SQL-like inputs. Commands are terminated with a semicolon.
      * It is mainly taken from
      *

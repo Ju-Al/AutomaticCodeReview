@@ -1,6 +1,5 @@
 package fr.free.nrw.commons.nearby.fragments;
 
-                controller.initiateGalleryPick(getActivity(), false);
 import static fr.free.nrw.commons.location.LocationServiceManager.LocationChangeType.LOCATION_SIGNIFICANTLY_CHANGED;
 import static fr.free.nrw.commons.location.LocationServiceManager.LocationChangeType.LOCATION_SLIGHTLY_CHANGED;
 import static fr.free.nrw.commons.location.LocationServiceManager.LocationChangeType.MAP_UPDATED;
@@ -1625,7 +1624,7 @@ public class NearbyParentFragment extends CommonsDaggerSupportFragment
                 Timber.d("Gallery button tapped. Place: %s", selectedPlace.toString());
                 storeSharedPrefs(selectedPlace);
 
-                if (chipWlm.isChecked()){
+                controller.initiateGalleryPick(getActivity(), false);
                     controller.initiateGalleryPick(getActivity(), true);
                 } else {
                     controller.initiateGalleryPick(getActivity(), false);

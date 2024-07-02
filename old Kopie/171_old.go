@@ -204,8 +204,85 @@ func (ps *PushSync) receiveReceipt(r protobuf.Reader) (receipt pb.Receipt, err e
 	return receipt, nil
 }
 
+// chunksWorker is a loop that keeps looking for chunks that are locally uploaded ( by monitoring pushIndex )
+// and pushes them to the closest peer and get a receipt.
+func (ps *PushSync) chunksWorker() {
+	var chunks <-chan swarm.Chunk
+	var unsubscribe func()
+	// timer, initially set to 0 to fall through select case on timer.C for initialisation
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	defer close(ps.chunksWorkerQuitC)
+	chunksInBatch := -1
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ps.quit
+		cancel()
+	}()
+	for {
+		select {
+		// handle incoming chunks
+		case ch, more := <-chunks:
+			// if no more, set to nil, reset timer to 0 to finalise batch immediately
+			if !more {
+				chunks = nil
+				var dur time.Duration
+				if chunksInBatch == 0 {
+					dur = 500 * time.Millisecond
+				}
+				timer.Reset(dur)
+				break
+			}
+
+			chunksInBatch++
+			ps.metrics.TotalChunksToBeSentCounter.Inc()
+			peer, err := ps.peerSuggester.ClosestPeer(ch.Address())
+			if err != nil {
+				if errors.Is(err, topology.ErrWantSelf) {
+					if err := ps.storer.Set(ctx, storage.ModeSetSyncPush, ch.Address()); err != nil {
+						ps.logger.Errorf("pushsync: error setting chunks to synced: %v", err)
+					}
+					continue
+				}
+			}
+
+			// TODO: make this function as a go routine and process several chunks in parallel
+			if err := ps.SendChunkAndReceiveReceipt(ctx, peer, ch); err != nil {
+				ps.logger.Errorf("pushsync: error while sending chunk or receiving receipt: %v", err)
+				continue
+			}
+
+			// retry interval timer triggers starting from new
+		case <-timer.C:
+			// initially timer is set to go off as well as every time we hit the end of push index
+			startTime := time.Now()
+
+			// if subscribe was running, stop it
+			if unsubscribe != nil {
+				unsubscribe()
+			}
+
+			// and start iterating on Push index from the beginning
+			chunks, unsubscribe = ps.storer.SubscribePush(ctx)
+
+			// reset timer to go off after retryInterval
+			timer.Reset(retryInterval)
+			ps.metrics.MarkAndSweepTimer.Observe(time.Since(startTime).Seconds())
+
+		case <-ps.quit:
+			if unsubscribe != nil {
+				unsubscribe()
+			}
+			return
+		}
+	}
+}
+
 // sendChunkAndReceiveReceipt sends chunk to a given peer
-// by opening a stream. It then waits for a receipt from that peer and
+// by opening a stream. It then waits for a receipt from that peer.
+// Once the receipt is received within a given time frame it marks that this chunk
+// as synced in the localstore.
+func (ps *PushSync) SendChunkAndReceiveReceipt(ctx context.Context, peer swarm.Address, ch swarm.Chunk) error {
 // returns error or nil based on the receiving and the validity of the receipt.
 func (ps *PushSync) SendChunkAndReceiveReceipt(ctx context.Context, peer swarm.Address, ch swarm.Chunk) (*pb.Receipt, error) {
 	streamer, err := ps.streamer.NewStream(ctx, peer, nil, protocolName, protocolVersion, streamName)

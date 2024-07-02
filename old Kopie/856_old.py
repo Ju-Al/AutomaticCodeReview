@@ -1,7 +1,4 @@
 """ This file contains handler functions for rabbitmq messages we
-    artists = data['artist_stats']
-    artist_count = data['artist_count']
-    db_stats.insert_user_stats(user['id'], artists, {}, {}, artist_count)
 receive from the Spark cluster.
 """
 import listenbrainz.db.user as db_user
@@ -52,7 +49,9 @@ def handle_user_artist(data):
     if is_new_user_stats_batch():
         notify_user_stats_update()
     current_app.logger.debug("inserting stats for user %s", musicbrainz_id)
-
+    artists = data['artist_stats']
+    artist_count = data['artist_count']
+    db_stats.insert_user_stats(user['id'], artists, {}, {}, artist_count)
     # delete extra data
     del data['musicbrainz_id']
     del data['type']

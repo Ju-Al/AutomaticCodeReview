@@ -119,8 +119,6 @@ class Graph(Dataset, Element2D):
     kdims = param.List(default=[Dimension('start'), Dimension('end')],
                        bounds=(2, 2))
 
-    _node_type = Nodes
-
     _edge_type = EdgePaths
 
     def __init__(self, data, kdims=None, vdims=None, **params):

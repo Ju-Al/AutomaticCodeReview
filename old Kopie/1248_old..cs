@@ -1,5 +1,4 @@
 // Licensed to the .NET Foundation under one or more agreements.
-            using TraceEventDispatcher source = getSource(tracePath);
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -506,7 +505,7 @@ namespace GCPerf
 
         public static void PrintEventsWithoutTraceLog(string tracePath, Func<TraceEvent, bool> filter, uint? maxEvents)
         {
-            using TraceEventDispatcher source = TraceEventDispatcher.GetDispatcherFromFileName(tracePath);
+            using TraceEventDispatcher source = getSource(tracePath);
             Util.Assert(source != null, $"PrintEventsWithoutTraceLog: Bad path {tracePath}.");
 
             uint n = 0;

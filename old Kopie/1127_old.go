@@ -1,804 +1,839 @@
-package bftcosi
+// Copyright 2018 The Go Cloud Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-/*
-BFTCoSi is a byzantine-fault-tolerant protocol to sign a message given a
-verification-function. It uses two rounds of signing - the first round
-indicates the willingness of the rounds to sign the message, and the second
-round is only started if at least a 'threshold' number of nodes signed off in
-the first round.
-*/
+// Package blob provides an easy and portable way to interact with blobs
+// within a storage location, hereafter called a "bucket".
+//
+// It supports operations like reading and writing blobs (using standard
+// interfaces from the io package), deleting blobs, and listing blobs in a
+// bucket.
+//
+// Subpackages contain distinct implementations of blob for various providers,
+// including Cloud and on-prem solutions. For example, "fileblob" supports
+// blobs backed by a filesystem. Your application should import one of these
+// provider-specific subpackages and use its exported function(s) to create a
+// *Bucket; do not use the NewBucket function in this package. For example:
+//
+//  bucket, err := fileblob.OpenBucket("path/to/dir", nil)
+//  if err != nil {
+//      return fmt.Errorf("could not open bucket: %v", err)
+//  }
+//  buf, err := bucket.ReadAll(ctx.Background(), "myfile.txt")
+//  ...
+//
+// Then, write your application code using the *Bucket type. You can easily
+// reconfigure your initialization code to choose a different provider.
+// You can develop your application locally using fileblob, or deploy it to
+// multiple Cloud providers. You may find http://github.com/google/wire useful
+// for managing your initialization code.
+//
+// Alternatively, you can construct a *Bucket using blob.Open by providing
+// a URL that's supported by a blob subpackage that you have linked
+// in to your application.
+package blob // import "gocloud.dev/blob"
 
 import (
-	"crypto/sha512"
+	"bytes"
+	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
+	"io/ioutil"
+	"log"
+	"mime"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/dedis/cothority/cosi/crypto"
-	"github.com/dedis/kyber"
-	"github.com/dedis/onet"
-	"github.com/dedis/onet/log"
+	"gocloud.dev/blob/driver"
+	"gocloud.dev/internal/gcerr"
+	"gocloud.dev/internal/trace"
+	xerrors "golang.org/x/exp/errors"
 )
 
-// VerificationFunction can be passes to each protocol node. It will be called
-// (in a go routine) during the (start/handle) challenge prepare phase of the
-// protocol. The passed message is the same as sent in the challenge phase.
-// The `Data`-part is only to help the VerificationFunction do it's job. In
-// the case of the services, this part should be replaced by the correct
-// passing of the service-configuration-data, which is not done yet.
-type VerificationFunction func(Msg []byte, Data []byte) bool
-
-// ProtocolBFTCoSi is the main struct for running the protocol
-type ProtocolBFTCoSi struct {
-	// the node we are represented-in
-	*onet.TreeNodeInstance
-	// all data we need during the signature-rounds
-	collectStructs
-
-	// The message that will be signed by the BFTCosi
-	Msg []byte
-	// Data going along the msg to the verification
-	Data []byte
-	// Timeout is how long to wait while gathering commits.
-	Timeout time.Duration
-	// AllowedExceptions for how much exception is allowed. If more than
-	// AllowedExceptions number of conodes refuse to sign, no signature
-	// will be created. It is set to (n-1)/3 by default.
-	AllowedExceptions int
-	// last block computed
-	lastBlock string
-	// our index in the Roster list
-	index int
-
-	// onet-channels used to communicate the protocol
-	// channel for announcement
-	announceChan chan announceChan
-	// channel for commitment
-	commitChan chan commitChan
-	// Two channels for the challenge through the 2 rounds: difference is that
-	// during the commit round, we need the previous signature of the "prepare"
-	// round.
-	// channel for challenge during the prepare phase
-	challengePrepareChan chan challengePrepareChan
-	// channel for challenge during the commit phase
-	challengeCommitChan chan challengeCommitChan
-	// channel for response
-	responseChan chan responseChan
-
-	// Internal communication channels
-	// channel used to wait for the verification of the block
-	verifyChan chan bool
-
-	// handler-functions
-	// onDone is the callback that will be called at the end of the
-	// protocol when all nodes have finished. Either at the end of the response
-	// phase of the commit round or at the end of a view change.
-	onDone func()
-	// onSignatureDone is the callback that will be called when a signature has
-	// been generated ( at the end of the response phase of the commit round)
-	onSignatureDone func(*BFTSignature)
-	// VerificationFunction will be called
-	// during the (start/handle) challenge prepare phase of the protocol
-	VerificationFunction VerificationFunction
-	// closing is true if the node is being shut down
-	closing bool
-	// mutex for closing down properly
-	closingMutex sync.Mutex
-	// successful is a flag to indicate whether the protocol finished successfully
-	successful    bool
-	successfulMut sync.Mutex
+// Reader reads bytes from a blob.
+// It implements io.ReadCloser, and must be closed after
+// reads are finished.
+type Reader struct {
+	b    driver.Bucket
+	r    driver.Reader
+	tctx context.Context // trace context
 }
 
-// collectStructs holds the variables that are used during the protocol to hold
-// messages
-type collectStructs struct {
-	// prepare-round cosi
-	prepare *crypto.CoSi
-	// commit-round cosi
-	commit *crypto.CoSi
-
-	// prepareSignature is the signature generated during the prepare phase
-	// This signature is adapted according to the exceptions that occured during
-	// the prepare phase.
-	prepareSignature []byte
-
-	// mutex for all temporary structures
-	tmpMutex sync.Mutex
-	// exceptions given during the rounds that is used in the signature
-	// temporary buffer of the public keys for nodes that responded
-	tempPrepareResponsePublics []kyber.Point
-func NewBFTCoSiProtocol(n *onet.TreeNodeInstance, verify VerificationFunction) (*ProtocolBFTCoSi, error) {
-	tempExceptions []Exception
-	// message in the prepare phase
-	respondedNodesPrepare map[kyber.Point]*onet.TreeNode
-	// respondedNodesCommit stores a list of nodes that sent a commit
-	// message in the commit phase
-	respondedNodesCommit map[kyber.Point]*onet.TreeNode
-	// temporary buffer of "prepare" commitments
-	tempPrepareCommit []kyber.Point
-	// temporary buffer of "commit" commitments
-	tempCommitCommit []kyber.Point
-	// temporary buffer of "prepare" responses
-	tempPrepareResponse []kyber.Scalar
-	// temporary buffer of "commit" responses
-	tempCommitResponse []kyber.Scalar
-
-	committedInPreparePhase bool
-	committedInCommitPhase  bool
+// Read implements io.Reader (https://golang.org/pkg/io/#Reader).
+func (r *Reader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	return n, wrapError(r.b, err)
 }
 
-// NewBFTCoSiProtocol returns a new bftcosi struct
-func NewBFTCoSiProtocol(n *onet.TreeNodeInstance, verify VerificationFunction, to time.Duration) (*ProtocolBFTCoSi, error) {
-	t := (len(n.Tree().List()) - 1) / 3
-	// initialize the bftcosi node/protocol-instance
-	bft := &ProtocolBFTCoSi{
-		TreeNodeInstance: n,
-		collectStructs: collectStructs{
-			prepare:               crypto.NewCosi(n.Suite(), n.Private(), n.Roster().Publics()),
-			commit:                crypto.NewCosi(n.Suite(), n.Private(), n.Roster().Publics()),
-			respondedNodesPrepare: make(map[kyber.Point]*onet.TreeNode),
-			respondedNodesCommit:  make(map[kyber.Point]*onet.TreeNode),
-		},
-		verifyChan:           make(chan bool),
-		VerificationFunction: verify,
-		AllowedExceptions:    t,
-		Msg:                  make([]byte, 0),
-		Data:                 make([]byte, 0),
-		Timeout:              to,
-	}
-
-	idx, _ := n.Roster().Search(bft.ServerIdentity().ID)
-	bft.index = idx
-
-	// Registering channels.
-	err := bft.RegisterChannels(&bft.announceChan,
-		&bft.challengePrepareChan, &bft.challengeCommitChan,
-		&bft.commitChan, &bft.responseChan)
-	if err != nil {
-		return nil, err
-	}
-
-	n.OnDoneCallback(bft.nodeDone)
-	return bft, nil
-}
-
-// Start will start both rounds "prepare" and "commit" at same time. The
-// "commit" round will wait till the end of the "prepare" round during its
-// challenge phase.
-func (bft *ProtocolBFTCoSi) Start() error {
-	if err := bft.startAnnouncement(RoundPrepare); err != nil {
-		return err
-	}
-	go func() {
-		bft.startAnnouncement(RoundCommit)
-	}()
-	return nil
-}
-
-// Dispatch makes sure that the order of the messages is correct by waiting
-// on each channel in the correct order.
-// By closing the channels for the leafs we can avoid having
-// `if !bft.IsLeaf` in the code.
-func (bft *ProtocolBFTCoSi) Dispatch() error {
-	defer bft.Done()
-
-	bft.closingMutex.Lock()
-	if bft.closing {
-		return nil
-	}
-	// Close unused channels for the leaf nodes, so they won't listen
-	// and block on those messages which they will only send but never
-	// receive.
-	// Unfortunately this is not possible for the announce- and
-	// challenge-channels, so the root-node has to send the message
-	// to the channel instead of using a simple `SendToChildren`.
-	if bft.IsLeaf() {
-		close(bft.commitChan)
-		close(bft.responseChan)
-	}
-	bft.closingMutex.Unlock()
-
-	// Start prepare round
-	if err := bft.handleAnnouncement(<-bft.announceChan); err != nil {
-		return err
-	}
-	if !bft.IsLeaf() {
-		if err := bft.handleCommitmentPrepare(bft.commitChan); err != nil {
-			return err
-		}
-	}
-
-	// Start commit round
-	if err := bft.handleAnnouncement(<-bft.announceChan); err != nil {
-		return err
-	}
-	if !bft.IsLeaf() {
-		if err := bft.handleCommitmentCommit(bft.commitChan); err != nil {
-			return err
-		}
-	}
-
-	var gotChallengePrepare bool
-	for {
-		select {
-		case c := <-bft.challengePrepareChan:
-			if gotChallengePrepare {
-				log.Warn(bft.Name(), "got multiple challenges - potential ddos")
-				continue
-			}
-			// Finish the prepare round
-			if err := bft.handleChallengePrepare(c); err != nil {
-				return err
-			}
-			if !bft.IsLeaf() {
-				if err := bft.handleResponsePrepare(bft.responseChan); err != nil {
-					return err
-				}
-			}
-			gotChallengePrepare = true
-		case c := <-bft.challengeCommitChan:
-
-			// Finish the commit round
-			if err := bft.handleChallengeCommit(c); err != nil {
-				return err
-			}
-			if !bft.IsLeaf() {
-				if err := bft.handleResponseCommit(bft.responseChan); err != nil {
-					return err
-				}
-			}
-			bft.successfulMut.Lock()
-			bft.successful = true
-			bft.successfulMut.Unlock()
-			// we return here even when prepare is not done yet,
-			// because we may not have received the challenge for
-			// the prepare phase
-			return nil
-		case <-time.After(bft.Timeout):
-			return fmt.Errorf("timeout waiting for challenge - " +
-				"might be OK because the protocol already finished")
-		}
-	}
-}
-
-// Signature will generate the final signature, the output of the BFTCoSi
-// protocol.  The signature contains the commit round signature, with the
-// message.  Expect this function to have an undefined behavior when called
-// from a non-root Node.  If the root does not finish correctly, then the
-// signature will be nil.
-func (bft *ProtocolBFTCoSi) Signature() *BFTSignature {
-
-	bft.successfulMut.Lock()
-	ok := bft.successful
-	bft.successfulMut.Unlock()
-	if !ok {
-		return &BFTSignature{
-			Msg: bft.Msg,
-		}
-	}
-
-	// create exceptions for the nodes that were late to respond in the
-	// commit phase
-	var i int
-	exceptions := make([]Exception, bft.AllowedExceptions)
-	for _, tn := range bft.Children() {
-		if _, ok := bft.respondedNodesCommit[tn.ServerIdentity.Public]; !ok {
-			exceptions[i] = Exception{
-				Index:      tn.RosterIndex,
-				Commitment: bft.Suite().Point().Null(),
-			}
-			i++
-		}
-	}
-
-	return &BFTSignature{
-		Sig:        bft.commit.Signature(),
-		Msg:        bft.Msg,
-		Exceptions: exceptions,
-	}
-}
-
-// RegisterOnDone registers a callback to call when the bftcosi protocols has
-// really finished
-func (bft *ProtocolBFTCoSi) RegisterOnDone(fn func()) {
-	bft.onDone = fn
-}
-
-// RegisterOnSignatureDone register a callback to call when the bftcosi
-// protocol reached a signature on the block
-func (bft *ProtocolBFTCoSi) RegisterOnSignatureDone(fn func(*BFTSignature)) {
-	bft.onSignatureDone = fn
-}
-
-// Shutdown closes all channels in case we're done
-func (bft *ProtocolBFTCoSi) Shutdown() error {
-	defer func() {
-		// In case the channels were already closed
-		recover()
-	}()
-	bft.setClosing()
-	close(bft.announceChan)
-	close(bft.challengePrepareChan)
-	close(bft.challengeCommitChan)
-	if !bft.IsLeaf() {
-		close(bft.commitChan)
-		close(bft.responseChan)
-	}
-	return nil
-}
-
-// handleAnnouncement passes the announcement to the right CoSi struct.
-func (bft *ProtocolBFTCoSi) handleAnnouncement(msg announceChan) error {
-	ann := msg.Announce
-	if bft.isClosing() {
-		log.Lvl3("Closing")
-		return nil
-	}
-	if bft.IsLeaf() {
-		bft.Timeout = ann.Timeout
-		return bft.startCommitment(ann.TYPE)
-	}
-	errs := bft.SendToChildrenInParallel(&ann)
-	if len(errs) > bft.AllowedExceptions {
-		return errs[0]
-	}
-	return nil
-}
-
-// handleCommitmentPrepare handles incoming commit messages in the prepare phase
-// and then computes the aggregate commit when enough messages arrive.
-// The aggregate is sent to the parent if the node is not a root otherwise it
-// starts the challenge.
-func (bft *ProtocolBFTCoSi) handleCommitmentPrepare(c chan commitChan) error {
-	bft.tmpMutex.Lock()
-	defer bft.tmpMutex.Unlock() // NOTE potentially locked for the whole timeout
-
-	// wait until we have enough RoundPrepare commitments or timeout
-	// should do nothing if `c` is closed
-	if err := bft.readCommitChan(c, RoundPrepare); err != nil {
-		return err
-	}
-
-	// at this point we should have n-t commit messages
-	commitment := bft.prepare.Commit(bft.Suite().RandomStream(), bft.tempPrepareCommit)
-	if bft.IsRoot() {
-		return bft.startChallenge(RoundPrepare)
-	}
-	return bft.SendToParent(&Commitment{
-		TYPE:       RoundPrepare,
-		Commitment: commitment,
-	})
-}
-
-// handleCommitmentCommit is similar to handleCommitmentPrepare except it is for
-// the commit phase.
-func (bft *ProtocolBFTCoSi) handleCommitmentCommit(c chan commitChan) error {
-	bft.tmpMutex.Lock()
-	defer bft.tmpMutex.Unlock() // NOTE potentially locked for the whole timeout
-
-	// wait until we have enough RoundCommit commitments or timeout
-	// should do nothing if `c` is closed
-	if err := bft.readCommitChan(c, RoundCommit); err != nil {
-		return err
-	}
-
-	// at this point we should have a threshold number of commitments
-	commitment := bft.commit.Commit(bft.Suite().RandomStream(), bft.tempCommitCommit)
-	if bft.IsRoot() {
-		// do nothing:
-		// stop the processing of the round, wait the end of
-		// the "prepare" round: calls startChallengeCommit
-		return nil
-	}
-	return bft.SendToParent(&Commitment{
-		TYPE:       RoundCommit,
-		Commitment: commitment,
-	})
-}
-
-// handleChallengePrepare collects the challenge-messages
-func (bft *ProtocolBFTCoSi) handleChallengePrepare(msg challengePrepareChan) error {
-	if bft.isClosing() {
-		return nil
-	}
-	ch := msg.ChallengePrepare
-	if !bft.IsRoot() {
-		bft.Msg = ch.Msg
-		bft.Data = ch.Data
-		// start the verification of the message
-		// acknowledge the challenge and send it down
-		bft.prepare.Challenge(ch.Challenge)
-	}
-	go func() {
-		select {
-		case bft.verifyChan <- bft.VerificationFunction(bft.Msg, bft.Data):
-		case <-time.After(bft.Timeout):
-			log.Error(bft.Name(), "verification didn't complete after", bft.Timeout)
-			// we might not have a reader on bft.verifyChan if nodes exit early
-			select {
-			case bft.verifyChan <- false:
-			default:
-			}
-		}
-	}()
-	if bft.IsLeaf() {
-		return bft.handleResponsePrepare(bft.responseChan)
-	}
-	// only send to the committed children
-	return bft.multicast(&ch, bft.respondedNodesPrepare)
-}
-
-// handleChallengeCommit verifies the signature and checks if not more than
-// the threshold of participants refused to sign
-func (bft *ProtocolBFTCoSi) handleChallengeCommit(msg challengeCommitChan) error {
-	if bft.isClosing() {
-		return nil
-	}
-	ch := msg.ChallengeCommit
-	if !bft.IsRoot() {
-		bft.commit.Challenge(ch.Challenge)
-	}
-
-	// verify if the signature is correct
-	data := sha512.Sum512(ch.Signature.Msg)
-	bftPrepareSig := &BFTSignature{
-		Sig:        ch.Signature.Sig,
-		Msg:        data[:],
-		Exceptions: ch.Signature.Exceptions,
-	}
-	if err := bftPrepareSig.Verify(bft.Suite(), bft.Roster().Publics()); err != nil {
-		return fmt.Errorf("%s: Verification of the signature failed: %v", bft.Name(), err)
-	}
-
-	// check if we have no more than threshold failed nodes
-	if len(ch.Signature.Exceptions) > int(bft.AllowedExceptions) {
-		return fmt.Errorf("%s: More than threshold (%d/%d) refused to sign - aborting",
-			bft.Roster(), len(ch.Signature.Exceptions), len(bft.Roster().List))
-	}
-
-	// store the exceptions for later usage
-	bft.tempExceptions = ch.Signature.Exceptions
-
-	if bft.IsLeaf() {
-		// bft.responseChan should be closed
-		return bft.handleResponseCommit(bft.responseChan)
-	}
-	// only send to the committed children
-	return bft.multicast(&ch, bft.respondedNodesCommit)
-}
-
-// handleResponsePrepare handles response messages in the prepare phase.  If
-// the node is not the root, it'll aggregate the response and forward to the
-// parent. Otherwise it verifies the response.
-func (bft *ProtocolBFTCoSi) handleResponsePrepare(c chan responseChan) error {
-	bft.tmpMutex.Lock()
-	defer bft.tmpMutex.Unlock() // NOTE potentially locked for the whole timeout
-
-	// wait until we have enough RoundPrepare responses or timeout
-	// does nothing if channel is closed
-	if err := bft.readResponseChan(c, RoundPrepare); err != nil {
-		return err
-	}
-
-	// wait for verification
-	bzrReturn, ok := bft.waitResponseVerification()
-	if !ok {
-		return fmt.Errorf("%v verification failed", bft.Name())
-	}
-
-	// return if we're not root
-	if !bft.IsRoot() {
-		return bft.SendToParent(bzrReturn)
-	}
-
-	// Since cosi does not support exceptions yet, we have to remove the
-	// responses that are not supposed to be there, i.e. exceptions.
-	cosiSig := bft.prepare.Signature()
-	correctResponseBuff, err := bzrReturn.Response.MarshalBinary()
-	if err != nil {
-		return err
-	}
-
-	// signature is aggregate commit || aggregate response || mask
-	// replace the old aggregate response with the corrected one
-	pointLen := bft.Suite().PointLen()
-	sigLen := pointLen + bft.Suite().ScalarLen()
-	copy(cosiSig[pointLen:sigLen], correctResponseBuff)
-	bft.prepareSignature = cosiSig
-
-	// Verify the signature is correct
-	data := sha512.Sum512(bft.Msg)
-	sig := &BFTSignature{
-		Msg:        data[:],
-		Sig:        cosiSig,
-		Exceptions: bft.tempExceptions,
-	}
-
-	if err := sig.Verify(bft.Suite(), bft.Roster().Publics()); err != nil {
-		return fmt.Errorf("%s: Verification of the signature failed: %v", bft.Name(), err)
-	}
-	log.Lvl3(bft.Name(), "Verification of signature successful")
-
-	// Start the challenge of the 'commit'-round
-	if err := bft.startChallenge(RoundCommit); err != nil {
-		log.Error(bft.Name(), err)
-		return err
-	}
-	return nil
-}
-
-// handleResponseCommit is similar to `handleResponsePrepare` except it is for
-// the commit phase. A key distinction is that the protocol ends at the end of
-// this function and final signature is generated if it is called by the root.
-func (bft *ProtocolBFTCoSi) handleResponseCommit(c chan responseChan) error {
-	bft.tmpMutex.Lock()
-	defer bft.tmpMutex.Unlock()
-
-	// wait until we have enough RoundCommit responses or timeout
-	// does nothing if channel is closed
-	if err := bft.readResponseChan(c, RoundCommit); err != nil {
-		return err
-	}
-
-	r := &Response{
-		TYPE:     RoundCommit,
-		Response: bft.Suite().Scalar().Zero(),
-	}
-
-	var err error
-	if bft.IsLeaf() {
-		r.Response, err = bft.commit.CreateResponse()
-	} else {
-		r.Response, err = bft.commit.Response(bft.tempCommitResponse)
-	}
-	if err != nil {
-		return err
-	}
-
-	// if root we have finished
-	if bft.IsRoot() {
-		sig := bft.Signature()
-		if bft.onSignatureDone != nil {
-			bft.onSignatureDone(sig)
-		}
-		return nil
-	}
-
-	err = bft.SendToParent(r)
-	bft.Done()
+// Close implements io.Closer (https://golang.org/pkg/io/#Closer).
+func (r *Reader) Close() error {
+	err := wrapError(r.b, r.r.Close())
+	trace.EndSpan(r.tctx, err)
 	return err
 }
 
-// readCommitChan reads a threshold (n-t) of the commit messages or until the
-// timeout for message type `t`.
-func (bft *ProtocolBFTCoSi) readCommitChan(c chan commitChan, t RoundType) error {
-	timeout := time.After(bft.Timeout)
-	for {
-		if bft.isClosing() {
-			return errors.New("closing")
-		}
+// ContentType returns the MIME type of the blob.
+func (r *Reader) ContentType() string {
+	return r.r.Attributes().ContentType
+}
 
-		select {
-		case msg, ok := <-c:
-			if !ok {
-				log.Lvl3("Channel closed")
-				return nil
+// ModTime returns the time the blob was last modified.
+func (r *Reader) ModTime() time.Time {
+	return r.r.Attributes().ModTime
+}
+
+// Size returns the size of the blob content in bytes.
+func (r *Reader) Size() int64 {
+	return r.r.Attributes().Size
+}
+
+// As converts i to provider-specific types.
+// See Bucket.As for more details.
+func (r *Reader) As(i interface{}) bool {
+	return r.r.As(i)
+}
+
+// Attributes contains attributes about a blob.
+type Attributes struct {
+	// CacheControl specifies caching attributes that providers may use
+	// when serving the blob.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+	CacheControl string
+	// ContentDisposition specifies whether the blob content is expected to be
+	// displayed inline or as an attachment.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+	ContentDisposition string
+	// ContentEncoding specifies the encoding used for the blob's content, if any.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
+	ContentEncoding string
+	// ContentLanguage specifies the language used in the blob's content, if any.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Language
+	ContentLanguage string
+	// ContentType is the MIME type of the blob. It will not be empty.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
+	ContentType string
+	// Metadata holds key/value pairs associated with the blob.
+	// Keys are guaranteed to be in lowercase, even if the backend provider
+	// has case-sensitive keys (although note that Metadata written via
+	// this package will always be lowercased). If there are duplicate
+	// case-insensitive keys (e.g., "foo" and "FOO"), only one value
+	// will be kept, and it is undefined which one.
+	Metadata map[string]string
+	// ModTime is the time the blob was last modified.
+	ModTime time.Time
+	// Size is the size of the blob's content in bytes.
+	Size int64
+	// MD5 is an MD5 hash of the blob contents or nil if not available.
+	MD5 []byte
+
+	asFunc func(interface{}) bool
+}
+
+// As converts i to provider-specific types.
+// See Bucket.As for more details.
+func (a *Attributes) As(i interface{}) bool {
+	if a.asFunc == nil {
+		return false
+	}
+	return a.asFunc(i)
+}
+
+// Writer writes bytes to a blob.
+//
+// It implements io.WriteCloser (https://golang.org/pkg/io/#Closer), and must be
+// closed after all writes are done.
+type Writer struct {
+	b          driver.Bucket
+	w          driver.Writer
+	cancel     func() // cancels the ctx provided to NewTypedWriter if contentMD5 verification fails
+	contentMD5 []byte
+	md5hash    hash.Hash
+
+	// These fields exist only when w is not yet created.
+	//
+	// A ctx is stored in the Writer since we need to pass it into NewTypedWriter
+	// when we finish detecting the content type of the blob and create the
+	// underlying driver.Writer. This step happens inside Write or Close and
+	// neither of them take a context.Context as an argument. The ctx is set
+	// to nil after we have passed it to NewTypedWriter.
+	ctx  context.Context
+	key  string
+	opts *driver.WriterOptions
+	buf  *bytes.Buffer
+	tctx context.Context // context for tracing only
+}
+
+// sniffLen is the byte size of Writer.buf used to detect content-type.
+const sniffLen = 512
+
+// Write implements the io.Writer interface (https://golang.org/pkg/io/#Writer).
+//
+// Writes may happen asynchronously, so the returned error can be nil
+// even if the actual write eventually fails. The write is only guaranteed to
+// have succeeded if Close returns no error.
+func (w *Writer) Write(p []byte) (n int, err error) {
+	if len(w.contentMD5) > 0 {
+		if _, err := w.md5hash.Write(p); err != nil {
+			return 0, err
+		}
+	}
+	if w.w != nil {
+		n, err := w.w.Write(p)
+		return n, wrapError(w.b, err)
+	}
+
+	// If w is not yet created due to no content-type being passed in, try to sniff
+	// the MIME type based on at most 512 bytes of the blob content of p.
+
+	// Detect the content-type directly if the first chunk is at least 512 bytes.
+	if w.buf.Len() == 0 && len(p) >= sniffLen {
+		return w.open(p)
+	}
+
+	// Store p in w.buf and detect the content-type when the size of content in
+	// w.buf is at least 512 bytes.
+	w.buf.Write(p)
+	if w.buf.Len() >= sniffLen {
+		return w.open(w.buf.Bytes())
+	}
+	return len(p), nil
+}
+
+// Close closes the blob writer. The write operation is not guaranteed to have succeeded until
+// Close returns with no error.
+// Close may return an error if the context provided to create the Writer is
+// canceled or reaches its deadline.
+func (w *Writer) Close() (err error) {
+	defer func() { trace.EndSpan(w.tctx, err) }()
+	if len(w.contentMD5) > 0 {
+		// Verify the MD5 hash of what was written matches the ContentMD5 provided
+		// by the user.
+		md5sum := w.md5hash.Sum(nil)
+		if !bytes.Equal(md5sum, w.contentMD5) {
+			// No match! Return an error, but first cancel the context and call the
+			// driver's Close function to ensure the write is aborted.
+			w.cancel()
+			if w.w != nil {
+				_ = w.w.Close()
 			}
-
-			from := msg.ServerIdentity.Public
-			comm := msg.Commitment
-			// store the message and return when we have enough
-			switch comm.TYPE {
-			case RoundPrepare:
-				if bft.committedInPreparePhase {
-					continue
-				}
-				if _, ok := bft.respondedNodesPrepare[from]; ok {
-					log.Warnf("%s: node %v already responded - potential malicious behaviour")
-					continue
-				}
-				bft.respondedNodesPrepare[from] = msg.TreeNode
-				bft.tempPrepareCommit = append(bft.tempPrepareCommit, comm.Commitment)
-				if t == RoundPrepare && len(bft.tempPrepareCommit) == len(bft.Children())-bft.AllowedExceptions {
-					bft.committedInPreparePhase = true
-					return nil
-				}
-			case RoundCommit:
-				if bft.committedInCommitPhase {
-					continue
-				}
-				if _, ok := bft.respondedNodesCommit[from]; ok {
-					log.Warnf("%s: node %v already responded - potential malicious behaviour")
-					continue
-				}
-				bft.respondedNodesCommit[from] = msg.TreeNode
-				bft.tempCommitCommit = append(bft.tempCommitCommit, comm.Commitment)
-				if t == RoundCommit && len(bft.tempCommitCommit) == len(bft.Children())-bft.AllowedExceptions {
-					bft.committedInCommitPhase = true
-					return nil
-				}
-			}
-		case <-timeout:
-			// if there is a timeout, then we cannot continue
-			return fmt.Errorf("timeout while trying to read commit message for phase %v", t)
+			return fmt.Errorf("blob: the ContentMD5 you specified (%X) did not match what was written (%X)", w.contentMD5, md5sum)
 		}
 	}
-}
 
-// readResponseChan reads a threshold (n-t) of response messages, the threshold
-// must be from the committed set of nodes.  It returns an error on timeout.
-func (bft *ProtocolBFTCoSi) readResponseChan(c chan responseChan, t RoundType) error {
-	timeout := time.After(bft.Timeout)
-	for {
-		if bft.isClosing() {
-			return errors.New("Closing")
-		}
-
-		select {
-		case msg, ok := <-c:
-			if !ok {
-				log.Lvl3("Channel closed")
-				return nil
-			}
-			r := msg.Response
-
-			switch msg.Response.TYPE {
-			case RoundPrepare:
-				bft.tempPrepareResponse = append(bft.tempPrepareResponse, r.Response)
-				bft.tempExceptions = append(bft.tempExceptions, r.Exceptions...)
-				// NOTE here we assume all nodes that committed will respond
-				if t == RoundPrepare && len(bft.tempPrepareResponse) == len(bft.tempPrepareCommit) {
-					return nil
-				}
-			case RoundCommit:
-				bft.tempCommitResponse = append(bft.tempCommitResponse, r.Response)
-				// NOTE here we assume all nodes that committed will respond
-				if t == RoundCommit && len(bft.tempCommitResponse) == len(bft.tempCommitCommit) {
-					return nil
-				}
-			}
-		case <-timeout:
-			// if there is a timeout, then we cannot continue
-			return fmt.Errorf("%s: timeout while trying to read response message for phase %v", bft.Name(), t)
-		}
+	defer w.cancel()
+	if w.w != nil {
+		return wrapError(w.b, w.w.Close())
 	}
-}
-
-// startAnnouncement creates its announcement for the prepare round and
-// sends it down the tree.
-func (bft *ProtocolBFTCoSi) startAnnouncement(t RoundType) error {
-	bft.announceChan <- announceChan{Announce: Announce{TYPE: t, Timeout: bft.Timeout}}
-	return nil
-}
-
-// startCommitment sends the first commitment to the parent node
-func (bft *ProtocolBFTCoSi) startCommitment(t RoundType) error {
-	cm := bft.getCosi(t).CreateCommitment(bft.Suite().RandomStream())
-	return bft.SendToParent(&Commitment{TYPE: t, Commitment: cm})
-}
-
-// startChallenge creates the challenge and sends it to children that committed
-func (bft *ProtocolBFTCoSi) startChallenge(t RoundType) error {
-	switch t {
-	case RoundPrepare:
-		// need to hash the message before so challenge in both phases are not
-		// the same
-		data := sha512.Sum512(bft.Msg)
-		ch, err := bft.prepare.CreateChallenge(data[:])
-		if err != nil {
-			return err
-		}
-		bftChal := ChallengePrepare{
-			Challenge: ch,
-			Msg:       bft.Msg,
-			Data:      bft.Data,
-		}
-		bft.challengePrepareChan <- challengePrepareChan{ChallengePrepare: bftChal}
-	case RoundCommit:
-		// commit phase
-		ch, err := bft.commit.CreateChallenge(bft.Msg)
-		if err != nil {
-			return err
-		}
-
-		// send challenge + signature
-		cc := ChallengeCommit{
-			Challenge: ch,
-			Signature: &BFTSignature{
-				Msg:        bft.Msg,
-				Sig:        bft.prepareSignature,
-				Exceptions: bft.tempExceptions,
-			},
-		}
-		bft.challengeCommitChan <- challengeCommitChan{ChallengeCommit: cc}
+	if _, err := w.open(w.buf.Bytes()); err != nil {
+		return err
 	}
-	return nil
+	return wrapError(w.b, w.w.Close())
 }
 
-// waitResponseVerification waits till the end of the verification and returns
-// the BFTCoSiResponse along with the flag:
-// true => no exception, the verification is correct
-// false => exception, the verification failed
-func (bft *ProtocolBFTCoSi) waitResponseVerification() (*Response, bool) {
-	log.Lvl3(bft.Name(), "Waiting for response verification:")
-	// wait the verification
-	if !<-bft.verifyChan {
-		return nil, false
+// open tries to detect the MIME type of p and write it to the blob.
+// The error it returns is wrapped.
+func (w *Writer) open(p []byte) (int, error) {
+	ct := http.DetectContentType(p)
+	var err error
+	if w.w, err = w.b.NewTypedWriter(w.ctx, w.key, ct, w.opts); err != nil {
+		return 0, wrapError(w.b, err)
 	}
+	w.buf = nil
+	w.ctx = nil
+	w.key = ""
+	w.opts = nil
+	n, err := w.w.Write(p)
+	return n, wrapError(w.b, err)
+}
 
-	// sanity check
-	if bft.IsLeaf() && len(bft.tempPrepareResponse) != 0 {
-		panic("bft.tempPrepareResponse is not 0 on leaf node")
+// ListOptions sets options for listing blobs via Bucket.List.
+type ListOptions struct {
+	// Prefix indicates that only blobs with a key starting with this prefix
+	// should be returned.
+	Prefix string
+	// Delimiter sets the delimiter used to define a hierarchical namespace,
+	// like a filesystem with "directories".
+	//
+	// An empty delimiter means that the bucket is treated as a single flat
+	// namespace.
+	//
+	// A non-empty delimiter means that any result with the delimiter in its key
+	// after Prefix is stripped will be returned with ListObject.IsDir = true,
+	// ListObject.Key truncated after the delimiter, and zero values for other
+	// ListObject fields. These results represent "directories". Multiple results
+	// in a "directory" are returned as a single result.
+	Delimiter string
+
+	// BeforeList is a callback that will be called before each call to the
+	// the underlying provider's list functionality.
+	// asFunc converts its argument to provider-specific types.
+	// See Bucket.As for more details.
+	BeforeList func(asFunc func(interface{}) bool) error
+}
+
+// ListIterator iterates over List results.
+type ListIterator struct {
+	b       driver.Bucket
+	opts    *driver.ListOptions
+	page    *driver.ListPage
+	nextIdx int
+}
+
+// Next returns a *ListObject for the next blob. It returns (nil, io.EOF) if
+// there are no more.
+func (i *ListIterator) Next(ctx context.Context) (*ListObject, error) {
+	if i.page != nil {
+		// We've already got a page of results.
+		if i.nextIdx < len(i.page.Objects) {
+			// Next object is in the page; return it.
+			dobj := i.page.Objects[i.nextIdx]
+			i.nextIdx++
+			return &ListObject{
+				Key:     dobj.Key,
+				ModTime: dobj.ModTime,
+				Size:    dobj.Size,
+				MD5:     dobj.MD5,
+				IsDir:   dobj.IsDir,
+				asFunc:  dobj.AsFunc,
+			}, nil
+		}
+		if len(i.page.NextPageToken) == 0 {
+			// Done with current page, and there are no more; return io.EOF.
+			return nil, io.EOF
+		}
+		// We need to load the next page.
+		i.opts.PageToken = i.page.NextPageToken
 	}
-
-	resp, err := bft.prepare.Response(bft.tempPrepareResponse)
+	// Loading a new page.
+	p, err := i.b.ListPaged(ctx, i.opts)
 	if err != nil {
-		return nil, false
+		return nil, wrapError(i.b, err)
 	}
+	i.page = p
+	i.nextIdx = 0
+	return i.Next(ctx)
+}
 
-	// Create the exceptions for nodes that were not included in the first
-	// 2/3 of the responses. We do this in two steps. (1) Find children
-	// that are not in respondedNodesPrepare and (2) for the missing
-	// ones, find the global index and then add it to the exception.
-	for _, tn := range bft.Children() {
-		if _, ok := bft.respondedNodesPrepare[tn.ServerIdentity.Public]; !ok {
-			// We assume the server was also not available for the commitment
-			// so no need to subtract the commitment.
-			// Conversely, we cannot handle nodes which fail right
-			// after making a commitment at the moment.
-			bft.tempExceptions = append(bft.tempExceptions, Exception{
-				Index:      tn.RosterIndex,
-				Commitment: bft.Suite().Point().Null(),
-			})
+// ListObject represents a single blob returned from List.
+type ListObject struct {
+	// Key is the key for this blob.
+	Key string
+	// ModTime is the time the blob was last modified.
+	ModTime time.Time
+	// Size is the size of the blob's content in bytes.
+	Size int64
+	// MD5 is an MD5 hash of the blob contents or nil if not available.
+	MD5 []byte
+	// IsDir indicates that this result represents a "directory" in the
+	// hierarchical namespace, ending in ListOptions.Delimiter. Key can be
+	// passed as ListOptions.Prefix to list items in the "directory".
+	// Fields other than Key and IsDir will not be set if IsDir is true.
+	IsDir bool
+
+	asFunc func(interface{}) bool
+}
+
+// As converts i to provider-specific types.
+// See Bucket.As for more details.
+func (o *ListObject) As(i interface{}) bool {
+	if o.asFunc == nil {
+		return false
+	}
+	return o.asFunc(i)
+}
+
+// Bucket provides an easy and portable way to interact with blobs
+// within a "bucket", including read, write, and list operations.
+// To create a Bucket, use constructors found in provider-specific
+// subpackages.
+type Bucket struct {
+	b driver.Bucket
+}
+
+// NewBucket is intended for use by provider implementations.
+var NewBucket = newBucket
+
+// newBucket creates a new *Bucket based on a specific driver implementation.
+// End users should use subpackages to construct a *Bucket instead of this
+// function; see the package documentation for details.
+func newBucket(b driver.Bucket) *Bucket {
+	return &Bucket{b: b}
+}
+
+// As converts i to provider-specific types.
+//
+// This function (and the other As functions in this package) are inherently
+// provider-specific, and using them will make that part of your application
+// non-portable, so use with care.
+//
+// See the documentation for the subpackage used to instantiate Bucket to see
+// which type(s) are supported.
+//
+// Usage:
+//
+// 1. Declare a variable of the provider-specific type you want to access.
+//
+// 2. Pass a pointer to it to As.
+//
+// 3. If the type is supported, As will return true and copy the
+// provider-specific type into your variable. Otherwise, it will return false.
+//
+// Provider-specific types that are intended to be mutable will be exposed
+// as a pointer to the underlying type.
+//
+// See
+// https://github.com/google/go-cloud/blob/master/internal/docs/design.md#as
+// for more background.
+func (b *Bucket) As(i interface{}) bool {
+	if i == nil {
+		return false
+	}
+	return b.b.As(i)
+}
+
+// ReadAll is a shortcut for creating a Reader via NewReader with nil
+// ReaderOptions, and reading the entire blob.
+func (b *Bucket) ReadAll(ctx context.Context, key string) (_ []byte, err error) {
+	defer func() { trace.EndSpan(ctx, err) }()
+
+	r, err := b.NewReader(ctx, key, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return ioutil.ReadAll(r)
+}
+
+// List returns a ListIterator that can be used to iterate over blobs in a
+// bucket, in lexicographical order of UTF-8 encoded keys. The underlying
+// implementation fetches results in pages.
+//
+// A nil ListOptions is treated the same as the zero value.
+//
+// List is not guaranteed to include all recently-written blobs;
+// some providers are only eventually consistent.
+func (b *Bucket) List(opts *ListOptions) *ListIterator {
+	if opts == nil {
+		opts = &ListOptions{}
+	}
+	dopts := &driver.ListOptions{
+		Prefix:     opts.Prefix,
+		Delimiter:  opts.Delimiter,
+		BeforeList: opts.BeforeList,
+	}
+	return &ListIterator{b: b.b, opts: dopts}
+}
+
+// Attributes returns attributes for the blob stored at key.
+//
+// If the blob does not exist, Attributes returns an error for which
+// IsNotExist will return true.
+func (b *Bucket) Attributes(ctx context.Context, key string) (_ Attributes, err error) {
+	ctx = trace.StartSpan(ctx, "gocloud.dev/blob.Attributes")
+	defer func() { trace.EndSpan(ctx, err) }()
+
+	a, err := b.b.Attributes(ctx, key)
+	if err != nil {
+		return Attributes{}, wrapError(b.b, err)
+	}
+	var md map[string]string
+	if len(a.Metadata) > 0 {
+		// Providers are inconsistent, but at least some treat keys
+		// as case-insensitive. To make the behavior consistent, we
+		// force-lowercase them when writing and reading.
+		md = make(map[string]string, len(a.Metadata))
+		for k, v := range a.Metadata {
+			md[strings.ToLower(k)] = v
 		}
 	}
+	return Attributes{
+		CacheControl:       a.CacheControl,
+		ContentDisposition: a.ContentDisposition,
+		ContentEncoding:    a.ContentEncoding,
+		ContentLanguage:    a.ContentLanguage,
+		ContentType:        a.ContentType,
+		Metadata:           md,
+		ModTime:            a.ModTime,
+		Size:               a.Size,
+		MD5:                a.MD5,
+		asFunc:             a.AsFunc,
+	}, nil
+}
 
-	r := &Response{
-		TYPE:       RoundPrepare,
-		Exceptions: bft.tempExceptions,
-		Response:   resp,
+// NewReader is a shortcut for NewRangedReader with offset=0 and length=-1.
+func (b *Bucket) NewReader(ctx context.Context, key string, opts *ReaderOptions) (*Reader, error) {
+	return b.NewRangeReader(ctx, key, 0, -1, opts)
+}
+
+// NewRangeReader returns a Reader to read content from the blob stored at key.
+// It reads at most length bytes starting at offset (>= 0).
+// If length is negative, it will read till the end of the blob.
+//
+// If the blob does not exist, NewRangeReader returns an error for which
+// IsNotExist will return true. Attributes is a lighter-weight way
+// to check for existence.
+//
+// A nil ReaderOptions is treated the same as the zero value.
+//
+// The caller must call Close on the returned Reader when done reading.
+func (b *Bucket) NewRangeReader(ctx context.Context, key string, offset, length int64, opts *ReaderOptions) (_ *Reader, err error) {
+	if offset < 0 {
+		return nil, errors.New("blob.NewRangeReader: offset must be non-negative")
 	}
-
-	log.Lvl3(bft.Name(), "Response verified")
-	return r, true
-}
-
-// nodeDone is either called by the end of EndProtocol or by the end of the
-// response phase of the commit round.
-func (bft *ProtocolBFTCoSi) nodeDone() bool {
-	bft.Shutdown()
-	if bft.onDone != nil {
-		// only true for the root
-		bft.onDone()
+	if opts == nil {
+		opts = &ReaderOptions{}
 	}
-	return true
-}
-
-func (bft *ProtocolBFTCoSi) getCosi(t RoundType) *crypto.CoSi {
-	if t == RoundPrepare {
-		return bft.prepare
-	}
-	return bft.commit
-}
-
-func (bft *ProtocolBFTCoSi) isClosing() bool {
-	bft.closingMutex.Lock()
-	defer bft.closingMutex.Unlock()
-	return bft.closing
-}
-
-func (bft *ProtocolBFTCoSi) setClosing() {
-	bft.closingMutex.Lock()
-	bft.closing = true
-	bft.closingMutex.Unlock()
-}
-
-func (bft *ProtocolBFTCoSi) multicast(msg interface{}, nodes map[kyber.Point]*onet.TreeNode) error {
-	for _, tn := range nodes {
-		if err := bft.SendTo(tn, msg); err != nil {
-			log.Error(err)
+	dopts := &driver.ReaderOptions{}
+	tctx := trace.StartSpan(ctx, "gocloud.dev/blob.NewRangeReader")
+	defer func() {
+		if err != nil {
+			trace.EndSpan(tctx, err)
 		}
+	}()
+	r, err := b.b.NewRangeReader(ctx, key, offset, length, dopts)
+	if err != nil {
+		return nil, wrapError(b.b, err)
 	}
-	return nil
+	return &Reader{b: b.b, r: r, tctx: tctx}, nil
+}
+
+// WriteAll is a shortcut for creating a Writer via NewWriter and writing p.
+func (b *Bucket) WriteAll(ctx context.Context, key string, p []byte, opts *WriterOptions) (err error) {
+	w, err := b.NewWriter(ctx, key, opts)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(p); err != nil {
+		_ = w.Close()
+		return err
+	}
+	return w.Close()
+}
+
+// NewWriter returns a Writer that writes to the blob stored at key.
+// A nil WriterOptions is treated the same as the zero value.
+//
+// If a blob with this key already exists, it will be replaced.
+// The blob being written is not guaranteed to be readable until Close
+// has been called; until then, any previous blob will still be readable.
+// Even after Close is called, newly written blobs are not guaranteed to be
+// returned from List; some providers are only eventually consistent.
+//
+// The returned Writer will store ctx for later use in Write and/or Close.
+// To abort a write, cancel ctx; otherwise, it must remain open until
+// Close is called.
+//
+// The caller must call Close on the returned Writer, even if the write is
+// aborted.
+func (b *Bucket) NewWriter(ctx context.Context, key string, opts *WriterOptions) (_ *Writer, err error) {
+	var dopts *driver.WriterOptions
+	var w driver.Writer
+	if opts == nil {
+		opts = &WriterOptions{}
+	}
+	dopts = &driver.WriterOptions{
+		CacheControl:       opts.CacheControl,
+		ContentDisposition: opts.ContentDisposition,
+		ContentEncoding:    opts.ContentEncoding,
+		ContentLanguage:    opts.ContentLanguage,
+		ContentMD5:         opts.ContentMD5,
+		BufferSize:         opts.BufferSize,
+		BeforeWrite:        opts.BeforeWrite,
+	}
+	if len(opts.Metadata) > 0 {
+		// Providers are inconsistent, but at least some treat keys
+		// as case-insensitive. To make the behavior consistent, we
+		// force-lowercase them when writing and reading.
+		md := make(map[string]string, len(opts.Metadata))
+		for k, v := range opts.Metadata {
+			if k == "" {
+				return nil, errors.New("blob.NewWriter: WriterOptions.Metadata keys may not be empty strings")
+			}
+			lowerK := strings.ToLower(k)
+			if _, found := md[lowerK]; found {
+				return nil, fmt.Errorf("blob.NewWriter: duplicate case-insensitive metadata key %q", lowerK)
+			}
+			md[lowerK] = v
+		}
+		dopts.Metadata = md
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	tctx := trace.StartSpan(ctx, "gocloud.dev/blob.NewWriter")
+	defer func() {
+		if err != nil {
+			trace.EndSpan(tctx, err)
+		}
+	}()
+
+	if opts.ContentType != "" {
+		t, p, err := mime.ParseMediaType(opts.ContentType)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		ct := mime.FormatMediaType(t, p)
+		w, err = b.b.NewTypedWriter(ctx, key, ct, dopts)
+		if err != nil {
+			cancel()
+			return nil, wrapError(b.b, err)
+		}
+		return &Writer{
+			b:          b.b,
+			w:          w,
+			cancel:     cancel,
+			contentMD5: opts.ContentMD5,
+			md5hash:    md5.New(),
+			tctx:       tctx,
+		}, nil
+	}
+	return &Writer{
+		ctx:        ctx,
+		cancel:     cancel,
+		b:          b.b,
+		key:        key,
+		opts:       dopts,
+		buf:        bytes.NewBuffer([]byte{}),
+		contentMD5: opts.ContentMD5,
+		md5hash:    md5.New(),
+		tctx:       tctx,
+	}, nil
+}
+
+// Delete deletes the blob stored at key.
+//
+// If the blob does not exist, Delete returns an error for which
+// IsNotExist will return true.
+func (b *Bucket) Delete(ctx context.Context, key string) (err error) {
+	ctx = trace.StartSpan(ctx, "gocloud.dev/blob.Delete")
+	defer func() { trace.EndSpan(ctx, err) }()
+	return wrapError(b.b, b.b.Delete(ctx, key))
+}
+
+// SignedURL returns a URL that can be used to GET the blob for the duration
+// specified in opts.Expiry.
+//
+// A nil SignedURLOptions is treated the same as the zero value.
+//
+// It is valid to call SignedURL for a key that does not exist.
+//
+// If the provider implementation does not support this functionality, SignedURL
+// will return an error for which IsNotImplemented will return true.
+func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptions) (string, error) {
+	if opts == nil {
+		opts = &SignedURLOptions{}
+	}
+	if opts.Expiry < 0 {
+		return "", errors.New("blob.SignedURL: SignedURLOptions.Expiry must be >= 0")
+	}
+	if opts.Expiry == 0 {
+		opts.Expiry = DefaultSignedURLExpiry
+	}
+	dopts := driver.SignedURLOptions{
+		Expiry: opts.Expiry,
+	}
+	url, err := b.b.SignedURL(ctx, key, &dopts)
+	return url, wrapError(b.b, err)
+}
+
+// DefaultSignedURLExpiry is the default duration for SignedURLOptions.Expiry.
+const DefaultSignedURLExpiry = 1 * time.Hour
+
+// SignedURLOptions sets options for SignedURL.
+type SignedURLOptions struct {
+	// Expiry sets how long the returned URL is valid for.
+	// Defaults to DefaultSignedURLExpiry.
+	Expiry time.Duration
+}
+
+// ReaderOptions sets options for NewReader and NewRangedReader.
+// It is provided for future extensibility.
+type ReaderOptions struct{}
+
+// WriterOptions sets options for NewWriter.
+type WriterOptions struct {
+	// BufferSize changes the default size in bytes of the chunks that
+	// Writer will upload in a single request; larger blobs will be split into
+	// multiple requests.
+	//
+	// This option may be ignored by some provider implementations.
+	//
+	// If 0, the provider implementation will choose a reasonable default.
+	//
+	// If the Writer is used to do many small writes concurrently, using a
+	// smaller BufferSize may reduce memory usage.
+	BufferSize int
+
+	// CacheControl specifies caching attributes that providers may use
+	// when serving the blob.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+	CacheControl string
+
+	// ContentDisposition specifies whether the blob content is expected to be
+	// displayed inline or as an attachment.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+	ContentDisposition string
+
+	// ContentEncoding specifies the encoding used for the blob's content, if any.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
+	ContentEncoding string
+
+	// ContentLanguage specifies the language used in the blob's content, if any.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Language
+	ContentLanguage string
+
+	// ContentType specifies the MIME type of the blob being written. If not set,
+	// it will be inferred from the content using the algorithm described at
+	// http://mimesniff.spec.whatwg.org/.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
+	ContentType string
+
+	// ContentMD5 is used as a message integrity check.
+	// If len(ContentMD5) > 0, the MD5 hash of the bytes written must match
+	// ContentMD5, or Close will return an error without completing the write.
+	// https://tools.ietf.org/html/rfc1864
+	ContentMD5 []byte
+
+	// Metadata holds key/value strings to be associated with the blob, or nil.
+	// Keys may not be empty, and are lowercased before being written.
+	// Duplicate case-insensitive keys (e.g., "foo" and "FOO") will result in
+	// an error.
+	Metadata map[string]string
+
+	// BeforeWrite is a callback that will be called exactly once, before
+	// any data is written (unless NewWriter returns an error, in which case
+	// it will not be called at all). Note that this is not necessarily during
+	// or after the first Write call, as providers may buffer bytes before
+	// sending an upload request.
+	//
+	// asFunc converts its argument to provider-specific types.
+	// See Bucket.As for more details.
+	BeforeWrite func(asFunc func(interface{}) bool) error
+}
+
+// FromURLFunc is intended for use by provider implementations.
+// It allows providers to convert a parsed URL from Open to a driver.Bucket.
+type FromURLFunc func(context.Context, *url.URL) (driver.Bucket, error)
+
+var (
+	// registry maps scheme strings to provider-specific instantiation functions.
+	registry = map[string]FromURLFunc{}
+	// registryMu protected registry.
+	registryMu sync.Mutex
+)
+
+// Register is for use by provider implementations. It allows providers to
+// register an instantiation function for URLs with the given scheme. It is
+// expected to be called from the provider implementation's package init
+// function.
+//
+// fn will be called from Open, with a bucket name and options parsed from
+// the URL. All option keys will be lowercased.
+//
+// Register panics if a provider has already registered for scheme.
+func Register(scheme string, fn FromURLFunc) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	if _, found := registry[scheme]; found {
+		log.Fatalf("a provider has already registered for scheme %q", scheme)
+	}
+	registry[scheme] = fn
+}
+
+// fromRegistry looks up the registered function for scheme.
+// It returns nil if scheme has not been registered for.
+func fromRegistry(scheme string) FromURLFunc {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	return registry[scheme]
+}
+
+// Open creates a *Bucket from a URL.
+// See the package documentation in provider-specific subpackages for more
+// details on supported scheme(s) and URL parameter(s).
+func Open(ctx context.Context, urlstr string) (*Bucket, error) {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme == "" {
+		return nil, fmt.Errorf("invalid URL %q, missing scheme", urlstr)
+	}
+	fn := fromRegistry(u.Scheme)
+	if fn == nil {
+		return nil, fmt.Errorf("no provider registered for scheme %q", u.Scheme)
+	}
+	drv, err := fn(ctx, u)
+	if err != nil {
+		return nil, err
+	}
+	return NewBucket(drv), nil
+}
+
+// wrappedError is used to wrap all errors returned by drivers so that users
+// are not given access to provider-specific errors.
+type wrappedError struct {
+	err error
+	b   driver.Bucket
+}
+
+func wrapError(b driver.Bucket, err error) error {
+	if err == nil {
+		return nil
+	}
+	if err == io.EOF {
+		return err
+	}
+	return &wrappedError{b: b, err: err}
+}
+
+func (w *wrappedError) Error() string {
+	return "blob: " + w.err.Error()
+}
+
+// IsNotExist returns true iff err indicates that the referenced blob does not exist.
+func IsNotExist(err error) bool {
+	if e, ok := err.(*wrappedError); ok {
+		return e.b.IsNotExist(e.err)
+	}
+	return false
+}
+
+// IsNotImplemented returns true iff err indicates that the provider does not
+// support the given operation.
+func IsNotImplemented(err error) bool {
+	if e, ok := err.(*wrappedError); ok {
+		return e.b.IsNotImplemented(e.err)
+	}
+	if err == nil || i == nil {
+		return false
+	}
+	if e, ok := err.(*wrappedError); ok {
+		return e.b.ErrorAs(e.err, i)
+	}
+	return false
+	return false
+}
+
+// ErrorAs converts i to provider-specific types.
+// See Bucket.As for more details.
+func ErrorAs(err error, i interface{}) bool {
+	return xerrors.As(err, i)
 }

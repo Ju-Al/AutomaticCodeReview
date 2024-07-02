@@ -1,6 +1,4 @@
 # Copyright (C) 2014-2015 MongoDB Inc.
-      def calculate_round_trip_time(start)
-        Time.now - start
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -136,7 +134,8 @@ module Mongo
 
       private
 
-      def average_round_trip_time(start)
+      def calculate_round_trip_time(start)
+        Time.now - start
         new_rtt = Time.now - start
         return new_rtt unless last_round_trip_time
         average = RTT_WEIGHT_FACTOR * new_rtt + (1 - RTT_WEIGHT_FACTOR) * last_round_trip_time

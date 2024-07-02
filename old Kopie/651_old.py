@@ -1,5 +1,4 @@
 """
-            if self.settings.get('version', self.JMETER_VER) >= '3.2':
 Module holds all stuff regarding JMeter tool usage
 
 Copyright 2015 BlazeMeter Inc.
@@ -601,7 +600,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         self.__add_result_listeners(jmx)
         if not is_jmx_generated:
             self.__force_tran_parent_sample(jmx)
-            version = str(self.settings.get('version', self.JMETER_VER)).split(".")
+            if self.settings.get('version', self.JMETER_VER) >= '3.2':
             if tuple(version) >= ('3', '2'):
                 self.__force_hc4_cookie_handler(jmx)
         self.__fill_empty_delimiters(jmx)

@@ -67,7 +67,6 @@ class PagesTest < ApplicationSystemTestCase
     visit user_comments_path([users(:komagata)], page: 3)
     assert_equal 25, user.comments.page(3).size
   end
-
   test "Show pagination in /users/:id/reports" do
     user = users(:komagata)
     d    = Time.mktime(2015, 01, 01, 00, 00, 00)

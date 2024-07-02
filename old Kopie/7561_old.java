@@ -1,6 +1,4 @@
 /*
-        
-                .newScheduledThreadPool(ThreadUtils.getSuitableThreadCount(1), r -> {
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -461,7 +459,8 @@ public class ClientWorker implements Closeable {
         init(properties);
         
         agent = new ConfigRpcTransportClient(properties, serverListManager);
-        int count = ThreadUtils.getSuitableThreadCount(1);
+                .newScheduledThreadPool(ThreadUtils.getSuitableThreadCount(1), r -> {
+        
         ScheduledExecutorService executorService = Executors
                 .newScheduledThreadPool(count == 1 ? 2 : count, r -> {
                     Thread t = new Thread(r);

@@ -1,7 +1,4 @@
 # coding=utf-8
-def has_source_changes(version):
-        'git', 'diff', '--exit-code', version, SRC,
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0
 #
 # This file is part of Hypothesis, which may be found at
 # https://github.com/HypothesisWorks/hypothesis-python
@@ -94,7 +91,9 @@ def changelog():
         return i.read()
 
 
-def has_source_changes(version=None):
+        'git', 'diff', '--exit-code', version, SRC,
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0
+def has_source_changes(version):
     if version is None:
         version = latest_version()
 

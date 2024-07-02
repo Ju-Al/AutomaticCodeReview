@@ -1,83 +1,64 @@
 import React from 'react';
-            title={'Edit Shipping Method'}
-import { useIntl } from 'react-intl';
-import { arrayOf, bool, func, number, object, shape, string } from 'prop-types';
+import { FormattedMessage } from 'react-intl';
+import { object, shape, string } from 'prop-types';
+import { X as CloseIcon } from 'react-feather';
+import { useEditModal } from '@magento/peregrine/lib/talons/CheckoutPage/ShippingInformation/useEditModal';
 
 import { mergeClasses } from '../../../classify';
-import Dialog from '../../Dialog';
-import FormError from '../../FormError';
-import ShippingRadios from './shippingRadios';
-import defaultClasses from './updateModal.css';
+import Icon from '../../Icon';
+import { Portal } from '../../Portal';
+import AddressForm from './AddressForm';
+import defaultClasses from './editModal.css';
 
-const UpdateModal = props => {
-    const {
-        classes: propClasses,
-        formErrors,
-        formInitialValues,
-        handleCancel,
-        handleSubmit,
-        isLoading,
-        isOpen,
-        pageIsUpdating,
-        shippingMethods
-    } = props;
-    const { formatMessage } = useIntl();
-
-    const dialogButtonsDisabled = pageIsUpdating;
-    const dialogSubmitButtonDisabled = isLoading;
-    const dialogFormProps = {
-        initialValues: formInitialValues
-    };
+const EditModal = props => {
+    const { classes: propClasses, shippingData } = props;
+    const talonProps = useEditModal();
+    const { handleClose, isOpen } = talonProps;
 
     const classes = mergeClasses(defaultClasses, propClasses);
+    const rootClass = isOpen ? classes.root_open : classes.root;
+
+    // Unmount the form to force a reset back to original values on close
+    const bodyElement = isOpen ? (
+        <AddressForm
+            afterSubmit={handleClose}
+            onCancel={handleClose}
+            shippingData={shippingData}
+        />
+    ) : null;
 
     return (
-        <Dialog
-            confirmText={'Update'}
-            formProps={dialogFormProps}
-            isOpen={isOpen}
-            onCancel={handleCancel}
-            onConfirm={handleSubmit}
-            shouldDisableAllButtons={dialogButtonsDisabled}
-            shouldDisableConfirmButton={dialogSubmitButtonDisabled}
-            title={formatMessage({
-                id: 'updateModal.editShippingMethod',
-                defaultMessage: 'Edit Shipping Method'
-            })}
-        >
-            <FormError
-                classes={{ root: classes.errorContainer }}
-                errors={formErrors}
-            />
-            <ShippingRadios
-                disabled={dialogButtonsDisabled}
-                shippingMethods={shippingMethods}
-            />
-        </Dialog>
+        <Portal>
+            <aside className={rootClass}>
+                <div className={classes.header}>
+                    <span className={classes.headerText}>
+                        {'Edit Shipping Information'}
+                            id={'editModal.editShippingInfo'}
+                            defaultMessage={'Edit Shipping Information'}
+                        />
+                    </span>
+                    <button
+                        className={classes.closeButton}
+                        onClick={handleClose}
+                    >
+                        <Icon src={CloseIcon} />
+                    </button>
+                </div>
+                <div className={classes.body}>{bodyElement}</div>
+            </aside>
+        </Portal>
     );
 };
 
-export default UpdateModal;
+export default EditModal;
 
-UpdateModal.propTypes = {
-    formInitialValues: object,
-    handleCancel: func,
-    handleSubmit: func,
-    isLoading: bool,
-    isOpen: bool,
-    pageIsUpdating: bool,
-    shippingMethods: arrayOf(
-        shape({
-            amount: shape({
-                currency: string,
-                value: number
-            }),
-            available: bool,
-            carrier_code: string,
-            carrier_title: string,
-            method_code: string,
-            method_title: string,
-            serializedValue: string.isRequired
-        })
-    )
+EditModal.propTypes = {
+    classes: shape({
+        root: string,
+        root_open: string,
+        body: string,
+        header: string,
+        headerText: string
+    }),
+    shippingData: object
 };

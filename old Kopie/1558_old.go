@@ -294,10 +294,6 @@ func TestParseBlock(t *testing.T) {
 
 			if _, ok := headers["X-Forwarded-Proto"]; !ok {
 				t.Errorf("Test %d: Could not find the X-Forwarded-Proto header", i+1)
-			}
-		}
-	}
-
 	// tests for insecure skip verify
 	isv_tests := []struct {
 		config string

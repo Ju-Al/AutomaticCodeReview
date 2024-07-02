@@ -147,7 +147,6 @@ public class HistoryController {
         checkHistoryInfoPermission(configHistoryInfo, dataId, group, tenant);
         return configHistoryInfo;
     }
-
     /**
      * Query configs list by namespace.
      * @param tenant config_info namespace

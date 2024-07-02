@@ -1,7 +1,4 @@
 <?php
-            $oNewParticipant=$this->getEvent()->get('model');
-            $oCurrentUser=$this->api->getCurrentUser();
-            $aValues=$oNewParticipant->getAttributes();
     class AuditLog extends \ls\pluginmanager\PluginBase {
 
         protected $storage = 'DbStorage';
@@ -241,7 +238,8 @@
                 return;
             }
 
-            $sTokenIds=$this->getEvent()->get('sTokenIds');
+            $oNewParticipant=$this->getEvent()->get('model');
+            $aValues=$oNewParticipant->getAttributes();
             $aTokenIds = explode(',', $sTokenIds);
 
             foreach ($aTokenIds as $tokenId){

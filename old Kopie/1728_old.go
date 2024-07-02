@@ -113,7 +113,6 @@ func AgentAuthorizer(log logrus.FieldLogger, ds datastore.DataStore, clk clock.C
 			return st.Err()
 		}
 
-		internal := func(reason types.InternalDetails_Reason, format string, args ...interface{}) error {
 			st := status.Newf(codes.Internal, format, args...)
 			if detailed, err := st.WithDetails(&types.InternalDetails{
 				Reason: reason,

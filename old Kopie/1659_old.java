@@ -3,7 +3,6 @@
  */
 
 package net.sourceforge.pmd.lang.java.metrics.impl.visitors;
-package net.sourceforge.pmd.lang.java.metrics.impl.internal;
 
 import java.util.List;
 

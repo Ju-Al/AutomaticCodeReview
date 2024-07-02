@@ -1023,8 +1023,6 @@ class HintManager(QObject):
             self.handle_partial_key(keystring)
         else:
             self._fire(keystring)
-
-    @cmdutils.register(instance='hintmanager', scope='window',
                        modes=[usertypes.KeyMode.hint])
     def hints_cycle(self, reverse: bool = False) -> None:
         """Bring hints covered by other hints to the foreground.

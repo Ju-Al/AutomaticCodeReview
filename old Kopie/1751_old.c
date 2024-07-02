@@ -168,7 +168,6 @@ size_t h2o_filecache_get_etag(h2o_filecache_ref_t *ref, char *outbuf)
     memcpy(outbuf, ref->_etag.buf, ref->_etag.len + 1);
     return ref->_etag.len;
 }
-
 int h2o_filecache_compare_etag_strong(char *tag1, size_t tag1_len, char *tag2, size_t tag2_len)
 {
     size_t i;

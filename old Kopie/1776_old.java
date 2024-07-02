@@ -1,5 +1,4 @@
 /*
-  @Test void testCubeInSpark() {
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -4706,6 +4705,7 @@ OFFSET 10";
 
     final String sql2 = "select \"warehouse_class_id\", \"description\"\n"
         + "from \"warehouse_class\"";
+  @Test void testCubeInSpark() {
     final String expected2 = "SELECT *\n"
         + "FROM \"foodmart\".\"warehouse_class\"";
     sql(sql2).ok(expected2);

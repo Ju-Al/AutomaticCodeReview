@@ -1,5 +1,4 @@
 /* -------------------------------------------------------------------------- *
-    _numCoordinateActuators(0)
  *                      OpenSim:  StaticOptimization.cpp                      *
  * -------------------------------------------------------------------------- *
  * The OpenSim API is a toolkit for musculoskeletal modeling and simulation.  *
@@ -74,7 +73,7 @@ StaticOptimization::StaticOptimization(Model *aModel) :
     _convergenceCriterion(_convergenceCriterionProp.getValueDbl()),
     _maximumIterations(_maximumIterationsProp.getValueInt()),
     _modelWorkingCopy(NULL),
-    _numCoordinateActuators(0),
+    _numCoordinateActuators(0)
     _forceReporter(nullptr)
 {
     setNull();

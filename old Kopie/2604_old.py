@@ -1,5 +1,4 @@
 # Copyright 2019 Damien Goutte-Gattat.  All rights reserved.
-def GckIterator(handle):
 #
 # This file is part of the Biopython distribution and governed by your
 # choice of the "Biopython License Agreement" or the "BSD 3-Clause License".
@@ -66,7 +65,7 @@ def _read_p4string(handle):
     return data
 
 
-def _parse(handle):
+def GckIterator(handle):
     # Skip file header
     # GCK files start with a 24-bytes header. Bytes 4 and 8 seem to
     # always be 12, maybe this could act as a magic cookie. Bytes

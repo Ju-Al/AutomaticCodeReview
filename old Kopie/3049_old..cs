@@ -1,5 +1,4 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
-        private ConcurrentDictionary<string, ActivityInfo> _Activities = new ConcurrentDictionary<string, ActivityInfo>();
 // The .NET Foundation licenses this file to you under the MS-PL license.
 // See the LICENSE file in the project root for more information.
 
@@ -11,7 +10,7 @@ namespace MvvmCross.Platforms.Android.Views
 {
     public class MvxApplicationCallbacksCurrentTopActivity : Java.Lang.Object, Application.IActivityLifecycleCallbacks, IMvxAndroidCurrentTopActivity
     {
-        protected ConcurrentDictionary<string, ActivityInfo> _Activities { private set; } = new ConcurrentDictionary<string, ActivityInfo>();
+        private ConcurrentDictionary<string, ActivityInfo> _Activities = new ConcurrentDictionary<string, ActivityInfo>();
         public Activity Activity => GetCurrentActivity();
 
         public void OnActivityCreated(Activity activity, Bundle savedInstanceState)

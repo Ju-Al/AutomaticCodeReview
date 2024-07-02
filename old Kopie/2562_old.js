@@ -1,7 +1,4 @@
 // @flow
-      details[policyId + assetName] = asset;
-  getAssetDetails = (policyId: string, assetName: string): ?Asset =>
-    this.details[policyId + assetName];
 import { observable, action, computed } from 'mobx';
 import { get } from 'lodash';
 import Store from './lib/Store';
@@ -55,7 +52,9 @@ export default class AssetsStore extends Store {
   } {
     return this.all.reduce((details, asset) => {
       const { policyId, assetName } = asset;
-      details[`${policyId}${assetName}`] = asset;
+  getAssetDetails = (policyId: string, assetName: string): ?Asset =>
+    this.details[policyId + assetName];
+      details[policyId + assetName] = asset;
       return details;
     }, {});
   }

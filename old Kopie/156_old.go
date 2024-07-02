@@ -1,9 +1,5 @@
 package node
 
-	mySelectors, ok := selectors[baseSpiffeID]
-	var entries []*common.Selector
-		entries = mySelectors.Entries
-		for _, selector := range entries {
 import (
 	"context"
 	"errors"
@@ -111,7 +107,10 @@ func (no *stubNodeService) FetchBaseSVID(ctx context.Context, request pb.FetchBa
 		return response, err
 	}
 
-	baseIDSelectors, ok := selectors[baseSpiffeID]
+	mySelectors, ok := selectors[baseSpiffeID]
+		entries = mySelectors.Entries
+		for _, selector := range entries {
+	var entries []*common.Selector
 	//generateCombination(baseIDSelectors) (TODO:walmav)
 	var selectorEntries []*common.Selector
 	if ok {

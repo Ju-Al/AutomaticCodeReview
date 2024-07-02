@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-	return fmt.Errorf("alias is not supported in hosted zones not managed by Copilot")
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -592,7 +591,7 @@ func validateAlias(svcName, alias string, app *config.Application, envName strin
 `, color.HighlightCode("http.alias"), envName, app.Name, app.Domain, envName,
 		app.Name, app.Domain, app.Name, app.Domain, app.Name,
 		app.Domain, app.Domain, app.Domain)
-	return fmt.Errorf("alias is not supported in hosted zones that are not managed by Copilot")
+	return fmt.Errorf("alias is not supported in hosted zones not managed by Copilot")
 }
 
 func checkUnsupportedAlias(alias, envName string, app *config.Application) error {

@@ -1,5 +1,4 @@
 // @flow
-    defaultMessage: '!!!Loading stake pools',
 import React, { Component } from 'react';
 import { observer } from 'mobx-react';
 import classnames from 'classnames';
@@ -17,7 +16,7 @@ const messages = defineMessages({
   },
   loadingStakePoolsMessage: {
     id: 'staking.delegationCenter.loadingStakePoolsMessage',
-    defaultMessage: '!!!Loading wallets',
+    defaultMessage: '!!!Loading stake pools',
     description:
       'Loading stake pool message for the Delegation center body section.',
   },

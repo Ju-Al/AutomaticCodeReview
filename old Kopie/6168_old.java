@@ -1,5 +1,4 @@
 /**
-                                             R.attr.conversation_item_background};
  * Copyright (C) 2011 Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
@@ -196,7 +195,7 @@ public class ConversationItem extends LinearLayout
   private void initializeAttributes() {
     final int[]      attributes = new int[] {R.attr.conversation_item_bubble_background,
                                              R.attr.conversation_list_item_background_selected,
-                                             R.attr.conversation_item_background,
+                                             R.attr.conversation_item_background};
                                              R.attr.conversation_item_sent_text_primary_color};
     final TypedArray attrs      = context.obtainStyledAttributes(attributes);
 

@@ -1,5 +1,4 @@
 package com.fsck.k9.view;
-        if (id == R.id.from) {
 
 
 import java.util.Arrays;
@@ -169,7 +168,7 @@ public class MessageHeader extends LinearLayout implements OnClickListener, OnLo
     @Override
     public boolean onLongClick(View view) {
         int id = view.getId();
-
+        if (id == R.id.from) {
         if (id == R.id.subject) {
             onAddSubjectToClipboard(mMessage.getSubject());
         } else if (id == R.id.from) {

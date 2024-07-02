@@ -1,5 +1,4 @@
 <?php
-/**
  * HTTP Request class
  *
  * PHP version 7

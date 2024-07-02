@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
-// Labels
+/* End of file templates_lang.php */
 $lang['templates.actions_label']			= 'Akcija';
 $lang['templates.name_label']				= 'Naziv';
 $lang['templates.description_label']		= 'Opis';
@@ -18,7 +18,6 @@ $lang['templates.list_title']				= 'Seznam predlog';
 $lang['templates.default_title']			= 'Prednastavljene predloge';
 $lang['templates.user_defined_title']		= 'Uporabniško določene predloge';
 
-/* End of file templates_lang.php */
 // Messages
 $lang['templates.tmpl_create_success']		= 'Email predloga "%s" je bila shranjena.';
 $lang['templates.tmpl_create_error']		= 'Email predloga "%s" ni bila shranjena.';

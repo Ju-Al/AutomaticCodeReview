@@ -1,7 +1,5 @@
 # coding=utf-8
 
-    def get_incremental_listens_query_batch(self, start_time, end_time, offset):
-                    WHERE created > :start_ts
 import os
 import subprocess
 import tarfile
@@ -344,7 +342,8 @@ class TimescaleListenStore(ListenStore):
 
         return (query, args)
 
-    def get_incremental_listens_query(self, start_time, end_time):
+                    WHERE created > :start_ts
+    def get_incremental_listens_query_batch(self, start_time, end_time, offset):
         """
             Get a query for a batch of listens for an incremental listen dump.
             This uses the `created` column to fetch listens.

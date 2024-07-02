@@ -1,5 +1,4 @@
 """Module for graph index class definition."""
-        True if the graph is a multigraph. None means determined by data.
 from __future__ import absolute_import
 
 import numpy as np
@@ -997,7 +996,7 @@ def from_coo(num_nodes, src, dst, is_multigraph, readonly):
     dst : Tensor
         Dst end nodes of the edges.
     is_multigraph : bool or None
-        Deprecated (Will be deleted in the future).
+        True if the graph is a multigraph. None means determined by data.
         True if the graph is a multigraph. None will be set to True by default.
     readonly : bool
         True if the returned graph is readonly.

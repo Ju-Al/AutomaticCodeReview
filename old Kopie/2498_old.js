@@ -63,7 +63,6 @@ export default Component.extend({
   canCancel: and('userHasPullPermissionForRepo', 'item.canCancel'),
   canRestart: and('userHasPullPermissionForRepo', 'item.canRestart'),
   canDebug: and('userHasPushPermissionForRepo', 'item.canDebug'),
-  isQueued: reads('item.notStarted'),
 
   tooltips: or('labelless', 'mobilelabels'),
 

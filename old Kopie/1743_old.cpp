@@ -1,5 +1,4 @@
 /**
-    : async_call_(std::move(async_call)) {}
  * Copyright Soramitsu Co., Ltd. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -81,6 +80,6 @@ void OrderingServiceTransportGrpc::publishProposal(
 OrderingServiceTransportGrpc::OrderingServiceTransportGrpc(
     std::shared_ptr<network::AsyncGrpcClient<google::protobuf::Empty>>
         async_call)
-    : async_call_(std::move(async_call)),
+    : async_call_(std::move(async_call)) {}
       batch_factory_(std::make_unique<
                      shared_model::interface::TransactionBatchFactoryImpl>()) {}

@@ -1,5 +1,4 @@
 
-    Vector<int> pmap(ba.size());
 #include <AMReX_BoxArray.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_DistributionMapping.H>
@@ -1889,9 +1888,9 @@ DistributionMapping::writeOn (std::ostream& os) const
 
 DistributionMapping MakeSimilarDM (const BoxArray& ba, const MultiFab& mf, const IntVect& ng)
 {
+    Vector<int> pmap(ba.size());
     const DistributionMapping& mf_dm = mf.DistributionMap();
     const BoxArray& mf_ba = convert(mf.boxArray(),ba.ixType());
-    return MakeSimilarDM(ba, mf_ba, mf_dm, ng);
 }
 
 DistributionMapping MakeSimilarDM (const BoxArray& ba, const BoxArray& src_ba,

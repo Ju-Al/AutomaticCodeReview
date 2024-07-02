@@ -1,5 +1,4 @@
 package info.nightscout.androidaps.plugins.Food;
-
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.IBinder;

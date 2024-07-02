@@ -159,7 +159,6 @@ void Post(node *n) {
     }
 }
 
-/** test traverse a tree with Post order
  * and save the traverse node to an array.
  * \param[in] n the node pointer of a tree to start traverse
  * \param[out] arr the output array that save the traversed tree nodes pointers

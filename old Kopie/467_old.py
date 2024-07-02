@@ -587,8 +587,6 @@ class TestJMeterExecutor(BZTestCase):
         writers = xml_tree.findall(".//ResultCollector[@testname='KPI Writer']")
         for writer in writers:
             self.assertEqual('true', writer.find('objProp/value/hostname').text)
-
-    def test_distributed_props(self):
         self.obj.execution.merge({"scenario": {"script": __dir__() + "/../jmeter/jmx/http.jmx"}})
         self.obj.distributed_servers = ["127.0.0.1", "127.0.0.1"]
         self.obj.settings['properties'] = BetterDict()

@@ -170,8 +170,6 @@ func updateNodeContent(node *Node, results []saveResult) error {
 	return nil
 }
 
-const chunkerBufSize = 512 * chunker.KiB
-
 var chunkerBufPool = sync.Pool{
 	New: func() interface{} { return make([]byte, chunkerBufSize) },
 }

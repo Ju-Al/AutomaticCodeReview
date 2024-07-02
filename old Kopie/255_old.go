@@ -533,9 +533,6 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 	// test if got variable is set correctly to original value
 	if got != original {
 		t.Errorf("got hook value %v, want %v", got, original)
-	}
-}
-
 func TestPinAfterMultiGC(t *testing.T) {
 	db := newTestDB(t, &Options{
 		Capacity: 100,

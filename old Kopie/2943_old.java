@@ -1,4 +1,63 @@
 /*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.rocketmq.tools.command.message;
+
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.List;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.rocketmq.client.QueryResult;
+import org.apache.rocketmq.client.exception.MQBrokerException;
+import org.apache.rocketmq.client.exception.MQClientException;
+import org.apache.rocketmq.common.UtilAll;
+import org.apache.rocketmq.common.message.MessageExt;
+import org.apache.rocketmq.common.protocol.body.ConsumeMessageDirectlyResult;
+import org.apache.rocketmq.remoting.RPCHook;
+import org.apache.rocketmq.remoting.common.RemotingHelper;
+import org.apache.rocketmq.remoting.exception.RemotingException;
+import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
+import org.apache.rocketmq.tools.admin.api.MessageTrack;
+import org.apache.rocketmq.tools.command.SubCommand;
+import org.apache.rocketmq.tools.command.SubCommandException;
+
+public class QueryMsgByUniqueKeySubCommand implements SubCommand {
+
+    private DefaultMQAdminExt defaultMQAdminExt;
+
+    private DefaultMQAdminExt createMQAdminExt(RPCHook rpcHook) throws SubCommandException {
+        if (this.defaultMQAdminExt != null) {
+            return defaultMQAdminExt;
+        } else {
+            defaultMQAdminExt = new DefaultMQAdminExt(rpcHook);
+            defaultMQAdminExt.setInstanceName(Long.toString(System.currentTimeMillis()));
+            try {
+                defaultMQAdminExt.start();
+            }
+            catch (Exception e) {
+                throw new SubCommandException(this.getClass().getSimpleName() + " command failed", e);
+            }
+            return defaultMQAdminExt;
+        }
+    }
+
     public static void queryById(final DefaultMQAdminExt admin, final String topic,
         final String msgId) throws MQClientException,
         RemotingException, MQBrokerException, InterruptedException, IOException {
@@ -75,66 +134,6 @@
             "Message Body Path:",
             bodyTmpFilePath
         );
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package org.apache.rocketmq.tools.command.message;
-
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.List;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.rocketmq.client.QueryResult;
-import org.apache.rocketmq.client.exception.MQBrokerException;
-import org.apache.rocketmq.client.exception.MQClientException;
-import org.apache.rocketmq.common.UtilAll;
-import org.apache.rocketmq.common.message.MessageExt;
-import org.apache.rocketmq.common.protocol.body.ConsumeMessageDirectlyResult;
-import org.apache.rocketmq.remoting.RPCHook;
-import org.apache.rocketmq.remoting.common.RemotingHelper;
-import org.apache.rocketmq.remoting.exception.RemotingException;
-import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
-import org.apache.rocketmq.tools.admin.api.MessageTrack;
-import org.apache.rocketmq.tools.command.SubCommand;
-import org.apache.rocketmq.tools.command.SubCommandException;
-
-public class QueryMsgByUniqueKeySubCommand implements SubCommand {
-
-    private DefaultMQAdminExt defaultMQAdminExt;
-
-    private DefaultMQAdminExt createMQAdminExt(RPCHook rpcHook) throws SubCommandException {
-        if (this.defaultMQAdminExt != null) {
-            return defaultMQAdminExt;
-        } else {
-            defaultMQAdminExt = new DefaultMQAdminExt(rpcHook);
-            defaultMQAdminExt.setInstanceName(Long.toString(System.currentTimeMillis()));
-            try {
-                defaultMQAdminExt.start();
-            }
-            catch (Exception e) {
-                throw new SubCommandException(this.getClass().getSimpleName() + " command failed", e);
-            }
-            return defaultMQAdminExt;
-        }
-    }
-
-    public static void queryById(final DefaultMQAdminExt admin, final String topic, final String msgId,
                                  final boolean showAll) throws MQClientException,
             RemotingException, MQBrokerException, InterruptedException, IOException {
 

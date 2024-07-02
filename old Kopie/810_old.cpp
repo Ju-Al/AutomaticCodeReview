@@ -1,36 +1,4 @@
 #ifdef FREEORION_WIN32
-        boost::unordered_map<int, AncestorInfo> ancestors;
-        std::vector<int> path;
-        // A list of all reachable midpoints between at least two different terminal points
-        // Start from all terminal points.
-            ancestors.insert(std::make_pair(*start_it, AncestorInfo(*start_it, *start_it)));
-            const PrevCurrInfo & curr = try_next.front();
-                boost::unordered_map<int, AncestorInfo>::iterator ancestor = ancestors.find(next);
-                // Unvisited system, so create new ancestor.
-                if (ancestor == ancestors.end()) {
-                    ancestors.insert(std::make_pair(next, AncestorInfo(curr.curr, curr.origin)));
-                // Previously visited so modify older ancestor to merge
-                // paths/create end points.
-                    // Same origin so add to ancestors.
-                    if (ancestor->second.single_origin
-                        && ancestor->second.single_origin == curr.origin)
-                        ancestor->second.ids.push_back(curr.curr);
-                    // Different origins so mark both as ends of good paths
-                    } else if (ancestor->second.single_origin
-                        && ancestor->second.single_origin != curr.origin)
-                        // Single origin becomes multi origin and these
-                        // points are marked as midpoints.
-                        ancestor->second.single_origin = boost::none;
-                    // Already multi-origin so add to ancestors
-                        ancestor->second.ids.push_back(curr.curr);
-        boost::unordered_set<int> ancestors_on_path;
-            boost::unordered_map<int, AncestorInfo>::const_iterator ancestor_ii_sys;
-            ancestors_on_path.insert(*reached_it);
-            while (!ancestors_on_path.empty()) {
-                ii_sys = *ancestors_on_path.begin();
-                ancestors_on_path.erase(ancestors_on_path.begin());
-                if ((ancestor_ii_sys = ancestors.find(ii_sys)) != ancestors.end()
-                    && (good_path.count(ancestor_ii_sys->first) == 0 ))
 #include <GL/glew.h>
 #endif
 
@@ -2917,7 +2885,38 @@ namespace GetPathsThroughSupplyLanes {
         if (terminal_points.empty())
             return;
 
-        // Part One:  Find all reachable mid points between two different
+        std::vector<int> path;
+        // A list of all reachable midpoints between at least two different terminal points
+        // Start from all terminal points.
+            ancestors.insert(std::make_pair(*start_it, AncestorInfo(*start_it, *start_it)));
+            const PrevCurrInfo & curr = try_next.front();
+                boost::unordered_map<int, AncestorInfo>::iterator ancestor = ancestors.find(next);
+                // Unvisited system, so create new ancestor.
+                if (ancestor == ancestors.end()) {
+                    ancestors.insert(std::make_pair(next, AncestorInfo(curr.curr, curr.origin)));
+                // Previously visited so modify older ancestor to merge
+                // paths/create end points.
+                    // Same origin so add to ancestors.
+                    if (ancestor->second.single_origin
+                        && ancestor->second.single_origin == curr.origin)
+                        ancestor->second.ids.push_back(curr.curr);
+                    // Different origins so mark both as ends of good paths
+                    } else if (ancestor->second.single_origin
+                        && ancestor->second.single_origin != curr.origin)
+                        // Single origin becomes multi origin and these
+                        // points are marked as midpoints.
+                        ancestor->second.single_origin = boost::none;
+                    // Already multi-origin so add to ancestors
+                        ancestor->second.ids.push_back(curr.curr);
+        boost::unordered_set<int> ancestors_on_path;
+            boost::unordered_map<int, AncestorInfo>::const_iterator ancestor_ii_sys;
+            ancestors_on_path.insert(*reached_it);
+            while (!ancestors_on_path.empty()) {
+                ii_sys = *ancestors_on_path.begin();
+                ancestors_on_path.erase(ancestors_on_path.begin());
+                if ((ancestor_ii_sys = ancestors.find(ii_sys)) != ancestors.end()
+                    && (good_path.count(ancestor_ii_sys->first) == 0 ))
+        boost::unordered_map<int, AncestorInfo> ancestors;
         // terminal points.
 
         // try_next holds systems reached in the breadth first search

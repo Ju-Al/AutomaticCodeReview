@@ -1,9 +1,4 @@
 /***************************************************************************
-        else {
-            if ( strs ) {
-                strs->append( _( "Entire unit is undead, so morale does not apply." ) );
-                strs->append( "\n" );
-            }
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -1159,7 +1154,11 @@ int Army::GetMoraleModificator( std::string * strs ) const
                 }
             }
         }
-        else
+        else {
+            if ( strs ) {
+                strs->append( _( "Entire unit is undead, so morale does not apply." ) );
+                strs->append( "\n" );
+            }
             return 0;
         break;
     case 3:

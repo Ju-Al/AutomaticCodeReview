@@ -1,12 +1,5 @@
 package info.nightscout.androidaps.plugins.general.wear;
 
-        TempTarget tempTarget = new TempTarget()
-                .date(System.currentTimeMillis())
-                .duration(duration)
-                .reason("WearPlugin")
-                .source(Source.USER);
-        if (tempTarget.durationInMinutes != 0) {
-            tempTarget.low(low).high(high);
 import android.app.NotificationManager;
 import android.content.Context;
 import android.os.HandlerThread;
@@ -705,7 +698,13 @@ public class ActionStringHandler {
     }
 
     private static void generateTempTarget(int duration, double low, double high) {
-        if (duration == 0) {
+        TempTarget tempTarget = new TempTarget()
+                .date(System.currentTimeMillis())
+                .duration(duration)
+                .reason("WearPlugin")
+                .source(Source.USER);
+        if (tempTarget.durationInMinutes != 0) {
+            tempTarget.low(low).high(high);
             try {
                 BlockingAppRepository.INSTANCE.runTransaction(new CancelTemporaryTargetTransaction());
             } catch (IllegalStateException ignored) {

@@ -792,7 +792,6 @@ class ElementPlot(BokehPlot, GenericElementPlot):
         options = self._traverse_options(element, 'plot', ['width', 'height'], defaults=False)
         fixed_width = (self.frame_width or options.get('width'))
         fixed_height = (self.frame_height or options.get('height'))
-        constrained_width = options.get('min_width') or options.get('max_width')
         constrained_width = options.get('min_height') or options.get('max_height')
 
         data_aspect = (self.aspect == 'equal' or self.data_aspect)

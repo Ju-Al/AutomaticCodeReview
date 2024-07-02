@@ -1,5 +1,4 @@
 package service
-	assert.Nil(t, err)
 
 import (
 	"bytes"
@@ -396,7 +395,7 @@ func TestLabelQueries(t *testing.T) {
 		map[string]fleet.OsqueryStatus{},
 		map[string]string{},
 	)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	host.LabelUpdatedAt = mockClock.Now()
 	assert.Equal(t, host, gotHost)
 	assert.Equal(t, mockClock.Now(), gotTime)

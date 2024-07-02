@@ -1,7 +1,5 @@
 package openfoodfacts.github.scrachx.openfood.views.product;
 
-		Uri wikipediaUri = Uri.parse( url );
-		CustomTabActivityHelper.openCustomTab( getActivity(), customTabsIntent, wikipediaUri, new WebViewFallback() );
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -360,7 +358,8 @@ public class ProductAttributeDetailsFragment extends BottomSheetDialogFragment i
 
 	private void openInCustomTab( String url )
 	{
-		// Url might be empty string if there is no wiki link in english or the user'd language
+		Uri wikipediaUri = Uri.parse( url );
+		CustomTabActivityHelper.openCustomTab( getActivity(), customTabsIntent, wikipediaUri, new WebViewFallback() );
 		if (!url.equals("")) {
 			Uri wikipediaUri = Uri.parse(url);
 			CustomTabActivityHelper.openCustomTab(getActivity(), customTabsIntent, wikipediaUri, new WebViewFallback());

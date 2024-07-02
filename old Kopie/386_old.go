@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var TypedRowsSansAge []row.Row
 var TypedRowsSansTitle []row.Row
 
 func init() {

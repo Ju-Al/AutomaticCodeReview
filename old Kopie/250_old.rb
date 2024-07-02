@@ -1,5 +1,4 @@
 module Pod
-  module Generator
 
     class Markdown < Acknowledgements
 

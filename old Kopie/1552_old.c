@@ -1170,7 +1170,6 @@ int s2n_connection_send_stuffer(struct s2n_stuffer *stuffer, struct s2n_connecti
 {
     notnull_check(conn);
     notnull_check(conn->send);
-    if (conn->write_fd_broken) {
         S2N_ERROR(S2N_ERR_SEND_STUFFER_TO_CONN);
     }
     /* Make sure we even have the data */

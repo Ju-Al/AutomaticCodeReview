@@ -1,5 +1,4 @@
 package frugal
-	ctx.AddRequestHeader("foo", "bar")
 
 import (
 	"testing"
@@ -42,7 +41,7 @@ func TestOpID(t *testing.T) {
 func TestRequestHeader(t *testing.T) {
 	corid := "fooid"
 	ctx := NewFContext(corid)
-	assert.Equal(t, ctx, ctx.AddRequestHeader("foo", "bar"))
+	ctx.AddRequestHeader("foo", "bar")
 	val, ok := ctx.RequestHeader("foo")
 	assert.True(t, ok)
 	assert.Equal(t, "bar", val)

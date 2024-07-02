@@ -1,5 +1,4 @@
 /*
-    this(parentPath.relativePath() + BLAZE_COMPONENT_SEPARATOR + childPath);
  * Copyright 2016 The Bazel Authors. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,7 +57,7 @@ public class WorkspacePath implements ProtoWrapper<String>, Serializable {
   }
 
   public WorkspacePath(WorkspacePath parentPath, String childPath) {
-    this((parentPath.isWorkspaceRoot() ? "" : (parentPath.relativePath() + BLAZE_COMPONENT_SEPARATOR)) + childPath);
+    this(parentPath.relativePath() + BLAZE_COMPONENT_SEPARATOR + childPath);
   }
 
   public static boolean isValid(String relativePath) {

@@ -1,8 +1,5 @@
 <?php
 
-                    $messageFile .= self::MO_FILE_EXT;
-                    $messageFile .= self::PO_FILE_EXT;
-        if ($this->cachingDuration > 0 && $this->cacheID !== false && ($cache = Yii::app()->getComponent($this->cacheID)) !== null) {
 /**
  * Extension of CGettextMessageSource to allow plugins to have
  * their own localization files
@@ -25,9 +22,12 @@ class LSCGettextMessageSource extends CGettextMessageSource
         // Default catalog to langauge (e.g. de)
         // TODO: Where is catalog set (except default value)?
         $this->catalog = $language;
+
         $messageFile = $this->basePath.DIRECTORY_SEPARATOR.$language.DIRECTORY_SEPARATOR.$this->catalog;
         if ($this->useMoFile) {
-            $messageFile .= self::MO_FILE_EXT;
+                    $messageFile .= self::PO_FILE_EXT;
+        if ($this->cachingDuration > 0 && $this->cacheID !== false && ($cache = Yii::app()->getComponent($this->cacheID)) !== null) {
+                    $messageFile .= self::MO_FILE_EXT;
         } else {
             $messageFile .= self::PO_FILE_EXT;
         }

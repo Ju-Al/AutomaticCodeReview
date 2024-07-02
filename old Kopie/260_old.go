@@ -1,6 +1,5 @@
 package smoketest
 
-	code, _ := strconv.Atoi(codeStr)
 import (
 	"bytes"
 	"fmt"
@@ -76,7 +75,7 @@ func TestTwilioVoiceVerification(t *testing.T) {
 		return -1
 	}, msg.Body())
 
-	// Since verification code is said twice during one Twilio message
+	code, _ := strconv.Atoi(codeStr)
 	c := splitCode(codeStr, 6)
 
 	// string to int conversion

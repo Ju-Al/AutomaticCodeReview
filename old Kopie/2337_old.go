@@ -133,7 +133,6 @@ func AddProvider(provider string) *Action {
 	}
 }
 
-// ReadLocal reads a local Terraform variable from main.tf.
 // The local variable was likely added using an Action returned from AddLocal.
 // If the variable is not found, it returns the empty string and no error.
 func ReadLocal(biomeDir, key string) (string, error) {

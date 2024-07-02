@@ -1,5 +1,4 @@
 <?php
-/**
  * File containing the Sensei_Data_Port_Model class.
  *
  * @package sensei

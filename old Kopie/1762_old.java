@@ -126,8 +126,6 @@ public class ServerAmpleImpl extends AmpleImpl implements Ample {
       throw new RuntimeException(e);
     }
   }
-
-  @Override
   public void putGcFdCandidates(TableId tableId, Collection<String> candidates) {
 
     if (RootTable.ID.equals(tableId)) {

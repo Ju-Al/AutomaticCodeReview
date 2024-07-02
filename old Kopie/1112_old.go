@@ -1,8 +1,5 @@
 package base
 
-func (b *Server) CreateDevDatabase(ctx context.Context, dialect string, opt ...Option) error {
-	opts := getOpts(opt...)
-	var container, url string
 import (
 	"context"
 	"crypto/rand"
@@ -464,6 +461,9 @@ func (b *Server) ConnectToDatabase(dialect string) error {
 		gorm.LogFormatter = db.GetGormLogFormatter(b.Logger)
 		b.Database.SetLogger(db.GetGormLogger(b.Logger))
 	}
+func (b *Server) CreateDevDatabase(ctx context.Context, dialect string, opt ...Option) error {
+	opts := getOpts(opt...)
+	var container, url string
 	return nil
 }
 

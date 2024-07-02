@@ -478,8 +478,6 @@ class HDF5DailyBarReader(SessionBarReader):
         end_ix = self.dates.searchsorted(end_date, side='right')
 
         return slice(start_ix, end_ix)
-
-    def _validate_assets(self, assets):
         """Validate that asset identifiers are contained in the daily bars.
 
         Parameters

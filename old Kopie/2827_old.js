@@ -31,7 +31,6 @@ CREATE TABLE notes (
 	is_todo INT NOT NULL DEFAULT 0,
 	todo_due INT NOT NULL DEFAULT 0,
 	todo_completed INT NOT NULL DEFAULT 0,
-	pinned INT NOT NULL DEFAULT 0,
 	source TEXT NOT NULL DEFAULT "",
 	source_application TEXT NOT NULL DEFAULT "",
 	application_data TEXT NOT NULL DEFAULT "",

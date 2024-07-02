@@ -1,5 +1,4 @@
 <?php
- * @param array $sidebars_widgets Sidebar widgets and their settings.
 /**
  * Core Widgets API
  *
@@ -1043,7 +1042,7 @@ function wp_get_sidebars_widgets( $deprecated = true ) {
  * @access private
  *
  * @global array $_wp_sidebars_widgets
- * @global array $sidebars_widgets
+ * @param array $sidebars_widgets Sidebar widgets and their settings.
  * @param array $new_sidebars_widgets Sidebar widgets and their settings.
  * @param boolean $call_retrieve_widgets Should call retrieve_widgets?
  */

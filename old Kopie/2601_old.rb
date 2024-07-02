@@ -1,5 +1,4 @@
 module RSpec
-  module Core
     RSpec.describe DidYouMean do
       describe '#call' do
         if defined?(::DidYouMean::SpellChecker)

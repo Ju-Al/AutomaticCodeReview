@@ -1,17 +1,4 @@
 """Functions to convert NetworkX graphs to and from common data containers
-        nodeset = G
-        nlen = len(G)
-    else:
-        nlen = len(nodelist)
-        nodeset = set(G.nbunch_iter(nodelist))
-        if nlen != len(nodeset):
-            for n in nodelist:
-                if n not in G:
-                    raise nx.NetworkXError(f"Node {n} in nodelist is not in G")
-            raise nx.NetworkXError("nodelist contains duplicates.")
-
-    undirected = not G.is_directed()
-    index = dict(zip(nodelist, range(nlen)))
 like numpy arrays, scipy sparse matrices, and pandas DataFrames.
 
 The preferred way of converting data to a NetworkX graph is through the
@@ -1184,7 +1171,19 @@ def to_numpy_array(
 
     if nodelist is None:
         nodelist = list(G)
-    nlen = len(nodelist)
+        nodeset = G
+        nlen = len(G)
+    else:
+        nlen = len(nodelist)
+        nodeset = set(G.nbunch_iter(nodelist))
+        if nlen != len(nodeset):
+            for n in nodelist:
+                if n not in G:
+                    raise nx.NetworkXError(f"Node {n} in nodelist is not in G")
+            raise nx.NetworkXError("nodelist contains duplicates.")
+
+    undirected = not G.is_directed()
+    index = dict(zip(nodelist, range(nlen)))
 
     # Input validation
     nodeset = set(nodelist)

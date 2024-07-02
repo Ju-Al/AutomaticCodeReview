@@ -1,11 +1,4 @@
 /*
-        if ( name != null )
-        {
-            return AdminConsole.getAdminText( name, pluginName );
-        }
-        else
-        {
-            return pluginName;
  * Copyright 2016 IgniteRealtime.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -151,7 +144,13 @@ public class PluginMetadataHelper
     {
         final String name = getElementValue( pluginDir, "/plugin/name" );
         final String pluginName = getCanonicalName( pluginDir );
-        if ( name != null ) {
+        if ( name != null )
+        {
+            return AdminConsole.getAdminText( name, pluginName );
+        }
+        else
+        {
+            return pluginName;
             try {
                 return AdminConsole.getAdminText(name, pluginName);
             } catch(final Exception ignored) {

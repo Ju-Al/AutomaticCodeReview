@@ -1,16 +1,4 @@
 package core
-		fields := strings.Fields(name)
-		for i, namePart := range fields {
-			cmd = addSubcommand(cmd, namePart, alias.Desc, alias.PositionalLabels && len(alias.Subcommand) == 0 && i == len(fields)-1)
-			for _, subcommand := range alias.Subcommand {
-				addSubcommands(cmd, strings.Fields(subcommand), alias.PositionalLabels)
-			}
-			for _, flag := range alias.Flag {
-				var f struct {
-					Data bool
-				cmd.AddOption(&flags.Option{
-					LongName: strings.TrimLeft(flag, "-"),
-				}, &f.Data)
 
 import (
 	"github.com/thought-machine/go-flags"
@@ -23,7 +11,17 @@ import (
 func (config *Configuration) AttachAliasFlags(parser *flags.Parser) bool {
 	for name, alias := range config.Alias {
 		cmd := parser.Command
-		if alias.Config == "" {
+		fields := strings.Fields(name)
+		for i, namePart := range fields {
+			cmd = addSubcommand(cmd, namePart, alias.Desc, alias.PositionalLabels && len(alias.Subcommand) == 0 && i == len(fields)-1)
+			for _, subcommand := range alias.Subcommand {
+				addSubcommands(cmd, strings.Fields(subcommand), alias.PositionalLabels)
+			}
+			for _, flag := range alias.Flag {
+				cmd.AddOption(&flags.Option{
+					LongName: strings.TrimLeft(flag, "-"),
+				}, &f.Data)
+				var f struct {
 			fields := strings.Fields(name)
 			for i, namePart := range fields {
 				cmd = addSubcommand(cmd, namePart, alias.Desc, alias.PositionalLabels && len(alias.Subcommand) == 0 && i == len(fields)-1)

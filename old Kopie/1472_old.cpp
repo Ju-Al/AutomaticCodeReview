@@ -2294,7 +2294,6 @@ void *Atom::extract(char *name)
   if (strcmp(name,"dpdTheta") == 0) return (void *) dpdTheta;
   if (strcmp(name,"edpd_temp") == 0) return (void *) edpd_temp;
 
-  // when used with fix property/atom
   int cf=0;
   int idv = find_custom(name, cf);
   if(idv>=0) return (void *) dvector[idv];

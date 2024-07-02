@@ -391,7 +391,6 @@ function rocket_get_cache_busting_paths( $filename, $extension ) {
  * @return string Resolved file path
  */
 function rocket_realpath( $file ) {
-	$wrapper = null;
 
 	// Strip the protocol.
 	if ( wp_is_stream( $file ) ) {

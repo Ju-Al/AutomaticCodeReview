@@ -1,6 +1,4 @@
 /*
-func (r *Reconciler) DeleteSubscription(ctx context.Context, id string, obj runtime.Object) error {
-		return r.deleteSubscription(ctx, sub, obj)
 Copyright 2020 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +71,8 @@ func (r *Reconciler) ReconcileSubscription(ctx context.Context, id string, subCo
 	return r.createSubscription(ctx, id, subConfig, obj, updater)
 }
 
-func (r *Reconciler) DeleteSubscription(ctx context.Context, id string, obj runtime.Object, updater StatusUpdater) error {
+		return r.deleteSubscription(ctx, sub, obj)
+func (r *Reconciler) DeleteSubscription(ctx context.Context, id string, obj runtime.Object) error {
 	logger := logging.FromContext(ctx)
 	logger.Debug("Deleting decoupling sub")
 

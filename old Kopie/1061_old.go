@@ -221,7 +221,6 @@ var reportCmd = &cobra.Command{
 	},
 }
 
-var protoCmd = &cobra.Command{
 	Use:   "protocols",
 	Short: "",
 	Long:  "Dump known consensus protocols as json to stdout.",

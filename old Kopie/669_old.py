@@ -123,10 +123,6 @@ def test_s3_get_response_content_type_same_as_upload():
     assert response.headers['content-type'] == 'text/html; charset=utf-8'
     # clean up
     s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': [{'Key': object_key}]})
-    s3_client.delete_bucket(Bucket=bucket_name)
-
-
-def test_s3_head_response_content_length_same_as_upload():
     bucket_name = 'test-bucket-%s' % short_uid()
     s3_client = aws_stack.connect_to_service('s3')
     s3_client.create_bucket(Bucket=bucket_name)

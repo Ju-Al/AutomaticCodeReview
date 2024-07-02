@@ -1,5 +1,4 @@
 """API creating NCCL communicators."""
-
 from .. import backend as F
 from .._ffi.function import _init_api
 

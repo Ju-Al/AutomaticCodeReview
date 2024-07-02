@@ -178,9 +178,6 @@ describe('Testing createCatalogCacheHandler', () => {
         );
 
         expect(cacheableResponsePlugin.statuses).toEqual([0, 200]);
-    });
-});
-
 describe('Testing registerImagePreFetchHandler', () => {
     function clearHandlersObject() {
         Object.keys(__handlers__).forEach(messageType => {

@@ -82,7 +82,6 @@ public class DeadCompactionDetector {
       tabletCompactions.forEach((ecid, extent) -> log.trace("Saw {} for {}", ecid, extent));
     }
 
-    // Remove from the dead map any compactions that the Tablet's
     // do not think are running any more.
     this.deadCompactions.keySet().forEach(eci -> {
       if (!tabletCompactions.containsKey(eci)) {

@@ -1,7 +1,4 @@
 import numpy as np
-    max_coordinate = bboxes.max()
-    offsets = inds.to(bboxes) * (max_coordinate + 1)
-    bboxes_for_nms = bboxes + offsets[:, None]
 import torch
 
 from . import nms_ext
@@ -139,8 +136,10 @@ def batched_nms(bboxes, scores, inds, nms_cfg):
     Returns:
         tuple: kept bboxes and indice.
     """
+    max_coordinate = bboxes.max()
+    offsets = inds.to(bboxes) * (max_coordinate + 1)
+    bboxes_for_nms = bboxes + offsets[:, None]
     nms_cfg_ = nms_cfg.copy()
-    class_agnostic = nms_cfg_.pop('class_agnostic', False)
     if not class_agnostic:
         max_coordinate = bboxes.max()
         offsets = inds.to(bboxes) * (max_coordinate + 1)

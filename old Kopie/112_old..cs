@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Globalization;
 using BenchmarkDotNet.Attributes;
 
 namespace System.Tests

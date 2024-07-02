@@ -1099,8 +1099,6 @@ hipError_t hipMemcpyFromSymbolAsync(void* dst, const void* symbolName, size_t co
 
     return ihipLogStatus(e);
 }
-
-
 hipError_t hipGetSymbolAddress(void** devPtr, const void* symbolName) {
     HIP_INIT_SPECIAL_API((TRACE_MCMD), devPtr, symbolName);
 

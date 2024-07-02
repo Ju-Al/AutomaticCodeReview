@@ -1,11 +1,6 @@
 <?php
 
 /**
-		 * @var $wpdb wpdb
-		 */
-		global $wpdb;
-
-		$sql = "ALTER TABLE `{$wpdb->prefix}" . self::$prefix . "{$table}` {$changes}";
  * @package Pods
  */
 class PodsData {
@@ -1829,6 +1824,12 @@ class PodsData {
 	 *
 	 * @uses  PodsData::query
 	 *
+		/**
+		 * @var $wpdb wpdb
+		 */
+		global $wpdb;
+
+		$sql = "ALTER TABLE `{$wpdb->prefix}" . self::$prefix . "{$table}` {$changes}";
 	 * @since 2.0.0
 	 */
 	public static function table_alter( $table, $changes ) {

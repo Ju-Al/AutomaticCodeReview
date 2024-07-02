@@ -1,5 +1,4 @@
 <?php
-    public function create($path, $size = null);
 
 declare(strict_types=1);
 
@@ -36,5 +35,5 @@ interface PictureFactoryInterface
      *
      * @return PictureInterface
      */
-    public function create($path, $size = null/*, ResizeOptions $options = null*/);
+    public function create($path, $size = null);
 }

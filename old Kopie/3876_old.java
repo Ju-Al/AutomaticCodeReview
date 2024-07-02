@@ -1,5 +1,4 @@
 package de.danoeh.antennapod.core.util.playback;
-                                          boolean fromUser, TextView txtvPosition) {
 
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -522,7 +521,7 @@ public class PlaybackController {
      * Should be used by classes which implement the OnSeekBarChanged interface.
      */
     public float onSeekBarProgressChanged(SeekBar seekBar, int progress,
-                                          boolean fromUser, TextView txtvPosition, TextView seekDisplay) {
+                                          boolean fromUser, TextView txtvPosition) {
         if (fromUser && playbackService != null && media != null) {
             float prog = progress / ((float) seekBar.getMax());
             int duration = media.getDuration();

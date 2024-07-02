@@ -1,5 +1,4 @@
 # -------------------------------------------------------------------------
-                  use_db=True):
 #                     The CodeChecker Infrastructure
 #   This file is distributed under the University of Illinois Open Source
 #   License. See LICENSE.TXT for details.
@@ -163,7 +162,7 @@ def check(check_data):
 
 
 def start_workers(args, actions, context, analyzer_config_map, skp_handler,
-                  use_db=True, export_plist_path=True):
+                  use_db=True):
     """
     Start the workers in the process pool
     for every buildaction there is worker which makes the analysis.

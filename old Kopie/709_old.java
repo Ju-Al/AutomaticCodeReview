@@ -1,5 +1,4 @@
 /**
-		else {
  * $RCSfile: RoutingTableImpl.java,v $
  * $Revision: 3138 $
  * $Date: 2005-12-01 02:13:26 -0300 (Thu, 01 Dec 2005) $
@@ -479,7 +478,7 @@ public class RoutingTableImpl extends BasicModule implements RoutingTable, Clust
 		        }
 		    }
 		}
-		else if (!RemoteServerManager.canAccess(jid.getDomain())) { // Check if the remote domain is in the blacklist
+		else {
             Log.info( "Unable to authenticate: Remote domain is not accessible according to our configuration (typical causes: server federation is disabled, or domain is blacklisted)." );
             routed = false;
         }

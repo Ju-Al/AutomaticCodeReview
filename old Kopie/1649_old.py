@@ -479,7 +479,6 @@ class HadoopJobRunner(JobRunner):
         if libjars:
             arglist += ['-libjars', ','.join(libjars)]
 
-        # 'archives' is also a generic option
         archives = [archive for archive in self.archives]
 
         if archives:

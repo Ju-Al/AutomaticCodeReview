@@ -331,8 +331,6 @@ public class AppRegistryController {
 		}
 		this.unregister(type, name, appRegistration.getVersion());
 	}
-
-	@RequestMapping(method = RequestMethod.DELETE)
 	@ResponseStatus(HttpStatus.OK)
 	public void unregisterAll() {
 		List<AppRegistration> appRegistrations = appRegistryService.findAll();

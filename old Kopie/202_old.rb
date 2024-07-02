@@ -28,7 +28,6 @@ module Travis
               end
             else
               @allow_failure = config.delete(:allow_failure)
-              HASH_CONFIG_KEYS.each do |k|
                 @hash_config.merge!(k => config.delete(k)) if config.key?(k)
               end
               script.cmd("git fetch --tags") if on[:tags]

@@ -1,6 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-    /* Resource type (only 'global' and 'gce_instance' are supported) */
 /*  Fluent Bit
  *  ==========
  *  Copyright (C) 2019-2020 The Fluent Bit Authors
@@ -274,7 +273,7 @@ struct flb_stackdriver *flb_stackdriver_conf_create(struct flb_output_instance *
         ctx->metadata_server_auth = true;
     }
 
-    /* set metadata server url with default, then replace if spec'd in config */
+    /* Resource type (only 'global' and 'gce_instance' are supported) */
     ctx->metadata_server = FLB_STD_META_URL;
     tmp = flb_output_get_property("metadata_server", ins);
     if (tmp) {

@@ -71,7 +71,6 @@ class PodsField_WYSIWYG extends PodsField {
 					),
 				),
 			),
-			static::$type . '_editor_height'     => array(
 				'label'           => __( 'Editor Height', 'pods' ),
 				'default'         => '',
 				'type'            => 'number',

@@ -1,273 +1,206 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
-// This file is part of go-algorand
-//
-// go-algorand is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as
-// published by the Free Software Foundation, either version 3 of the
-// License, or (at your option) any later version.
-//
-// go-algorand is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
-
-package logging
+package stdmap
 
 import (
-	"fmt"
+	"log"
 
-	"github.com/olivere/elastic"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/sohlich/elogrus.v3"
-
-	"github.com/algorand/go-algorand/util/metrics"
+	"github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/module/mempool"
 )
 
-var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages not sent to server"})
+type sealSet map[flow.Identifier]*flow.IncorporatedResultSeal
 
-func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int) *asyncTelemetryHook {
-	return createAsyncHookLevels(wrappedHook, channelDepth, maxQueueDepth, makeLevels(logrus.InfoLevel))
+// IncorporatedResultSeals implements the incorporated result seals memory pool
+// of the consensus nodes, used to store seals that need to be added to blocks.
+type IncorporatedResultSeals struct {
+	*Backend
+	// index the seals by the height of the executed block
+	byHeight     map[uint64]sealSet
+	lowestHeight uint64
 }
 
-func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
-	// one time check to see if the wrappedHook is ready (true for mocked telemetry)
-	tfh, ok := wrappedHook.(*telemetryFilteredHook)
-	ready := ok && tfh.wrappedHook != nil
+func indexByHeight(seal *flow.IncorporatedResultSeal) uint64 {
+	return seal.Header.Height
+}
 
-	hook := &asyncTelemetryHook{
-		wrappedHook:   wrappedHook,
-		entries:       make(chan *logrus.Entry, channelDepth),
-		quit:          make(chan struct{}),
-		maxQueueDepth: maxQueueDepth,
-		levels:        levels,
-		ready:         ready,
-		urlUpdate:     make(chan bool),
+// NewIncorporatedResultSeals creates a mempool for the incorporated result seals
+func NewIncorporatedResultSeals(limit uint) *IncorporatedResultSeals {
+	byHeight := make(map[uint64]sealSet)
+
+	// assuming all the entities are for unsealed blocks, then we will remove a seal
+		maxHeight := uint64(0)
+		var sealsAtMaxHeight sealSet
+		for height, seals := range byHeight {
+			if height > maxHeight || (height == 0 && maxHeight == 0) {
+				maxHeight = height
+				sealsAtMaxHeight = seals
+			}
+		}
+
+		for sealID, seal := range sealsAtMaxHeight {
+			return sealID, seal
+		}
+
+		// this can only happen if mempool is empty or if the secondary index was inconsistently updated
+		panic("cannot eject element from empty mempool")
+	// when eject a entity, also update the secondary indx
+	// with the largest height.
+	// seals will be gradually removed from mempool
+	// ejecting a seal from mempool means that we have reached our limit and something is very bad, meaning that sealing
+	// is not actually happening.
+	// By setting high limit ~12 hours we ensure that we have some safety window for sealing to recover and make progress
+	ejector := func(entities map[flow.Identifier]flow.Entity) (flow.Identifier, flow.Entity) {
+		log.Fatalf("incorporated result seals reached max capacity %d", limit)
+		panic("incorporated result seals reached max capacity")
 	}
 
-	go func() {
-		defer func() {
-			// flush the channel
-			moreEntries := true
-			for moreEntries {
-				select {
-				case entry := <-hook.entries:
-					hook.appendEntry(entry)
-				default:
-					moreEntries = false
+	r := &IncorporatedResultSeals{
+		Backend:  NewBackend(WithLimit(limit), WithEject(ejector)),
+		byHeight: byHeight,
+	}
+
+	// when eject a entity, also update the secondary index
+	r.RegisterEjectionCallbacks(func(entity flow.Entity) {
+		seal := entity.(*flow.IncorporatedResultSeal)
+		sealID := seal.ID()
+		r.removeFromIndex(sealID, seal.Header.Height)
+	})
+
+	return r
+}
+
+func (ir *IncorporatedResultSeals) removeFromIndex(id flow.Identifier, height uint64) {
+	sealsAtHeight := ir.byHeight[height]
+	delete(sealsAtHeight, id)
+	if len(sealsAtHeight) == 0 {
+		delete(ir.byHeight, height)
+	}
+}
+
+func (ir *IncorporatedResultSeals) removeByHeight(height uint64) {
+	for sealID := range ir.byHeight[height] {
+		ir.Backdata.Rem(sealID)
+	}
+	delete(ir.byHeight, height)
+}
+
+// Add adds an IncorporatedResultSeal to the mempool
+func (ir *IncorporatedResultSeals) Add(seal *flow.IncorporatedResultSeal) (bool, error) {
+	added := false
+	sealID := seal.ID()
+	err := ir.Backend.Run(func(entities map[flow.Identifier]flow.Entity) error {
+		// skip elements below the pruned
+		if seal.Header.Height < ir.lowestHeight {
+			return nil
+		}
+
+		added = ir.Backdata.Add(seal)
+		if !added {
+			return nil
+		}
+
+		height := indexByHeight(seal)
+		sameHeight, ok := ir.byHeight[height]
+		if !ok {
+			sameHeight = make(sealSet)
+			ir.byHeight[height] = sameHeight
+		}
+		sameHeight[sealID] = seal
+		return nil
+	})
+
+	return added, err
+}
+
+// Size returns the size of the underlying backing store
+func (ir *IncorporatedResultSeals) Size() uint {
+	return ir.Backend.Size()
+}
+
+// All returns all the items in the mempool
+func (ir *IncorporatedResultSeals) All() []*flow.IncorporatedResultSeal {
+	entities := ir.Backend.All()
+	res := make([]*flow.IncorporatedResultSeal, 0, len(ir.entities))
+	for _, entity := range entities {
+		// uncaught type assertion; should never panic as the mempool only stores IncorporatedResultSeal:
+		res = append(res, entity.(*flow.IncorporatedResultSeal))
+	}
+	return res
+}
+
+// ByID gets an IncorporatedResultSeal by IncorporatedResult ID
+func (ir *IncorporatedResultSeals) ByID(id flow.Identifier) (*flow.IncorporatedResultSeal, bool) {
+	entity, ok := ir.Backend.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	// uncaught type assertion; should never panic as the mempool only stores IncorporatedResultSeal:
+	return entity.(*flow.IncorporatedResultSeal), true
+}
+
+// Rem removes an IncorporatedResultSeal from the mempool
+func (ir *IncorporatedResultSeals) Rem(id flow.Identifier) bool {
+	removed := false
+	err := ir.Backend.Run(func(entities map[flow.Identifier]flow.Entity) error {
+		var entity flow.Entity
+		entity, removed = ir.Backdata.Rem(id)
+		if !removed {
+			return nil
+		}
+		seal := entity.(*flow.IncorporatedResultSeal)
+		ir.removeFromIndex(id, seal.Header.Height)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return removed
+}
+
+func (ir *IncorporatedResultSeals) Clear() {
+	err := ir.Backend.Run(func(_ map[flow.Identifier]flow.Entity) error {
+		ir.Backdata.Clear()
+		ir.byHeight = make(map[uint64]sealSet)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+// PruneUpToHeight remove all seals for blocks whose height is strictly
+// smaller that height. Note: seals for blocks at height are retained.
+// After pruning, seals below for blocks below the given height are dropped.
+//
+// Monotonicity Requirement:
+// The pruned height cannot decrease, as we cannot recover already pruned elements.
+// If `height` is smaller than the previous value, the previous value is kept
+// and the sentinel empool.NewDecreasingPruningHeightError is returned.
+func (ir *IncorporatedResultSeals) PruneUpToHeight(height uint64) error {
+	return ir.Backend.Run(func(entities map[flow.Identifier]flow.Entity) error {
+		if height < ir.lowestHeight {
+			return mempool.NewDecreasingPruningHeightErrorf(
+				"pruning height: %d, existing height: %d", height, ir.lowestHeight)
+		}
+
+		if len(entities) == 0 {
+			ir.lowestHeight = height
+			return nil
+		}
+		// Optimization: if there are less height in the index than the height range to prune,
+		// range to prune, then just go through each seal.
+		// Otherwise, go through each height to prune.
+		if uint64(len(ir.byHeight)) < height-ir.lowestHeight {
+			for h := range ir.byHeight {
+				if h < height {
+					ir.removeByHeight(h)
 				}
 			}
-			for range hook.pending {
-				// The telemetry service is
-				// exiting. Un-wait for the left out
-				// messages.
-				hook.wg.Done()
-			}
-			hook.wg.Done()
-		}()
-
-		exit := false
-		for !exit {
-			exit = !hook.waitForEventAndReady()
-
-			hasEvents := true
-
-			for hasEvents {
-				select {
-				case entry := <-hook.entries:
-					hook.appendEntry(entry)
-				default:
-					hook.Lock()
-					var entry *logrus.Entry
-					if len(hook.pending) > 0 && hook.ready {
-						entry = hook.pending[0]
-						hook.pending = hook.pending[1:]
-					}
-					hook.Unlock()
-					if entry != nil {
-						hook.wrappedHook.Fire(entry)
-						hook.wg.Done()
-					} else {
-						hasEvents = false
-					}
-				}
+		} else {
+			for h := ir.lowestHeight; h < height; h++ {
+				ir.removeByHeight(h)
 			}
 		}
-	}()
-
-	return hook
-}
-
-func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) bool {
-	hook.Lock()
-	defer hook.Unlock()
-	// TODO: If there are errors at startup, before the telemetry URI is set, this can fill up. Should we prioritize
-	//       startup / heartbeat events?
-	if len(hook.pending) >= hook.maxQueueDepth {
-		hook.pending = hook.pending[1:]
-		hook.wg.Done()
-	}
-	hook.pending = append(hook.pending, entry)
-
-	// Return ready here to avoid taking the lock again.
-	return hook.ready
-}
-
-func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
-	for {
-		select {
-		case <-hook.quit:
-			return false
-		case entry := <-hook.entries:
-			ready := hook.appendEntry(entry)
-
-			// Otherwise keep waiting for the URL to update.
-			if ready {
-				return true
-			}
-		case <-hook.urlUpdate:
-			hook.Lock()
-			hasEvents := len(hook.pending) > 0
-			hook.Unlock()
-
-			// Otherwise keep waiting for an entry.
-			if hasEvents {
-				return true
-			}
-		}
-	}
-}
-
-// Fire is required to implement logrus hook interface
-func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
-	hook.wg.Add(1)
-	select {
-	case <-hook.quit:
-		// telemetry quit
-	case hook.entries <- entry:
-	default:
-		hook.wg.Done()
-		// queue is full, don't block, drop message.
-
-		// metrics is a different mechanism that will never block
-		telemetryDrops.Inc(nil)
-	}
-	return nil
-}
-
-// Levels Required for logrus hook interface
-func (hook *asyncTelemetryHook) Levels() []logrus.Level {
-	if hook.wrappedHook != nil {
-		return hook.wrappedHook.Levels()
-	}
-
-	return hook.levels
-}
-
-func (hook *asyncTelemetryHook) Close() {
-	hook.wg.Add(1)
-	close(hook.quit)
-	hook.wg.Wait()
-}
-
-func (hook *asyncTelemetryHook) Flush() {
-	hook.wg.Wait()
-}
-
-func (hook *dummyHook) UpdateHookURI(uri string) (err error) {
-	return
-}
-func (hook *dummyHook) Levels() []logrus.Level {
-	return []logrus.Level{}
-}
-func (hook *dummyHook) Fire(entry *logrus.Entry) error {
-	return nil
-}
-func (hook *dummyHook) Close() {
-}
-func (hook *dummyHook) Flush() {
-}
-
-func (hook *dummyHook) appendEntry(entry *logrus.Entry) bool {
-	return true
-}
-func (hook *dummyHook) waitForEventAndReady() bool {
-	return true
-}
-
-func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
-	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
-	// things can recover later.
-	if cfg.URI == "" {
-		return nil, nil
-	}
-
-	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
-		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
-		elastic.SetSniff(false),
-		elastic.SetGzip(true))
-	if err != nil {
-		return nil, err
-	}
-	hostName := cfg.getHostName()
-	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
-
-	return hook, err
-}
-
-// createTelemetryHook creates the Telemetry log hook, or returns nil if remote logging is not enabled
-func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
-	if !cfg.Enable {
-		return nil, fmt.Errorf("createTelemetryHook called when telemetry not enabled")
-	}
-
-	hook, err = hookFactory(cfg)
-
-	if err != nil {
-		return nil, err
-	}
-
-	filteredHook, err := newTelemetryFilteredHook(cfg, hook, cfg.ReportHistoryLevel, history, cfg.SessionGUID, hookFactory, makeLevels(cfg.MinLogLevel))
-
-	return filteredHook, err
-}
-
-// Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
-//       updated.
-func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
-	updated := false
-
-	if hook.wrappedHook == nil {
-		return fmt.Errorf("asyncTelemetryHook.wrappedHook is nil")
-	}
-
-	tfh, ok := hook.wrappedHook.(*telemetryFilteredHook)
-	if ok {
-		hook.Lock()
-
-		copy := tfh.telemetryConfig
-		copy.URI = uri
-		var newHook logrus.Hook
-		newHook, err = tfh.factory(copy)
-
-		if err == nil && newHook != nil {
-			tfh.wrappedHook = newHook
-			tfh.telemetryConfig.URI = uri
-			hook.ready = true
-			updated = true
-		}
-
-		// Need to unlock before sending event to hook.urlUpdate
-		hook.Unlock()
-
-		// Notify event listener if the hook was created.
-		if updated {
-			hook.urlUpdate <- true
-		}
-	} else {
-		return fmt.Errorf("asyncTelemetryHook.wrappedHook does not implement telemetryFilteredHook")
-	}
-	return
+		ir.lowestHeight = height
+		return nil
+	})
 }

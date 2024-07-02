@@ -1,10 +1,4 @@
 # Copyright 2000, 2004 by Brad Chapman.
-            if not isinstance(alphabet, (Alphabet.Alphabet, Alphabet.AlphabetEncoder)):
-                raise ValueError("Invalid alphabet argument")
-            self._alphabet = alphabet
-        else:
-            # Default while we add sequences, will take a consensus later
-            self._alphabet = Alphabet.single_letter_alphabet
 # Revisions copyright 2010-2013, 2015-2018 by Peter Cock.
 # All rights reserved.
 #
@@ -161,7 +155,12 @@ class MultipleSeqAlignment:
         {'stats': 'CCCXCCC'}
         """
         if alphabet is not None:
-            raise ValueError(
+            if not isinstance(alphabet, (Alphabet.Alphabet, Alphabet.AlphabetEncoder)):
+                raise ValueError("Invalid alphabet argument")
+            self._alphabet = alphabet
+        else:
+            # Default while we add sequences, will take a consensus later
+            self._alphabet = Alphabet.single_letter_alphabet
                 "alphabet is no longer supported; its value should be None"
             )
 

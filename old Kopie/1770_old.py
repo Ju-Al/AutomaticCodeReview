@@ -190,7 +190,6 @@ def test_ftrl_construct_wrong_nbins_value():
             == str(e.value))
 
 
-@pytest.mark.parametrize('value, message',
                          [[-1, "Argument `mantissa_nbits` in Ftrl() constructor cannot be negative: -1"],
                          [54, "Argument `mantissa_nbits` in Ftrl() constructor should be less than 54, got: 54"]])
 def test_ftrl_construct_wrong_mantissa_nbits_value(value, message):

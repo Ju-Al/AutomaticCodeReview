@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-    "Bio.PDB",
-    "Bio.PDB.AbstractPropertyMap",
-]
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -71,7 +68,9 @@ VERBOSITY = 0
 # Following modules have historic failures. If you fix one of these
 # please remove here!
 EXCLUDE_DOCTEST_MODULES = [
-    ]
+    "Bio.PDB",
+    "Bio.PDB.AbstractPropertyMap",
+]
 
 
 # Exclude modules with online activity

@@ -1,5 +1,4 @@
 // Copyright The OpenTelemetry Authors
-	config *config
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +31,7 @@ type Tracer struct {
 	// Version is the instrumentation version.
 	Version string
 
-	config   *config
+	config *config
 	provider *TracerProvider
 }
 

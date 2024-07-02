@@ -1,5 +1,4 @@
 # coding: utf-8
-    def shuffle_models(self):
 # pylint: disable = invalid-name, C0111, C0301
 # pylint: disable = R0912, R0913, R0914, W0105, W0201, W0212
 """Wrapper c_api of LightGBM"""
@@ -1946,7 +1945,7 @@ class Booster(object):
         _save_pandas_categorical(filename, self.pandas_categorical)
         return self
 
-    def shuffle_models(self, start_iteration=0, end_iteration=-1):
+    def shuffle_models(self):
         """Shuffle models.
 
         Parameters

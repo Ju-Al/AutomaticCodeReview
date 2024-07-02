@@ -1,6 +1,4 @@
 using System;
-                CQ dom = result.Content;
-                var errorMessage = dom["td.mf_content"].Html();
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Text;
@@ -68,7 +66,8 @@ namespace Jackett.Common.Indexers
             var result = await RequestLoginAndFollowRedirect(LoginUrl, pairs, null, true, null, LoginUrl);
             await ConfigureIfOK(result.Cookies, result.Content.Contains("logout.php"), () =>
             {
-                var parser = new HtmlParser();
+                CQ dom = result.Content;
+                var errorMessage = dom["td.mf_content"].Html();
                 var dom = parser.ParseDocument(result.Content);
                 var errorMessage = dom.QuerySelector("td.mf_content").Html();
                 throw new ExceptionWithConfigData(errorMessage, configData);

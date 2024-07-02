@@ -348,8 +348,6 @@ class SeqFeature(object):
         >>> f = SeqFeature(FeatureLocation(8, 15), type="domain")
         >>> f.extract(seq)
         Seq('VALIVIC', ProteinAlphabet())
-
-        If the FeatureLocation is None, e.g. when parsing invalid locus
         locations in the GenBank parser, extract() will raise a ValueError.
 
         >>> from Bio.Seq import Seq

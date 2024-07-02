@@ -1,654 +1,1003 @@
-/******************************************************************************
-            sleep(0.01);
-*       SOFA, Simulation Open-Framework Architecture, development version     *
-*                (c) 2006-2019 INRIA, USTL, UJF, CNRS, MGH                    *
-*                                                                             *
-* This program is free software; you can redistribute it and/or modify it     *
-* under the terms of the GNU General Public License as published by the Free  *
-* Software Foundation; either version 2 of the License, or (at your option)   *
-* any later version.                                                          *
-*                                                                             *
-* This program is distributed in the hope that it will be useful, but WITHOUT *
-* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or       *
-* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for    *
-* more details.                                                               *
-*                                                                             *
-* You should have received a copy of the GNU General Public License along     *
-* with this program. If not, see <http://www.gnu.org/licenses/>.              *
-*******************************************************************************
-* Authors: The SOFA Team and external contributors (see Authors.txt)          *
-*                                                                             *
-* Contact information: contact@sofa-framework.org                             *
-******************************************************************************/
-#include "HeadlessRecorder.h"
-#include "VideoRecorderFFMpeg.h"
-#include <sofa/helper/AdvancedTimer.h>
+/**
+ * @file user.cpp
+ * @brief Class for manipulating user / contact data
+ *
+ * (c) 2013-2014 by Mega Limited, Auckland, New Zealand
+ *
+ * This file is part of the MEGA SDK - Client Access Engine.
+ *
+ * Applications using the MEGA API must present a valid application key
+ * and comply with the the rules set forth in the Terms of Service.
+ *
+ * The MEGA SDK is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * @copyright Simplified (2-clause) BSD License.
+ *
+ * You should have received a copy of the license along with this
+ * program.
+ */
 
-#include <boost/program_options.hpp>
+#include "mega/user.h"
+#include "mega/megaclient.h"
+#include "mega/logging.h"
 
-namespace sofa
+namespace mega {
+User::User(const char* cemail)
 {
+    userhandle = UNDEF;
+    show = VISIBILITY_UNKNOWN;
+    ctime = 0;
+    pubkrequested = false;
+    isTemporary = false;
+    resetTag();
 
-namespace gui
-{
-
-namespace hRecorder
-{
-
-int HeadlessRecorder::width = 1920;
-int HeadlessRecorder::height = 1080;
-int HeadlessRecorder::recordTimeInSeconds = 5;
-int HeadlessRecorder::fps = 60;
-std::string HeadlessRecorder::fileName = "tmp";
-bool HeadlessRecorder::saveAsVideo = false;
-bool HeadlessRecorder::saveAsScreenShot = false;
-bool HeadlessRecorder::recordUntilStopAnimate = false;
-
-std::string HeadlessRecorder::recordTypeRaw = "wallclocktime";
-RecordMode HeadlessRecorder::recordType = RecordMode::wallclocktime;
-float HeadlessRecorder::skipTime = 0;
-
-using namespace sofa::defaulttype;
-using sofa::simulation::getSimulation;
-
-static sofa::core::ObjectFactory::ClassEntry::SPtr classVisualModel;
-typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
-typedef Bool (*glXMakeContextCurrentARBProc)(Display*, GLXDrawable, GLXDrawable, GLXContext);
-static glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
-static glXMakeContextCurrentARBProc glXMakeContextCurrentARB = 0;
-
-void static_handler(int /*signum*/)
-{
-    HeadlessRecorder::recordUntilStopAnimate = false;
-    HeadlessRecorder::recordTimeInSeconds = 0;
-}
-
-// Class
-HeadlessRecorder::HeadlessRecorder()
-{
-    groot = NULL;
-    m_nFrames = 0;
-    initVideoRecorder = true;
-    initTexturesDone = false;
-    vparams = core::visual::VisualParams::defaultInstance();
-    vparams->drawTool() = &drawTool;
-
-    signal(SIGTERM, static_handler);
-    signal(SIGINT, static_handler);
-}
-
-HeadlessRecorder::~HeadlessRecorder()
-{
-    glDeleteFramebuffers(1, &fbo);
-    glDeleteRenderbuffers(1, &rbo_color);
-    glDeleteRenderbuffers(1, &rbo_depth);
-}
-
-void HeadlessRecorder::parseRecordingModeOption()
-{
-    if (recordTypeRaw == "wallclocktime")
+    if (cemail)
     {
-        recordType = RecordMode::wallclocktime;
-        skipTime = 0;
+        email = cemail;
     }
-    else if (recordTypeRaw == "simulationtime")
-    {
-        recordType = RecordMode::simulationtime;
-        skipTime = 1.0/fps;
-    }
-    else
-    {
-        recordType = RecordMode::timeinterval;
-        skipTime = std::stof(recordTypeRaw);
-   }
+
+    memset(&changed, 0, sizeof(changed));
 }
 
-int HeadlessRecorder::RegisterGUIParameters(ArgumentParser* argumentParser)
+bool User::serialize(string* d)
 {
-    auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%F-%X");
+    unsigned char l;
+    unsigned short ll;
+    time_t ts;
+    AttrMap attrmap;
+    char attrVersion = '1';
 
-    argumentParser->addArgument(boost::program_options::value<bool>(&saveAsScreenShot)->default_value(false)->implicit_value(true),
-                                "picture", "enable picture mode (save as png)");
-    argumentParser->addArgument(boost::program_options::value<bool>(&saveAsVideo)->default_value(false)->implicit_value(true),
-                                "video", "enable video mode (save as avi, x264)");
-    argumentParser->addArgument(boost::program_options::value<std::string>(&fileName)->default_value(ss.str()),
-                                "filename", "(only HeadLessRecorder) name of the file");
-    argumentParser->addArgument(boost::program_options::value<int>(&recordTimeInSeconds)->default_value(5),
-                                "recordTime", "(only HeadLessRecorder) seconds of recording, video or pictures of the simulation");
-    argumentParser->addArgument(boost::program_options::value<int>(&width)->default_value(1920),
-                                "width", "(only HeadLessRecorder) video or picture width");
-    argumentParser->addArgument(boost::program_options::value<int>(&height)->default_value(1080),
-                                "height", "(only HeadLessRecorder) video or picture height");
-    argumentParser->addArgument(boost::program_options::value<int>(&fps)->default_value(60),
-                                "fps", "(only HeadLessRecorder) define how many frame per second HeadlessRecorder will generate");
-    argumentParser->addArgument(boost::program_options::value<bool>(&recordUntilStopAnimate)->default_value(false)->implicit_value(true),
-                                "recordUntilEndAnimate", "(only HeadLessRecorder) recording until the end of animation does not care how many seconds have been set");
-    argumentParser->addArgument(boost::program_options::value<std::string>(&recordTypeRaw)->default_value("wallclocktime"),
-                                "recordingmode", "(only HeadLessRecorder) define how the recording should be made; either \"simulationtime\" (records as if it was simulating in real time and skips frames accordingly), \"wallclocktime\" (records a frame for each time step) or an arbitrary interval time between each frame as a float.");
-    return 0;
-}
+    d->reserve(d->size() + 100 + attrmap.storagesize(10));
 
-BaseGUI* HeadlessRecorder::CreateGUI(const char* /*name*/, sofa::simulation::Node::SPtr groot, const char* filename)
-{
-    msg_warning("HeadlessRecorder") << "This is an experimental feature. Works only on linux.\n\t" << "For any suggestion/help/bug please report to:\n\t" << "https://github.com/sofa-framework/sofa/pull/538";
+    d->append((char*)&userhandle, sizeof userhandle);
+    
+    // FIXME: use m_time_t & Serialize64 instead
+    ts = ctime;
+    d->append((char*)&ts, sizeof ts);
+    d->append((char*)&show, sizeof show);
 
-    int context_attribs[] = {
-        GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-        GLX_CONTEXT_MINOR_VERSION_ARB, 0,
-        None
-    };
+    l = (unsigned char)email.size();
+    d->append((char*)&l, sizeof l);
+    d->append(email.c_str(), l);
 
-    Display* m_display;
-    int fbcount = 0;
-    GLXFBConfig* fbc = NULL;
-    GLXContext ctx;
-    GLXPbuffer pbuf;
+    d->append((char*)&attrVersion, 1);
+    d->append("\0\0\0\0\0\0", 7);
 
-    /* open display */
-    if ( ! (m_display = XOpenDisplay(0)) ){
-        fprintf(stderr, "Failed to open display\n");
-        exit(1);
-    }
+    // serialization of attributes
+    l = (unsigned char)attrs.size();
+    d->append((char*)&l, sizeof l);
+    for (userattr_map::iterator it = attrs.begin(); it != attrs.end(); it++)
+    {
+        d->append((char*)&it->first, sizeof it->first);
 
-    /* get framebuffer configs, any is usable (might want to add proper attribs) */
-    if ( !(fbc = glXChooseFBConfig(m_display, DefaultScreen(m_display), NULL, &fbcount) ) ){
-        fprintf(stderr, "Failed to get FBConfig\n");
-        exit(1);
-    }
+        ll = (unsigned short)it->second.size();
+        d->append((char*)&ll, sizeof ll);
+        d->append(it->second.data(), ll);
 
-    /* get the required extensions */
-    glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddressARB( (const GLubyte *) "glXCreateContextAttribsARB");
-    glXMakeContextCurrentARB = (glXMakeContextCurrentARBProc)glXGetProcAddressARB( (const GLubyte *) "glXMakeContextCurrent");
-    if ( !(glXCreateContextAttribsARB && glXMakeContextCurrentARB) ){
-        fprintf(stderr, "missing support for GLX_ARB_create_context\n");
-        XFree(fbc);
-        exit(1);
-    }
-
-    /* create a context using glXCreateContextAttribsARB */
-    if ( !( ctx = glXCreateContextAttribsARB(m_display, fbc[0], 0, True, context_attribs)) ){
-        fprintf(stderr, "Failed to create opengl context\n");
-        XFree(fbc);
-        exit(1);
-    }
-
-    /* create temporary pbuffer */
-    int pbuffer_attribs[] = {
-        GLX_PBUFFER_WIDTH, width,
-        GLX_PBUFFER_HEIGHT, height,
-        None
-    };
-    pbuf = glXCreatePbuffer(m_display, fbc[0], pbuffer_attribs);
-
-    XFree(fbc);
-    XSync(m_display, False);
-
-    /* try to make it the current context */
-    if ( !glXMakeContextCurrent(m_display, pbuf, pbuf, ctx) ){
-        /* some drivers does not support context without default framebuffer, so fallback on
-                    * using the default window.
-                    */
-        if ( !glXMakeContextCurrent(m_display, DefaultRootWindow(m_display), DefaultRootWindow(m_display), ctx) ){
-            fprintf(stderr, "failed to make current\n");
-            exit(1);
+        if (attrsv.find(it->first) != attrsv.end())
+        {
+            ll = (unsigned short)attrsv[it->first].size();
+            d->append((char*)&ll, sizeof ll);
+            d->append(attrsv[it->first].data(), ll);
+        }
+        else
+        {
+            ll = 0;
+            d->append((char*)&ll, sizeof ll);
         }
     }
 
-    GLenum err = glewInit();
-    if (GLEW_OK != err)
+    if (pubk.isvalid())
     {
-        std:: cout << "GLEW Error: " << glewGetErrorString(err) << std::endl;
-        exit(EXIT_FAILURE);
+        pubk.serializekey(d, AsymmCipher::PUBKEY);
     }
 
-    HeadlessRecorder* gui = new HeadlessRecorder();
-    gui->setScene(groot, filename);
-    gui->initializeGL();
-    return gui;
+    return true;
 }
 
-int HeadlessRecorder::closeGUI()
+User* User::unserialize(MegaClient* client, string* d)
 {
-    delete this;
-    return 0;
-}
+    handle uh;
+    time_t ts;
+    visibility_t v;
+    unsigned char l;
+    unsigned short ll;
+    string m;
+    User* u;
+    const char* ptr = d->data();
+    const char* end = ptr + d->size();
+    int i;
+    char attrVersion;
 
-// -----------------------------------------------------------------
-// --- OpenGL stuff
-// -----------------------------------------------------------------
-void HeadlessRecorder::initializeGL(void)
-{
-    static GLfloat    specular[4];
-    static GLfloat    ambientLight[4];
-    static GLfloat    diffuseLight[4];
-    static GLfloat    lightPosition[4];
-    static GLfloat    lmodel_ambient[]    = {0.0f, 0.0f, 0.0f, 0.0f};
-    static GLfloat    lmodel_twoside[]    = {GL_FALSE};
-    static GLfloat    lmodel_local[]        = {GL_FALSE};
-    static bool       initialized            = false;
-
-    if (!initialized)
+    if (ptr + sizeof(handle) + sizeof(time_t) + sizeof(visibility_t) + 2 > end)
     {
-        lightPosition[0] = -0.7f;
-        lightPosition[1] = 0.3f;
-        lightPosition[2] = 0.0f;
-        lightPosition[3] = 1.0f;
-
-        ambientLight[0] = 0.5f;
-        ambientLight[1] = 0.5f;
-        ambientLight[2] = 0.5f;
-        ambientLight[3] = 1.0f;
-
-        diffuseLight[0] = 0.9f;
-        diffuseLight[1] = 0.9f;
-        diffuseLight[2] = 0.9f;
-        diffuseLight[3] = 1.0f;
-
-        specular[0] = 1.0f;
-        specular[1] = 1.0f;
-        specular[2] = 1.0f;
-        specular[3] = 1.0f;
-
-        // Set light model
-        glLightModelfv(GL_LIGHT_MODEL_LOCAL_VIEWER, lmodel_local);
-        glLightModelfv(GL_LIGHT_MODEL_TWO_SIDE, lmodel_twoside);
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lmodel_ambient);
-
-        // Setup 'light 0'
-        glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
-        glLightfv(GL_LIGHT0, GL_SPECULAR, specular);
-        glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
-        glEnable(GL_LIGHT0);
-
-        // Define background color
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-
-        // frame buffer
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-        // color render buffer
-        glGenRenderbuffers(1, &rbo_color);
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo_color);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB, width, height);
-        glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo_color);
-
-        /* Depth renderbuffer. */
-        glGenRenderbuffers(1, &rbo_depth);
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo_depth);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
-        glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo_depth);
-        glReadBuffer(GL_COLOR_ATTACHMENT0);
-
-        glEnable(GL_DEPTH_TEST);
-
-        initialized = true;
+        return NULL;
     }
 
-    // switch to preset view
-    resetView();
-}
+    uh = MemAccess::get<handle>(ptr);
+    ptr += sizeof uh;
 
-bool HeadlessRecorder::canRecord()
-{
-    if(recordUntilStopAnimate)
+    // FIXME: use m_time_t & Serialize64
+    ts = MemAccess::get<time_t>(ptr);
+    ptr += sizeof ts;
+
+    v = MemAccess::get<visibility_t>(ptr);
+    ptr += sizeof v;
+
+    l = *ptr++;
+    if (l)
     {
-        return currentSimulation() && currentSimulation()->getContext()->getAnimate();
-    }
-    return static_cast<float>(m_nFrames)/static_cast<float>(fps) <= recordTimeInSeconds;
-}
-
-int HeadlessRecorder::mainLoop()
-{
-    // Boost program_option doesn't take the order or the options inter-dependencies into account,
-    // so we parse this option after we are certain everythin was parsed.
-    parseRecordingModeOption();
-
-    if(currentCamera)
-        currentCamera->setViewport(width, height);
-    calcProjection();
-
-    if (!saveAsVideo && !saveAsScreenShot)
-    {
-        msg_error("HeadlessRecorder") <<  "Please, use at least one option: picture or video mode.";
-        return 0;
-    }
-    if ((recordType == RecordMode::simulationtime || recordType == RecordMode::timeinterval) && groot->getDt() > skipTime)
-    {
-        msg_error("HeadlessRecorder") << "Scene delta time (" << groot->getDt() << "s) is too big to provide images at the supplied fps; it should be at least <" << skipTime ;
-        return 0;
-    }
-
-
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
-    while(canRecord())
-    {
-        if (keepFrame())
+        if (ptr + l > end)
         {
-            redraw();
-            m_nFrames++;
-            if(m_nFrames % fps == 0)
+            return NULL;
+        }
+        m.assign(ptr, l);
+    }
+    ptr += l;
+
+    if (ptr + sizeof(char) > end)
+    {
+        return NULL;
+    }
+
+    attrVersion = MemAccess::get<char>(ptr);
+    ptr += sizeof(attrVersion);
+
+    for (i = 7; i--;)
+    {
+        if (ptr + MemAccess::get<unsigned char>(ptr) < end)
+        {
+            ptr += MemAccess::get<unsigned char>(ptr) + 1;
+        }
+    }
+
+    if ((i >= 0) || !(u = client->finduser(uh, 1)))
+    {
+        return NULL;
+    }
+
+    client->mapuser(uh, m.c_str());
+    u->set(v, ts);
+    u->resetTag();
+
+    if (attrVersion == '\0')
+    {
+        AttrMap attrmap;
+        if ((ptr < end) && !(ptr = attrmap.unserialize(ptr, end)))
+        {
+            client->discarduser(uh);
+            return NULL;
+        }
+    }
+    else if (attrVersion == '1')
+    {
+        attr_t key;
+
+        if (ptr + sizeof(char) > end)
+        {
+            client->discarduser(uh);
+            return NULL;
+        }
+
+        l = *ptr++;
+        for (int i = 0; i < l; i++)
+        {
+            if (ptr + sizeof key + sizeof(ll) > end)
             {
-                end = std::chrono::system_clock::now();
-                int elapsed_milliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count();
-                msg_info("HeadlessRecorder") << "Encoding : " << m_nFrames/fps << " seconds. Encoding time : " << elapsed_milliSeconds << " ms";
-                start = std::chrono::system_clock::now();
+                client->discarduser(uh);
+                return NULL;
             }
-            record();
-        }
 
-        if (currentSimulation() && currentSimulation()->getContext()->getAnimate())
+            key = MemAccess::get<attr_t>(ptr);
+            ptr += sizeof key;
+
+            ll = MemAccess::get<short>(ptr);
+            ptr += sizeof ll;
+
+            if (ptr + ll + sizeof(ll) > end)
+            {
+                client->discarduser(uh);
+                return NULL;
+            }
+
+            u->attrs[key].assign(ptr, ll);
+            ptr += ll;
+
+            ll = MemAccess::get<short>(ptr);
+            ptr += sizeof ll;
+
+            if (ll)
+            {
+                if (ptr + ll > end)
+                {
+                    client->discarduser(uh);
+                    return NULL;
+                }
+                u->attrsv[key].assign(ptr,ll);
+                ptr += ll;
+            }
+        }
+    }
+
+#ifdef ENABLE_CHAT
+    const string *av = (u->isattrvalid(ATTR_KEYRING)) ? u->getattr(ATTR_KEYRING) : NULL;
+    if (av)
+    {
+        TLVstore *tlvRecords = TLVstore::containerToTLVrecords(av, &client->key);
+        if (tlvRecords)
         {
-            step();
+            if (tlvRecords->find(EdDSA::TLV_KEY))
+            {
+                client->signkey = new EdDSA((unsigned char *) tlvRecords->get(EdDSA::TLV_KEY).data());
+                if (!client->signkey->initializationOK)
+                {
+                    delete client->signkey;
+                    client->signkey = NULL;
+                    LOG_warn << "Failed to load chat key from local cache.";
+                }
+                else
+                {
+                    LOG_info << "Signing key loaded from local cache.";
+                }
+            }
+
+            if (tlvRecords->find(ECDH::TLV_KEY))
+            {
+                client->chatkey = new ECDH((unsigned char *) tlvRecords->get(ECDH::TLV_KEY).data());
+                if (!client->chatkey->initializationOK)
+                {
+                    delete client->chatkey;
+                    client->chatkey = NULL;
+                    LOG_warn << "Failed to load chat key from local cache.";
+                }
+                else
+                {
+                    LOG_info << "Chat key succesfully loaded from local cache.";
+                }
+            }
+
+            delete tlvRecords;
         }
         else
         {
-            //TODO(hugtalbot 2020-04-17): back to zero since sleep(0.01) creates implicit
-            //conversion from 'double' to 'unsigned int' changes value from 0.01 to 0
-            sleep(0);
+            LOG_warn << "Failed to decrypt keyring from cache";
         }
     }
-    msg_info("HeadlessRecorder") << "Recording time: " << recordTimeInSeconds << " seconds at: " << fps << " fps.";
+#endif
+
+    if ((ptr < end) && !u->pubk.setkey(AsymmCipher::PUBKEY, (byte*)ptr, end - ptr))
+    {
+        client->discarduser(uh);
+        return NULL;
+    }
+
+    return u;
+}
+
+void User::setattr(attr_t at, string *av, string *v)
+{
+    setChanged(at);
+
+    if (at != ATTR_AVATAR)  // avatar is saved to disc
+    {
+        attrs[at] = *av;
+    }
+
+    attrsv[at] = v ? *v : "N";
+}
+
+void User::invalidateattr(attr_t at)
+{
+    setChanged(at);
+    attrsv.erase(at);
+}
+
+void User::removeattr(attr_t at)
+{
+    setChanged(at);
+    attrs.erase(at);
+    attrsv.erase(at);
+}
+
+// returns the value if there is value (even if it's invalid by now)
+const string * User::getattr(attr_t at)
+{
+    userattr_map::const_iterator it = attrs.find(at);
+    if (it != attrs.end())
+    {
+        return &(it->second);
+    }
+
+    return NULL;
+}
+
+bool User::isattrvalid(attr_t at)
+{
+    return attrsv.count(at);
+}
+
+string User::attr2string(attr_t type)
+{
+    string attrname;
+
+    switch(type)
+    {
+        case ATTR_AVATAR:
+            attrname = "+a";
+            break;
+
+        case ATTR_FIRSTNAME:
+            attrname = "firstname";
+            break;
+
+        case ATTR_LASTNAME:
+            attrname = "lastname";
+            break;
+
+        case ATTR_AUTHRING:
+            attrname = "*!authring";
+            break;
+
+        case ATTR_LAST_INT:
+            attrname = "*!lstint";
+            break;
+
+        case ATTR_ED25519_PUBK:
+            attrname = "+puEd255";
+            break;
+
+        case ATTR_CU25519_PUBK:
+            attrname = "+puCu255";
+            break;
+
+        case ATTR_SIG_RSA_PUBK:
+            attrname = "+sigPubk";
+            break;
+
+        case ATTR_SIG_CU255_PUBK:
+            attrname = "+sigCu255";
+            break;
+
+        case ATTR_KEYRING:
+            attrname = "*keyring";
+            break;
+
+        case ATTR_COUNTRY:
+            attrname = "country";
+            break;
+
+        case ATTR_BIRTHDAY:
+            attrname = "birthday";
+            break;
+
+        case ATTR_BIRTHMONTH:
+            attrname = "birthmonth";
+            break;
+
+        case ATTR_BIRTHYEAR:
+            attrname = "birthyear";
+            break;
+
+        case ATTR_LANGUAGE:
+            attrname = "^!lang";
+            break;
+
+        case ATTR_PWD_REMINDER:
+            attrname = "^!prd";
+            break;
+
+        case ATTR_DISABLE_VERSIONS:
+            attrname = "^!dv";
+            break;
+
+        case ATTR_CONTACT_LINK_VERIFICATION:
+            attrname = "^clv";
+            break;
+
+        case ATTR_RICH_PREVIEWS:
+            attrname = "*!rp";
+            break;
+
+        case ATTR_LAST_PSA:
+            attrname = "^!lastPsa";
+            break;
+
+        case ATTR_RUBBISH_TIME:
+            attrname = "^!rubbishtime";
+            break;
+
+        case ATTR_STORAGE_STATE:
+            attrname = "^!usl";
+            break;
+
+        case ATTR_GEOLOCATION:
+            attrname = "*!geo";
+            break;
+
+            attrname = "*unshareable";
+            break;
+
+        case ATTR_UNKNOWN:  // empty string
+            break;
+    }
+
+    return attrname;
+}
+
+attr_t User::string2attr(const char* name)
+{
+    if (!strcmp(name, "*keyring"))
+    {
+        return ATTR_KEYRING;
+    }
+    else if (!strcmp(name, "*!authring"))
+    {
+        return ATTR_AUTHRING;
+    }
+    else if (!strcmp(name, "*!lstint"))
+    {
+        return ATTR_LAST_INT;
+    }
+    else if (!strcmp(name, "+puCu255"))
+    {
+        return ATTR_CU25519_PUBK;
+    }
+    else if (!strcmp(name, "+puEd255"))
+    {
+        return ATTR_ED25519_PUBK;
+    }
+    else if (!strcmp(name, "+sigPubk"))
+    {
+        return ATTR_SIG_RSA_PUBK;
+    }
+    else if (!strcmp(name, "+sigCu255"))
+    {
+        return ATTR_SIG_CU255_PUBK;
+    }
+    else if (!strcmp(name, "+a"))
+    {
+        return ATTR_AVATAR;
+    }
+    else if (!strcmp(name, "firstname"))
+    {
+        return ATTR_FIRSTNAME;
+    }
+    else if (!strcmp(name, "lastname"))
+    {
+        return ATTR_LASTNAME;
+    }
+    else if (!strcmp(name, "country"))
+    {
+        return ATTR_COUNTRY;
+    }
+    else if (!strcmp(name, "birthday"))
+    {
+        return ATTR_BIRTHDAY;
+    }
+    else if(!strcmp(name, "birthmonth"))
+    {
+        return ATTR_BIRTHMONTH;
+    }
+    else if(!strcmp(name, "birthyear"))
+    {
+        return ATTR_BIRTHYEAR;
+    }
+    else if(!strcmp(name, "^!lang"))
+    {
+        return ATTR_LANGUAGE;
+    }
+    else if(!strcmp(name, "^!prd"))
+    {
+        return ATTR_PWD_REMINDER;
+    }
+    else if(!strcmp(name, "^!dv"))
+    {
+        return ATTR_DISABLE_VERSIONS;
+    }
+    else if(!strcmp(name, "^clv"))
+    {
+        return ATTR_CONTACT_LINK_VERIFICATION;
+    }
+    else if(!strcmp(name, "*!rp"))
+    {
+        return ATTR_RICH_PREVIEWS;
+    }
+    else if(!strcmp(name, "^!lastPsa"))
+    {
+        return ATTR_LAST_PSA;
+    }
+    else if(!strcmp(name, "^!rubbishtime"))
+    {
+        return ATTR_RUBBISH_TIME;
+    }
+    else if(!strcmp(name, "^!usl"))
+    {
+        return ATTR_STORAGE_STATE;
+    }
+    else if(!strcmp(name, "*!geo"))
+    {
+        return ATTR_GEOLOCATION;
+    }
+    else if (!strcmp(name, "*unshareable"))
+    {
+        return ATTR_UNSHAREABLE_ATTR;
+    }
+    else
+    {
+        return ATTR_UNKNOWN;   // attribute not recognized
+    }
+}
+
+bool User::needversioning(attr_t at)
+{
+    switch(at)
+    {
+        case ATTR_AVATAR:
+        case ATTR_FIRSTNAME:
+        case ATTR_LASTNAME:
+        case ATTR_COUNTRY:
+        case ATTR_BIRTHDAY:
+        case ATTR_BIRTHMONTH:
+        case ATTR_BIRTHYEAR:
+        case ATTR_LANGUAGE:
+        case ATTR_PWD_REMINDER:
+        case ATTR_DISABLE_VERSIONS:
+        case ATTR_RICH_PREVIEWS:
+        case ATTR_LAST_PSA:
+        case ATTR_RUBBISH_TIME:
+        case ATTR_GEOLOCATION:
+        case ATTR_UNSHAREABLE_ATTR:
+            return 0;
+
+        case ATTR_AUTHRING:
+        case ATTR_LAST_INT:
+        case ATTR_ED25519_PUBK:
+        case ATTR_CU25519_PUBK:
+        case ATTR_SIG_RSA_PUBK:
+        case ATTR_SIG_CU255_PUBK:
+        case ATTR_KEYRING:
+        case ATTR_CONTACT_LINK_VERIFICATION:
+            return 1;
+
+        case ATTR_STORAGE_STATE: //putua is forbidden for this attribute
+        default:
+            return -1;
+    }
+}
+
+char User::scope(attr_t at)
+{
+    switch(at)
+    {
+        case ATTR_KEYRING:
+        case ATTR_AUTHRING:
+        case ATTR_LAST_INT:
+        case ATTR_RICH_PREVIEWS:
+        case ATTR_GEOLOCATION:
+        case ATTR_UNSHAREABLE_ATTR:
+            return '*';
+
+        case ATTR_AVATAR:
+        case ATTR_ED25519_PUBK:
+        case ATTR_CU25519_PUBK:
+        case ATTR_SIG_RSA_PUBK:
+        case ATTR_SIG_CU255_PUBK:
+            return '+';
+
+        case ATTR_LANGUAGE:
+        case ATTR_PWD_REMINDER:
+        case ATTR_DISABLE_VERSIONS:
+        case ATTR_CONTACT_LINK_VERIFICATION:
+        case ATTR_LAST_PSA:
+        case ATTR_RUBBISH_TIME:
+        case ATTR_STORAGE_STATE:
+            return '^';
+
+        default:
+            return '0';
+    }
+}
+
+bool User::mergePwdReminderData(int numDetails, const char *data, unsigned int size, string *newValue)
+{
+    if (numDetails == 0)
+    {
+        return false;
+    }
+
+    // format: <lastSuccess>:<lastSkipped>:<mkExported>:<dontShowAgain>:<lastLogin>
+    string oldValue;
+    if (data && size)
+    {
+        oldValue.assign(data, size);
+
+        // ensure the old value has a valid format
+        if (std::count(oldValue.begin(), oldValue.end(), ':') != 4
+                || oldValue.length() < 9)
+        {
+            oldValue = "0:0:0:0:0";
+        }
+    }
+    else    // no existing value, set with default values and update it consequently
+    {
+        oldValue = "0:0:0:0:0";
+    }
+
+    bool lastSuccess = (numDetails & PWD_LAST_SUCCESS) != 0;
+    bool lastSkipped = (numDetails & PWD_LAST_SKIPPED) != 0;
+    bool mkExported = (numDetails & PWD_MK_EXPORTED) != 0;
+    bool dontShowAgain = (numDetails & PWD_DONT_SHOW) != 0;
+    bool lastLogin = (numDetails & PWD_LAST_LOGIN) != 0;
+
+    bool changed = false;
+
+    // Timestamp for last successful validation of password in PRD
+    m_time_t tsLastSuccess;
+    size_t len = oldValue.find(":");
+    string buf = oldValue.substr(0, len) + "#"; // add character control '#' for conversion
+    oldValue = oldValue.substr(len + 1);    // skip ':'
+    if (lastSuccess)
+    {
+        changed = true;
+        tsLastSuccess = m_time();
+    }
+    else
+    {
+        char *pEnd = NULL;
+        tsLastSuccess = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastSuccess == LLONG_MAX || tsLastSuccess == LLONG_MIN)
+        {
+            tsLastSuccess = 0;
+            changed = true;
+        }
+    }
+
+    // Timestamp for last time the PRD was skipped
+    m_time_t tsLastSkipped;
+    len = oldValue.find(":");
+    buf = oldValue.substr(0, len) + "#";
+    oldValue = oldValue.substr(len + 1);
+    if (lastSkipped)
+    {
+        tsLastSkipped = m_time();
+        changed = true;
+    }
+    else
+    {
+        char *pEnd = NULL;
+        tsLastSkipped = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastSkipped == LLONG_MAX || tsLastSkipped == LLONG_MIN)
+        {
+            tsLastSkipped = 0;
+            changed = true;
+        }
+    }
+
+    // Flag for Recovery Key exported
+    bool flagMkExported;
+    len = oldValue.find(":");
+    if (len != 1)
+    {
+        return false;
+    }
+    buf = oldValue.substr(0, len) + "#";
+    oldValue = oldValue.substr(len + 1);
+    if (mkExported && !(buf.at(0) == '1'))
+    {
+        flagMkExported = true;
+        changed = true;
+    }
+    else
+    {
+        char *pEnd = NULL;
+        int tmp = strtol(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || (tmp != 0 && tmp != 1))
+        {
+            flagMkExported = false;
+            changed = true;
+        }
+        else
+        {
+            flagMkExported = tmp;
+        }
+    }
+
+    // Flag for "Don't show again" the PRD
+    bool flagDontShowAgain;
+    len = oldValue.find(":");
+    if (len != 1 || len + 1 == oldValue.length())
+    {
+        return false;
+    }
+    buf = oldValue.substr(0, len) + "#";
+    oldValue = oldValue.substr(len + 1);
+    if (dontShowAgain && !(buf.at(0) == '1'))
+    {
+        flagDontShowAgain = true;
+        changed = true;
+    }
+    else
+    {
+        char *pEnd = NULL;
+        int tmp = strtol(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || (tmp != 0 && tmp != 1))
+        {
+            flagDontShowAgain = false;
+            changed = true;
+        }
+        else
+        {
+            flagDontShowAgain = tmp;
+        }
+    }
+
+    // Timestamp for last time user logged in
+    m_time_t tsLastLogin = 0;
+    len = oldValue.length();
+    if (lastLogin)
+    {
+        tsLastLogin = m_time();
+        changed = true;
+    }
+    else
+    {
+        buf = oldValue.substr(0, len) + "#";
+
+        char *pEnd = NULL;
+        tsLastLogin = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastLogin == LLONG_MAX || tsLastLogin == LLONG_MIN)
+        {
+            tsLastLogin = 0;
+            changed = true;
+        }
+    }
+
+    std::stringstream value;
+    value << tsLastSuccess << ":" << tsLastSkipped << ":" << flagMkExported
+        << ":" << flagDontShowAgain << ":" << tsLastLogin;
+
+    *newValue = value.str();
+
+    return changed;
+}
+
+m_time_t User::getPwdReminderData(int numDetail, const char *data, unsigned int size)
+{
+    if (!numDetail || !data || !size)
+    {
+        return 0;
+    }
+
+    // format: <lastSuccess>:<lastSkipped>:<mkExported>:<dontShowAgain>:<lastLogin>
+    string value;
+    value.assign(data, size);
+
+    // ensure the value has a valid format
+    if (std::count(value.begin(), value.end(), ':') != 4
+            || value.length() < 9)
+    {
+        return 0;
+    }
+
+    bool lastSuccess = (numDetail & PWD_LAST_SUCCESS) != 0;
+    bool lastSkipped = (numDetail & PWD_LAST_SKIPPED) != 0;
+    bool mkExported = (numDetail & PWD_MK_EXPORTED) != 0;
+    bool dontShowAgain = (numDetail & PWD_DONT_SHOW) != 0;
+    bool lastLogin = (numDetail & PWD_LAST_LOGIN) != 0;
+
+    // Timestamp for last successful validation of password in PRD
+    m_time_t tsLastSuccess;
+    size_t len = value.find(":");
+    string buf = value.substr(0, len) + "#"; // add character control '#' for conversion
+    value = value.substr(len + 1);    // skip ':'
+    if (lastSuccess)
+    {
+        char *pEnd = NULL;
+        tsLastSuccess = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastSuccess == LLONG_MAX || tsLastSuccess == LLONG_MIN)
+        {
+            tsLastSuccess = 0;
+        }
+        return tsLastSuccess;
+    }
+
+    // Timestamp for last time the PRD was skipped
+    m_time_t tsLastSkipped;
+    len = value.find(":");
+    buf = value.substr(0, len) + "#";
+    value = value.substr(len + 1);
+    if (lastSkipped)
+    {
+        char *pEnd = NULL;
+        tsLastSkipped = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastSkipped == LLONG_MAX || tsLastSkipped == LLONG_MIN)
+        {
+            tsLastSkipped = 0;
+        }
+        return tsLastSkipped;
+    }
+
+    // Flag for Recovery Key exported
+    len = value.find(":");
+    buf = value.substr(0, len) + "#";
+    value = value.substr(len + 1);
+    if (mkExported)
+    {
+        char *pEnd = NULL;
+        m_time_t flagMkExported = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || (flagMkExported != 0 && flagMkExported != 1))
+        {
+            flagMkExported = 0;
+        }
+        return flagMkExported;
+    }
+
+    // Flag for "Don't show again" the PRD
+    len = value.find(":");
+    buf = value.substr(0, len) + "#";
+    value = value.substr(len + 1);
+    if (dontShowAgain)
+    {
+        char *pEnd = NULL;
+        m_time_t flagDontShowAgain = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || (flagDontShowAgain != 0 && flagDontShowAgain != 1))
+        {
+            flagDontShowAgain = 0;
+        }
+        return flagDontShowAgain;
+    }
+
+    // Timestamp for last time user logged in
+    m_time_t tsLastLogin = 0;
+    len = value.length();
+    if (lastLogin)
+    {
+        buf = value.substr(0, len) + "#";
+
+        char *pEnd = NULL;
+        tsLastLogin = strtoll(buf.data(), &pEnd, 10);
+        if (*pEnd != '#' || tsLastLogin == LLONG_MAX || tsLastLogin == LLONG_MIN)
+        {
+            tsLastLogin = 0;
+        }
+        return tsLastLogin;
+    }
+
     return 0;
 }
 
-bool HeadlessRecorder::keepFrame()
+const string *User::getattrversion(attr_t at)
 {
-    switch(recordType)
+    userattr_map::iterator it = attrsv.find(at);
+    if (it != attrsv.end())
     {
-        case RecordMode::wallclocktime :
-            return true;
-        case RecordMode::simulationtime :
-        case RecordMode::timeinterval :
-            return groot->getTime() >= m_nFrames * skipTime;
-    }
-    return false;
-}
-
-void HeadlessRecorder::redraw()
-{
-    glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    paintGL();
-    glFlush();
-}
-
-void HeadlessRecorder::displayOBJs()
-{
-    vparams->sceneBBox() = groot->f_bbox.getValue();
-    if (!initTexturesDone)
-    {
-        simulation::getSimulation()->initTextures(groot.get());
-        initTexturesDone = true;
-    } else
-    {
-        simulation::getSimulation()->draw(vparams,groot.get());
-    }
-}
-
-void HeadlessRecorder::drawScene(void)
-{
-    if (!groot) return;
-    if(!currentCamera)
-    {
-        msg_error("HeadlessRecorder") << "ERROR: no camera defined";
-        return;
+        return &(it->second);
     }
 
-    calcProjection();
-    glLoadIdentity();
-
-    GLdouble mat[16];
-    currentCamera->getOpenGLModelViewMatrix(mat);
-    glMultMatrixd(mat);
-    displayOBJs();
+    return NULL;
 }
 
-void HeadlessRecorder::calcProjection()
+bool User::setChanged(attr_t at)
 {
-    double xNear, yNear;
-    double xFactor = 1.0, yFactor = 1.0;
-    double offset;
-    double xForeground, yForeground, zForeground, xBackground, yBackground, zBackground;
-    Vector3 center;
-
-    /// Camera part
-    if (!currentCamera)
-        return;
-
-    if (groot && (!groot->f_bbox.getValue().isValid()))
+    switch(at)
     {
-        vparams->sceneBBox() = groot->f_bbox.getValue();
-        currentCamera->setBoundingBox(vparams->sceneBBox().minBBox(), vparams->sceneBBox().maxBBox());
-    }
-    currentCamera->computeZ();
+        case ATTR_AVATAR:
+            changed.avatar = true;
+            break;
 
-    vparams->zNear() = currentCamera->getZNear();
-    vparams->zFar() = currentCamera->getZFar();
+        case ATTR_FIRSTNAME:
+            changed.firstname = true;
+            break;
 
-    xNear = 0.35 * vparams->zNear();
-    yNear = 0.35 * vparams->zNear();
-    offset = 0.001 * vparams->zNear(); // for foreground and background planes
+        case ATTR_LASTNAME:
+            changed.lastname = true;
+            break;
 
-    if ((height != 0) && (width != 0))
-    {
-        if (height > width)
-        {
-            xFactor = 1.0;
-            yFactor = (double) height / (double) width;
-        }
-        else
-        {
-            xFactor = (double) width / (double) height;
-            yFactor = 1.0;
-        }
-    }
-    vparams->viewport() = sofa::helper::make_array(0,0,width,height);
+        case ATTR_AUTHRING:
+            changed.authring = true;
+            break;
 
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
+        case ATTR_LAST_INT:
+            changed.lstint = true;
+            break;
 
-    xFactor *= 0.01;
-    yFactor *= 0.01;
+        case ATTR_ED25519_PUBK:
+            changed.puEd255 = true;
+            break;
 
-    zForeground = -vparams->zNear() - offset;
-    zBackground = -vparams->zFar() + offset;
+        case ATTR_CU25519_PUBK:
+            changed.puCu255 = true;
+            break;
 
-    if (currentCamera->getCameraType() == core::visual::VisualParams::PERSPECTIVE_TYPE)
-        gluPerspective(currentCamera->getFieldOfView(), (double) width / (double) height, vparams->zNear(), vparams->zFar());
-    else
-    {
-        float ratio = (float)( vparams->zFar() / (vparams->zNear() * 20) );
-        Vector3 tcenter = vparams->sceneTransform() * center;
-        if (tcenter[2] < 0.0)
-        {
-            ratio = (float)( -300 * (tcenter.norm2()) / tcenter[2] );
-        }
-        glOrtho((-xNear * xFactor) * ratio, (xNear * xFactor) * ratio, (-yNear * yFactor) * ratio, (yNear * yFactor) * ratio,
-                vparams->zNear(), vparams->zFar());
-    }
+        case ATTR_SIG_RSA_PUBK:
+            changed.sigPubk = true;
+            break;
 
-    xForeground = -zForeground * xNear / vparams->zNear();
-    yForeground = -zForeground * yNear / vparams->zNear();
-    xBackground = -zBackground * xNear / vparams->zNear();
-    yBackground = -zBackground * yNear / vparams->zNear();
+        case ATTR_SIG_CU255_PUBK:
+            changed.sigCu255 = true;
+            break;
 
-    xForeground *= xFactor;
-    yForeground *= yFactor;
-    xBackground *= xFactor;
-    yBackground *= yFactor;
+        case ATTR_KEYRING:
+            changed.keyring = true;
+            break;
 
-    glGetDoublev(GL_PROJECTION_MATRIX,lastProjectionMatrix);
+        case ATTR_COUNTRY:
+            changed.country = true;
+            break;
 
-    glMatrixMode(GL_MODELVIEW);
-}
+        case ATTR_BIRTHDAY:
+        case ATTR_BIRTHMONTH:
+        case ATTR_BIRTHYEAR:
+            changed.birthday = true;
+            break;
 
-void HeadlessRecorder::paintGL()
-{
-    glClearColor(0.0f,0.0f,0.0f,0.0f);
-    glClearDepth(1.0);
-    drawScene();
-}
+        case ATTR_LANGUAGE:
+            changed.language = true;
+            break;
 
-void HeadlessRecorder::step()
-{
-    sofa::helper::AdvancedTimer::begin("Animate");
-    getSimulation()->animate(groot.get());
-    sofa::helper::AdvancedTimer::end("Animate");
-    getSimulation()->updateVisual(groot.get());
-    redraw();
+        case ATTR_PWD_REMINDER:
+            changed.pwdReminder = true;
+            break;
 
-}
+        case ATTR_DISABLE_VERSIONS:
+            changed.disableVersions = true;
+            break;
 
-void HeadlessRecorder::resetView()
-{
-    bool fileRead = false;
+        case ATTR_CONTACT_LINK_VERIFICATION:
+            changed.contactLinkVerification = true;
+            break;
 
-    if (!sceneFileName.empty())
-    {
-        std::string viewFileName = sceneFileName + ".view";
-        fileRead = currentCamera->importParametersFromFile(viewFileName);
+        case ATTR_RICH_PREVIEWS:
+            changed.richPreviews = true;
+            break;
+
+        case ATTR_LAST_PSA:
+            changed.lastPsa = true;
+            break;
+
+        case ATTR_RUBBISH_TIME:
+            changed.rubbishTime = true;
+            break;
+
+        case ATTR_STORAGE_STATE:
+            changed.storageState = true;
+            break;
+
+        case ATTR_GEOLOCATION:
+            changed.geolocation = true;
+            break;
+
+        default:
+            return false;
     }
 
-    //if there is no .view file , look at the center of the scene bounding box
-    // and with a Up vector in the same axis as the gravity
-    if (!fileRead)
-    {
-        newView();
-    }
-    redraw();
+    return true;
 }
 
-void HeadlessRecorder::newView()
+void User::setTag(int tag)
 {
-    if (!currentCamera || !groot)
-        return;
-
-    currentCamera->setDefaultView(groot->getGravity());
-}
-
-void HeadlessRecorder::setScene(sofa::simulation::Node::SPtr scene, const char* filename, bool)
-{
-    std::ostringstream ofilename;
-
-    sceneFileName = (filename==NULL)?"":filename;
-    if (!sceneFileName.empty())
+    if (this->tag != 0)    // external changes prevail
     {
-        const char* begin = sceneFileName.c_str();
-        const char* end = strrchr(begin,'.');
-        if (!end) end = begin + sceneFileName.length();
-        ofilename << std::string(begin, end);
-        ofilename << "_";
-    }
-    else
-        ofilename << "scene_";
-
-    groot = scene;
-    initTexturesDone = false;
-
-    //Camera initialization
-    if (groot)
-    {
-        groot->get(currentCamera);
-        if (!currentCamera)
-        {
-            currentCamera = sofa::core::objectmodel::New<component::visualmodel::InteractiveCamera>();
-            currentCamera->setName(core::objectmodel::Base::shortName(currentCamera.get()));
-            groot->addObject(currentCamera);
-            currentCamera->p_position.forceSet();
-            currentCamera->p_orientation.forceSet();
-            currentCamera->bwdInit();
-            resetView();
-        }
-
-        vparams->sceneBBox() = groot->f_bbox.getValue();
-        currentCamera->setBoundingBox(vparams->sceneBBox().minBBox(), vparams->sceneBBox().maxBBox());
-
-    }
-    redraw();
-}
-
-sofa::simulation::Node* HeadlessRecorder::currentSimulation()
-{
-    return groot.get();
-}
-
-void HeadlessRecorder::setViewerResolution(int /*width*/, int /*height*/)
-{
-}
-
-// -----------------------------------------------------------------
-// --- FrameRecord
-// -----------------------------------------------------------------
-void HeadlessRecorder::record()
-{
-
-    if (saveAsScreenShot)
-    {
-        std::string pngFilename = fileName + std::to_string(m_nFrames) + ".png" ;
-        screenshotPNG(pngFilename);
-    } else if (saveAsVideo)
-    {
-        if (initVideoRecorder)
-        {
-            std::string videoFilename = fileName;
-            videoFilename.append(".avi");
-            //videoFilename.append(".mp4");
-            videorecorder = std::unique_ptr<VideoRecorderFFmpeg>(new VideoRecorderFFmpeg(fps, width, height, videoFilename.c_str(), AV_CODEC_ID_H264));
-            videorecorder->start();
-            initVideoRecorder = false;
-        }
-        if (canRecord())
-            videorecorder->encodeFrame();
-        else
-            videorecorder->stop();
+        this->tag = tag;
     }
 }
 
-// -----------------------------------------------------------------
-// --- Screenshot
-// -----------------------------------------------------------------
-void HeadlessRecorder::screenshotPNG(std::string filename)
+int User::getTag()
 {
-    std::string extension = sofa::helper::system::SetDirectory::GetExtension(filename.c_str());
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-
-    //test if we can export in lossless image
-    bool imageSupport = helper::io::Image::FactoryImage::getInstance()->hasKey(extension);
-    if (!imageSupport)
-    {
-        msg_error("Capture") << "Could not write " << extension << "image format (no support found)";
-        return;
-    }
-    helper::io::Image* img = helper::io::Image::FactoryImage::getInstance()->createObject(extension, "");
-    bool success = false;
-    if (img)
-    {
-        img->init(width, height, 1, 1, sofa::helper::io::Image::UNORM8, sofa::helper::io::Image::RGBA);
-        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, img->getPixels());
-
-        success = img->save(filename, 0);
-
-        if (success)
-        {
-            msg_info("Capture") << "Saved " << img->getWidth() << "x" << img->getHeight() << " screen image to " << filename;
-        }
-        delete img;
-    }
-
-    if(!success)
-    {
-        msg_error("Capture") << "Unknown error while saving screen image to " << filename;
-    }
+    return tag;
 }
 
-} // namespace hRecorder
+void User::resetTag()
+{
+    tag = -1;
+}
 
-} // namespace gui
-
-} // namespace sofa
-
+// update user attributes
+void User::set(visibility_t v, m_time_t ct)
+{
+    show = v;
+    ctime = ct;
+}
+} // namespace

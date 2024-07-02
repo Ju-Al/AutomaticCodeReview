@@ -52,7 +52,6 @@ def test_can_not_send_same_schema(looper, sdk_pool_handle,
         "can have one and only one SCHEMA with name business and version 1.8"
     )
 
-
 def test_schema_maximum_attrib(looper, sdk_pool_handle,
                                sdk_wallet_trust_anchor):
     attribs = []

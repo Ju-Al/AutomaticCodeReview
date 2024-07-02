@@ -1,5 +1,4 @@
 # coding=utf-8
-                """ AND id >= %(from_id)s AND id <= %(to_id)s
 from __future__ import division, absolute_import
 from __future__ import print_function, unicode_literals
 import logging
@@ -208,7 +207,7 @@ class ListenStore(object):
         """
         query = """SELECT * FROM listens WHERE uid = %(uid)s AND """ + \
                 range_keys(len(date_range)) + \
-                """ AND id > %(from_id)s AND id < %(to_id)s
+                """ AND id >= %(from_id)s AND id <= %(to_id)s
                    ORDER BY id """ + order.upper() + """ LIMIT %(limit)s"""
 
         fetched_rows = 0  # Total number of rows fetched for this range

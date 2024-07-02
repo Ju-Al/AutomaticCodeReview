@@ -146,7 +146,6 @@ def hours_minutes_seconds(value):
     :param value: hh:mm:ss
     :return: seconds
     """
-    try:
         if int(value):
             return value
     except ValueError:

@@ -219,8 +219,6 @@ export default Service.extend({
       this.signOut();
     }
   }
-});
-
 function createUserRecord(store, user) {
   const record = store.push(store.normalize('user', user));
   const installation = store.peekAll('installation').findBy('owner.id', user.id) || null;

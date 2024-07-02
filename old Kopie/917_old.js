@@ -1,17 +1,4 @@
 /**
-    var oldValue = checkboxObj.clicked;
-    var newValue = !oldValue;
-    checkboxObj.clicked = newValue;
-
-    if (checkboxObj.clicked) {
-      Blockly.utils.addClass((checkboxObj.svgRoot), 'checked');
-    } else {
-      Blockly.utils.removeClass((checkboxObj.svgRoot), 'checked');
-    }
-
-    Blockly.Events.fire(new Blockly.Events.Change(
-        checkboxObj.block, 'checkbox', null, oldValue, newValue));
-
  * @license
  * Visual Blocks Editor
  *
@@ -558,8 +545,20 @@ Blockly.VerticalFlyout.prototype.createCheckbox_ = function(block, cursorX,
  * @return {!Function} Function to call when checkbox is clicked.
  * @private
  */
+    var oldValue = checkboxObj.clicked;
+    var newValue = !oldValue;
+    checkboxObj.clicked = newValue;
+
+    if (checkboxObj.clicked) {
+      Blockly.utils.addClass((checkboxObj.svgRoot), 'checked');
+    } else {
+      Blockly.utils.removeClass((checkboxObj.svgRoot), 'checked');
+    }
+
+    Blockly.Events.fire(new Blockly.Events.Change(
+        checkboxObj.block, 'checkbox', null, oldValue, newValue));
+
 Blockly.VerticalFlyout.prototype.checkboxClicked_ = function(checkboxObj) {
-  var context = this;
   return function(e) {
     context.setCheckboxState(checkboxObj.block.id, !checkboxObj.clicked);
     // This event has been handled.  No need to bubble up to the document.

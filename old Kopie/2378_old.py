@@ -1,19 +1,4 @@
 # Copyright 2012 by Eric Talevich.  All rights reserved.
-    from Bio.File import UndoHandle
-
-        undo_handle = UndoHandle(handle)
-        firstline = undo_handle.peekline()
-        # check if file is empty
-        if not firstline:
-            raise ValueError("Empty file.")
-
-        # Deduce the PDB ID from the PDB header
-        # ENH: or filename?
-        if firstline.startswith("HEADER"):
-            pdb_id = firstline[62:66]
-        else:
-                "First line is not a 'HEADER'; can't determine PDB ID. "
-                "Line: %r" % firstline,
 #
 # This file is part of the Biopython distribution and governed by your
 # choice of the "Biopython License Agreement" or the "BSD 3-Clause License".
@@ -298,8 +283,22 @@ def PdbAtomIterator(handle):
     # Only import PDB when needed, to avoid/delay NumPy dependency in SeqIO
     from Bio.PDB import PDBParser
 
+    from Bio.File import UndoHandle
+
     with as_handle(handle, "rU") as handle:
-        struct = PDBParser().get_structure(None, handle)
+        undo_handle = UndoHandle(handle)
+        firstline = undo_handle.peekline()
+        # check if file is empty
+        if not firstline:
+            raise ValueError("Empty file.")
+
+        # Deduce the PDB ID from the PDB header
+        # ENH: or filename?
+        if firstline.startswith("HEADER"):
+            pdb_id = firstline[62:66]
+                "First line is not a 'HEADER'; can't determine PDB ID. "
+                "Line: %r" % firstline,
+        else:
         pdb_id = struct.header['idcode']
         if not pdb_id:
             warnings.warn(

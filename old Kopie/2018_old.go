@@ -53,7 +53,6 @@ type envUpgradeOpts struct {
 	sel                appEnvSelector
 	legacyEnvTemplater templater
 	prog               progress
-	lambdas            reader
 	appCFN             appResourcesGetter
 
 	// Constructors for clients that can be initialized only at runtime.

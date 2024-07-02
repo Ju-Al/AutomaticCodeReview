@@ -139,7 +139,6 @@ def main():
 
     except GeocoderQuotaExceeded:
         raise Exception("Google Maps API key over requests limit.")
-    except SIGINTRecieved:
         if bot:
             bot.event_manager.emit(
                 'bot_interrupted',

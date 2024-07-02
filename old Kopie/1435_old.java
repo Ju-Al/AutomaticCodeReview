@@ -1,574 +1,256 @@
 /*
- * Copyright 2018 ConsenSys AG.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
-package tech.pegasys.pantheon.tests.acceptance.dsl.node;
 
-import static java.util.Collections.unmodifiableList;
-import static net.consensys.cava.io.file.Files.copyResource;
-import static org.apache.logging.log4j.LogManager.getLogger;
-
-import tech.pegasys.pantheon.controller.KeyPairUtil;
-import tech.pegasys.pantheon.crypto.SECP256K1.KeyPair;
-import tech.pegasys.pantheon.ethereum.core.Address;
-import tech.pegasys.pantheon.ethereum.core.MiningParameters;
-import tech.pegasys.pantheon.ethereum.core.PrivacyParameters;
-import tech.pegasys.pantheon.ethereum.core.Util;
-import tech.pegasys.pantheon.ethereum.jsonrpc.JsonRpcConfiguration;
-import tech.pegasys.pantheon.ethereum.jsonrpc.websocket.WebSocketConfiguration;
-import tech.pegasys.pantheon.ethereum.permissioning.PermissioningConfiguration;
-import tech.pegasys.pantheon.metrics.prometheus.MetricsConfiguration;
-import tech.pegasys.pantheon.tests.acceptance.dsl.condition.Condition;
-import tech.pegasys.pantheon.tests.acceptance.dsl.httptransaction.HttpRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.httptransaction.HttpTransaction;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.AdminJsonRpcRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.CliqueJsonRpcRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.EeaJsonRpcRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.IbftJsonRpcRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.JsonRequestFactories;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.PermissioningJsonRpcRequestFactory;
-import tech.pegasys.pantheon.tests.acceptance.dsl.transaction.Transaction;
-import tech.pegasys.pantheon.tests.acceptance.dsl.waitcondition.WaitCondition;
+package org.apache.iceberg.flink;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
+import org.apache.iceberg.AssertHelpers;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.types.Types;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Test;
 
-import com.google.common.base.MoreObjects;
-import com.google.common.io.MoreFiles;
-import com.google.common.io.RecursiveDeleteOption;
-import org.apache.logging.log4j.Logger;
-import org.awaitility.Awaitility;
-import org.awaitility.core.ConditionTimeoutException;
-import org.java_websocket.exceptions.WebsocketNotConnectedException;
-import org.web3j.protocol.Web3jService;
-import org.web3j.protocol.core.JsonRpc2_0Web3j;
-import org.web3j.protocol.http.HttpService;
-import org.web3j.protocol.websocket.WebSocketClient;
-import org.web3j.protocol.websocket.WebSocketListener;
-import org.web3j.protocol.websocket.WebSocketService;
-import org.web3j.utils.Async;
+public class TestFlinkCatalogDatabase extends FlinkCatalogTestBase {
 
-public class PantheonNode implements NodeConfiguration, RunnableNode, AutoCloseable {
-
-  private static final String LOCALHOST = "127.0.0.1";
-  private static final Logger LOG = getLogger();
-
-  private final Path homeDirectory;
-  private final KeyPair keyPair;
-  private final Properties portsProperties = new Properties();
-  private final Boolean p2pEnabled;
-
-  private final String name;
-  private final MiningParameters miningParameters;
-  private final PrivacyParameters privacyParameters;
-  private final JsonRpcConfiguration jsonRpcConfiguration;
-  private final WebSocketConfiguration webSocketConfiguration;
-  private final MetricsConfiguration metricsConfiguration;
-  private final Optional<PermissioningConfiguration> permissioningConfiguration;
-  private final GenesisConfigProvider genesisConfigProvider;
-  private final boolean devMode;
-  private final boolean discoveryEnabled;
-  private final List<URI> bootnodes = new ArrayList<>();
-  private final boolean bootnodeEligible;
-
-  private Optional<String> genesisConfig = Optional.empty();
-  private JsonRequestFactories jsonRequestFactories;
-  private HttpRequestFactory httpRequestFactory;
-  private boolean useWsForJsonRpc = false;
-  private String token = null;
-  private List<String> plugins = new ArrayList<>();
-
-  public PantheonNode(
-      final String name,
-      final MiningParameters miningParameters,
-      final PrivacyParameters privacyParameters,
-      final JsonRpcConfiguration jsonRpcConfiguration,
-      final WebSocketConfiguration webSocketConfiguration,
-      final MetricsConfiguration metricsConfiguration,
-      final Optional<PermissioningConfiguration> permissioningConfiguration,
-      final Optional<String> keyfilePath,
-      final boolean devMode,
-      final GenesisConfigProvider genesisConfigProvider,
-      final boolean p2pEnabled,
-      final boolean discoveryEnabled,
-      final boolean bootnodeEligible,
-      final List<String> plugins)
-      throws IOException {
-    this.bootnodeEligible = bootnodeEligible;
-    this.homeDirectory = Files.createTempDirectory("acctest");
-    keyfilePath.ifPresent(
-        path -> {
-          try {
-            copyResource(path, homeDirectory.resolve("key"));
-          } catch (IOException e) {
-            LOG.error("Could not find key file \"{}\" in resources", path);
-          }
-        });
-    this.keyPair = KeyPairUtil.loadKeyPair(homeDirectory);
-    this.name = name;
-    this.miningParameters = miningParameters;
-    this.privacyParameters = privacyParameters;
-    this.privacyParameters.setSigningKeyPair(keyPair);
-    this.jsonRpcConfiguration = jsonRpcConfiguration;
-    this.webSocketConfiguration = webSocketConfiguration;
-    this.metricsConfiguration = metricsConfiguration;
-    this.permissioningConfiguration = permissioningConfiguration;
-    this.genesisConfigProvider = genesisConfigProvider;
-    this.devMode = devMode;
-    this.p2pEnabled = p2pEnabled;
-    this.discoveryEnabled = discoveryEnabled;
-        pluginName -> {
-          try {
-            homeDirectory.resolve("plugins").toFile().mkdirs();
-            copyResource(
-                pluginName + ".jar", homeDirectory.resolve("plugins/" + pluginName + ".jar"));
-            PantheonNode.this.plugins.add(pluginName);
-          } catch (final IOException e) {
-            LOG.error("Could not find plugin \"{}\" in resources", pluginName);
-          }
-        });
-    LOG.info("Created PantheonNode {}", this.toString());
+  public TestFlinkCatalogDatabase(String catalogName, String[] baseNamepace) {
+    super(catalogName, baseNamepace);
   }
 
-  private boolean isJsonRpcEnabled() {
-    return jsonRpcConfiguration().isEnabled();
+  @After
+  public void clean() {
+    sql("DROP TABLE IF EXISTS %s.tl", flinkDatabase);
+    sql("DROP DATABASE IF EXISTS %s", flinkDatabase);
   }
 
-  private boolean isWebSocketsRpcEnabled() {
-    return webSocketConfiguration().isEnabled();
+  @Test
+  public void testCreateNamespace() {
+    Assert.assertFalse(
+        "Database should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s", flinkDatabase);
+
+    Assert.assertTrue("Database should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
   }
 
-  @Override
-  public String getName() {
-    return name;
+  @Test
+  public void testDefaultDatabase() {
+    sql("USE CATALOG %s", catalogName);
+
+    Assert.assertEquals("Should use the current catalog", getTableEnv().getCurrentCatalog(), catalogName);
+    Assert.assertEquals("Should use the configured default namespace",
+        getTableEnv().getCurrentDatabase(), "default");
   }
 
-  @Override
-  public String getNodeId() {
-    return keyPair.getPublicKey().toString().substring(2);
+  @Test
+  public void testDropEmptyDatabase() {
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s", flinkDatabase);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("DROP DATABASE %s", flinkDatabase);
+
+    Assert.assertFalse(
+        "Namespace should have been dropped",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
   }
 
-  @Override
-  public URI enodeUrl() {
-    final String discport = isDiscoveryEnabled() ? "?discport=" + getDiscoveryPort() : "";
-    return URI.create("enode://" + getNodeId() + "@" + LOCALHOST + ":" + getP2pPort() + discport);
+  @Test
+  public void testDropNonEmptyNamespace() {
+    Assume.assumeFalse("Hadoop catalog throws IOException: Directory is not empty.", isHadoopCatalog);
+
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s", flinkDatabase);
+
+    validationCatalog.createTable(
+        TableIdentifier.of(icebergNamespace, "tl"),
+        new Schema(Types.NestedField.optional(0, "id", Types.LongType.get())));
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+    Assert.assertTrue("Table should exist", validationCatalog.tableExists(TableIdentifier.of(icebergNamespace, "tl")));
+
+    AssertHelpers.assertThrowsCause(
+        "Should fail if trying to delete a non-empty database",
+        DatabaseNotEmptyException.class,
+        String.format("Database %s in catalog %s is not empty.", DATABASE, catalogName),
+        () -> sql("DROP DATABASE %s", flinkDatabase));
+
+    sql("DROP TABLE %s.tl", flinkDatabase);
   }
 
-  private String getP2pPort() {
-    final String port = portsProperties.getProperty("p2p");
-    if (port == null) {
-      throw new IllegalStateException("Requested p2p port before ports properties was written");
-    }
-    return port;
+  @Test
+  public void testListTables() {
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s", flinkDatabase);
+    sql("USE CATALOG %s", catalogName);
+    sql("USE %s", DATABASE);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    Assert.assertEquals("Should not list any tables", 0, sql("SHOW TABLES").size());
+
+    validationCatalog.createTable(
+        TableIdentifier.of(icebergNamespace, "tl"),
+        new Schema(Types.NestedField.optional(0, "id", Types.LongType.get())));
+
+    List<Object[]> tables = sql("SHOW TABLES");
+    Assert.assertEquals("Only 1 table", 1, tables.size());
+    Assert.assertEquals("Table name should match", "tl", tables.get(0)[0]);
   }
 
-  private String getDiscoveryPort() {
-    final String port = portsProperties.getProperty("discovery");
-    if (port == null) {
-      throw new IllegalStateException(
-          "Requested discovery port before ports properties was written");
-    }
-    return port;
-  }
+  @Test
+  public void testListNamespace() {
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
 
-  private Optional<String> jsonRpcBaseUrl() {
-    if (isJsonRpcEnabled()) {
-      return Optional.of(
-          "http://"
-              + jsonRpcConfiguration.getHost()
-              + ":"
-              + portsProperties.getProperty("json-rpc"));
-    } else {
-      return Optional.empty();
-    }
-  }
+    sql("CREATE DATABASE %s", flinkDatabase);
+    sql("USE CATALOG %s", catalogName);
 
-  private Optional<String> wsRpcBaseUrl() {
-    if (isWebSocketsRpcEnabled()) {
-      return Optional.of(
-          "ws://" + webSocketConfiguration.getHost() + ":" + portsProperties.getProperty("ws-rpc"));
-    } else {
-      return Optional.empty();
-    }
-  }
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
 
-  private Optional<String> wsRpcBaseHttpUrl() {
-    if (isWebSocketsRpcEnabled()) {
-      return Optional.of(
-          "http://"
-              + webSocketConfiguration.getHost()
-              + ":"
-              + portsProperties.getProperty("ws-rpc"));
-    } else {
-      return Optional.empty();
-    }
-  }
+    List<Object[]> databases = sql("SHOW DATABASES");
 
-  @Override
-  public Optional<Integer> jsonRpcWebSocketPort() {
-    if (isWebSocketsRpcEnabled()) {
-      return Optional.of(Integer.valueOf(portsProperties.getProperty("ws-rpc")));
-    } else {
-      return Optional.empty();
-    }
-  }
+    if (isHadoopCatalog) {
+      Assert.assertEquals("Should have 1 database", 1, databases.size());
+      Assert.assertEquals("Should have only db database", "db", databases.get(0)[0]);
 
-  @Override
-  public String hostName() {
-    return LOCALHOST;
-  }
-
-  private JsonRequestFactories jsonRequestFactories() {
-    Optional<WebSocketService> websocketService = Optional.empty();
-    if (jsonRequestFactories == null) {
-      final Web3jService web3jService;
-
-      if (useWsForJsonRpc) {
-        final String url = wsRpcBaseUrl().orElse("ws://" + LOCALHOST + ":" + 8546);
-        final Map<String, String> headers = new HashMap<>();
-        if (token != null) {
-          headers.put("Authorization", "Bearer " + token);
-        }
-        final WebSocketClient wsClient = new WebSocketClient(URI.create(url), headers);
-
-        web3jService = new WebSocketService(wsClient, false);
-        try {
-          ((WebSocketService) web3jService).connect();
-        } catch (final ConnectException e) {
-          throw new RuntimeException(e);
-        }
-
-        websocketService = Optional.of((WebSocketService) web3jService);
-      } else {
-        web3jService =
-            jsonRpcBaseUrl()
-                .map(HttpService::new)
-                .orElse(new HttpService("http://" + LOCALHOST + ":" + 8545));
-        if (token != null) {
-          ((HttpService) web3jService).addHeader("Authorization", "Bearer " + token);
-        }
+      if (baseNamespace.length > 0) {
+        // test namespace not belongs to this catalog
+        validationNamespaceCatalog.createNamespace(Namespace.of(baseNamespace[0], "UNKNOWN_NAMESPACE"));
+        databases = sql("SHOW DATABASES");
+        Assert.assertEquals("Should have 1 database", 1, databases.size());
+        Assert.assertEquals("Should have only db database", "db", databases.get(0)[0]);
       }
-
-      jsonRequestFactories =
-          new JsonRequestFactories(
-              new JsonRpc2_0Web3j(web3jService, 2000, Async.defaultExecutorService()),
-              new CliqueJsonRpcRequestFactory(web3jService),
-              new IbftJsonRpcRequestFactory(web3jService),
-              new PermissioningJsonRpcRequestFactory(web3jService),
-              new AdminJsonRpcRequestFactory(web3jService),
-              new EeaJsonRpcRequestFactory(web3jService),
-              websocketService);
-    }
-
-    return jsonRequestFactories;
-  }
-
-  private HttpRequestFactory httpRequestFactory() {
-    if (httpRequestFactory == null) {
-      final Optional<String> baseUrl;
-      final String port;
-      if (useWsForJsonRpc) {
-        baseUrl = wsRpcBaseHttpUrl();
-        port = "8546";
-      } else {
-        baseUrl = jsonRpcBaseUrl();
-        port = "8545";
-      }
-      httpRequestFactory =
-          new HttpRequestFactory(baseUrl.orElse("http://" + LOCALHOST + ":" + port));
-    }
-    return httpRequestFactory;
-  }
-
-  /** All future JSON-RPC calls are made via a web sockets connection. */
-  @Override
-  public void useWebSocketsForJsonRpc() {
-    final String url = wsRpcBaseUrl().isPresent() ? wsRpcBaseUrl().get() : "ws://127.0.0.1:8546";
-
-    checkIfWebSocketEndpointIsAvailable(url);
-
-    useWsForJsonRpc = true;
-
-    if (jsonRequestFactories != null) {
-      jsonRequestFactories.shutdown();
-      jsonRequestFactories = null;
-    }
-
-    if (httpRequestFactory != null) {
-      httpRequestFactory = null;
-    }
-  }
-
-  /** All future JSON-RPC calls will include the authentication token. */
-  @Override
-  public void useAuthenticationTokenInHeaderForJsonRpc(final String token) {
-
-    if (jsonRequestFactories != null) {
-      jsonRequestFactories.shutdown();
-      jsonRequestFactories = null;
-    }
-
-    if (httpRequestFactory != null) {
-      httpRequestFactory = null;
-    }
-
-    this.token = token;
-  }
-
-  private void checkIfWebSocketEndpointIsAvailable(final String url) {
-    final WebSocketClient webSocketClient = new WebSocketClient(URI.create(url));
-    // Web3j implementation always invoke the listener (even when one hasn't been set). We are using
-    // this stub implementation to avoid a NullPointerException.
-    webSocketClient.setListener(
-        new WebSocketListener() {
-          @Override
-          public void onMessage(final String message) {
-            // DO NOTHING
-          }
-
-          @Override
-          public void onError(final Exception e) {
-            // DO NOTHING
-          }
-
-          @Override
-          public void onClose() {
-            // DO NOTHING
-          }
-        });
-
-    // Because we can't trust the connection timeout of the WebSocket client implementation, we are
-    // using this approach to verify if the endpoint is enabled.
-    webSocketClient.connect();
-    try {
-      Awaitility.await().atMost(5, TimeUnit.SECONDS).until(webSocketClient::isOpen);
-    } catch (final ConditionTimeoutException e) {
-      throw new WebsocketNotConnectedException();
-    } finally {
-      webSocketClient.close();
-    }
-  }
-
-  @Override
-  public void start(final PantheonNodeRunner runner) {
-    runner.startNode(this);
-    loadPortsFile();
-  }
-
-  @Override
-  public NodeConfiguration getConfiguration() {
-    return this;
-  }
-
-  @Override
-  public void awaitPeerDiscovery(final Condition condition) {
-    if (jsonRpcEnabled()) {
-      verify(condition);
-    }
-  }
-
-  private void loadPortsFile() {
-    try (final FileInputStream fis =
-        new FileInputStream(new File(homeDirectory.toFile(), "pantheon.ports"))) {
-      portsProperties.load(fis);
-      LOG.info("Ports for node {}: {}", name, portsProperties);
-    } catch (final IOException e) {
-      throw new RuntimeException("Error reading Pantheon ports file", e);
-    }
-  }
-
-  @Override
-  public Address getAddress() {
-    return Util.publicKeyToAddress(keyPair.getPublicKey());
-  }
-
-  public Path homeDirectory() {
-    return homeDirectory;
-  }
-
-  @Override
-  public boolean jsonRpcEnabled() {
-    return isJsonRpcEnabled();
-  }
-
-  JsonRpcConfiguration jsonRpcConfiguration() {
-    return jsonRpcConfiguration;
-  }
-
-  Optional<String> jsonRpcListenHost() {
-    if (isJsonRpcEnabled()) {
-      return Optional.of(jsonRpcConfiguration().getHost());
     } else {
-      return Optional.empty();
+      // If there are multiple classes extends FlinkTestBase, TestHiveMetastore may loose the creation for default
+      // database. See HiveMetaStore.HMSHandler.init.
+      Assert.assertTrue("Should have db database", databases.stream().anyMatch(d -> d[0].equals("db")));
     }
   }
 
-  Optional<Integer> jsonRpcListenPort() {
-    if (isJsonRpcEnabled()) {
-      return Optional.of(jsonRpcConfiguration().getPort());
-    } else {
-      return Optional.empty();
-    }
+  @Test
+  public void testCreateNamespaceWithMetadata() {
+    Assume.assumeFalse("HadoopCatalog does not support namespace metadata", isHadoopCatalog);
+
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s WITH ('prop'='value')", flinkDatabase);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    Map<String, String> nsMetadata = validationNamespaceCatalog.loadNamespaceMetadata(icebergNamespace);
+
+    Assert.assertEquals("Namespace should have expected prop value", "value", nsMetadata.get("prop"));
   }
 
-  boolean wsRpcEnabled() {
-    return isWebSocketsRpcEnabled();
+  @Test
+  public void testCreateNamespaceWithComment() {
+    Assume.assumeFalse("HadoopCatalog does not support namespace metadata", isHadoopCatalog);
+
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s COMMENT 'namespace doc'", flinkDatabase);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    Map<String, String> nsMetadata = validationNamespaceCatalog.loadNamespaceMetadata(icebergNamespace);
+
+    Assert.assertEquals("Namespace should have expected comment", "namespace doc", nsMetadata.get("comment"));
   }
 
-  WebSocketConfiguration webSocketConfiguration() {
-    return webSocketConfiguration;
+  @Test
+  public void testCreateNamespaceWithLocation() throws Exception {
+    Assume.assumeFalse("HadoopCatalog does not support namespace metadata", isHadoopCatalog);
+
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    File location = TEMPORARY_FOLDER.newFile();
+    Assert.assertTrue(location.delete());
+
+    sql("CREATE DATABASE %s WITH ('location'='%s')", flinkDatabase, location);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    Map<String, String> nsMetadata = validationNamespaceCatalog.loadNamespaceMetadata(icebergNamespace);
+
+    Assert.assertEquals("Namespace should have expected location",
+        "file:" + location.getPath(), nsMetadata.get("location"));
   }
 
-  Optional<String> wsRpcListenHost() {
-    return Optional.of(webSocketConfiguration().getHost());
+  @Test
+  public void testSetProperties() {
+    Assume.assumeFalse("HadoopCatalog does not support namespace metadata", isHadoopCatalog);
+
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    sql("CREATE DATABASE %s", flinkDatabase);
+
+    Assert.assertTrue("Namespace should exist", validationNamespaceCatalog.namespaceExists(icebergNamespace));
+
+    Map<String, String> defaultMetadata = validationNamespaceCatalog.loadNamespaceMetadata(icebergNamespace);
+    Assert.assertFalse("Default metadata should not have custom property", defaultMetadata.containsKey("prop"));
+
+    sql("ALTER DATABASE %s SET ('prop'='value')", flinkDatabase);
+
+    Map<String, String> nsMetadata = validationNamespaceCatalog.loadNamespaceMetadata(icebergNamespace);
+
+    Assert.assertEquals("Namespace should have expected prop value", "value", nsMetadata.get("prop"));
   }
 
-  Optional<Integer> wsRpcListenPort() {
-    return Optional.of(webSocketConfiguration().getPort());
-  }
+  @Test
+  public void testHadoopNotSupportMeta() {
+    Assume.assumeTrue("HadoopCatalog does not support namespace metadata", isHadoopCatalog);
 
-  MetricsConfiguration metricsConfiguration() {
-    return metricsConfiguration;
-  }
+    Assert.assertFalse(
+        "Namespace should not already exist",
+        validationNamespaceCatalog.namespaceExists(icebergNamespace));
 
-  String p2pListenHost() {
-    return LOCALHOST;
-  }
-
-  @Override
-  public List<URI> bootnodes() {
-    return unmodifiableList(bootnodes);
-  }
-
-  @Override
-  public boolean isP2pEnabled() {
-    return p2pEnabled;
-  }
-
-  @Override
-  public boolean isBootnodeEligible() {
-    return bootnodeEligible;
-  }
-
-  @Override
-  public void bootnodes(final List<URI> bootnodes) {
-    this.bootnodes.clear();
-    this.bootnodes.addAll(bootnodes);
-  }
-
-  MiningParameters getMiningParameters() {
-    return miningParameters;
-  }
-
-  public PrivacyParameters getPrivacyParameters() {
-    return privacyParameters;
-  }
-
-  public boolean isDevMode() {
-    return devMode;
-  }
-
-  @Override
-  public boolean isDiscoveryEnabled() {
-    return discoveryEnabled;
-  }
-
-  Optional<PermissioningConfiguration> getPermissioningConfiguration() {
-    return permissioningConfiguration;
-  }
-
-  public List<String> getPlugins() {
-    return plugins;
-  }
-
-  @Override
-  public void setPlugins(final List<String> plugins) {
-    this.plugins.clear();
-    this.plugins.addAll(plugins);
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("name", name)
-        .add("homeDirectory", homeDirectory)
-        .add("keyPair", keyPair)
-        .add("p2pEnabled", p2pEnabled)
-        .add("discoveryEnabled", discoveryEnabled)
-        .add("privacyEnabled", privacyParameters.isEnabled())
-        .toString();
-  }
-
-  @Override
-  public void stop() {
-    if (jsonRequestFactories != null) {
-      jsonRequestFactories.shutdown();
-      jsonRequestFactories = null;
-    }
-  }
-
-  @Override
-  public void close() {
-    stop();
-    try {
-      MoreFiles.deleteRecursively(homeDirectory, RecursiveDeleteOption.ALLOW_INSECURE);
-    } catch (final IOException e) {
-      LOG.info("Failed to clean up temporary file: {}", homeDirectory, e);
-    }
-  }
-
-  @Override
-  public GenesisConfigProvider genesisConfigProvider() {
-    return genesisConfigProvider;
-  }
-
-  @Override
-  public Optional<String> getGenesisConfig() {
-    return genesisConfig;
-  }
-
-  @Override
-  public void setGenesisConfig(final String config) {
-    this.genesisConfig = Optional.of(config);
-  }
-
-  @Override
-  public <T> T execute(final Transaction<T> transaction) {
-    return transaction.execute(jsonRequestFactories());
-  }
-
-  @Override
-  public <T> T executeHttpTransaction(final HttpTransaction<T> transaction) {
-    return transaction.execute(httpRequestFactory());
-  }
-
-  @Override
-  public void verify(final Condition expected) {
-    expected.verify(this);
-  }
-
-  @Override
-  public void waitUntil(final WaitCondition expected) {
-    expected.waitUntil(this);
+    AssertHelpers.assertThrowsCause(
+        "Should fail if trying to create database with location in hadoop catalog.",
+        UnsupportedOperationException.class,
+        String.format("Cannot create namespace %s: metadata is not supported", icebergNamespace),
+        () -> sql("CREATE DATABASE %s WITH ('prop'='value')", flinkDatabase));
   }
 }

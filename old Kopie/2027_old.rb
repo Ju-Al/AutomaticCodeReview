@@ -1,329 +1,244 @@
-require 'spec_helper'
+require File.expand_path('../../spec_helper', __FILE__)
 
-describe Mongo::QueryCache do
-
-  around do |spec|
-    Mongo::QueryCache.clear_cache
-    Mongo::QueryCache.cache { spec.run }
-  end
-
-  before do
-    authorized_collection.delete_many
-  end
-
-  let(:subscriber) { EventSubscriber.new }
-
-  let(:client) do
-    authorized_client.tap do |client|
-      client.subscribe(Mongo::Monitoring::COMMAND, subscriber)
-    end
-  end
-
-  let(:authorized_collection) { client['collection_spec'] }
-
-  describe '#enabled' do
-
-    context 'when query cache is disabled' do
-
-      before do
-        Mongo::QueryCache.enabled = false
-      end
-
-      it 'disables the query cache' do
-        expect(Mongo::QueryCache.enabled?).to be(false)
-      end
-    end
-
-    context 'when query cache is enabled' do
-
-      before do
-        Mongo::QueryCache.enabled = true
-      end
-
-      it 'enables the query cache' do
-        expect(Mongo::QueryCache.enabled?).to be(true)
-      end
-    end
-  end
-
-  describe '#cache' do
+module Pod
+  describe Validator do
 
     before do
-      authorized_collection.insert_one({ name: 'testing' })
-      Mongo::QueryCache.enabled = false
+      Validator.any_instance.stubs(:xcodebuild).returns('')
     end
 
-    let(:events) do
-      subscriber.command_started_events('find')
+    # @return [void]
+    #
+    def write_podspec(text, name = 'JSONKit.podspec')
+      file = temporary_directory + name
+      File.open(file, 'w') {|f| f.write(text) }
+      file
     end
 
-    it 'executes the block with the query cache enabled' do
-      Mongo::QueryCache.cache do
-        authorized_collection.find(name: 'testing').to_a
-        expect(Mongo::QueryCache.enabled?).to be(true)
-        expect(Mongo::QueryCache.cache_table.length).to eq(1)
-      end
-      expect(Mongo::QueryCache.enabled?).to be(false)
-      authorized_collection.find(name: 'testing').to_a
-      expect(events.length).to eq(2)
-      expect(Mongo::QueryCache.cache_table.length).to eq(1)
-    end
-  end
-
-  describe '#uncached' do
-
-    before do
-      authorized_collection.insert_one({ name: 'testing' })
+    # @return [String]
+    #
+    def stub_podspec(pattern = nil, replacement = nil)
+      spec = (fixture('spec-repos') + 'master/JSONKit/1.4/JSONKit.podspec').read
+      spec.gsub!(/https:\/\/github\.com\/johnezang\/JSONKit\.git/, fixture('integration/JSONKit').to_s)
+      spec.gsub!(pattern, replacement) if pattern && replacement
+      spec
     end
 
-    it 'executes the block with the query cache disabled' do
-      Mongo::QueryCache.uncached do
-        authorized_collection.find(name: 'testing').to_a
-        expect(Mongo::QueryCache.enabled?).to be(false)
-      end
-      expect(Mongo::QueryCache.cache_table.length).to eq(0)
-    end
-  end
-
-  context 'when querying in the same collection' do
-
-    before do
-      10.times do |i|
-        authorized_collection.insert_one(test: i)
-      end
+    # @return [Pathname]
+    #
+    def podspec_path
+      fixture('spec-repos') + 'master/JSONKit/1.4/JSONKit.podspec'
     end
 
-    let(:events) do
-      subscriber.command_started_events('find')
+    #-------------------------------------------------------------------------#
+
+    describe "Quick mode" do
+      it "validates a correct podspec" do
+        sut = Validator.new(podspec_path)
+        sut.quick = true
+        sut.validate
+        sut.results.should == []
+        sut.validated?.should.be.true
+      end
+
+      it "lints the podspec during validation" do
+        podspec = stub_podspec(/s.name.*$/, 's.name = "TEST"')
+        file = write_podspec(podspec)
+        sut = Validator.new(file)
+        sut.quick = true
+        sut.validate
+        sut.results.map(&:to_s).first.should.match /should match the name/
+        sut.validated?.should.be.false
+      end
+
+      it "respects quick mode" do
+        file = write_podspec(stub_podspec)
+        sut = Validator.new(file)
+        sut.quick = true
+        sut.expects(:perform_extensive_analysis).never
+        sut.validate
+      end
+
+      it "respects the only errors option" do
+        podspec = stub_podspec(/s.summary.*/, "s.summary = 'A short description of'")
+        file = write_podspec(podspec)
+        sut = Validator.new(file)
+        sut.quick = true
+        sut.only_errors = true
+        sut.validate
+        sut.results.map(&:to_s).first.should.match /summary.*meaningful/
+        sut.validated?.should.be.true
+      end
+
+      it "handles symlinks" do
+        file = write_podspec(stub_podspec)
+        validator = Validator.new(file)
+        validator.quick = true
+        validator.stubs(:validate_homepage)
+        validator.stubs(:validate_screenshots)
+        validator.validate
+        validator.validation_dir.should.be == Pathname.new("/private/tmp/CocoaPods/Lint")
+      end
     end
 
-    context 'when query cache is disabled' do
+    #-------------------------------------------------------------------------#
 
-      before do
-        Mongo::QueryCache.enabled = false
-        authorized_collection.find(test: 1).to_a
-      end
+    describe "Extensive analysis" do
 
-      it 'queries again' do
-        authorized_collection.find(test: 1).to_a
-        expect(events.length).to eq(2)
-        expect(Mongo::QueryCache.cache_table.length).to eq(0)
-      end
-    end
+      describe "Homepage validation" do
+        require 'webmock'
 
-    context 'when query cache is enabled' do
+        before do
+          @sut = Validator.new(podspec_path)
+          @sut.stubs(:install_pod)
+          @sut.stubs(:build_pod)
+          @sut.stubs(:check_file_patterns)
+          @sut.stubs(:tear_down_validation_environment)
+        end
 
-      before do
-        authorized_collection.find(test: 1).to_a
-      end
+        it "checks if the homepage is valid" do
+          WebMock::API.stub_request(:head, /not-found/).to_return(:status => 404)
+          Specification.any_instance.stubs(:homepage).returns('http://banana-corp.local/not-found/')
+          @sut.validate
+          @sut.results.map(&:to_s).first.should.match /The URL (.*) is not reachable/
+        end
 
-      it 'does not query again' do
-        authorized_collection.find(test: 1).to_a
-        expect(events.length).to eq(1)
-        expect(Mongo::QueryCache.cache_table.length).to eq(1)
-      end
-    end
+        it "indicates if it was not able to validate the homepage" do
+          WebMock::API.stub_request(:head, 'banana-corp.local').to_raise(SocketError)
+          Specification.any_instance.stubs(:homepage).returns('http://banana-corp.local/')
+          @sut.validate
+          @sut.results.map(&:to_s).first.should.match /There was a problem validating the URL/
+        it "does not fail if the homepage redirects" do
+          WebMock::API.stub_request(:head, /redirect/).to_return(
+            :status => 301, :headers => { 'Location' => 'http://banana-corp.local/found/' } )
+          WebMock::API.stub_request(:head, /found/).to_return( :status => 200 )
+          Specification.any_instance.stubs(:homepage).returns('http://banana-corp.local/redirect/')
+          @sut.validate
+          @sut.results.length.should.equal 0
+        end
 
-    context 'when query has collation' do
-      min_server_fcv '3.4'
+        it "does not fail if the homepage does not support HEAD" do
+          WebMock::API.stub_request(:head, /page/).to_return( :status => 405 )
+          WebMock::API.stub_request(:get, /page/).to_return( :status => 200 )
+          Specification.any_instance.stubs(:homepage).returns('http://banana-corp.local/page/')
+          @sut.validate
+          @sut.results.length.should.equal 0
+        end
 
-      let(:options1) do
-        { :collation => { locale: 'fr' } }
-      end
-
-      let(:options2) do
-        { collation: { locale: 'en_US' } }
-      end
-
-      before do
-        authorized_collection.find({ test: 3 }, options1).to_a
-      end
-
-      context 'when query has the same collation' do
-
-        it 'uses the cache' do
-          authorized_collection.find({ test: 3 }, options1).to_a
-          expect(events.length).to eq(1)
+        it "does not follow redirects infinitely" do
+          WebMock::API.stub_request(:head, /redirect/).to_return(
+            :status => 301, :headers => { 'Location' => 'http://banana-corp.local/redirect/' } )
+          Specification.any_instance.stubs(:homepage).returns('http://banana-corp.local/redirect/')
+          @sut.validate
+          @sut.results.map(&:to_s).first.should.match /The URL \(.*\) is not reachable/
         end
       end
 
-      context 'when query has a different collation' do
+      describe "Screenshot validation" do
+        require 'webmock'
 
-        it 'queries again' do
-          authorized_collection.find({ test: 3 }, options2).to_a
-          expect(events.length).to eq(2)
-          expect(Mongo::QueryCache.cache_table.length).to eq(2)
+        before do
+          @sut = Validator.new(podspec_path)
+          @sut.stubs(:install_pod)
+          @sut.stubs(:build_pod)
+          @sut.stubs(:check_file_patterns)
+          @sut.stubs(:tear_down_validation_environment)
+          @sut.stubs(:validate_homepage)
+          WebMock::API.stub_request(:head, 'banana-corp.local/valid-image.png').to_return(:status => 200, :headers => { 'Content-Type' => 'image/png' })
         end
-      end
-    end
 
-    context 'when first query has no limit' do
-
-      before do
-        authorized_collection.find.to_a.count
-      end
-
-      context 'when next query has a limit' do
-
-        it 'uses the cache' do
-          authorized_collection.find({}, limit: 5).to_a.count
-          expect(events.length).to eq(1)
+        it "checks if the screenshots are valid" do
+          Specification.any_instance.stubs(:screenshots).returns(['http://banana-corp.local/valid-image.png'])
+          @sut.validate
+          @sut.results.should.be.empty?
         end
-      end
-    end
 
-    context 'when first query has a limit' do
-
-      before do
-        authorized_collection.find(limit: 2).to_a
-      end
-
-      context 'when next query has a different limit' do
-
-        it 'queries again' do
-          authorized_collection.find(limit: 3).to_a
-          expect(events.length).to eq(2)
+        it "should fail if any of the screenshots URLS do not return an image" do
+          WebMock::API.stub_request(:head, 'banana-corp.local/').to_return(:status => 200)
+          Specification.any_instance.stubs(:screenshots).returns(['http://banana-corp.local/valid-image.png', 'http://banana-corp.local/'])
+          @sut.validate
+          @sut.results.map(&:to_s).first.should.match /The screenshot .* is not a valid image/
         end
       end
 
-      context 'when next query does not have a limit' do
+      it "respects the no clean option" do
+        file = write_podspec(stub_podspec)
+        sut = Validator.new(file)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        sut.no_clean = true
+        sut.validate
+        sut.validation_dir.should.exist
+      end
 
-        it 'queries again' do
-          authorized_collection.find.to_a
-          expect(events.length).to eq(2)
-        end
+      it "builds the pod per platform" do
+        file = write_podspec(stub_podspec)
+        sut = Validator.new(file)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        sut.expects(:install_pod).twice
+        sut.expects(:build_pod).twice
+        sut.expects(:check_file_patterns).twice
+        sut.validate
+      end
+
+      it "uses the deployment target of the specification" do
+        sut = Validator.new(podspec_path)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        podfile = sut.send(:podfile_from_spec, :ios, '5.0')
+        dependency = podfile.target_definitions['Pods'].dependencies.first
+        dependency.external_source.has_key?(:podspec).should.be.true
+      end
+
+      it "respects the local option" do
+        sut = Validator.new(podspec_path)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        podfile = sut.send(:podfile_from_spec, :ios, '5.0')
+        deployment_target = podfile.target_definitions['Pods'].platform.deployment_target
+        deployment_target.to_s.should == "5.0"
+      end
+
+      it "uses xcodebuild to generate notes and warnings" do
+        sut = Validator.new(podspec_path)
+        sut.stubs(:check_file_patterns)
+        sut.stubs(:xcodebuild).returns("file.m:1:1: warning: direct access to objective-c's isa is deprecated")
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        sut.validate
+        first = sut.results.map(&:to_s).first
+        first.should.include "[xcodebuild]"
+        sut.result_type.should == :note
+      end
+
+      it "checks for file patterns" do
+        file = write_podspec(stub_podspec(/s\.source_files = 'JSONKit\.\*'/, "s.source_files = 'wrong_paht.*'"))
+        sut = Validator.new(file)
+        sut.stubs(:build_pod)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        sut.validate
+        sut.results.map(&:to_s).first.should.match /source_files.*did not match/
+        sut.result_type.should == :error
+      end
+
+      it "validates a podspec with dependencies" do
+        podspec = stub_podspec(/s.name.*$/, 's.name = "ZKit"')
+        podspec.gsub!(/s.requires_arc/, "s.dependency 'SBJson', '~> 3.2'\n  s.requires_arc")
+        podspec.gsub!(/s.license.*$/, 's.license = "Public Domain"')
+        file = write_podspec(podspec, "ZKit.podspec")
+
+        spec = Specification.from_file(file)
+        sut = Validator.new(spec)
+        sut.stubs(:validate_homepage)
+        sut.stubs(:validate_screenshots)
+        sut.stubs(:build_pod)
+        sut.validate
+        sut.validated?.should.be.true
       end
     end
+    #-------------------------------------------------------------------------#
 
-    context 'when querying only the first' do
-
-      before do
-        5.times do |i|
-          authorized_collection.insert_one(test: 11)
-        end
-      end
-
-      before do
-        authorized_collection.find({test: 11}).to_a
-      end
-
-      it 'does not query again' do
-        expect(authorized_collection.find({test: 11}).count).to eq(5)
-        authorized_collection.find({test: 11}).first
-        expect(events.length).to eq(1)
-      end
-
-      context 'when limiting the result' do
-
-        it 'does not query again' do
-          authorized_collection.find({test: 11}, limit: 2).to_a
-          expect(events.length).to eq(1)
-        end
-      end
-    end
-
-    context 'when specifying a different skip value' do
-
-      before do
-        authorized_collection.find({test: 11}, {limit: 2, skip: 1}).to_a
-      end
-
-      it 'queries again' do
-        authorized_collection.find({test: 11}, {limit: 2, skip: 3}).to_a
-        expect(events.length).to eq(2)
-      end
-    end
-
-    context 'when sorting documents' do
-
-      before do
-        authorized_collection.find({}, desc).to_a
-      end
-
-      let(:desc) do
-        { sort: {test: -1} }
-      end
-
-      let(:asc) do
-        { sort: {test: 1} }
-      end
-
-      context 'with different selector' do
-
-        it 'queries again' do
-          authorized_collection.find({}, asc).to_a
-          expect(events.length).to eq(2)
-        end
-      end
-
-      it 'does not query again' do
-        authorized_collection.find({}, desc).to_a
-        expect(events.length).to eq(1)
-      end
-    end
-
-    context 'when inserting new documents' do
-
-      before do
-        authorized_collection.find.to_a
-        authorized_collection.insert_one({ name: "bob" })
-      end
-
-      it 'queries again' do
-        authorized_collection.find.to_a
-        expect(events.length).to eq(2)
-      end
-    end
-
-    context 'when deleting documents' do
-
-      before do
-        authorized_collection.find.to_a
-      end
-
-      it 'queries again' do
-        authorized_collection.delete_many
-        authorized_collection.find.to_a
-        expect(events.length).to eq(2)
-      end
-    end
-
-    context 'when replacing documents' do
-      before do
-        authorized_collection.find.to_a
-      end
-
-      let(:selector) do
-        { test: 5 }
-      end
-
-      it 'queries again' do
-        authorized_collection.replace_one(selector, { test: 100 } )
-        authorized_collection.find.to_a
-        expect(events.length).to eq(2)
-      end
-    end
-  end
-
-  context 'when querying in a different collection' do
-
-    let(:database) { client.database }
-
-    let(:new_collection) do
-      Mongo::Collection.new(database, 'foo')
-    end
-
-    before do
-      authorized_collection.find.to_a
-    end
-
-    let(:events) do
-      subscriber.command_started_events('find')
-    end
-
-    it 'queries again' do
-      new_collection.find.to_a
-      expect(events.length).to eq(2)
-    end
   end
 end

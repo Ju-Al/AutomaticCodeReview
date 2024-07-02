@@ -1,7 +1,5 @@
 package python
 
-func (g *Generator) GenerateConstantsContents([]*parser.Constant) error {
-	return nil
 import (
 	"fmt"
 	"os"
@@ -51,7 +49,8 @@ func (g *Generator) TeardownGenerator() error {
 }
 
 // GenerateConstantsContents generates constants.
-func (g *Generator) GenerateConstantsContents(constants []*parser.Constant) error {
+func (g *Generator) GenerateConstantsContents([]*parser.Constant) error {
+	return nil
 	contents := "\n\n"
 	contents += "from thrift.Thrift import TType, TMessageType, TException, TApplicationException\n"
 	contents += "from f_types import *\n\n"

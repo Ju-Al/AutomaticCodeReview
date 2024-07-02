@@ -268,7 +268,6 @@ def using_clang():
         is_clang = False
     return is_clang
 
-def using_msvc():
     """Will we be using an MSVC compiler?"""
     # how portable is this?
     compiler = new_compiler()

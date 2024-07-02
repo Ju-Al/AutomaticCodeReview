@@ -1,6 +1,4 @@
 // @flow
-    const { wallets, adaRedemption } = this.props.stores.ada;
-    const { actions } = this.props;
 import React, { Component } from 'react';
 import { observer, inject } from 'mobx-react';
 import { get } from 'lodash';
@@ -38,7 +36,8 @@ export default class Wallet extends Component<Props> {
   };
 
   render() {
-    const { actions, stores } = this.props;
+    const { wallets, adaRedemption } = this.props.stores.ada;
+    const { actions } = this.props;
     const { wallets, adaRedemption } = stores.ada;
     const { showAdaRedemptionSuccessMessage, amountRedeemed } = adaRedemption;
     const { currentLocale } = stores.profile;

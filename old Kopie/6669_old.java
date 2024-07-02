@@ -1,6 +1,5 @@
 package org.thoughtcrime.securesms.audio;
 
-          if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -134,7 +133,7 @@ public class AudioSlidePlayer implements SensorEventListener {
           }
 
           sensorManager.unregisterListener(AudioSlidePlayer.this);
-
+          if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && wakeLock.isHeld()) {
             wakeLock.release(PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY);
           }

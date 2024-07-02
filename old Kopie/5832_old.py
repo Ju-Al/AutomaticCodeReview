@@ -1,12 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-    def _show_error_page(self, url, error):
-        url_string = url.toDisplayString()
-        error_page = jinja.render(
-            'error.html',
-            title="Error loading page: {}".format(url_string),
-            url=url_string, error=error)
-        self.set_html(error_page)
 # Copyright 2016-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -1499,7 +1492,13 @@ class WebEngineTab(browsertab.AbstractTab):
         # percent encoded content is 2 megabytes minus 30 bytes.
         self._widget.setHtml(html, base_url)
 
-    def _show_error_page(self, url: QUrl, error: str) -> None:
+        url_string = url.toDisplayString()
+        error_page = jinja.render(
+            'error.html',
+            title="Error loading page: {}".format(url_string),
+            url=url_string, error=error)
+        self.set_html(error_page)
+    def _show_error_page(self, url, error):
         """Show an error page in the tab."""
         log.misc.debug("Showing error page for {}".format(error))
         error_url = QUrl("qute://error")

@@ -125,8 +125,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             findPreference("displayLocationPermissionForCardView").setEnabled(false);
             findPreference("displayCampaignsCardView").setEnabled(false);
             uploadLimit.setEnabled(false);
-        }
-
         findPreference("telemetryOptIn").setOnPreferenceChangeListener(
             (preference, newValue) -> {
                 telemetryOptInout((boolean)newValue);

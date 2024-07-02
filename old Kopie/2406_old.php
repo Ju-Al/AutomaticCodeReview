@@ -1,5 +1,4 @@
 <?php
-					$show_delete_course_button = apply_filters( 'sensei_show_delete_course_button', false );
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -1419,7 +1418,7 @@ class Sensei_Course {
 					/**
 					 * documented in class-sensei-course.php the_course_action_buttons function
 					 */
-					$show_delete_course_button = apply_filters_deprecated(
+					$show_delete_course_button = apply_filters( 'sensei_show_delete_course_button', false );
 						'sensei_show_delete_course_button',
 						[ false ],
 						'2.0.0',

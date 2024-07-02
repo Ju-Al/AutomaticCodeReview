@@ -1,6 +1,4 @@
 # This file is part of Scapy
-                    tmp = struct.unpack("iiii", cmsg_data)
-                    timestamp = tmp[0] + tmp[2] * 1e-9
 # See http://www.secdev.org/projects/scapy for more information
 # Copyright (C) Philippe Biondi <phil@secdev.org>
 # This program is published under a GPLv2 license
@@ -108,7 +106,8 @@ class SuperSocket(six.with_metaclass(_SuperSocket_metaclass)):
                         pkt = pkt[:12] + tag + pkt[12:]
                 elif cmsg_lvl == socket.SOL_SOCKET and \
                         cmsg_type == SO_TIMESTAMPNS:
-                    length = len(cmsg_data)
+                    tmp = struct.unpack("iiii", cmsg_data)
+                    timestamp = tmp[0] + tmp[2] * 1e-9
                     if length == 16:  # __kernel_timespec
                         tmp = struct.unpack("ll", cmsg_data)
                     elif length == 8:  # timespec

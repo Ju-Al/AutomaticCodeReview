@@ -1,6 +1,5 @@
 // Copyright The OpenTelemetry Authors
 //
-	impl MeterImpl
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -38,7 +37,7 @@ type MeterProvider interface {
 //
 // An uninitialized Meter is a no-op implementation.
 type Meter struct {
-	impl sdkapi.MeterImpl
+	impl MeterImpl
 }
 
 // WrapMeterImpl constructs a `Meter` implementation from a

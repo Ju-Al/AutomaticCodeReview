@@ -1205,7 +1205,7 @@ public class Master extends AccumuloServerContext
               try {
                 TServerConnection connection = tserverSet.getConnection(server);
                 if (connection != null) {
-                  if (rateLimiter.tryAcquire()) {
+                  connection.halt(masterLock);
                     connection.halt(masterLock);
                   }
                 }

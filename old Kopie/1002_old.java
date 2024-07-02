@@ -1,150 +1,144 @@
 /*
- * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+import java.util.concurrent.Callable;
+import java.util.function.Supplier;
+public class IndexByName extends TypeUtil.CustomOrderSchemaVisitor<Map<String, Integer>> {
+  public Map<String, Integer> schema(Schema schema, Supplier<Map<String, Integer>> structResult) {
+    return structResult.get();
+  public Map<String, Integer> struct(Types.StructType struct, Iterable<Map<String, Integer>> fieldResults) {
+    // iterate through the fields to update the index for each one, use size to avoid errorprone failure
+    Lists.newArrayList(fieldResults).size();
+    return nameToId;
+  public Map<String, Integer> field(Types.NestedField field, Supplier<Map<String, Integer>> fieldResult) {
+    withName(field.name(), fieldResult::get);
+    addField(field.name(), field.fieldId());
+    return null;
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package com.hazelcast.jet;
+package org.apache.iceberg.types;
 
-import com.hazelcast.client.HazelcastClient;
-import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.impl.HazelcastClientProxy;
-import com.hazelcast.config.Config;
-import com.hazelcast.config.MapConfig;
-import com.hazelcast.config.MergePolicyConfig;
-import com.hazelcast.config.ServiceConfig;
-import com.hazelcast.config.ServicesConfig;
-import com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher;
-import com.hazelcast.core.Hazelcast;
-import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.instance.HazelcastInstanceImpl;
-import com.hazelcast.instance.HazelcastInstanceProxy;
-import com.hazelcast.jet.config.JetClientConfig;
-import com.hazelcast.jet.config.JetConfig;
-import com.hazelcast.jet.config.MetricsConfig;
-import com.hazelcast.jet.impl.JetClientInstanceImpl;
-import com.hazelcast.jet.impl.JetInstanceImpl;
-import com.hazelcast.jet.impl.JetService;
-import com.hazelcast.jet.impl.metrics.JetMetricsService;
-import com.hazelcast.map.merge.IgnoreMergingEntryMapMergePolicy;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.exceptions.ValidationException;
 
-import java.util.Properties;
+public class IndexByName extends TypeUtil.SchemaVisitor<Map<String, Integer>> {
+  private static final Joiner DOT = Joiner.on(".");
 
-import static com.hazelcast.jet.impl.JobRepository.JOB_RESULTS_MAP_NAME;
-import static com.hazelcast.jet.impl.config.XmlJetConfigBuilder.getClientConfig;
-import static com.hazelcast.jet.impl.metrics.JetMetricsService.applyMetricsConfig;
-import static java.util.concurrent.TimeUnit.DAYS;
+  private final Deque<String> fieldNames = Lists.newLinkedList();
+  private final Map<String, Integer> nameToId = Maps.newHashMap();
 
-/**
- * Entry point to the Jet product.
- */
-public final class Jet {
+  @Override
+  public void beforeField(Types.NestedField field) {
+    fieldNames.push(field.name());
+  }
 
-    /**
-     * Prefix of all Hazelcast internal objects used by Jet (such as job
-     * metadata, snapshots etc.)
-     */
-    public static final String INTERNAL_JET_OBJECTS_PREFIX = "__jet.";
+  @Override
+  public void afterField(Types.NestedField field) {
+    fieldNames.pop();
+  }
 
-    private static final int JOB_RESULTS_TTL_SECONDS = (int) DAYS.toSeconds(7);
+  @Override
+  public void beforeListElement(Types.NestedField elementField) {
+    if (!elementField.type().isStructType()) {
+      beforeField(elementField);
+    }
+  }
 
-    private Jet() {
+  @Override
+  public void afterListElement(Types.NestedField elementField) {
+    if (!elementField.type().isStructType()) {
+      afterField(elementField);
+    }
+  }
+
+  @Override
+  public void beforeMapKey(Types.NestedField keyField) {
+    beforeField(keyField);
+  }
+
+  @Override
+  public void afterMapKey(Types.NestedField keyField) {
+    afterField(keyField);
+  }
+
+  @Override
+  public void beforeMapValue(Types.NestedField valueField) {
+    if (!valueField.type().isStructType()) {
+      beforeField(valueField);
+    }
+  }
+
+  @Override
+  public void afterMapValue(Types.NestedField valueField) {
+    if (!valueField.type().isStructType()) {
+      afterField(valueField);
+    }
+  }
+
+  @Override
+  public Map<String, Integer> schema(Schema schema, Map<String, Integer> structResult) {
+    return nameToId;
+  }
+
+  @Override
+  public Map<String, Integer> struct(Types.StructType struct, List<Map<String, Integer>> fieldResults) {
+    return nameToId;
+  }
+
+  @Override
+  public Map<String, Integer> field(Types.NestedField field, Map<String, Integer> fieldResult) {
+    addField(field.name(), field.fieldId());
+    return nameToId;
+  }
+
+  @Override
+  public Map<String, Integer> list(Types.ListType list, Map<String, Integer> elementResult) {
+    addField("element", list.elementId());
+    return nameToId;
+  }
+
+  @Override
+  public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
+    addField("key", map.keyId());
+    addField("value", map.valueId());
+    return nameToId;
+  }
+
+  @Override
+  public Map<String, Integer> primitive(Type.PrimitiveType primitive) {
+    return nameToId;
+  }
+
+  private void addField(String name, int fieldId) {
+    String fullName = name;
+    if (!fieldNames.isEmpty()) {
+      fullName = DOT.join(DOT.join(fieldNames.descendingIterator()), name);
     }
 
-    /**
-     * Creates a member of the Jet cluster with the given configuration.
-     */
-    public static JetInstance newJetInstance(JetConfig config) {
-        configureJetService(config);
-        HazelcastInstanceImpl hazelcastInstance = ((HazelcastInstanceProxy)
-                Hazelcast.newHazelcastInstance(config.getHazelcastConfig())).getOriginal();
-        return new JetInstanceImpl(hazelcastInstance, config);
+    Integer existingFieldId = nameToId.put(fullName, fieldId);
+    if (existingFieldId != null && !"element".equals(name) && !"value".equals(name)) {
+      throw new ValidationException(
+          "Invalid schema: multiple fields for name %s: %s and %s", fullName, existingFieldId, fieldId);
     }
-
-    /**
-     * Creates a member of the Jet cluster with the configuration loaded from
-     * default location.
-     */
-    public static JetInstance newJetInstance() {
-        return newJetInstance(JetConfig.loadDefault());
-    }
-
-    /**
-     * Creates a Jet client with the default configuration.
-     */
-    public static JetInstance newJetClient() {
-        ClientConfig clientConfig = getClientConfig();
-        return newJetClient(clientConfig);
-    }
-
-    /**
-     * Creates a Jet client with the given Hazelcast client configuration.
-     *
-     * {@link JetClientConfig} may be used to create a configuration with the
-     * default group name and password for Jet.
-     */
-    public static JetInstance newJetClient(ClientConfig config) {
-        return getJetClientInstance(HazelcastClient.newHazelcastClient(config));
-    }
-
-    /**
-     * Shuts down all running Jet client and member instances.
-     */
-    public static void shutdownAll() {
-        HazelcastClient.shutdownAll();
-        Hazelcast.shutdownAll();
-    }
-
-    static JetClientInstanceImpl getJetClientInstance(HazelcastInstance client) {
-        return new JetClientInstanceImpl(((HazelcastClientProxy) client).client);
-    }
-
-    static void configureJetService(JetConfig jetConfig) {
-        Config hzConfig = jetConfig.getHazelcastConfig();
-        if (!(hzConfig.getConfigPatternMatcher() instanceof MatchingPointConfigPatternMatcher)) {
-            throw new UnsupportedOperationException("Custom config pattern matcher is not supported in Jet");
-        }
-
-        ServicesConfig servicesConfig = hzConfig.getServicesConfig();
-        servicesConfig
-                .addServiceConfig(new ServiceConfig().setEnabled(true)
-                        .setName(JetService.SERVICE_NAME)
-                        .setClassName(JetService.class.getName())
-                        .setConfigObject(jetConfig));
-
-        servicesConfig
-                .addServiceConfig(new ServiceConfig().setEnabled(true)
-                        .setName(JetMetricsService.SERVICE_NAME)
-                        .setClassName(JetMetricsService.class.getName())
-                        .setConfigObject(jetConfig.getMetricsConfig()));
-
-        hzConfig
-                .addMapConfig(new MapConfig(INTERNAL_JET_OBJECTS_PREFIX + "*")
-                        .setBackupCount(jetConfig.getInstanceConfig().getBackupCount())
-                        .setStatisticsEnabled(false)
-                        .setMergePolicyConfig(
-                                new MergePolicyConfig().setPolicy(IgnoreMergingEntryMapMergePolicy.class.getName()))
-                )
-                .addMapConfig(new MapConfig(JOB_RESULTS_MAP_NAME)
-                        .setTimeToLiveSeconds(JOB_RESULTS_TTL_SECONDS)
-                );
-
-        MetricsConfig metricsConfig = jetConfig.getMetricsConfig();
-        applyMetricsConfig(hzConfig, metricsConfig);
-
-        Properties jetProps = jetConfig.getProperties();
-        for (String prop : jetProps.stringPropertyNames()) {
-            hzConfig.getProperties().setProperty(prop, jetProps.getProperty(prop));
-        }
-    }
+  }
 }

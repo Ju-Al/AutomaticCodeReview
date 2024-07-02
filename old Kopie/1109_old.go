@@ -37,7 +37,6 @@ type decimalType struct {
 
 var _ TypeInfo = (*decimalType)(nil)
 
-var DecimalDefaultType = &decimalType{sql.MustCreateDecimalType(10, 5)}
 
 func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var precision uint8

@@ -1,16 +1,5 @@
 #include <LightGBM/application.h>
 
-  dataset_loader_ = new DatasetLoader(config_.io_config, predict_fun);
-  dataset_loader_->SetHeader(config_.io_config.data_filename.c_str());
-    train_data_ = dataset_loader_->LoadFromFile(config_.io_config.data_filename.c_str(),
-      Network::rank(), Network::num_machines());
-    train_data_ = dataset_loader_->LoadFromFile(config_.io_config.data_filename.c_str(), 0, 1);
-  if (config_.boosting_config->is_provide_training_metric) {
-      Metric* metric =
-        Metric::CreateMetric(metric_type, config_.metric_config);
-      train_metric_.push_back(metric);
-    valid_datas_.push_back(dataset_loader_->LoadFromFileAlignWithOtherDataset(config_.io_config.valid_data_filenames[i].c_str(),
-      train_data_));
 #include <LightGBM/utils/common.h>
 #include <LightGBM/utils/text_reader.h>
 
@@ -130,7 +119,17 @@ void Application::LoadData() {
        GlobalSyncUpByMin<int>(config_.io_config.data_random_seed);
   }
 
-  DatasetLoader dataset_loader(config_.io_config, predict_fun);
+  dataset_loader_ = new DatasetLoader(config_.io_config, predict_fun);
+    train_data_ = dataset_loader_->LoadFromFile(config_.io_config.data_filename.c_str(),
+      Network::rank(), Network::num_machines());
+    train_data_ = dataset_loader_->LoadFromFile(config_.io_config.data_filename.c_str(), 0, 1);
+  if (config_.boosting_config->is_provide_training_metric) {
+      Metric* metric =
+        Metric::CreateMetric(metric_type, config_.metric_config);
+      train_metric_.push_back(metric);
+    valid_datas_.push_back(dataset_loader_->LoadFromFileAlignWithOtherDataset(config_.io_config.valid_data_filenames[i].c_str(),
+      train_data_));
+  dataset_loader_->SetHeader(config_.io_config.data_filename.c_str());
   dataset_loader.SetHeader(config_.io_config.data_filename.c_str());
   // load Training data
   if (config_.is_parallel_find_bin) {

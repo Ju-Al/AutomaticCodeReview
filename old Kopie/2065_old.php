@@ -1,9 +1,5 @@
 <?php
 
-     *
-     * @expectedDeprecation The language prefix is configured per root page since Contao 4.10. Enabling this option will activate legacy routing.
-     * @expectedDeprecation The URL suffix is configured per root page since Contao 4.10. Enabling this option will activate legacy routing.
-    public function testRegistersTheRoutingLegacyMatcher(): void
 declare(strict_types=1);
 
 /*
@@ -2695,8 +2691,11 @@ class ContaoCoreExtensionTest extends TestCase
 
     /**
      * @group legacy
+     *
+     * @expectedDeprecation The language prefix is configured per root page since Contao 4.10. Enabling this option will activate legacy routing.
+     * @expectedDeprecation The URL suffix is configured per root page since Contao 4.10. Enabling this option will activate legacy routing.
      */
-    public function testOnlyRegistersTheRoutingLegacyMatcher(): void
+    public function testRegistersTheRoutingLegacyMatcher(): void
     {
         $container = $this->getContainerBuilder([
             'contao' => [

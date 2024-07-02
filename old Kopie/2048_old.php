@@ -1,557 +1,617 @@
 <?php
-function get_rocket_qtranslate_langs_for_admin_bar( $fork = '' ) {
 
-	$langlinks   = array();
-	$currentlang = array();
-		$langlinks[ $lang ] = array(
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Get all langs to display in admin bar for WPML
+ * Link to the configuration page of the plugin, support & documentation
+ *
+ * @since 1.0
+ *
+ * @param array $actions Array of links to display.
+ * @return array Updated array of links
+ */
+function rocket_settings_action_links( $actions ) {
+	if ( ! current_user_can( 'rocket_manage_options' ) ) {
+		return $actions;
+	}
+
+	array_unshift( $actions, sprintf( '<a href="%s">%s</a>', 'https://wp-rocket.me/support/?utm_source=wp_plugin&utm_medium=wp_rocket', __( 'Support', 'rocket' ) ) );
+
+	array_unshift( $actions, sprintf( '<a href="%s">%s</a>', get_rocket_documentation_url(), __( 'Docs', 'rocket' ) ) );
+
+	array_unshift( $actions, sprintf( '<a href="%s">%s</a>', get_rocket_faq_url(), __( 'FAQ', 'rocket' ) ) );
+
+	array_unshift( $actions, sprintf( '<a href="%s">%s</a>', admin_url( 'options-general.php?page=' . WP_ROCKET_PLUGIN_SLUG ), __( 'Settings', 'rocket' ) ) );
+
+	return $actions;
+}
+add_filter( 'plugin_action_links_' . plugin_basename( WP_ROCKET_FILE ), 'rocket_settings_action_links' );
+
+/**
+ * Add a link "Renew your licence" when you can't do it automatically (expired licence but new version available)
+ *
+ * @since 2.2
+ *
+ * @param array  $plugin_meta An array of the plugin's metadata, including the version, author, author URI, and plugin URI.
+ * @param string $plugin_file Path to the plugin file, relative to the plugins directory.
+ * @return array Updated meta content if license is expired
+ */
+function rocket_plugin_row_meta( $plugin_meta, $plugin_file ) {
+	if ( 'wp-rocket/wp-rocket.php' === $plugin_file ) {
+
+		$update_plugins = get_site_transient( 'update_plugins' );
+
+		if ( false !== $update_plugins && isset( $update_plugins->response[ $plugin_file ] ) && empty( $update_plugins->response[ $plugin_file ]->package ) ) {
+
+			$link = '<span class="dashicons dashicons-update rocket-dashicons"></span> <span class="rocket-renew">Renew your licence of WP Rocket to receive access to automatic upgrades and support.</span> <a href="http://wp-rocket.me" target="_blank" class="rocket-purchase">Purchase now</a>.';
+
+			$plugin_meta = array_merge( (array) $link, $plugin_meta );
+		}
+	}
+
+	return $plugin_meta;
+}
+add_action( 'plugin_row_meta', 'rocket_plugin_row_meta', 10, 2 );
+
+/**
+ * Add a link "Purge this cache" in the post edit area
+ *
+ * @since 1.0
+ *
+ * @param array  $actions An array of row action links.
+ * @param object $post The post object.
+ * @return array Updated array of row action links
+ */
+function rocket_post_row_actions( $actions, $post ) {
+	if ( ! current_user_can( 'rocket_purge_posts' ) ) {
+		return $actions;
+	}
+
+	$url                     = wp_nonce_url( admin_url( 'admin-post.php?action=purge_cache&type=post-' . $post->ID ), 'purge_cache_post-' . $post->ID );
+	$actions['rocket_purge'] = sprintf( '<a href="%s">%s</a>', $url, __( 'Clear this cache', 'rocket' ) );
+
+	return $actions;
+}
+add_filter( 'page_row_actions', 'rocket_post_row_actions', 10, 2 );
+add_filter( 'post_row_actions', 'rocket_post_row_actions', 10, 2 );
+
+/**
+ * Add a link "Purge this cache" in the taxonomy edit area
+ *
+ * @since 1.0
+ *
+ * @param array  $actions An array of row action links.
+ * @param object $term The term object.
+ * @return array Updated array of row action links
+ */
+function rocket_tag_row_actions( $actions, $term ) {
+	global $taxnow;
+
+	if ( ! current_user_can( 'rocket_purge_terms' ) ) {
+		return $actions;
+	}
+
+	$url                     = wp_nonce_url( admin_url( 'admin-post.php?action=purge_cache&type=term-' . $term->term_id . '&taxonomy=' . $taxnow ), 'purge_cache_term-' . $term->term_id );
+	$actions['rocket_purge'] = sprintf( '<a href="%s">%s</a>', $url, __( 'Clear this cache', 'rocket' ) );
+
+	return $actions;
+}
+add_filter( 'tag_row_actions', 'rocket_tag_row_actions', 10, 2 );
+
+/**
+ * Add a link "Purge this cache" in the user edit area
+ *
+ * @since 2.6.12
+ * @param array  $actions An array of row action links.
+ * @param object $user The user object.
+ * @return array Updated array of row action links
+ */
+function rocket_user_row_actions( $actions, $user ) {
+	if ( ! current_user_can( 'rocket_purge_users' ) || ! get_rocket_option( 'cache_logged_user', false ) ) {
+		return $actions;
+	}
+
+	$url                     = wp_nonce_url( admin_url( 'admin-post.php?action=purge_cache&type=user-' . $user->ID ), 'purge_cache_user-' . $user->ID );
+	$actions['rocket_purge'] = sprintf( '<a href="%s">%s</a>', $url, __( 'Clear this cache', 'rocket' ) );
+
+	return $actions;
+}
+add_filter( 'user_row_actions', 'rocket_user_row_actions', 10, 2 );
+
+/**
+ * Manage the dismissed boxes
+ *
+ * @since 2.4 Add a delete_transient on function name (box name)
+ * @since 1.3.0 $args can replace $_GET when called internaly
+ * @since 1.1.10
+ *
+ * @param array $args An array of query args.
+ */
+function rocket_dismiss_boxes( $args ) {
+	$args = empty( $args ) ? $_GET : $args; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+	if ( isset( $args['box'], $args['_wpnonce'] ) ) {
+
+		if ( ! wp_verify_nonce( $args['_wpnonce'], $args['action'] . '_' . $args['box'] ) ) {
+			if ( defined( 'DOING_AJAX' ) ) {
+				wp_send_json(
+					[
+						'error' => 1,
+					]
+				);
+			} else {
+				wp_nonce_ays( '' );
+			}
+		}
+
+		if ( '__rocket_imagify_notice' === $args['box'] ) {
+			update_option( 'wp_rocket_dismiss_imagify_notice', 0 );
+		}
+
+		global $current_user;
+		$actual = get_user_meta( $current_user->ID, 'rocket_boxes', true );
+		$actual = array_merge( (array) $actual, [ $args['box'] ] );
+		$actual = array_filter( $actual );
+		$actual = array_unique( $actual );
+		update_user_meta( $current_user->ID, 'rocket_boxes', $actual );
+		delete_transient( $args['box'] );
+
+		if ( 'admin-post.php' === $GLOBALS['pagenow'] ) {
+			if ( defined( 'DOING_AJAX' ) ) {
+				wp_send_json(
+					[
+						'error' => 0,
+					]
+				);
+			} else {
+				wp_safe_redirect( wp_get_referer() );
+				die();
+			}
+		}
+	}
+}
+add_action( 'wp_ajax_rocket_ignore', 'rocket_dismiss_boxes' );
+add_action( 'admin_post_rocket_ignore', 'rocket_dismiss_boxes' );
+
+/**
+ * Renew the plugin modification warning on plugin de/activation
  *
  * @since 1.3.0
  *
- * @return array $langlinks List of active languages
+ * @param string $plugin plugin name.
  */
-function get_rocket_wpml_langs_for_admin_bar() {  // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	global $sitepress;
-	$langlinks = [];
-
-	foreach ( $sitepress->get_active_languages() as $lang ) {
-		// Get flag.
-		$flag = $sitepress->get_flag( $lang['code'] );
-
-		if ( $flag->from_template ) {
-			$wp_upload_dir = wp_upload_dir();
-			$flag_url      = $wp_upload_dir['baseurl'] . '/flags/' . $flag->flag;
-		} else {
-			$flag_url = ICL_PLUGIN_URL . '/res/flags/' . $flag->flag;
-		}
-
-		$langlinks[] = [
-			'code'    => $lang['code'],
-			'current' => $lang['code'] === $sitepress->get_current_language(),
-			'anchor'  => $lang['display_name'],
-			'flag'    => '<img class="icl_als_iclflag" src="' . $flag_url . '" alt="' . $lang['code'] . '" width="18" height="12" />',
-		];
+function rocket_dismiss_plugin_box( $plugin ) {
+	if ( plugin_basename( WP_ROCKET_FILE ) !== $plugin ) {
+		rocket_renew_box( 'rocket_warning_plugin_modification' );
 	}
-
-	if ( isset( $_GET['lang'] ) && 'all' === $_GET['lang'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		array_unshift(
-			$langlinks,
-			[
-				'code'    => 'all',
-				'current' => 'all' === $sitepress->get_current_language(),
-				'anchor'  => __( 'All languages', 'rocket' ),
-				'flag'    => '<img class="icl_als_iclflag" src="' . ICL_PLUGIN_URL . '/res/img/icon16.png" alt="all" width="16" height="16" />',
-			]
-		);
-	} else {
-		array_push(
-			$langlinks,
-			[
-				'code'    => 'all',
-				'current' => 'all' === $sitepress->get_current_language(),
-				'anchor'  => __( 'All languages', 'rocket' ),
-				'flag'    => '<img class="icl_als_iclflag" src="' . ICL_PLUGIN_URL . '/res/img/icon16.png" alt="all" width="16" height="16" />',
-			]
-		);
-	}
-
-	return $langlinks;
 }
+add_action( 'activated_plugin', 'rocket_dismiss_plugin_box' );
+add_action( 'deactivated_plugin', 'rocket_dismiss_plugin_box' );
 
 /**
- * Get all langs to display in admin bar for qTranslate
+ * Display a prevention message when enabling or disabling a plugin can be in conflict with WP Rocket
  *
- * @since 2.7 add fork param
- * @since 1.3.5
- *
- * @param string $fork qTranslate fork name.
- * @return array $langlinks List of active languages
+ * @since 1.3.0
  */
-function get_rocket_qtranslate_langs_for_admin_bar( $fork = '' ) { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	global $q_config;
-
-	$langlinks   = [];
-	$currentlang = [];
-
-	foreach ( $q_config['enabled_languages'] as $lang ) {
-
-		$langlinks[ $lang ] = [
-			'code'   => $lang,
-			'anchor' => $q_config['language_name'][ $lang ],
-			'flag'   => '<img src="' . trailingslashit( WP_CONTENT_URL ) . $q_config['flag_location'] . $q_config['flag'][ $lang ] . '" alt="' . $q_config['language_name'][ $lang ] . '" width="18" height="12" />',
-		];
-
+function rocket_deactivate_plugin() {
+	if ( ! isset( $_GET['plugin'], $_GET['_wpnonce'] ) ) {
+		return;
+	}
+	if ( ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'deactivate_plugin' ) ) {
+		wp_nonce_ays( '' );
 	}
 
-	if ( isset( $_GET['lang'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$lang = sanitize_key( $_GET['lang'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	deactivate_plugins( sanitize_key( $_GET['plugin'] ) );
 
-		if ( 'x' === $fork ) {
-			if ( qtranxf_isEnabled( $lang ) ) {
-				$currentlang[ $lang ] = $langlinks[ $lang ];
-				unset( $langlinks[ $lang ] );
-				$langlinks = $currentlang + $langlinks;
-			}
-		} elseif ( qtrans_isEnabled( $lang ) ) {
-			$currentlang[ $lang ] = $langlinks[ $lang ];
-			unset( $langlinks[ $lang ] );
-			$langlinks = $currentlang + $langlinks;
-		}
-	}
-
-	return $langlinks;
+	wp_safe_redirect( wp_get_referer() );
+	die();
 }
+add_action( 'admin_post_deactivate_plugin', 'rocket_deactivate_plugin' );
 
 /**
- * Get all langs to display in admin bar for Polylang
+ * This function will force the direct download of the plugin's options, compressed.
  *
  * @since 2.2
- *
- * @return array $langlinks List of active languages
  */
-function get_rocket_polylang_langs_for_admin_bar() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	global $polylang;
-
-	$langlinks   = [];
-	$currentlang = [];
-	$langs       = [];
-	$img         = '';
-
-	$pll = function_exists( 'PLL' ) ? PLL() : $polylang;
-
-	if ( isset( $pll ) ) {
-		$langs = $pll->model->get_languages_list();
-
-		if ( ! empty( $langs ) ) {
-			foreach ( $langs as $lang ) {
-				if ( ! empty( $lang->flag ) ) {
-					$img = strpos( $lang->flag, 'img' ) !== false ? $lang->flag . '&nbsp;' : $lang->flag;
-				}
-
-				if ( isset( $pll->curlang->slug ) && $lang->slug === $pll->curlang->slug ) {
-					$currentlang[ $lang->slug ] = [
-						'code'   => $lang->slug,
-						'anchor' => $lang->name,
-						'flag'   => $img,
-					];
-				} else {
-					$langlinks[ $lang->slug ] = [
-						'code'   => $lang->slug,
-						'anchor' => $lang->name,
-						'flag'   => $img,
-					];
-				}
-			}
-		}
+function rocket_do_options_export() {
+	$filename = sprintf( 'wp-rocket-settings-%s-%s.json', date( 'Y-m-d' ), uniqid() );
+	@header( 'Content-Type: application/json' );
+	@header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+	@header( 'Content-Transfer-Encoding: binary' );
+	@header( 'Content-Length: ' . strlen( $options ) );
+	@header( 'Connection: close' );
+	echo $options;
+	if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( $_GET['_wpnonce'], 'rocket_export' ) ) {
+		wp_nonce_ays( '' );
 	}
 
-	return $currentlang + $langlinks;
+	$filename = sprintf( 'wp-rocket-settings-%s-%s.json', date( 'Y-m-d' ), uniqid() ); // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
+	$gz       = 'gz' . strrev( 'etalfed' );
+	$options  = wp_json_encode( get_option( WP_ROCKET_SLUG ) ); // do not use get_rocket_option() here.
+	nocache_headers();
+	@header( 'Content-Type: application/json' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	@header( 'Content-Disposition: attachment; filename="' . $filename . '"' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	@header( 'Content-Transfer-Encoding: binary' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	@header( 'Content-Length: ' . strlen( $options ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	@header( 'Connection: close' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	echo $options; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	exit();
 }
+add_action( 'admin_post_rocket_export', 'rocket_do_options_export' );
 
 /**
- * Tell if a translation plugin is activated.
- *
- * @since 2.0
- * @since 3.2.1 Return an identifier on success instead of true.
- *
- * @return string|bool An identifier corresponding to the active plugin. False otherwize.
- */
-function rocket_has_i18n() {
-	global $sitepress, $q_config, $polylang;
-
-	if ( ! empty( $sitepress ) && is_object( $sitepress ) && method_exists( $sitepress, 'get_active_languages' ) ) {
-		// WPML.
-		return 'wpml';
-	}
-
-	if ( ! empty( $polylang ) && function_exists( 'pll_languages_list' ) ) {
-		$languages = pll_languages_list();
-
-		if ( empty( $languages ) ) {
-			return false;
-		}
-
-		// Polylang, Polylang Pro.
-		return 'polylang';
-	}
-
-	if ( ! empty( $q_config ) && is_array( $q_config ) ) {
-		if ( function_exists( 'qtranxf_convertURL' ) ) {
-			// qTranslate-x.
-			return 'qtranslate-x';
-		}
-
-		if ( function_exists( 'qtrans_convertURL' ) ) {
-			// qTranslate.
-			return 'qtranslate';
-		}
-	}
-
-	return false;
-}
-
-/**
- * Get infos of all active languages.
- *
- * @since 2.0
- *
- * @return array A list of language codes.
- */
-function get_rocket_i18n_code() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$i18n_plugin = rocket_has_i18n();
-
-	if ( ! $i18n_plugin ) {
-		return false;
-	}
-
-	if ( 'wpml' === $i18n_plugin ) {
-		// WPML.
-		return array_keys( $GLOBALS['sitepress']->get_active_languages() );
-	}
-
-	if ( 'qtranslate' === $i18n_plugin || 'qtranslate-x' === $i18n_plugin ) {
-		// qTranslate, qTranslate-x.
-		return ! empty( $GLOBALS['q_config']['enabled_languages'] ) ? $GLOBALS['q_config']['enabled_languages'] : [];
-	}
-
-	if ( 'polylang' === $i18n_plugin ) {
-		// Polylang, Polylang Pro.
-		return pll_languages_list();
-	}
-
-	return false;
-}
-
-/**
- * Get all active languages host
- *
- * @since 2.6.8
- *
- * @return array $urls List of all active languages host
- */
-function get_rocket_i18n_host() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$langs_host = [];
-	$langs      = get_rocket_i18n_uri();
-
-	if ( $langs ) {
-		foreach ( $langs as $lang ) {
-			$langs_host[] = rocket_extract_url_component( $lang, PHP_URL_HOST );
-		}
-	}
-
-	return $langs_host;
-}
-
-/**
- * Get all active languages URI.
- *
- * @since 2.0
- *
- * @return array $urls List of all active languages URI.
- */
-function get_rocket_i18n_uri() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$i18n_plugin = rocket_has_i18n();
-	$urls        = [];
-
-	if ( 'wpml' === $i18n_plugin ) {
-		// WPML.
-		foreach ( get_rocket_i18n_code() as $lang ) {
-			$urls[] = $GLOBALS['sitepress']->language_url( $lang );
-		}
-	} elseif ( 'qtranslate' === $i18n_plugin || 'qtranslate-x' === $i18n_plugin ) {
-		// qTranslate, qTranslate-x.
-		foreach ( get_rocket_i18n_code() as $lang ) {
-			if ( 'qtranslate' === $i18n_plugin ) {
-				$urls[] = qtrans_convertURL( home_url(), $lang, true );
-			} else {
-				$urls[] = qtranxf_convertURL( home_url(), $lang, true );
-			}
-		}
-	} elseif ( 'polylang' === $i18n_plugin ) {
-		// Polylang, Polylang Pro.
-		$pll = function_exists( 'PLL' ) ? PLL() : $GLOBALS['polylang'];
-
-		if ( ! empty( $pll ) && is_object( $pll ) ) {
-			$urls = wp_list_pluck( $pll->model->get_languages_list(), 'search_url' );
-		}
-	}
-
-	if ( empty( $urls ) ) {
-		$urls[] = home_url();
-	}
-
-	return $urls;
-}
-
-/**
- * Get directories paths to preserve languages ​​when purging a domain.
- * This function is required when the domains of languages (​​other than the default) are managed by subdirectories.
- * By default, when you clear the cache of the french website with the domain example.com, all subdirectory like /en/ and /de/ are deleted.
- * But, if you have a domain for your english and german websites with example.com/en/ and example.com/de/, you want to keep the /en/ and /de/ directory when the french domain is cleared.
- *
- * @since 2.0
- *
- * @param  string $current_lang The current language code.
- * @return array                A list of directories path to preserve.
- */
-function get_rocket_i18n_to_preserve( $current_lang ) { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	// Must not be an empty string.
-	if ( empty( $current_lang ) ) {
-		return [];
-	}
-
-	// Must not be anything else but a string.
-	if ( ! is_string( $current_lang ) ) {
-		return [];
-	}
-
-	$i18n_plugin = rocket_has_i18n();
-
-	if ( ! $i18n_plugin ) {
-		return [];
-	}
-
-	$langs = get_rocket_i18n_code();
-
-	// Remove current lang to the preserve dirs.
-	$langs = array_diff( $langs, [ $current_lang ] );
-
-	// Stock all URLs of langs to preserve.
-	$langs_to_preserve = [];
-
-	if ( $langs ) {
-		foreach ( $langs as $lang ) {
-			$parse_url           = get_rocket_parse_url( get_rocket_i18n_home_url( $lang ) );
-			$langs_to_preserve[] = WP_ROCKET_CACHE_PATH . $parse_url['host'] . '(.*)/' . trim( $parse_url['path'], '/' );
-		}
-	}
-
-	/**
-	 * Filter directories path to preserve of cache purge.
-	 *
-	 * @since 2.1
-	 *
-	 * @param array $langs_to_preserve List of directories path to preserve.
-	*/
-	return apply_filters( 'rocket_langs_to_preserve', $langs_to_preserve );
-}
-
-/**
- * Get all languages subdomains URLs
- *
- * @since 2.1
- *
- * @return array $urls List of languages subdomains URLs
- */
-function get_rocket_i18n_subdomains() { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$i18n_plugin = rocket_has_i18n();
-
-	if ( ! $i18n_plugin ) {
-		return [];
-	}
-
-	switch ( $i18n_plugin ) {
-		// WPML.
-		case 'wpml':
-			$option = get_option( 'icl_sitepress_settings' );
-
-			if ( 2 === (int) $option['language_negotiation_type'] ) {
-				return get_rocket_i18n_uri();
-			}
-			break;
-		// qTranslate.
-		case 'qtranslate':
-			if ( 3 === (int) $GLOBALS['q_config']['url_mode'] ) {
-				return get_rocket_i18n_uri();
-			}
-			break;
-		// qTranslate-x.
-		case 'qtranslate-x':
-			if ( 3 === (int) $GLOBALS['q_config']['url_mode'] || 4 === (int) $GLOBALS['q_config']['url_mode'] ) {
-				return get_rocket_i18n_uri();
-			}
-			break;
-		// Polylang, Polylang Pro.
-		case 'polylang':
-			$pll = function_exists( 'PLL' ) ? PLL() : $GLOBALS['polylang'];
-
-			if ( ! empty( $pll ) && is_object( $pll ) && ( 2 === (int) $pll->options['force_lang'] || 3 === (int) $pll->options['force_lang'] ) ) {
-				return get_rocket_i18n_uri();
-			}
-	}
-
-	return [];
-}
-
-/**
- * Get home URL of a specific lang.
- *
- * @since 2.2
- *
- * @param  string $lang The language code. Default is an empty string.
- * @return string $url
- */
-function get_rocket_i18n_home_url( $lang = '' ) { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$i18n_plugin = rocket_has_i18n();
-
-	if ( ! $i18n_plugin ) {
-		return home_url();
-	}
-
-	switch ( $i18n_plugin ) {
-		// WPML.
-		case 'wpml':
-			return $GLOBALS['sitepress']->language_url( $lang );
-		// qTranslate.
-		case 'qtranslate':
-			return qtrans_convertURL( home_url(), $lang, true );
-		// qTranslate-x.
-		case 'qtranslate-x':
-			return qtranxf_convertURL( home_url(), $lang, true );
-		// Polylang, Polylang Pro.
-		case 'polylang':
-			$pll = function_exists( 'PLL' ) ? PLL() : $GLOBALS['polylang'];
-
-			if ( ! empty( $pll->options['force_lang'] ) && isset( $pll->links ) ) {
-				return pll_home_url( $lang );
-			}
-	}
-
-	return home_url();
-}
-
-/**
- * Get all translated path of a specific post with ID.
+ * Do the rollback
  *
  * @since 2.4
- *
- * @param  int    $post_id   Post ID.
- * @param  string $post_type Post Type.
- * @param  string $regex     Regex to include at the end.
- * @return array
  */
-function get_rocket_i18n_translated_post_urls( $post_id, $post_type = 'page', $regex = null ) { // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
-	$path = wp_parse_url( get_permalink( $post_id ), PHP_URL_PATH );
-
-	if ( empty( $path ) ) {
-		return [];
+function rocket_rollback() {
+	if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'rocket_rollback' ) ) {
+		wp_nonce_ays( '' );
 	}
 
-	$i18n_plugin = rocket_has_i18n();
-	$urls        = [];
+	$plugin_transient = get_site_transient( 'update_plugins' );
+	$plugin_folder    = plugin_basename( dirname( WP_ROCKET_FILE ) );
+	$plugin           = $plugin_folder . '/' . basename( WP_ROCKET_FILE );
 
-	switch ( $i18n_plugin ) {
-		// WPML.
-		case 'wpml':
-			$langs = get_rocket_i18n_code();
+	$plugin_transient->response[ $plugin ] = (object) [
+		'slug'        => $plugin_folder,
+		'new_version' => WP_ROCKET_LASTVERSION,
+		'url'         => 'https://wp-rocket.me',
+		'package'     => sprintf( 'https://wp-rocket.me/%s/wp-rocket_%s.zip', get_rocket_option( 'consumer_key' ), WP_ROCKET_LASTVERSION ),
+	];
 
-			if ( $langs ) {
-				foreach ( $langs as $lang ) {
-					$urls[] = wp_parse_url( get_permalink( icl_object_id( $post_id, $post_type, true, $lang ) ), PHP_URL_PATH ) . $regex;
-				}
-			}
-			break;
-		// qTranslate & qTranslate-x.
-		case 'qtranslate':
-		case 'qtranslate-x':
-			$langs  = $GLOBALS['q_config']['enabled_languages'];
-			$langs  = array_diff( $langs, [ $GLOBALS['q_config']['default_language'] ] );
-			$urls[] = wp_parse_url( get_permalink( $post_id ), PHP_URL_PATH ) . $regex;
+	set_site_transient( 'update_plugins', $plugin_transient );
 
-			if ( $langs ) {
-				$url = get_permalink( $post_id );
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
-				foreach ( $langs as $lang ) {
-					if ( 'qtranslate' === $i18n_plugin ) {
-						$urls[] = wp_parse_url( qtrans_convertURL( $url, $lang, true ), PHP_URL_PATH ) . $regex;
-					} elseif ( 'qtranslate-x' === $i18n_plugin ) {
-						$urls[] = wp_parse_url( qtranxf_convertURL( $url, $lang, true ), PHP_URL_PATH ) . $regex;
-					}
-				}
-			}
-			break;
-		// Polylang.
-		case 'polylang':
-			if ( function_exists( 'PLL' ) && is_object( PLL()->model ) ) {
-				$translations = pll_get_post_translations( $post_id );
-			} elseif ( ! empty( $GLOBALS['polylang']->model ) && is_object( $GLOBALS['polylang']->model ) ) {
-				$translations = $GLOBALS['polylang']->model->get_translations( 'page', $post_id );
-			}
+	// translators: %s is the plugin name.
+	$title         = sprintf( __( '%s Update Rollback', 'rocket' ), WP_ROCKET_PLUGIN_NAME );
+	$nonce         = 'upgrade-plugin_' . $plugin;
+	$url           = 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $plugin );
+	$upgrader_skin = new Plugin_Upgrader_Skin( compact( 'title', 'nonce', 'url', 'plugin' ) );
+	$upgrader      = new Plugin_Upgrader( $upgrader_skin );
 
-			if ( ! empty( $translations ) ) {
-				foreach ( $translations as $post_id ) {
-					$urls[] = wp_parse_url( get_permalink( $post_id ), PHP_URL_PATH ) . $regex;
-				}
-			}
+	remove_filter( 'site_transient_update_plugins', 'rocket_check_update', 1 );
+	add_filter( 'update_plugin_complete_actions', 'rocket_rollback_add_return_link' );
+	rocket_put_content( WP_CONTENT_DIR . '/advanced-cache.php', '' );
+
+	$upgrader->upgrade( $plugin );
+
+	wp_die(
+		'',
+		// translators: %s is the plugin name.
+		esc_html( sprintf( __( '%s Update Rollback', 'rocket' ), WP_ROCKET_PLUGIN_NAME ) ),
+		[
+			'response' => 200,
+		]
+	);
+}
+add_action( 'admin_post_rocket_rollback', 'rocket_rollback' );
+
+/**
+ * After a rollback has been done, replace the "return to" link by a link pointing to WP Rocket's tools page.
+ * A link to the plugins page is kept in case the plugin is not reactivated correctly.
+ *
+ * @since  3.2.4
+ * @author Grégory Viguier
+ * @author Arun Basil Lal
+ *
+ * @param  array $update_actions Array of plugin action links.
+ * @return array                 The array of links where the "return to" link has been replaced.
+ */
+function rocket_rollback_add_return_link( $update_actions ) {
+	if ( ! isset( $update_actions['plugins_page'] ) ) {
+		return $update_actions;
 	}
 
-	if ( trim( $path, '/' ) !== '' ) {
-		$urls[] = $path . $regex;
-	}
+	$update_actions['plugins_page'] = sprintf(
+		/* translators: 1 and 3 are link openings, 2 is a link closing. */
+		__( '%1$sReturn to WP Rocket%2$s or %3$sgo to Plugins page%2$s', 'rocket' ),
+		'<a href="' . esc_url( admin_url( 'options-general.php?page=' . WP_ROCKET_PLUGIN_SLUG ) . '#tools' ) . '" target="_parent">',
+		'</a>',
+		'<a href="' . esc_url( admin_url( 'plugins.php' ) ) . '" target="_parent">'
+	);
 
-	$urls = array_unique( $urls );
+	return $update_actions;
+}
 
-	return $urls;
+if ( ! defined( 'DOING_AJAX' ) && ! defined( 'DOING_AUTOSAVE' ) ) {
+	add_action( 'admin_init', 'rocket_init_cache_dir' );
+	add_action( 'admin_init', 'rocket_maybe_generate_advanced_cache_file' );
+	add_action( 'admin_init', 'rocket_maybe_generate_config_files' );
+	add_action( 'admin_init', 'rocket_maybe_set_wp_cache_define' );
 }
 
 /**
- * Returns the home URL, without WPML filters if the plugin is active
+ * Regenerate the advanced-cache.php file if an issue is detected.
  *
- * @since 3.2.4
- * @author Remy Perona
- *
- * @param string $path Path to add to the home URL.
- * @return string
+ * @since 2.6
  */
-function rocket_get_home_url( $path = '' ) {
-	global $wpml_url_filters;
-	static $home_url = [];
-	static $has_wpml;
-
-	if ( isset( $home_url[ $path ] ) ) {
-		return $home_url[ $path ];
+function rocket_maybe_generate_advanced_cache_file() {
+	if ( ! defined( 'WP_ROCKET_ADVANCED_CACHE' ) || ( defined( 'WP_ROCKET_ADVANCED_CACHE_PROBLEM' ) && WP_ROCKET_ADVANCED_CACHE_PROBLEM ) ) {
+		rocket_generate_advanced_cache_file();
 	}
-
-	if ( ! isset( $has_wpml ) ) {
-		$has_wpml = $wpml_url_filters && is_object( $wpml_url_filters ) && method_exists( $wpml_url_filters, 'home_url_filter' );
-	}
-
-	if ( $has_wpml ) {
-		remove_filter( 'home_url', [ $wpml_url_filters, 'home_url_filter' ], -10 );
-	}
-
-	$home_url[ $path ] = home_url( $path );
-
-	if ( $has_wpml ) {
-		add_filter( 'home_url', [ $wpml_url_filters, 'home_url_filter' ], -10, 4 );
-	}
-
-	return $home_url[ $path ];
 }
 
 /**
- * Gets the current language if Polylang or WPML is used
+ * Regenerate config file if an issue is detected.
  *
- * @since 3.3.3
+ * @since 2.6.5
+ */
+function rocket_maybe_generate_config_files() {
+	$home = get_rocket_parse_url( rocket_get_home_url() );
+
+	$path = ( ! empty( $home['path'] ) ) ? str_replace( '/', '.', untrailingslashit( $home['path'] ) ) : '';
+
+	if ( ! file_exists( WP_ROCKET_CONFIG_PATH . strtolower( $home['host'] ) . $path . '.php' ) ) {
+		rocket_generate_config_file();
+	}
+}
+
+/**
+ * Define WP_CACHE to true if it's not defined yet.
+ *
+ * @since 2.6
+ */
+function rocket_maybe_set_wp_cache_define() {
+	if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
+		set_rocket_wp_cache_define( true );
+	}
+}
+
+/**
+ * Filter plugin fetching API results to inject Imagify
+ *
+ * @since 2.10.7
  * @author Remy Perona
  *
- * @return string|bool
+ * @param object|WP_Error $result Response object or WP_Error.
+ * @param string          $action The type of information being requested from the Plugin Install API.
+ * @param object          $args   Plugin API arguments.
+ *
+ * @return array Updated array of results
  */
-function rocket_get_current_language() {
-	$i18n_plugin = rocket_has_i18n();
+function rocket_add_imagify_api_result( $result, $action, $args ) {
+	if ( empty( $args->browse ) ) {
+		return $result;
+	}
 
-	if ( ! $i18n_plugin ) {
+	if ( 'featured' !== $args->browse && 'recommended' !== $args->browse && 'popular' !== $args->browse ) {
+		return $result;
+	}
+
+	if ( ! isset( $result->info['page'] ) || 1 < $result->info['page'] ) {
+		return $result;
+	}
+
+	if ( is_plugin_active( 'imagify/imagify.php' ) || is_plugin_active_for_network( 'imagify/imagify.php' ) ) {
+		return $result;
+	}
+
+	// grab all slugs from the api results.
+	$result_slugs = wp_list_pluck( $result->plugins, 'slug' );
+
+	if ( in_array( 'imagify', $result_slugs, true ) ) {
+		return $result;
+	}
+
+	$query_args   = [
+		'slug'   => 'imagify',
+		'fields' => [
+			'icons'             => true,
+			'active_installs'   => true,
+			'short_description' => true,
+			'group'             => true,
+		],
+	];
+	$imagify_data = plugins_api( 'plugin_information', $query_args );
+
+	if ( is_wp_error( $imagify_data ) ) {
+		return $result;
+	}
+
+	if ( 'featured' === $args->browse ) {
+		array_push( $result->plugins, $imagify_data );
+	} else {
+		array_unshift( $result->plugins, $imagify_data );
+	}
+
+	return $result;
+}
+add_filter( 'plugins_api_result', 'rocket_add_imagify_api_result', 11, 3 );
+
+/**
+ * Gets all data to send to the analytics system
+ *
+ * @since 3.0 Send CDN zones, sitemaps paths, and count the number of CDN URLs used
+ * @since 2.11
+ * @author Remy Perona
+ *
+ * @return array An array of data
+ */
+function rocket_analytics_data() {
+	global $wp_version, $is_nginx, $is_apache, $is_iis7, $is_IIS;
+
+	if ( ! is_array( get_option( WP_ROCKET_SLUG ) ) ) {
 		return false;
 	}
 
-	if ( 'polylang' === $i18n_plugin && function_exists( 'pll_current_language' ) ) {
-		return pll_current_language();
-	} elseif ( 'wpml' === $i18n_plugin ) {
-		return apply_filters( 'wpml_current_language', null ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+	$untracked_wp_rocket_options = [
+		'license'                 => 1,
+		'consumer_email'          => 1,
+		'consumer_key'            => 1,
+		'secret_key'              => 1,
+		'secret_cache_key'        => 1,
+		'minify_css_key'          => 1,
+		'minify_js_key'           => 1,
+		'cloudflare_email'        => 1,
+		'cloudflare_api_key'      => 1,
+		'cloudflare_zone_id'      => 1,
+		'cloudflare_old_settings' => 1,
+		'submit_optimize'         => 1,
+		'analytics_enabled'       => 1,
+	];
+
+	$theme              = wp_get_theme();
+	$data               = array_diff_key( get_option( WP_ROCKET_SLUG ), $untracked_wp_rocket_options );
+	$locale             = explode( '_', get_locale() );
+	$data['web_server'] = 'Unknown';
+
+	if ( $is_nginx ) {
+		$data['web_server'] = 'NGINX';
+	} elseif ( $is_apache ) {
+		$data['web_server'] = 'Apache';
+	} elseif ( $is_iis7 ) {
+		$data['web_server'] = 'IIS 7';
+	} elseif ( $is_IIS ) {
+		$data['web_server'] = 'IIS';
+	}
+
+	$data['php_version']       = preg_replace( '@^(\d\.\d+).*@', '\1', phpversion() );
+	$data['wordpress_version'] = preg_replace( '@^(\d\.\d+).*@', '\1', $wp_version );
+	$data['current_theme']     = $theme->get( 'Name' );
+	$data['active_plugins']    = rocket_get_active_plugins();
+	$data['locale']            = $locale[0];
+	$data['multisite']         = is_multisite();
+	$data['cdn_cnames']        = count( $data['cdn_cnames'] );
+	$data['sitemaps']          = array_map( 'rocket_clean_exclude_file', $data['sitemaps'] );
+
+	return $data;
+}
+
+/**
+ * Determines if we should send the analytics data
+ *
+ * @since 2.11
+ * @author Remy Perona
+ *
+ * @return bool True if we should send them, false otherwise
+ */
+function rocket_send_analytics_data() {
+	if ( ! get_rocket_option( 'analytics_enabled' ) ) {
+		return false;
+	}
+
+	if ( ! current_user_can( 'administrator' ) ) {
+		return false;
+	}
+
+	if ( false === get_transient( 'rocket_send_analytics_data' ) ) {
+		set_transient( 'rocket_send_analytics_data', 1, 7 * DAY_IN_SECONDS );
+		return true;
 	}
 
 	return false;
 }
+
+/**
+ * Handles the analytics opt-in notice selection and prevent further display
+ *
+ * @since 2.11
+ * @author Remy Perona
+ */
+function rocket_analytics_optin() {
+	if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'analytics_optin' ) ) {
+		wp_nonce_ays( '' );
+	}
+
+	if ( ! current_user_can( 'administrator' ) ) {
+		wp_safe_redirect( wp_get_referer() );
+		die();
+	}
+
+	if ( isset( $_GET['value'] ) && 'yes' === $_GET['value'] ) {
+		update_rocket_option( 'analytics_enabled', 1 );
+		set_transient( 'rocket_analytics_optin', 1 );
+	}
+
+	update_option( 'rocket_analytics_notice_displayed', 1 );
+
+	wp_safe_redirect( wp_get_referer() );
+	die();
+}
+add_action( 'admin_post_rocket_analytics_optin', 'rocket_analytics_optin' );
+
+/**
+ * Handle WP Rocket settings import.
+ *
+ * @since 3.0 Hooked on admin_post now
+ * @since 2.10.7
+ * @author Remy Perona
+ *
+ * @return void
+ */
+function rocket_handle_settings_import() {
+	check_ajax_referer( 'rocket_import_settings', 'rocket_import_settings_nonce' );
+
+	if ( ! current_user_can( 'rocket_manage_options' ) ) {
+		rocket_settings_import_redirect( __( 'Settings import failed: you do not have the permissions to do this.', 'rocket' ), 'error' );
+	}
+
+	if ( ! isset( $_FILES['import'] ) || ( isset( $_FILES['import']['size'] ) && 0 === $_FILES['import']['size'] ) ) {
+		rocket_settings_import_redirect( __( 'Settings import failed: no file uploaded.', 'rocket' ), 'error' );
+	}
+
+	if ( isset( $_FILES['import']['name'] ) && ! preg_match( '/wp-rocket-settings-20\d{2}-\d{2}-\d{2}-[a-f0-9]{13}\.(?:txt|json)/', sanitize_file_name( $_FILES['import']['name'] ) ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+		rocket_settings_import_redirect( __( 'Settings import failed: incorrect filename.', 'rocket' ), 'error' );
+	}
+
+	add_filter( 'mime_types', 'rocket_allow_json_mime_type' );
+	add_filter( 'wp_check_filetype_and_ext', 'rocket_check_json_filetype', 10, 4 );
+
+	$mimes     = get_allowed_mime_types();
+	$mimes     = rocket_allow_json_mime_type( $mimes );
+	$file_data = wp_check_filetype_and_ext( $_FILES['import']['tmp_name'], sanitize_file_name( $_FILES['import']['name'] ), $mimes ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+
+	if ( 'text/plain' !== $file_data['type'] && 'application/json' !== $file_data['type'] ) {
+		rocket_settings_import_redirect( __( 'Settings import failed: incorrect filetype.', 'rocket' ), 'error' );
+	}
+
+	$_post_action       = isset( $_POST['action'] ) ? wp_unslash( sanitize_key( $_POST['action'] ) ) : '';
+	$_POST['action']    = 'wp_handle_sideload';
+	$overrides          = [];
+	$overrides['mimes'] = $mimes;
+	$file               = wp_handle_sideload( $_FILES['import'], $overrides ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+
+	if ( isset( $file['error'] ) ) {
+		rocket_settings_import_redirect( __( 'Settings import failed: ', 'rocket' ) . $file['error'], 'error' );
+	}
+
+	$_POST['action'] = $_post_action;
+	$settings        = rocket_direct_filesystem()->get_contents( $file['file'] );
+	remove_filter( 'mime_types', 'rocket_allow_json_mime_type' );
+	remove_filter( 'wp_check_filetype_and_ext', 'rocket_check_json_filetype', 10 );
+
+	if ( 'text/plain' === $file_data['type'] ) {
+		$gz       = 'gz' . strrev( 'etalfni' );
+		$settings = $gz( $settings );
+		$settings = maybe_unserialize( $settings );
+	} elseif ( 'application/json' === $file_data['type'] ) {
+		$settings = json_decode( $settings, true );
+
+		if ( null === $settings ) {
+			rocket_settings_import_redirect( __( 'Settings import failed: unexpected file content.', 'rocket' ), 'error' );
+		}
+	}
+
+	rocket_put_content( $file['file'], '' );
+	rocket_direct_filesystem()->delete( $file['file'] );
+
+	if ( is_array( $settings ) ) {
+		$options_api     = new WP_Rocket\Admin\Options( 'wp_rocket_' );
+		$current_options = $options_api->get( 'settings', [] );
+
+		$settings['consumer_key']     = $current_options['consumer_key'];
+		$settings['consumer_email']   = $current_options['consumer_email'];
+		$settings['secret_key']       = $current_options['secret_key'];
+		$settings['secret_cache_key'] = $current_options['secret_cache_key'];
+		$settings['minify_css_key']   = $current_options['minify_css_key'];
+		$settings['minify_js_key']    = $current_options['minify_js_key'];
+		$settings['version']          = $current_options['version'];
+
+		$options_api->set( 'settings', $settings );
+
+		rocket_settings_import_redirect( __( 'Settings imported and saved.', 'rocket' ), 'updated' );
+	}
+}
+add_action( 'admin_post_rocket_import_settings', 'rocket_handle_settings_import' );

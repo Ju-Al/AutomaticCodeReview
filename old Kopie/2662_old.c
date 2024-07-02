@@ -329,7 +329,6 @@ struct s2n_cert_chain_and_key *s2n_get_compatible_cert_chain_and_key(struct s2n_
         return conn->config->default_certs_by_type.certs[cert_type];
     }
 }
-
 /* This method will work when testing S2N, and for the EndOfEarlyData message.
  *
  * However, it will NOT work for arbitrary message types when potentially receiving records

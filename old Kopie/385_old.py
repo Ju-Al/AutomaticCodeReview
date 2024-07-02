@@ -92,8 +92,6 @@ def _get_timestamp(statuses=('SUCCESS', 'PARTIAL_SUCCESS')):
         LOGGER.error('Error getting latest snapshot timestamp: %s', err)
 
     return latest_timestamp
-
-def process(message):
     """Process messages about what notifications to send.
 
     Args:

@@ -1,5 +1,4 @@
 /*
-            insertWorkloadRecord(cn, provider, certReqInstanceId, sanIpStrForWorkloadStore);
  * Copyright 2016 Yahoo Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2908,7 +2907,7 @@ public class ZTSImpl implements KeyStore, ZTSHandler {
 
         if (enableWorkloadStore && !athenzSysDomainCache.isWorkloadStoreExcludedProvider(provider)) {
             // insert into workloads store is on best-effort basis. No errors are thrown if the op is not successful.
-            String hostName = info.getHostname();
+            insertWorkloadRecord(cn, provider, certReqInstanceId, sanIpStrForWorkloadStore);
             if (hostName == null) {
                 LOGGER.debug("hostname is not set by agent, hence forming the hostname {} with domain {} service {} and sanIpStr {} ..", hostName, info.getDomain(), info.getService(), sanIpStrForWorkloadStore);
                 hostName = info.getDomain() + "." + info.getService() + "." + sanIpStrForWorkloadStore;

@@ -1,9 +1,4 @@
 import React from 'react';
-    const radios = availablePaymentMethods.map(({ code, title }) => {
-        // If we don't have an implementation for a method type, ignore it.
-        if (!Object.keys(payments).includes(code)) {
-            return;
-        }
 import { shape, string, bool, func } from 'prop-types';
 import { RadioGroup } from 'informed';
 
@@ -41,7 +36,11 @@ const PaymentMethods = props => {
         return null;
     }
 
-    const radios = availablePaymentMethods
+    const radios = availablePaymentMethods.map(({ code, title }) => {
+        // If we don't have an implementation for a method type, ignore it.
+        if (!Object.keys(payments).includes(code)) {
+            return;
+        }
         .map(({ code, title }) => {
             // If we don't have an implementation for a method type, ignore it.
             if (

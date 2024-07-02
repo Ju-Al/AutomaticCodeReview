@@ -1,5 +1,4 @@
 # Copyright 2000 by Bertrand Frottier .  All rights reserved.
-        """Filtering options (-F) (PRIVATE)."""
 # Revisions 2005-2006 copyright Michiel de Hoon
 # Revisions 2006-2009 copyright Peter Cock
 # This code is part of the Biopython distribution and governed by its
@@ -356,7 +355,7 @@ class BlastParser(_XMLparser):
                                          int(self._value))
 
     def _end_Parameters_filter(self):
-        """Record a filtering options (-F) (PRIVATE)."""
+        """Filtering options (-F) (PRIVATE)."""
         self._parameters.filter = self._value
 
     # def _end_Parameters_pattern(self):

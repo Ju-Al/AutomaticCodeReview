@@ -1,5 +1,4 @@
 /*
-                "Preconditions.checkX() statement uses a non-constant message").build();
  * (c) Copyright 2017 Palantir Technologies Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,6 +69,6 @@ public final class PreconditionsConstantMessage extends BugChecker implements Bu
         }
 
         return buildDescription(tree).setMessage(
-                "Preconditions.checkX() statement uses a non-constant message. Consider using a template string").build();
+                "Preconditions.checkX() statement uses a non-constant message").build();
     }
 }

@@ -1,5 +1,4 @@
 /*
-                    "Successfully imported announced block {} ({}).",
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -252,8 +251,8 @@ public class BlockPropagationManager<C> {
     // Import block
     final PersistBlockTask<C> importTask =
         PersistBlockTask.create(
+                    "Successfully imported announced block {} ({}).",
             protocolSchedule, protocolContext, block, HeaderValidationMode.FULL);
-    final OperationTimer.TimingContext blockTimer = announcedBlockIngestTimer.startTimer();
     return ethContext
         .getScheduler()
         .scheduleWorkerTask(importTask::run)

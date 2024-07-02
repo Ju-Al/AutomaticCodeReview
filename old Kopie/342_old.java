@@ -1,301 +1,148 @@
-/**
- * Copyright 2015-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+/*
  *
- * Licensed under the Apache License, Version 2.0 (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  http://aws.amazon.com/apache2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package com.amazonaws.mobileconnectors.s3.transferutility;
-
-import android.database.Cursor;
-
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.mobileconnectors.s3.transferutility.TransferService.NetworkInfoReceiver;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
-import com.amazonaws.util.json.JsonUtils;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+package com.palantir.baseline.plugins;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.inject.Inject;
+import netflix.nebula.dependency.recommender.provider.RecommendationProviderContainer;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.TaskAction;
 
-/**
- * TransferRecord is used to store all the information of a transfer and
- * start/stop the a thread for the transfer task.
- */
-@SuppressWarnings("checkstyle:visibilitymodifier")
-class TransferRecord {
-    private static final Log LOGGER = LogFactory.getLog(TransferRecord.class);
 
-    public int id;
-    public int mainUploadId;
-    public int isRequesterPays;
-    public int isMultipart;
-    public int isLastPart;
-    public int isEncrypted;
-    public int partNumber;
-    public long bytesTotal;
-    public long bytesCurrent;
-    public long speed;
-    public long rangeStart;
-    public long rangeLast;
-    public long fileOffset;
-    public TransferType type;
-    public TransferState state;
-    public String bucketName;
-    public String key;
-    public String versionId;
-    public String file;
-    public String multipartId;
-    public String eTag;
-    public String headerContentType;
-    public String headerContentLanguage;
-    public String headerContentDisposition;
-    public String headerContentEncoding;
-    public String headerCacheControl;
-    public String headerExpire;
+public final class BomConflictCheckTask extends DefaultTask {
 
-    /**
-     * The following were added in 2.2.6 to support object metdata
-     */
-    public Map<String, String> userMetadata;
-    public String expirationTimeRuleId;
-    // This is a long representing a date, however it may be null
-    public String httpExpires;
-    public String sseAlgorithm;
-    public String sseKMSKey;
-    public String md5;
-    public String cannedAcl;
+    private final File propsFile;
 
-    private Future<?> submittedTask;
-
-    /**
-     * Constructs a TransferRecord and initializes the transfer id and S3
-     * client.
-     *
-     * @param id The id of a transfer.
-     */
-    public TransferRecord(int id) {
-        this.id = id;
+    @Inject
+    BomConflictCheckTask(File propsFile) {
+        this.propsFile = propsFile;
     }
 
-    /**
-     * Updates all the fields from database using the given Cursor.
-     *
-     * @param c A Cursor pointing to a transfer record.
-     */
-    public void updateFromDB(Cursor c) {
-        this.id = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_ID));
-        this.mainUploadId = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_MAIN_UPLOAD_ID));
-        this.type = TransferType.getType(c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_TYPE)));
-        this.state = TransferState.getState(c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_STATE)));
-        this.bucketName = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_BUCKET_NAME));
-        this.key = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_KEY));
-        this.versionId = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_VERSION_ID));
-        this.bytesTotal = c.getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_BYTES_TOTAL));
-        this.bytesCurrent = c.getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_BYTES_CURRENT));
-        this.speed = c.getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_SPEED));
-        this.isRequesterPays = c.getInt(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_IS_REQUESTER_PAYS));
-        this.isMultipart = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_IS_MULTIPART));
-        this.isLastPart = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_IS_LAST_PART));
-        this.isEncrypted = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_IS_ENCRYPTED));
-        this.partNumber = c.getInt(c.getColumnIndexOrThrow(TransferTable.COLUMN_PART_NUM));
-        this.eTag = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_ETAG));
-        this.file = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_FILE));
-        this.multipartId = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_MULTIPART_ID));
-        this.rangeStart = c
-                .getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_DATA_RANGE_START));
-        this.rangeLast = c.getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_DATA_RANGE_LAST));
-        this.fileOffset = c.getLong(c.getColumnIndexOrThrow(TransferTable.COLUMN_FILE_OFFSET));
-        this.headerContentType = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_CONTENT_TYPE));
-        this.headerContentLanguage = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_CONTENT_LANGUAGE));
-        this.headerContentDisposition = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_CONTENT_DISPOSITION));
-        this.headerContentEncoding = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_CONTENT_ENCODING));
-        this.headerCacheControl = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_CACHE_CONTROL));
-        this.headerExpire = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HEADER_EXPIRE));
-        this.userMetadata = JsonUtils.jsonToMap(c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_USER_METADATA)));
-        this.expirationTimeRuleId = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_EXPIRATION_TIME_RULE_ID));
-        this.httpExpires = c.getString(c
-                .getColumnIndexOrThrow(TransferTable.COLUMN_HTTP_EXPIRES_DATE));
-        this.sseAlgorithm = c
-                .getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_SSE_ALGORITHM));
-        this.sseKMSKey = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_SSE_KMS_KEY));
-        this.md5 = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_CONTENT_MD5));
-        this.cannedAcl = c.getString(c.getColumnIndexOrThrow(TransferTable.COLUMN_CANNED_ACL));
+    @InputFile
+    public File getPropsFile() {
+        return propsFile;
     }
 
-    /**
-     * Checks the state of the transfer and starts a thread to run the transfer
-     * task if possible.
-     *
-     * @param s3 s3 instance
-     * @param dbUtil database util
-     * @param updater status updater
-     * @param networkInfo network info
-     * @return Whether the task is running.
-     */
-    public boolean start(AmazonS3 s3, TransferDBUtil dbUtil, TransferStatusUpdater updater,
-            NetworkInfoReceiver networkInfo) {
-        if (!isRunning() && checkIsReadyToRun()) {
-            if (type.equals(TransferType.DOWNLOAD)) {
-                submittedTask = TransferThreadPool
-                        .submitTask(new DownloadTask(this, s3, updater, networkInfo));
-            } else {
-                submittedTask = TransferThreadPool
-                        .submitTask(new UploadTask(this, s3, dbUtil, updater, networkInfo));
-            }
-            return true;
-        }
-         * @Anchorer
-         * if transfer is already completed when trying to start, we should update state and trigger a callback
-         */
-        if (TransferState.COMPLETED.equals(state)) {
-            updater.updateState(id, TransferState.COMPLETED);
-        }
-        return false;
-    }
-
-    /**
-     * Pauses a running transfer.
-     *
-     * @param s3 s3 instance
-     * @param updater status updater
-     * @return true if the transfer is running and is paused successfully, false
-     *         otherwise
-     */
-    public boolean pause(AmazonS3 s3, TransferStatusUpdater updater) {
-        if (!isFinalState(state) && !TransferState.PAUSED.equals(state)) {
-            updater.updateState(id, TransferState.PAUSED);
-            if (isRunning()) {
-                submittedTask.cancel(true);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Cancels a running transfer.
-     *
-     * @param s3 s3 instance
-     * @param updater status updater
-     * @return true if the transfer is running and is canceled successfully,
-     *         false otherwise
-     */
-    public boolean cancel(final AmazonS3 s3, final TransferStatusUpdater updater) {
-        if (!isFinalState(state)) {
-            updater.updateState(id, TransferState.CANCELED);
-            if (isRunning()) {
-                submittedTask.cancel(true);
-            }
-            // additional cleanups
-            if (isMultipart == 1) {
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName,
-                                    key, multipartId));
-                            LOGGER.debug("Successfully clean up multipart upload: " + id);
-                        } catch (final AmazonClientException e) {
-                            LOGGER.debug("Failed to abort multiplart upload: " + id, e);
+    @TaskAction
+    public void checkBomConflict() {
+        final Map<String, String> recommendations = getProject().getExtensions()
+                .getByType(RecommendationProviderContainer.class)
+                .getMavenBomProvider()
+                .getRecommendations();
+        List<Conflict> conflicts = new LinkedList<>();
+        Set<String> artifacts = BaselineVersions.getResolvedArtifacts(getProject());
+        Map<String, String> resolvedConflicts = new HashMap<>();
+        BaselineVersions.checkVersionsProp(getPropsFile(),
+                (propName, propVersion) -> {
+                    String regex = propName.replaceAll("\\*", ".*");
+                    artifacts.forEach(artifactName -> {
+                        if (artifactName.matches(regex)) {
+                            resolvedConflicts.put(artifactName, propName);
                         }
-                    }
-                }).start();
-            } else if (TransferType.DOWNLOAD.equals(type)) {
-                // remove partially download file
-                new File(file).delete();
+                    });
+                    recommendations.forEach((bomName, bomVersion) -> {
+                        if (bomName.matches(regex)) {
+                            conflicts.add(new Conflict(propName, propVersion, bomName, bomVersion));
+                            resolvedConflicts.remove(bomName);
+                        }
+                    });
+                    return null;
+                });
+
+        //Critical conflicts are versions.props line that only override bom recommendations with same version
+        //so it should avoid considering the case where a wildcard also pin an artifact not present in the
+        List<Conflict> critical = conflicts.stream()
+                .filter(c -> c.getBomVersion().equals(c.getPropVersion()))
+                .filter(c -> !resolvedConflicts.containsValue(c.getPropName()))
+                .collect(Collectors.toList());
+
+        if (!conflicts.isEmpty()) {
+            System.out.println("There are conflicts between versions.props and the bom:");
+            System.out.println(conflictsToString(conflicts, resolvedConflicts));
+
+            if (!critical.isEmpty()) {
+                throw new RuntimeException("Critical conflicts between versions.props and the bom "
+                        + "(overriding with same version)\n" + conflictsToString(critical, resolvedConflicts));
             }
-            return true;
         }
-        return false;
+
     }
 
-    /**
-     * Checks whether the transfer is actively running
-     *
-     * @return true if the transfer is running
-     */
-    boolean isRunning() {
-        return submittedTask != null && !submittedTask.isDone();
+    private String conflictsToString(List<Conflict> conflicts, Map<String, String> resolvedConflicts) {
+        return conflicts.stream()
+                .map(conflict -> conflict.details(resolvedConflicts))
+                .collect(Collectors.joining("\n"));
     }
 
-    /**
-     * Wait till transfer finishes.
-     *
-     * @param timeout the maximum time to wait in milliseconds
-     * @throws InterruptedException
-     * @throws ExecutionException
-     * @throws TimeoutException
-     */
-    void waitTillFinish(long timeout) throws InterruptedException, ExecutionException,
-            TimeoutException {
-        if (isRunning()) {
-            submittedTask.get(timeout, TimeUnit.MILLISECONDS);
+    private static class Conflict {
+        private String propName;
+        private String propVersion;
+        private String bomName;
+        private String bomVersion;
+
+        Conflict(String propName, String propVersion, String bomName, String bomVersion) {
+            this.propName = propName;
+            this.propVersion = propVersion;
+            this.bomName = bomName;
+            this.bomVersion = bomVersion;
         }
-    }
 
-    /**
-     * Determines whether a transfer state is a final state.
-     */
-    @SuppressWarnings("checkstyle:hiddenfield")
-    private boolean isFinalState(TransferState state) {
-        return TransferState.COMPLETED.equals(state)
-                || TransferState.FAILED.equals(state)
-                || TransferState.CANCELED.equals(state);
-    }
+        public String getPropName() {
+            return propName;
+        }
 
-    private boolean checkIsReadyToRun() {
-        return partNumber == 0 && !TransferState.COMPLETED.equals(state);
-    }
+        public String getPropVersion() {
+            return propVersion;
+        }
 
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("[")
-                .append("id:").append(id).append(",")
-                .append("bucketName:").append(bucketName).append(",")
-                .append("key:").append(key).append(",")
-                .append("file:").append(file).append(",")
-                .append("type:").append(type).append(",")
-                .append("bytesTotal:").append(bytesTotal).append(",")
-                .append("bytesCurrent:").append(bytesCurrent).append(",")
-                .append("fileOffset:").append(fileOffset).append(",")
-                .append("state:").append(state).append(",")
-                .append("cannedAcl:").append(cannedAcl).append(",")
-                .append("mainUploadId:").append(mainUploadId).append(",")
-                .append("isMultipart:").append(isMultipart).append(",")
-                .append("isLastPart:").append(isLastPart).append(",")
-                .append("partNumber:").append(partNumber).append(",")
-                .append("multipartId:").append(multipartId).append(",")
-                .append("eTag:").append(eTag)
-                .append("]");
-        return sb.toString();
+        public String getBomName() {
+            return bomName;
+        }
+
+        public String getBomVersion() {
+            return bomVersion;
+        }
+
+        public String criticalString(Map<String, String> resolvedConflicts) {
+            if (!getBomVersion().equals(getPropVersion())) {
+                return "non critical: prop version not equals to bom version. (remove if unnecessary override)";
+            } else if (resolvedConflicts.containsValue(getPropName())) {
+                return "non critical: pin required by other non recommended artifacts: ["
+                        + resolvedConflicts.entrySet().stream()
+                        .filter(e -> e.getValue().equals(getPropName()))
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.joining(", ")) + "]";
+
+            } else {
+                return "critical: prop version equals to bom version. [redundant]";
+            }
+        }
+
+        public String details(Map<String, String> resolvedConflicts) {
+            return "bom:            " + getBomName() + " -> " + getBomVersion() + "\n"
+                    + "versions.props: " + getPropName() + " -> " + getPropVersion() + "\n"
+                    + criticalString(resolvedConflicts) + "\n";
+        }
     }
 }
 

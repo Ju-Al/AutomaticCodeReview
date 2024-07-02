@@ -1,5 +1,4 @@
 import os
-class WithSeededRandomPipelineEngine(WithTradingSessions, WithAssetFinder):
 import sqlite3
 from unittest import TestCase
 import warnings
@@ -1539,6 +1538,7 @@ class WithEquityPricingPipelineEngine(WithAdjustmentReader,
             'adjustments',
             cls.END_DATE.strftime("%Y-%m-%d-adjustments.db")
         )
+class WithSeededRandomPipelineEngine(WithTradingSessions, WithAssetFinder):
         ensure_directory(os.path.dirname(cls.adjustments_db_path))
         return cls.adjustments_db_path
 

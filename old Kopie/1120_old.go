@@ -1,5 +1,4 @@
 package sequence
-
 import (
 	"context"
 	"encoding/binary"

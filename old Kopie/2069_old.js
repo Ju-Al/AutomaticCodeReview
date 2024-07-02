@@ -376,8 +376,6 @@ __.extend(VMClient.prototype, {
       });
     }
   },
-
-  getSerialOutput: function(resourceGroupName, name, options, _) {
     var subscription = profile.current.getSubscription(this.subscription);
     var serviceClients = this._getServiceClients(subscription);
     var virtualMachine = new VirtualMachine(this.cli, serviceClients);

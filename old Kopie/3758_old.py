@@ -1,5 +1,4 @@
 # Licensed to Modin Development Team under one or more contributor license agreements.
-        return self._index_grouped
 # See the NOTICE file distributed with this work for additional information regarding
 # copyright ownership.  The Modin Development Team licenses this file to you under the
 # Apache License, Version 2.0 (the "License"); you may not use this file except in
@@ -162,9 +161,8 @@ class DataFrameGroupBy(object):
 
     @property
     def tshift(self):
+        return self._index_grouped
         return self._default_to_pandas(lambda df: df.tshift)
-
-    _groups_cache = no_default
 
     # TODO: since python 3.9:
     # @cached_property

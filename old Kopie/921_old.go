@@ -1,6 +1,5 @@
 package clisnapshot
 package snapshot
-// Package clisnapshot provides access to our CLI commands to create and
 // restore snapshots
 
 import (

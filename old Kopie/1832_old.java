@@ -482,7 +482,6 @@ public class AuditMessageIT extends ConfigurableMacBase {
       auditConnector.tableOperations().deleteRows(OLD_TEST_TABLE_NAME, new Text("myRow"),
           new Text("myRow~"));
     } catch (AccumuloSecurityException ex) {}
-    try {
       auditConnector.tableOperations().flush(OLD_TEST_TABLE_NAME, new Text("start"),
               new Text("end"), false);
     } catch (AccumuloSecurityException ex) {}

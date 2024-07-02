@@ -1,27 +1,4 @@
 #define _POSIX_C_SOURCE 200809L
-	if (eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE) {
-		wlr_log(WLR_ERROR, "Failed to bind to the OpenGL ES API");
-		goto error;
-	}
-
-	egl->gbm_device = gbm_create_device(drm_fd);
-	if (!egl->gbm_device) {
-		wlr_log(WLR_ERROR, "Failed to create GBM device");
-		goto error;
-	}
-
-	egl->display = egl->procs.eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR,
-		egl->gbm_device, NULL);
-	if (egl->display == EGL_NO_DISPLAY) {
-		wlr_log(WLR_ERROR, "Failed to create EGL display");
-		goto error;
-	}
-
-	EGLint major, minor;
-	if (eglInitialize(egl->display, &major, &minor) == EGL_FALSE) {
-		wlr_log(WLR_ERROR, "Failed to initialize EGL");
-		goto error;
-	}
 #include <assert.h>
 #include <drm_fourcc.h>
 #include <fcntl.h>
@@ -484,7 +461,7 @@ error:
 }
 
 void wlr_egl_destroy(struct wlr_egl *egl) {
-	if (egl == NULL || !egl->has_external_context) {
+	if (egl == NULL) {
 		return;
 	}
 

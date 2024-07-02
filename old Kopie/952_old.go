@@ -1,15 +1,4 @@
 package sessions
-		if len(authorizedActions) > 0 {
-			onlySelf := true
-			for _, v := range authorizedActions {
-				if v != action.ReadSelf && v != action.CancelSelf {
-					onlySelf = false
-					break
-				}
-			}
-			if !onlySelf || item.GetUserId() == authResults.UserId {
-				item.AuthorizedActions = authorizedActions.Strings()
-				finalItems = append(finalItems, item)
 
 import (
 	"context"
@@ -135,7 +124,17 @@ func (s Service) ListSessions(ctx context.Context, req *pbs.ListSessionsRequest)
 		item.Scope = scopeInfoMap[item.GetScopeId()]
 		res.ScopeId = item.Scope.Id
 		authorizedActions := authResults.FetchActionSetForId(ctx, item.Id, IdActions, auth.WithResource(res))
-		if len(authorizedActions) == 0 {
+		if len(authorizedActions) > 0 {
+			onlySelf := true
+			for _, v := range authorizedActions {
+				if v != action.ReadSelf && v != action.CancelSelf {
+					onlySelf = false
+					break
+				}
+			}
+			if !onlySelf || item.GetUserId() == authResults.UserId {
+				item.AuthorizedActions = authorizedActions.Strings()
+				finalItems = append(finalItems, item)
 			continue
 		}
 		onlySelf := true

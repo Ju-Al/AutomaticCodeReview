@@ -99,7 +99,6 @@ def run(inventory_index_id,
     # pylint: disable=too-many-locals
     global_configs = service_config.get_global_config()
     notifier_configs = service_config.get_notifier_config()
-    api_quota_configs = notifier_configs.get('api_quota')
 
     with service_config.scoped_session() as session:
         if scanner_index_id:

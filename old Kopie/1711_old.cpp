@@ -4280,7 +4280,6 @@ void MI_Manashield(int i)
 			missile[i]._mirange = 0;
 		if (plr[id]._pHitPoints < missile[i]._miVar1) {
 			diff = missile[i]._miVar1 - plr[id]._pHitPoints;
-#ifdef HELLFIRE
 			int div = 0;
 			for (int m = 0; m < missile[i]._mispllvl; m++) {
 				if (m < 7) {

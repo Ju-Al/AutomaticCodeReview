@@ -1596,8 +1596,6 @@ int32 GetViralMaxSpreadTime(int32 spell_id)
 int32 GetViralSpreadRange(int32 spell_id) 
 {
 	return spells[spell_id].viral_range;
-}
-
 uint32 GetProcLimitTimer(int32 spell_id, int proc_type) {
 
 	//This allows for support for effects that may have multiple different proc types and timers.

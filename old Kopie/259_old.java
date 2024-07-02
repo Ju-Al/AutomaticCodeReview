@@ -429,7 +429,6 @@ public abstract class LocalSession implements Session {
         }
         return "NONE";
     }
-
     /**
      * Enables stream management for session
      * @param enable XEP-0198 <enable/> stanza

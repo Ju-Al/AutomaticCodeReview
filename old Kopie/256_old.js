@@ -1,5 +1,4 @@
 const path = require("path");
-const replace = require("rollup-plugin-replace");
 const { rollup } = require("rollup");
 const { version } = require("../package.json");
 

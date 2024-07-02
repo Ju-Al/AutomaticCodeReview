@@ -822,7 +822,6 @@ StreamBase & operator>> (StreamBase & sb, LastLoseHero & st)
 {
     return sb >> st.heroes >> st.date;
 }
-
 StreamBase & operator << (StreamBase & sb, LastLoseHero & hero)
 {
     return sb << st.heroes << st.date;

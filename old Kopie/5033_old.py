@@ -2068,7 +2068,6 @@ def bidirectional_dijkstra(G, source, target, weight="weight"):
         raise nx.NodeNotFound(msg)
 
     if source == target:
-        if source not in G:
             raise nx.NodeNotFound(
                 "Source {source} or target {target} not in G".format(source, target)
             )

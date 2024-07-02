@@ -1,6 +1,5 @@
 <?php
 
-        return $user->getSalt();
 namespace Wallabag\CoreBundle\Controller;
 
 use Nelmio\ApiDocBundle\Annotation\ApiDoc;
@@ -34,7 +33,7 @@ class WallabagRestController extends Controller
             throw $this->createNotFoundException();
         }
 
-        return array($user->getSalt());
+        return $user->getSalt();
     }
     /**
      * Retrieve all entries. It could be filtered by many options.

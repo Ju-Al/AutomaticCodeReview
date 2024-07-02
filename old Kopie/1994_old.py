@@ -142,7 +142,6 @@ class SffRandomAccess(SeqFileRandomAccess):
         SeqIO.SffIO._check_eof(handle, index_offset, index_length)
 
     def get(self, offset):
-        """Return the Sequence records at the given offset."""
         handle = self._handle
         handle.seek(offset)
         return SeqIO.SffIO._sff_read_seq_record(handle,

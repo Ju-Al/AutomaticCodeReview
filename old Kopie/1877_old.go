@@ -2,338 +2,272 @@ package detailed
 
 import (
 	"fmt"
-	"strings"
+	"sort"
+	"strconv"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/endpoint"
-	"github.com/weaveworks/scope/probe/host"
-	"github.com/weaveworks/scope/probe/kubernetes"
-	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/render"
 	"github.com/weaveworks/scope/report"
 )
 
-// Shapes that are allowed
 const (
-	ImageNameNone = "<none>"
-
-	// Keys we use to render container names
-	AmazonECSContainerNameLabel  = "com.amazonaws.ecs.container-name"
-	KubernetesContainerNameLabel = "io.kubernetes.container.name"
-	MarathonAppIDEnv             = "MARATHON_APP_ID"
+	portKey     = "port"
+	portLabel   = "Port"
+	countKey    = "count"
+	countLabel  = "Count"
+	remoteKey   = "remote"
+	remoteLabel = "Remote"
+	number      = "number"
 )
 
-// NodeSummaryGroup is a topology-typed group of children for a Node.
-type NodeSummaryGroup struct {
-	ID         string        `json:"id"`
-	Label      string        `json:"label"`
-	Nodes      []NodeSummary `json:"nodes"`
-	TopologyID string        `json:"topologyId"`
-	Columns    []Column      `json:"columns"`
+// Exported for testing
+var (
+	NormalColumns = []Column{
+		{ID: portKey, Label: portLabel},
+		{ID: countKey, Label: countLabel, DefaultSort: true},
+		{ID: countKey, Label: countLabel, DataType: "number", DefaultSort: true},
+	}
+	InternetColumns = []Column{
+		{ID: remoteKey, Label: remoteLabel},
+		{ID: portKey, Label: portLabel, DataType: "number"},
+		{ID: countKey, Label: countLabel, DataType: "number", DefaultSort: true},
+	}
+)
+
+// ConnectionsSummary is the table of connection to/form a node
+type ConnectionsSummary struct {
+	ID          string       `json:"id"`
+	TopologyID  string       `json:"topologyId"`
+	Label       string       `json:"label"`
+	Columns     []Column     `json:"columns"`
+	Connections []Connection `json:"connections"`
 }
 
-// Column provides special json serialization for column ids, so they include
-// their label for the frontend.
-type Column struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	DefaultSort bool   `json:"defaultSort"`
-	DataType    string `json:"dataType"`
+// Connection is a row in the connections table.
+type Connection struct {
+	ID       string               `json:"id"`     // ID of this element in the UI.  Must be unique for a given ConnectionsSummary.
+	NodeID   string               `json:"nodeId"` // ID of a node in the topology. Optional, must be set if linkable is true.
+	Label    string               `json:"label"`
+	Linkable bool                 `json:"linkable"`
+	Metadata []report.MetadataRow `json:"metadata,omitempty"`
 }
 
-// NodeSummary is summary information about a child for a Node.
-type NodeSummary struct {
-	ID         string               `json:"id"`
-	Label      string               `json:"label"`
-	LabelMinor string               `json:"label_minor"`
-	Rank       string               `json:"rank"`
-	Shape      string               `json:"shape,omitempty"`
-	Stack      bool                 `json:"stack,omitempty"`
-	Linkable   bool                 `json:"linkable,omitempty"` // Whether this node can be linked-to
-	Pseudo     bool                 `json:"pseudo,omitempty"`
-	Metadata   []report.MetadataRow `json:"metadata,omitempty"`
-	Parents    []Parent             `json:"parents,omitempty"`
-	Metrics    []report.MetricRow   `json:"metrics,omitempty"`
-	Tables     []report.Table       `json:"tables,omitempty"`
-	Adjacency  report.IDList        `json:"adjacency,omitempty"`
+type connectionsByID []Connection
+
+func (s connectionsByID) Len() int           { return len(s) }
+func (s connectionsByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s connectionsByID) Less(i, j int) bool { return s[i].ID < s[j].ID }
+
+// Intermediate type used as a key to dedupe rows
+type connection struct {
+	remoteNodeID          string
+	remoteAddr, localAddr string // for internet nodes only
+	port                  string // destination port
 }
 
-var renderers = map[string]func(NodeSummary, report.Node) (NodeSummary, bool){
-	render.Pseudo:         pseudoNodeSummary,
-	report.Process:        processNodeSummary,
-	report.Container:      containerNodeSummary,
-	report.ContainerImage: containerImageNodeSummary,
-	report.Pod:            podNodeSummary,
-	report.Service:        podGroupNodeSummary,
-	report.Deployment:     podGroupNodeSummary,
-	report.ReplicaSet:     podGroupNodeSummary,
-	report.Host:           hostNodeSummary,
+type connectionCounters struct {
+	counted map[string]struct{}
+	counts  map[connection]int
 }
 
-var templates = map[string]struct{ Label, LabelMinor string }{
-	render.TheInternetID:      {render.InboundMajor, ""},
-	render.IncomingInternetID: {render.InboundMajor, render.InboundMinor},
-	render.OutgoingInternetID: {render.OutboundMajor, render.OutboundMinor},
+func newConnectionCounters() *connectionCounters {
+	return &connectionCounters{counted: map[string]struct{}{}, counts: map[connection]int{}}
 }
 
-// MakeNodeSummary summarizes a node, if possible.
-func MakeNodeSummary(r report.Report, n report.Node) (NodeSummary, bool) {
-	if renderer, ok := renderers[n.Topology]; ok {
-		return renderer(baseNodeSummary(r, n), n)
+func (c *connectionCounters) add(outgoing bool, localNode, remoteNode, localEndpoint, remoteEndpoint report.Node) {
+	// We identify connections by their source endpoint, pre-NAT, to
+	// ensure we only count them once.
+	srcEndpoint, dstEndpoint := remoteEndpoint, localEndpoint
+	if outgoing {
+		srcEndpoint, dstEndpoint = localEndpoint, remoteEndpoint
 	}
-	if strings.HasPrefix(n.Topology, "group:") {
-		return groupNodeSummary(baseNodeSummary(r, n), r, n)
+	connectionID := srcEndpoint.ID
+	if copySrcEndpointID, _, ok := srcEndpoint.Latest.LookupEntry("copy_of"); ok {
+		connectionID = copySrcEndpointID
 	}
-	return NodeSummary{}, false
+	if _, ok := c.counted[connectionID]; ok {
+		return
+	}
+
+	conn := connection{remoteNodeID: remoteNode.ID}
+	var ok bool
+	if _, _, conn.port, ok = report.ParseEndpointNodeID(dstEndpoint.ID); !ok {
+		return
+	}
+	// For internet nodes we break out individual addresses
+	if conn.remoteAddr, ok = internetAddr(remoteNode, remoteEndpoint); !ok {
+		return
+	}
+	if conn.localAddr, ok = internetAddr(localNode, localEndpoint); !ok {
+		return
+	}
+
+	c.counted[connectionID] = struct{}{}
+	c.counts[conn]++
 }
 
-// SummarizeMetrics returns a copy of the NodeSummary where the metrics are
-// replaced with their summaries
-func (n NodeSummary) SummarizeMetrics() NodeSummary {
-	summarizedMetrics := make([]report.MetricRow, len(n.Metrics))
-	for i, m := range n.Metrics {
-		summarizedMetrics[i] = m.Summary()
+func internetAddr(node report.Node, ep report.Node) (string, bool) {
+	if !isInternetNode(node) {
+		return "", true
 	}
-	n.Metrics = summarizedMetrics
-	return n
-}
-
-func baseNodeSummary(r report.Report, n report.Node) NodeSummary {
-	t, _ := r.Topology(n.Topology)
-	return NodeSummary{
-		ID:        n.ID,
-		Shape:     t.GetShape(),
-		Linkable:  true,
-		Metadata:  NodeMetadata(r, n),
-		Metrics:   NodeMetrics(r, n),
-		Parents:   Parents(r, n),
-		Tables:    NodeTables(r, n),
-		Adjacency: n.Adjacency,
-	}
-}
-
-func pseudoNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	base.Pseudo = true
-	base.Rank = n.ID
-
-	// try rendering as an internet node
-	if template, ok := templates[n.ID]; ok {
-		base.Label = template.Label
-		base.LabelMinor = template.LabelMinor
-		base.Shape = report.Cloud
-		return base, true
-	}
-
-	// try rendering as a known service node
-	if strings.HasPrefix(n.ID, render.ServiceNodeIDPrefix) {
-		base.Label = n.ID[len(render.ServiceNodeIDPrefix):]
-		base.LabelMinor = ""
-		base.Shape = report.Cloud
-		return base, true
-	}
-
-	// try rendering it as an uncontained node
-	if strings.HasPrefix(n.ID, render.MakePseudoNodeID(render.UncontainedID)) {
-		base.Label = render.UncontainedMajor
-		base.LabelMinor = report.ExtractHostID(n)
-		base.Shape = report.Square
-		base.Stack = true
-		return base, true
-	}
-
-	// try rendering it as an unmanaged node
-	if strings.HasPrefix(n.ID, render.MakePseudoNodeID(render.UnmanagedID)) {
-		base.Label = render.UnmanagedMajor
-		base.Shape = report.Square
-		base.Stack = true
-		base.LabelMinor = report.ExtractHostID(n)
-		return base, true
-	}
-
-	// try rendering it as an endpoint
-	if addr, ok := n.Latest.Lookup(endpoint.Addr); ok {
-		base.Label = addr
-		base.Shape = report.Circle
-		return base, true
-	}
-
-	return NodeSummary{}, false
-}
-
-func processNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	base.Label, _ = n.Latest.Lookup(process.Name)
-	base.Rank, _ = n.Latest.Lookup(process.Name)
-
-	pid, ok := n.Latest.Lookup(process.PID)
+	_, addr, _, ok := report.ParseEndpointNodeID(ep.ID)
 	if !ok {
-		return NodeSummary{}, false
+		return "", false
 	}
-	if containerName, ok := n.Latest.Lookup(docker.ContainerName); ok {
-		base.LabelMinor = fmt.Sprintf("%s (%s:%s)", report.ExtractHostID(n), containerName, pid)
-	} else {
-		base.LabelMinor = fmt.Sprintf("%s (%s)", report.ExtractHostID(n), pid)
+	if set, ok := ep.Sets.Lookup(endpoint.ReverseDNSNames); ok && len(set) > 0 {
+		// TODO We show just one of the names, selected rather
+		// abitrarily. We don't have space to show all (except in the
+		// tooltip perhaps), but should think of better strategies for
+		// choosing the name to display.
+		addr = fmt.Sprintf("%s (%s)", set[0], addr)
 	}
-
-	_, isConnected := n.Latest.Lookup(render.IsConnected)
-	base.Linkable = isConnected
-	return base, true
+	return addr, true
 }
 
-func containerNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	base.Label = getRenderableContainerName(n)
-	base.LabelMinor = report.ExtractHostID(n)
-
-	if imageName, ok := n.Latest.Lookup(docker.ImageName); ok {
-		base.Rank = docker.ImageNameWithoutVersion(imageName)
-	}
-
-	return base, true
-}
-
-func containerImageNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	imageName, ok := n.Latest.Lookup(docker.ImageName)
-	if !ok {
-		return NodeSummary{}, false
-	}
-
-	imageNameWithoutVersion := docker.ImageNameWithoutVersion(imageName)
-	base.Label = imageNameWithoutVersion
-	base.Rank = imageNameWithoutVersion
-	base.Stack = true
-
-	if base.Label == ImageNameNone {
-		base.Label, _ = n.Latest.Lookup(docker.ImageID)
-		if len(base.Label) > 12 {
-			base.Label = base.Label[:12]
+func (c *connectionCounters) rows(r report.Report, ns report.Nodes, includeLocal bool) []Connection {
+	output := []Connection{}
+	for row, count := range c.counts {
+		// Use MakeNodeSummary to render the id and label of this node
+		// TODO(paulbellamy): Would be cleaner if we hade just a
+		// MakeNodeID(ns[row.remoteNodeID]). As we don't need the whole summary.
+		summary, _ := MakeNodeSummary(r, ns[row.remoteNodeID])
+		connection := Connection{
+			ID:       fmt.Sprintf("%s-%s-%s-%s", row.remoteNodeID, row.remoteAddr, row.localAddr, row.port),
+			NodeID:   summary.ID,
+			Label:    summary.Label,
+			Linkable: true,
 		}
-	}
-
-	base.LabelMinor = pluralize(n.Counters, report.Container, "container", "containers")
-
-	return base, true
-}
-
-func addKubernetesLabelAndRank(base NodeSummary, n report.Node) NodeSummary {
-	base.Label, _ = n.Latest.Lookup(kubernetes.Name)
-	namespace, _ := n.Latest.Lookup(kubernetes.Namespace)
-	base.Rank = namespace + "/" + base.Label
-	return base
-}
-
-func podNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	base = addKubernetesLabelAndRank(base, n)
-	base.LabelMinor = pluralize(n.Counters, report.Container, "container", "containers")
-
-	return base, true
-}
-
-func podGroupNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	base = addKubernetesLabelAndRank(base, n)
-	base.Stack = true
-
-	// NB: pods are the highest aggregation level for which we display
-	// counts.
-	base.LabelMinor = pluralize(n.Counters, report.Pod, "pod", "pods")
-
-	return base, true
-}
-
-func hostNodeSummary(base NodeSummary, n report.Node) (NodeSummary, bool) {
-	var (
-		hostname, _ = n.Latest.Lookup(host.HostName)
-		parts       = strings.SplitN(hostname, ".", 2)
-	)
-
-	if len(parts) == 2 {
-		base.Label, base.LabelMinor, base.Rank = parts[0], parts[1], parts[1]
-	} else {
-		base.Label = hostname
-	}
-
-	return base, true
-}
-
-// groupNodeSummary renders the summary for a group node. n.Topology is
-// expected to be of the form: group:container:hostname
-func groupNodeSummary(base NodeSummary, r report.Report, n report.Node) (NodeSummary, bool) {
-	parts := strings.Split(n.Topology, ":")
-	if len(parts) != 3 {
-		return NodeSummary{}, false
-	}
-
-	label, ok := n.Latest.Lookup(parts[2])
-	if !ok {
-		return NodeSummary{}, false
-	}
-	base.Label, base.Rank = label, label
-
-	t, ok := r.Topology(parts[1])
-	if ok && t.Label != "" {
-		base.LabelMinor = pluralize(n.Counters, parts[1], t.Label, t.LabelPlural)
-	}
-
-	base.Shape = t.GetShape()
-	base.Stack = true
-	return base, true
-}
-
-func pluralize(counters report.Counters, key, singular, plural string) string {
-	if c, ok := counters.Lookup(key); ok {
-		if c == 1 {
-			return fmt.Sprintf("%d %s", c, singular)
+		if row.remoteAddr != "" {
+			connection.Label = row.remoteAddr
 		}
-		return fmt.Sprintf("%d %s", c, plural)
+		if includeLocal {
+			connection.Metadata = append(connection.Metadata,
+				report.MetadataRow{
+					ID:       remoteKey,
+					Value:    row.localAddr,
+					Datatype: number,
+				})
+		}
+		connection.Metadata = append(connection.Metadata,
+			report.MetadataRow{
+				ID:       portKey,
+				Value:    row.port,
+				Datatype: number,
+			},
+			report.MetadataRow{
+				ID:       countKey,
+				Value:    strconv.Itoa(count),
+				Datatype: number,
+			},
+		)
+		output = append(output, connection)
 	}
-	return ""
+	sort.Sort(connectionsByID(output))
+	return output
 }
 
-type nodeSummariesByID []NodeSummary
+func incomingConnectionsSummary(topologyID string, r report.Report, n report.Node, ns report.Nodes) ConnectionsSummary {
+	localEndpointIDs, localEndpointIDCopies := endpointChildIDsAndCopyMapOf(n)
+	counts := newConnectionCounters()
 
-func (s nodeSummariesByID) Len() int           { return len(s) }
-func (s nodeSummariesByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s nodeSummariesByID) Less(i, j int) bool { return s[i].ID < s[j].ID }
-
-// NodeSummaries is a set of NodeSummaries indexed by ID.
-type NodeSummaries map[string]NodeSummary
-
-// Summaries converts RenderableNodes into a set of NodeSummaries
-func Summaries(r report.Report, rns report.Nodes) NodeSummaries {
-	result := NodeSummaries{}
-	for id, node := range rns {
-		if summary, ok := MakeNodeSummary(r, node); ok {
-			for i, m := range summary.Metrics {
-				summary.Metrics[i] = m.Summary()
+	// For each node which has an edge TO me
+	for _, node := range ns {
+		if !node.Adjacency.Contains(n.ID) {
+			continue
+		}
+		for _, remoteEndpoint := range endpointChildrenOf(node) {
+			for _, localEndpointID := range remoteEndpoint.Adjacency.Intersection(localEndpointIDs) {
+				localEndpointID = canonicalEndpointID(localEndpointIDCopies, localEndpointID)
+				counts.add(false, n, node, r.Endpoint.Nodes[localEndpointID], remoteEndpoint)
 			}
-			result[id] = summary
 		}
 	}
+
+	columnHeaders := NormalColumns
+	if isInternetNode(n) {
+		columnHeaders = InternetColumns
+	}
+	return ConnectionsSummary{
+		ID:          "incoming-connections",
+		TopologyID:  topologyID,
+		Label:       "Inbound",
+		Columns:     columnHeaders,
+		Connections: counts.rows(r, ns, isInternetNode(n)),
+	}
+}
+
+func outgoingConnectionsSummary(topologyID string, r report.Report, n report.Node, ns report.Nodes) ConnectionsSummary {
+	localEndpoints := endpointChildrenOf(n)
+	counts := newConnectionCounters()
+
+	// For each node which has an edge FROM me
+	for _, id := range n.Adjacency {
+		node, ok := ns[id]
+		if !ok {
+			continue
+		}
+		remoteEndpointIDs, remoteEndpointIDCopies := endpointChildIDsAndCopyMapOf(node)
+		for _, localEndpoint := range localEndpoints {
+			for _, remoteEndpointID := range localEndpoint.Adjacency.Intersection(remoteEndpointIDs) {
+				remoteEndpointID = canonicalEndpointID(remoteEndpointIDCopies, remoteEndpointID)
+				counts.add(true, n, node, localEndpoint, r.Endpoint.Nodes[remoteEndpointID])
+			}
+		}
+	}
+
+	columnHeaders := NormalColumns
+	if isInternetNode(n) {
+		columnHeaders = InternetColumns
+	}
+	return ConnectionsSummary{
+		ID:          "outgoing-connections",
+		TopologyID:  topologyID,
+		Label:       "Outbound",
+		Columns:     columnHeaders,
+		Connections: counts.rows(r, ns, isInternetNode(n)),
+	}
+}
+
+func endpointChildrenOf(n report.Node) []report.Node {
+	result := []report.Node{}
+	n.Children.ForEach(func(child report.Node) {
+		if child.Topology == report.Endpoint {
+			result = append(result, child)
+		}
+	})
 	return result
 }
 
-// getRenderableContainerName obtains a user-friendly container name, to render in the UI
-func getRenderableContainerName(nmd report.Node) string {
-	for _, key := range []string{
-		// Amazon's ecs-agent produces huge Docker container names, destructively
-		// derived from mangling Container Definition names in Task
-		// Definitions.
-		//
-		// However, the ecs-agent provides a label containing the original Container
-		// Definition name.
-		docker.LabelPrefix + AmazonECSContainerNameLabel,
-		// Kubernetes also mangles its Docker container names and provides a
-		// label with the original container name. However, note that this label
-		// is only provided by Kubernetes versions >= 1.2 (see
-		// https://github.com/kubernetes/kubernetes/pull/17234/ )
-		docker.LabelPrefix + KubernetesContainerNameLabel,
-		// Marathon doesn't set any Docker labels and this is the only meaningful
-		// attribute we can find to make Scope useful without Mesos plugin
-		docker.EnvPrefix + MarathonAppIDEnv,
-		docker.ContainerName,
-		docker.ContainerHostname,
-	} {
-		if label, ok := nmd.Latest.Lookup(key); ok {
-			return label
+func endpointChildIDsAndCopyMapOf(n report.Node) (report.IDList, map[string]string) {
+	ids := report.MakeIDList()
+	copies := map[string]string{}
+	n.Children.ForEach(func(child report.Node) {
+		if child.Topology == report.Endpoint {
+			ids = ids.Add(child.ID)
+			if copyID, _, ok := child.Latest.LookupEntry("copy_of"); ok {
+				copies[child.ID] = copyID
+			}
 		}
+	})
+	return ids, copies
+}
+
+// canonicalEndpointID returns the original endpoint ID of which id is
+// a "copy_of" (due to NATing), or, if the id is not a copy, the id
+// itself.
+//
+// This is used for determining a unique destination endpoint ID for a
+// connection, removing any arbitrariness in the destination port we
+// are associating with the connection when it is encountered multiple
+// times in the topology (with different destination endpoints, due to
+// DNATing).
+func canonicalEndpointID(copies map[string]string, id string) string {
+	if original, ok := copies[id]; ok {
+		return original
 	}
-	return ""
+	return id
+}
+
+func isInternetNode(n report.Node) bool {
+	return n.ID == render.IncomingInternetID || n.ID == render.OutgoingInternetID
 }

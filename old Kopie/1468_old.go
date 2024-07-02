@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-	err = s.Initialize(cfg, phonebookAddresses)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -290,7 +289,7 @@ func main() {
 		}
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, string(genesisText[:]))
+	err = s.Initialize(cfg, phonebookAddresses)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)

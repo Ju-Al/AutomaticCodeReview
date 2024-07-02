@@ -1,36 +1,4 @@
 import {
-	// Alias `class` prop to `className` if available
-	if (props.class != props.className) {
-		classNameDescriptor.enumerable = 'className' in props;
-		if (props.className != null) props.class = props.className;
-		Object.defineProperty(props, 'className', classNameDescriptor);
-	}
-
-	// Apply DOM VNode compat
-	if (typeof type != 'function') {
-		// Apply defaultValue to value
-		if (props.defaultValue && props.value !== undefined) {
-			if (!props.value && props.value !== 0) {
-				props.value = props.defaultValue;
-			}
-			delete props.defaultValue;
-		// Add support for array select values: <select value={[]} />
-		if (Array.isArray(props.value) && props.multiple && type === 'select') {
-			toChildArray(props.children).forEach(child => {
-				if (props.value.indexOf(child.props.value) != -1) {
-					child.props.selected = true;
-			});
-			delete props.value;
-		}
-		// Normalize DOM vnode properties.
-		let shouldSanitize, attrs, i;
-		for (i in props) if ((shouldSanitize = CAMEL_PROPS.test(i))) break;
-		if (shouldSanitize) {
-			attrs = vnode.props = {};
-			for (i in props) {
-				attrs[
-					CAMEL_PROPS.test(i) ? i.replace(/([A-Z0-9])/, '-$1').toLowerCase() : i
-				] = props[i];
 	render as preactRender,
 	hydrate as preactHydrate,
 	options,
@@ -136,7 +104,35 @@ options.vnode = vnode => {
 	let type = vnode.type;
 	let props = vnode.props;
 
-	if (type) {
+	// Alias `class` prop to `className` if available
+	if (props.class != props.className) {
+		classNameDescriptor.enumerable = 'className' in props;
+		if (props.className != null) props.class = props.className;
+		Object.defineProperty(props, 'className', classNameDescriptor);
+	}
+
+	// Apply DOM VNode compat
+	if (typeof type != 'function') {
+		// Apply defaultValue to value
+		if (props.defaultValue && props.value !== undefined) {
+			if (!props.value && props.value !== 0) {
+				props.value = props.defaultValue;
+			}
+		// Add support for array select values: <select value={[]} />
+		if (Array.isArray(props.value) && props.multiple && type === 'select') {
+			toChildArray(props.children).forEach(child => {
+				if (props.value.indexOf(child.props.value) != -1) {
+					child.props.selected = true;
+			});
+		// Normalize DOM vnode properties.
+		let shouldSanitize, attrs, i;
+		for (i in props) if ((shouldSanitize = CAMEL_PROPS.test(i))) break;
+		if (shouldSanitize) {
+			attrs = vnode.props = {};
+			for (i in props) {
+				attrs[
+					CAMEL_PROPS.test(i) ? i.replace(/([A-Z0-9])/, '-$1').toLowerCase() : i
+				] = props[i];
 		// Alias `class` prop to `className` if available
 		if (props.class != props.className) {
 			classNameDescriptor.enumerable = 'className' in props;

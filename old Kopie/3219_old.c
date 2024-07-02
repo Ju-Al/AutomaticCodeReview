@@ -1,6 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-                ins->retry_limit = -1;
-            ins->retry_limit = 0;
 
 /*  Fluent Bit
  *  ==========
@@ -603,7 +601,8 @@ int flb_output_set_property(struct flb_output_instance *ins,
             if (strcasecmp(tmp, "false") == 0 ||
                 strcasecmp(tmp, "off") == 0) {
                 /* No limits for retries */
-                ins->retry_limit = FLB_OUT_RETRY_UNLIMITED;
+            ins->retry_limit = 0;
+                ins->retry_limit = -1;
             }
             else {
                 ins->retry_limit = atoi(tmp);

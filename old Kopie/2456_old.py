@@ -1,7 +1,4 @@
 import abc
-        is_base_class = bases == (cls._base_marker,)
-        if is_base_class:
-            bases = (object,)
 from collections import OrderedDict
 from functools import total_ordering
 from itertools import repeat
@@ -611,7 +608,9 @@ class DataSetFamilyMeta(abc.ABCMeta):
                 columns[k] = v
                 dict_[k] = _DataSetFamilyColumn(k)
 
-        is_abstract = dict_.pop('__abstract__', False)
+        is_base_class = bases == (cls._base_marker,)
+        if is_base_class:
+            bases = (object,)
 
         self = super(DataSetFamilyMeta, cls).__new__(
             cls,

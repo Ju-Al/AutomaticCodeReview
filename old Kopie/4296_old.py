@@ -374,7 +374,6 @@ def algebraic_connectivity(
     --------
     laplacian_matrix
     """
-    global np
     import numpy as np
 
     if len(G) < 2:

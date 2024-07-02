@@ -79,8 +79,6 @@ STATUS_TO_UPSTREAM_MAP = {
 
 TASK_FAMILY_RE = re.compile(r'([^(_]+)[(_]')
 
-RPC_METHODS = {}
-
 
 def rpc_method(fn=None, **request_args):
 

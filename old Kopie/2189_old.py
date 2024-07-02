@@ -1,5 +1,4 @@
 #
-                          DETAIL = 'Key ({plain_expr}) already exists.';
 # This source file is part of the EdgeDB open source project.
 #
 # Copyright 2008-present MagicStack Inc. and the EdgeDB authors.
@@ -207,7 +206,7 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
                           SCHEMA = '{schemaname}',
                           CONSTRAINT = '{constr}',
                           MESSAGE = '{errmsg}',
-                          DETAIL = 'Key ({esc_plain_expr}) already exists.';
+                          DETAIL = 'Key ({plain_expr}) already exists.';
                 END IF;
             '''.format(
                 plain_expr=origin_exprdata['plain'],

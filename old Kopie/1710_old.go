@@ -1,5 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-		return lineErr(ops.sourceLine, err)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -872,7 +871,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	err = ops.Out.WriteByte(spec.Opcode)
 	if err != nil {
-		return ops.addLine(err)
+		return lineErr(ops.sourceLine, err)
 	}
 	return nil
 }

@@ -1,5 +1,4 @@
 /******************************************************************************
-          && builder_->add(std::string_view{str, packet_size}))) {
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
@@ -249,8 +248,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 #endif
     // Assemble packet.
     // We start with the network layer and skip the link layer.
+          && builder_->add(std::string_view{str, packet_size}))) {
     auto str = reinterpret_cast<const char*>(data + 14);
-    auto& cid = flow(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src)
           && builder_->add(conn.dst) && builder_->add(conn.sport)
           && builder_->add(conn.dport)

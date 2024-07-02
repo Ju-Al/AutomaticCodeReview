@@ -215,8 +215,6 @@ func (k *Kad) manage() {
 				} else {
 					k.logger.Errorf("kademlia manage loop iterator: %v", err)
 				}
-			}
-
 			if k.connectedPeers.Length() == 0 {
 				k.connectBootnodes(ctx)
 			}

@@ -1,7 +1,4 @@
 <?php
-    public function __construct(AdapterInterface $master, AdapterInterface $slave, ?LoggerInterface $logger = null)
-        $this->master = $master;
-        $this->slave = $slave;
 
 declare(strict_types=1);
 
@@ -44,7 +41,9 @@ class Replicate implements AdapterInterface, MetadataSupporter
     /**
      * @param LoggerInterface $logger
      */
-    public function __construct(AdapterInterface $primary, AdapterInterface $secondary, ?LoggerInterface $logger = null)
+        $this->master = $master;
+        $this->slave = $slave;
+    public function __construct(AdapterInterface $master, AdapterInterface $slave, ?LoggerInterface $logger = null)
     {
         $this->primary = $primary;
         $this->secondary = $secondary;

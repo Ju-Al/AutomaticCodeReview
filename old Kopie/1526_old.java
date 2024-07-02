@@ -1,5 +1,4 @@
 package com.hubspot.singularity.scheduler;
-              Optional.of(Boolean.TRUE), requestId, Optional.<String> absent(),
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -662,7 +661,7 @@ public class SingularityCleaner {
       requestManager.createCleanupRequest(
           new SingularityRequestCleanup(
               cleanupTask.getUser(), RequestCleanupType.DELETING, System.currentTimeMillis(),
-              Optional.of(Boolean.TRUE), Optional.absent(), requestId, Optional.<String> absent(),
+              Optional.of(Boolean.TRUE), requestId, Optional.<String> absent(),
               Optional.<Boolean> absent(), cleanupTask.getMessage(), Optional.<String> absent(), Optional.<SingularityShellCommand>absent()));
     }
   }

@@ -1,7 +1,4 @@
 import numpy as np
-            if isinstance(level, str):
-                level = self.axes[axis].names.index(level)
-            return self.groupby(level=level, axis=axis).count()
 from numpy import nan
 import pandas
 from pandas.api.types import is_scalar
@@ -746,7 +743,9 @@ class BasePandasDataset(object):
                 # error thrown by pandas
                 raise TypeError("Can only count levels on hierarchical columns.")
 
-            return self._handle_level_agg(axis, level, "count")
+            if isinstance(level, str):
+                level = self.axes[axis].names.index(level)
+            return self.groupby(level=level, axis=axis).count()
 
         return self._reduce_dimension(
             self._query_compiler.count(

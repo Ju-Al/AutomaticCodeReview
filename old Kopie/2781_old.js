@@ -1,10 +1,4 @@
 import browser from '../../scripts/browser';
-                        // don't animate on smart tv's, too slow
-                        if (options.fullscreen && browser.supportsCssAnimation() && !browser.slow) {
-                            return zoomIn(dlg).then(function () {
-                                return videoElement;
-                            });
-                        } else {
 import { Events } from 'jellyfin-apiclient';
 import { appHost } from '../../components/apphost';
 import loading from '../../components/loading/loading';
@@ -1376,7 +1370,12 @@ function tryRemoveElement(elem) {
                             document.body.classList.add('hide-scroll');
                         }
 
-                        if (options.fullscreen) {
+                        // don't animate on smart tv's, too slow
+                        if (options.fullscreen && browser.supportsCssAnimation() && !browser.slow) {
+                            return zoomIn(dlg).then(function () {
+                                return videoElement;
+                            });
+                        } else {
                             if (browser.tv && Screenfull.isEnabled) {
                                 Screenfull.request();
                             }

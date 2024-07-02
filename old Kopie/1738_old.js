@@ -1,7 +1,5 @@
 /* eslint-disable indent */
 define(['dom', 'scrollManager'], function (dom, scrollManager) {
-    'use strict';
-
 import dom from 'dom';
 import scrollManager from 'scrollManager';
 

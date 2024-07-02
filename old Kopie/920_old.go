@@ -1,5 +1,4 @@
 package p2p
-			r.sw.StopPeerGracefully(p)
 
 import (
 	"bytes"
@@ -129,7 +128,7 @@ func (r *PEXReactor) AddPeer(p *Peer) error {
 	// close the connect if connect is big than max limit
 	if r.sw.peers.Size() >= r.sw.config.MaxNumPeers {
 		if ok := r.SendAddrs(p, r.book.GetSelection()); ok {
-			select {
+			r.sw.StopPeerGracefully(p)
 			case <-time.After(1 * time.Second):
 				r.sw.StopPeerGracefully(p)
 			}

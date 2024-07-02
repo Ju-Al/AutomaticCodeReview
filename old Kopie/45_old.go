@@ -1,5 +1,4 @@
 // Copyright 2019 Liquidata, Inc.
-		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir}
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -477,7 +476,7 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 			return err
 		}
 
-		now := time.Now()
+		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir}
 		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, time.Now()}
 
 		fs.objs[destPath] = destObj

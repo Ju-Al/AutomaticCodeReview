@@ -1,5 +1,4 @@
 import torch
-            torch.tensor(num_total_pos).cuda()).item()
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, Scale, bias_init_with_prob, normal_init
@@ -346,7 +345,7 @@ class GFLHead(AnchorHead):
          bbox_weights_list, num_total_pos, num_total_neg) = cls_reg_targets
 
         num_total_samples = reduce_mean(
-            torch.tensor(num_total_pos).float().cuda()).item()
+            torch.tensor(num_total_pos).cuda()).item()
         num_total_samples = max(num_total_samples, 1.0)
 
         losses_cls, losses_bbox, losses_dfl,\

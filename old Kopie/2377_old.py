@@ -1,5 +1,4 @@
 import sys
-        return os.path.realpath(fs_path)
 import os
 import time
 import six
@@ -28,7 +27,7 @@ class RRDReader(BaseReader):
     def _convert_fs_path(fs_path):
         if isinstance(fs_path, six.text_type):
             fs_path = fs_path.encode(sys.getfilesystemencoding())
-        return os.path.realpath(fs_path).decode("utf-8")
+        return os.path.realpath(fs_path)
 
     def __init__(self, fs_path, datasource_name):
         self.fs_path = RRDReader._convert_fs_path(fs_path)

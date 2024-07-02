@@ -139,7 +139,6 @@ class BaseConsensusRules(AbstractConsensusRules):
                 raise exceptions.OperationError(
                     'Only federation nodes can use the operation `CREATE`')
 
-            # validate digital asset
             # A create transaction will have only one output
             asset = transaction['transaction']['asset']
             assets.validate_asset_creation(asset['data'], asset['divisible'], asset['updatable'],

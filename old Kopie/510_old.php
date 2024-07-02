@@ -351,7 +351,6 @@ class ContentTest extends TestCaseWithURLToolSetup
     }
 
     /**
-     * Set the title of te object in all locales
      *
      * @param mixed  $object
      * @param string $title

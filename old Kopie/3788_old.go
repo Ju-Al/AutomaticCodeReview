@@ -1,22 +1,4 @@
 /*
-	corev1 "k8s.io/api/core/v1"
-	logtest "github.com/go-logr/logr/testing"
-	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-	"github.com/stretchr/testify/assert"
-// policyFuncBuilder wraps a policies.Func to allow injecting a testing.T
-type policyFuncBuilder func(t *testing.T) policies.Func
-
-	// now time is the current time at the start of the test (the clock is fixed)
-	now := time.Now()
-	metaNow := metav1.NewTime(now)
-	forceTriggeredReason := "ForceTriggered"
-	forceTriggeredMessage := "Re-issuance forced by unit test case"
-		// key that should be passed to ProcessItem.
-		// if not set, the 'namespace/name' of the 'Certificate' field will be used.
-		// if neither is set, the key will be ""
-		// Certificate to be synced for the test.
-		// if not set, the 'key' will be passed to ProcessItem instead.
-		certificate *cmapi.Certificate
 Copyright 2020 The cert-manager Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,8 +17,25 @@ limitations under the License.
 package trigger
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	logtest "github.com/go-logr/logr/testing"
+	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
+	"github.com/stretchr/testify/assert"
+// policyFuncBuilder wraps a policies.Func to allow injecting a testing.T
+type policyFuncBuilder func(t *testing.T) policies.Func
+
+	// now time is the current time at the start of the test (the clock is fixed)
+	now := time.Now()
+	metaNow := metav1.NewTime(now)
+	forceTriggeredReason := "ForceTriggered"
+	forceTriggeredMessage := "Re-issuance forced by unit test case"
+		// key that should be passed to ProcessItem.
+		// if not set, the 'namespace/name' of the 'Certificate' field will be used.
+		// if neither is set, the key will be ""
+		// Certificate to be synced for the test.
+		// if not set, the 'key' will be passed to ProcessItem instead.
+		certificate *cmapi.Certificate
 	"context"
-	"fmt"
 	"testing"
 	"time"
 

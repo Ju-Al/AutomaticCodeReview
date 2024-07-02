@@ -91,7 +91,6 @@ def test_serialization():
     loss = WeightedKappaLoss(num_classes=3)
     tf.keras.losses.deserialize(tf.keras.losses.serialize(loss))
 
-
 def test_save_model(tmpdir):
     model = tf.keras.models.Sequential(
         [

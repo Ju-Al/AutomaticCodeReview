@@ -1,5 +1,4 @@
 /*
-            PushDataWrapper wrapper = generatePushData();
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,6 +55,7 @@ public class PushExecuteTask extends AbstractExecuteTask {
     @Override
     public void run() {
         try {
+            PushDataWrapper wrapper = generatePushData();
             for (String each : getTargetClientIds()) {
                 Client client = delayTaskEngine.getClientManager().getClient(each);
                 if (null == client) {
@@ -63,7 +63,6 @@ public class PushExecuteTask extends AbstractExecuteTask {
                     continue;
                 }
                 Subscriber subscriber = delayTaskEngine.getClientManager().getClient(each).getSubscriber(service);
-                PushDataWrapper wrapper = generatePushData(subscriber);
                 delayTaskEngine.getPushExecutor().doPushWithCallback(each, subscriber, wrapper,
                         new NamingPushCallback(each, subscriber, wrapper.getOriginalData(), delayTask.isPushToAll()));
             }

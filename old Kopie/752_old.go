@@ -43,7 +43,6 @@ type CEB struct {
 	execIdx      int64
 
 	cleanupFunc func()
-
 	mu             sync.Mutex
 	urlAgentCtx    context.Context
 	urlAgentCancel func()

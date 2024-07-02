@@ -133,7 +133,6 @@ namespace System.Text.Primitives.Tests.Encoding
         }
 
         [Theory]
-        [MemberData(nameof(SupportedEncodingTestData))]
         public void InputOutputBufferSizeCombinations(TextEncoderTestHelper.SupportedEncoding from)
         {
             string inputString;

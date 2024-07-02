@@ -1,5 +1,4 @@
 # coding: utf-8
-          maintainer_email='guolin.ke@microsoft.com',
 """Setup lightgbm package."""
 import logging
 import struct
@@ -351,7 +350,7 @@ if __name__ == "__main__":
               ],
           },
           maintainer='Guolin Ke',
-          maintainer_email='guolin.ke@outlook.com',
+          maintainer_email='guolin.ke@microsoft.com',
           zip_safe=False,
           cmdclass={
               'install': CustomInstall,

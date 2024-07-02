@@ -104,7 +104,6 @@ public class BaseServerOptions {
     }
   }
 
-  @ManagedAttribute(name = "URL")
   public URL getExternalUrl() {
     try {
       return getExternalUri().toURL();

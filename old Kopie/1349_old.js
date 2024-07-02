@@ -15,7 +15,6 @@ class Item extends Component {
         itemIndex: PropTypes.number.isRequired,
         render: PropTypes.oneOfType([PropTypes.func, PropTypes.string])
             .isRequired
-const isString = item => typeof item === 'string';
 
 const getChild = item => (isString(item) ? item : null);
 

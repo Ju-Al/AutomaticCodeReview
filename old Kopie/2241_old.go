@@ -1,16 +1,4 @@
 // Copyright 2019 The Go Cloud Development Kit Authors
-	// Compute a sorted slice of available demos for usage.
-	var avail []string
-	for _, demo := range allDemos {
-		avail = append(avail, demo.name)
-	}
-	sort.Strings(avail)
-	fmt.Println(strings.Join(avail, "\n"))
-		if demo.name == demoToAdd {
-			return instantiateDemo(pctx, demo, force)
-	return xerrors.Errorf("%q is not a supported demo; try 'demo list' to see available demos")
-func instantiateDemo(pctx *processContext, demo *demoInfo, force bool) error {
-	logger.Printf("Adding %q...", demo.name)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,8 +66,19 @@ func registerDemoCmd(ctx context.Context, pctx *processContext, rootCmd *cobra.C
 		},
 	}
 	demoAddCmd.Flags().BoolVar(&force, "force", false, "re-add even the demo even if it has already been added, overwriting previous files")
+	// Compute a sorted slice of available demos for usage.
+	var avail []string
+	for _, demo := range allDemos {
+		avail = append(avail, demo.name)
+	}
+	sort.Strings(avail)
+	fmt.Println(strings.Join(avail, "\n"))
+		if demo.name == demoToAdd {
+			return instantiateDemo(pctx, demo, force)
+	return xerrors.Errorf("%q is not a supported demo; try 'demo list' to see available demos")
+func instantiateDemo(pctx *processContext, demo *demoInfo, force bool) error {
+	logger.Printf("Adding %q...", demo.name)
 	demoCmd.AddCommand(demoAddCmd)
-
 	rootCmd.AddCommand(demoCmd)
 }
 

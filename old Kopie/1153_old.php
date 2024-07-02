@@ -153,7 +153,6 @@ class ProductSearchExporter
         $this->sqlLoggerFacade->reenableLogging();
     }
 
-    /**
      * @param int $domainId
      * @param string $locale
      * @param int[] $productIds

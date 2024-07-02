@@ -1,5 +1,4 @@
 import json
-    # https://docs.aws.amazon.com/apigateway/api-reference/link-relation/basepathmapping-by-base-path
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -393,7 +392,7 @@ def add_base_path_mapping(path, data):
 
     domain_name = get_domain_from_path(path)
     # Note: "(none)" is a special value in API GW:
-    # https://docs.aws.amazon.com/apigateway/api-reference/link-relation/basepathmapping-by-base
+    # https://docs.aws.amazon.com/apigateway/api-reference/link-relation/basepathmapping-by-base-path
     # -path
     base_path = data["basePath"] = data.get("basePath") or "(none)"
     result = common.clone(data)

@@ -598,7 +598,6 @@ namespace iroha {
         };
       };
 
-      auto check_query = [this](const auto &q) {
         if (existsInDb<int>("account", "account_id", "quorum", q.accountId())) {
           return QueryFallbackCheckResult{};
         }

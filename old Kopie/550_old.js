@@ -1,10 +1,9 @@
 const fs = require('../../core/fs.js');
-    this.addSetProvider();
 const utils = require('../../utils/utils.js');
 
 class ENS {
+    this.addSetProvider();
   constructor(embark, _options) {
-    const self = this;
     this.logger = embark.logger;
     this.events = embark.events;
     this.namesConfig = embark.config.namesystemConfig;

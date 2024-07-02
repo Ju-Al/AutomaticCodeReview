@@ -1,5 +1,5 @@
 const fs = require('./fs.js');
-  if(!this.blockchainConfig.account && !this.blockchainConfig.isDev) {const File = require('./file.js');
+const File = require('./file.js');
 const Plugins = require('./plugins.js');
 const utils = require('../utils/utils.js');
 const path = require('path');
@@ -183,7 +183,7 @@ Config.prototype.loadBlockchainConfigFile = function() {
   if (!configFilePath) {
     this.blockchainConfig.default = true;
   }
-  if(!this.blockchainConfig.account && !this.blockchainConfig.isDev && this.env !== 'development') {
+  if(!this.blockchainConfig.account && !this.blockchainConfig.isDev) {  if(!this.blockchainConfig.account && !this.blockchainConfig.isDev && this.env !== 'development') {
     this.logger.warn(
       __('Account settings are needed for this chain.' +
          ' Please put a valid address and possibly a password in your blockchain config or use a dev chain.')

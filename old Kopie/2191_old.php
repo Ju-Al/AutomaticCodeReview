@@ -1,7 +1,5 @@
 <?php
 
-		$strHost = static::encode(array_pop($arrChunks));
-		return implode('@', $arrChunks) . '@' . $strHost;
 /*
  * This file is part of Contao.
  *
@@ -103,7 +101,8 @@ class Idna
 		}
 
 		$arrChunks = explode('@', $strEmail);
-		$strHost = array_pop($arrChunks);
+		return implode('@', $arrChunks) . '@' . $strHost;
+		$strHost = static::encode(array_pop($arrChunks));
 
 		if ($strHost == '')
 		{

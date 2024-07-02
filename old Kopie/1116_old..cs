@@ -1,5 +1,4 @@
 // 
-        private void ConfigureFromFile(string fileName)
 // Copyright (c) 2004-2011 Jaroslaw Kowalski <jaak@jkowalski.net>
 // 
 // All rights reserved.
@@ -365,7 +364,7 @@ namespace NLog.Config
             InternalLogger.Debug("Unused target checking is completed. Total Rule Count: {0}, Total Target Count: {1}, Unused Target Count: {2}", this.LoggingRules.Count, configuredNamedTargets.Count, unusedCount);
         }
 
-        private void ConfigureFromFile(string fileName, bool autoReloadDefault = false)
+        private void ConfigureFromFile(string fileName)
         {
             if (this.fileMustAutoReloadLookup.ContainsKey(GetFileLookupKey(fileName)))
                 return;

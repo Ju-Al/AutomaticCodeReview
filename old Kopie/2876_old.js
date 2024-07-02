@@ -1,5 +1,4 @@
 const fs = require('fs-extra');
-  trash: 'trash',
 // eslint-disable-next-line no-unused-vars
 const replace = require('replace-in-file');
 // eslint-disable-next-line no-unused-vars
@@ -53,7 +52,7 @@ const rename = {
   storybook: 'storybook',
   tasks: 'task',
   templates: 'template',
-  archive: 'archived',
+  trash: 'trash',
   ui: 'ui',
   urls: 'url',
   users: 'user',

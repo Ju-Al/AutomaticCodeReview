@@ -1,6 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////
-     *   The configuration object must contain `name` and the optional properties `update` and `timeToLive`.
-     *   to Realm for how long it must be kept alive, after which it will be automatically removed.
 //
 // Copyright 2016 Realm Inc.
 //
@@ -160,7 +158,8 @@ class Collection {
      * });
      *
      * @param {string|Realm.Sync.SubscriptionOptions} options - an optional name or configuration object for the subscription.
-     *   The configuration object must contain `name` and the optional properties `update`, `timeToLive` and `inclusions`.
+     *   to Realm for how long it must be kept alive, after which it will be automatically removed.
+     *   The configuration object must contain `name` and the optional properties `update` and `timeToLive`.
      *   If `update` is true the query on an existing subscription will be updated. If `timeToLive` is set, it indicates
      *   to Realm for how long it must be kept alive, after which it will be automatically removed. The `inclusions` property
      *   is an array of property paths which specifies which linkingObjects relationships should be included in the subscription.

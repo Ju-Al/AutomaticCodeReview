@@ -800,7 +800,6 @@ class ESNCell(keras.layers.AbstractRNNCell):
         base_config = super().get_config()
         return {**base_config, **config}
 
-
 @tf.keras.utils.register_keras_serializable(package="Addons")
 class PeepholeLSTMCell(tf.keras.layers.LSTMCell):
     """Equivalent to `tf.keras.layers.LSTMCell` class but adds peephole connections.

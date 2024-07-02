@@ -1,6 +1,4 @@
 package oracle
-	events, err := o.bch.Events().GetEvents(ctx, o.bch.Events().GetMultiSigFilter(
-		[]common.Address{o.bch.ContractRegistry().OracleMultiSig()}, big.NewInt(0)))
 
 import (
 	"context"
@@ -146,7 +144,7 @@ func (o *Oracle) Serve(ctx context.Context) error {
 		zap.String("account", crypto.PubkeyToAddress(o.key.PublicKey).String()),
 		zap.String("price update period:", o.cfg.Oracle.PriceUpdatePeriod.String()),
 		zap.String("contract update period", o.cfg.Oracle.ContractUpdatePeriod.String()),
-		zap.Float64("deviation percent", o.cfg.Oracle.Percent),
+		zap.Float64("deviation percent", o.cfg.Oracle.Percent))
 		zap.Bool("from now", o.cfg.Oracle.FromNow))
 
 	wg, ctx := errgroup.WithContext(ctx)

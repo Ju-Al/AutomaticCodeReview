@@ -1,5 +1,4 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-    if(info.current_count_change > 0)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,7 +113,7 @@ void HelloWorldPublisher::PubListener::on_publication_matched(
         eprosima::fastdds::dds::DataWriter*,
         const eprosima::fastdds::dds::PublicationMatchedStatus &info)
 {
-    if(info.current_count_change == 1)
+    if(info.current_count_change > 0)
     {
         n_matched = info.total_count;
         firstConnected = true;

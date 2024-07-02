@@ -109,7 +109,6 @@ public final class ThrottledStorageComponent extends ForwardingStorageComponent 
     return "Throttled{" + delegate.toString() + "}";
   }
 
-  /**
    * Lazy accesses the request context as we cannot scope the executor used by storage commands per
    * request.
    */

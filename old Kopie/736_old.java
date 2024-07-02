@@ -1,7 +1,4 @@
 /*
-  public void whenAccountsAreAddedToWhitelistShouldReturnTrue() {
-    JsonRpcResponse expectedResponse = new JsonRpcSuccessResponse(null, true);
-    when(accountWhitelist.addAccounts(eq(accounts))).thenReturn(AddResult.SUCCESS);
  * Copyright 2018 ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -58,7 +55,9 @@ public class PermAddAccountsToWhitelistTest {
   }
 
   @Test
-  public void whenAccountsAreAddedToWhitelistShouldReturnSuccess() {
+    JsonRpcResponse expectedResponse = new JsonRpcSuccessResponse(null, true);
+    when(accountWhitelist.addAccounts(eq(accounts))).thenReturn(AddResult.SUCCESS);
+  public void whenAccountsAreAddedToWhitelistShouldReturnTrue() {
     List<String> accounts = Arrays.asList("0x0", "0x1");
     JsonRpcResponse expectedResponse = new JsonRpcSuccessResponse(null, "Success");
     when(accountWhitelist.addAccounts(eq(accounts))).thenReturn(WhitelistOperationResult.SUCCESS);

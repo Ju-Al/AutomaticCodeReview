@@ -1,5 +1,4 @@
 // Copyright 2018 The Go Cloud Authors
-			t.Parallel()
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +70,7 @@ func TestWire(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			// TODO(light): These tests should be parallelizable, but seems to flake.
+			t.Parallel()
 			// See https://github.com/google/go-cloud/issues/669 for details.
 
 			// Materialize a temporary GOPATH directory.

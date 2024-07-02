@@ -95,7 +95,6 @@ public final class PreferSafeLoggableExceptions extends BugChecker implements Bu
                 .findAny()
                 .orElse(Description.NO_MATCH);
     }
-
     private static boolean isTestCode(VisitorState state) {
         return Streams.stream(state.getPath().iterator())
                 .filter(ancestor -> ancestor instanceof ClassTree)

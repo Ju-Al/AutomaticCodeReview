@@ -1,5 +1,4 @@
 /*
-		image: "gcr.io/heptio-images/velero:latest",
 Copyright 2018, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +26,7 @@ import (
 
 func DaemonSet(namespace string, opts ...podTemplateOption) *appsv1.DaemonSet {
 	c := &podTemplateConfig{
-		image: "velero/velero:latest",
+		image: "gcr.io/heptio-images/velero:latest",
 	}
 
 	for _, opt := range opts {

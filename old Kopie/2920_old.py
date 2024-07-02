@@ -1,5 +1,4 @@
 # This file is part of Hypothesis, which may be found at
-# https://github.com/HypothesisWorks/hypothesis/
 #
 # Most of this work is copyright (C) 2013-2021 David R. MacIver
 # (david@drmaciver.com), but it contains contributions by others. See

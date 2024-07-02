@@ -166,7 +166,6 @@ func (c DockerCommand) CheckDockerEngineRunning() error {
 	}
 }
 
-// GetPlatform will run the `docker version` command to get the OS/Arch.
 func (c DockerCommand) GetPlatform() (operatingSystem, architecture string, err error) {
 	var os string
 	var arch string

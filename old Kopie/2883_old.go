@@ -1,14 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-func isValidTaskDefOverridePath(path string) bool {
-	for _, s := range invalidTaskDefOverridePathRegexp {
-		re := regexp.MustCompile(fmt.Sprintf(`^%s$`, s))
-		if re.MatchString(path) {
-			return false
-		}
-	}
-	return true
-}
-
 // SPDX-License-Identifier: Apache-2.0
 
 package stack
@@ -316,6 +306,16 @@ func convertTaskDefOverrideRules(inRules []manifest.OverrideRule) []override.Rul
 		})
 	}
 	return res
+}
+
+func isValidTaskDefOverridePath(path string) bool {
+	for _, s := range invalidTaskDefOverridePathRegexp {
+		re := regexp.MustCompile(fmt.Sprintf(`^%s$`, s))
+		if re.MatchString(path) {
+			return false
+		}
+	}
+	return true
 }
 
 // convertStorageOpts converts a manifest Storage field into template data structures which can be used

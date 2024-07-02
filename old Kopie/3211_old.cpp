@@ -1,5 +1,4 @@
 /***************************************************************************
-    return false;
  *   Copyright (C) 2009 by Andrey Afletdinov <fheroes2@gmail.com>          *
  *                                                                         *
  *   Part of the Free Heroes2 Engine:                                      *
@@ -1605,7 +1604,7 @@ bool Interface::SkipRedrawTileBottom4Hero( const uint8_t tileset, const uint8_t 
         break;
     }
 
-    return Maps::Tiles::isShadowSprite( icn, icnIndex );
+    return false;
 }
 
 void Maps::Tiles::RedrawBottom4Hero( fheroes2::Image & dst, const Rect & visibleTileROI, const Interface::GameArea & area ) const

@@ -1,5 +1,4 @@
 package html
-
 import (
 	"fmt"
 	"html/template"

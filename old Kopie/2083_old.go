@@ -1,6 +1,4 @@
 package asp
-		s.Assert(s.config.Get(k, nil) != nil, "error calling package(): %s is not a known config value", k)
-		s.config.IndexAssign(pyString(k), v)
 
 import (
 	"encoding/json"
@@ -200,7 +198,8 @@ func pkg(s *scope, args []pyObject) pyObject {
 	s.Assert(s.pkg.NumTargets() == 0, "package() must be called before any build targets are defined")
 	for k, v := range s.locals {
 		k = strings.ToUpper(k)
-		configVal := s.config.Get(k, nil)
+		s.Assert(s.config.Get(k, nil) != nil, "error calling package(): %s is not a known config value", k)
+		s.config.IndexAssign(pyString(k), v)
 		s.Assert(configVal != nil, "error calling package(): %s is not a known config value", k)
 
 		// Merge the config value together for plugins

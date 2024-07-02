@@ -292,7 +292,6 @@ class RestService(BaseService):
                 potential_links.append(pl)
         return await self.get_service('planning_svc').sort_links(potential_links)
 
-    async def _build_and_apply_custom_link(self, agent, ability, operation_id):
         link = Link(operation=operation_id, command=ability.test, paw=agent.paw, ability=ability)
         link.apply_id(agent.host)
         return 'Assigned agent %s new task with ID=%s.' % (agent.paw, await self.apply_potential_link(link=link))

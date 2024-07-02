@@ -1,521 +1,342 @@
-# -*- coding: utf-8 -*-
-#
-# Copyright (c) 2013 Mortar Data
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not
-# use this file except in compliance with the License. You may obtain a copy of
-# the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations under
-# the License.
-#
-from __future__ import print_function
-
-import os
-import sys
-import tempfile
-
-import boto3
-from boto.s3 import key
-from botocore.exceptions import ClientError
-from mock import patch
-
-from helpers import skipOnTravis, unittest, with_config
-from luigi.contrib.s3 import (DeprecatedBotoClientException, FileNotFoundException,
-                              InvalidDeleteException, S3Client, S3Target)
-from luigi.target import MissingParentDirectory
-from moto import mock_s3, mock_sts
-from target_test import FileSystemTargetTestMixin
-
-if (3, 4, 0) <= sys.version_info[:3] < (3, 4, 3):
-    # spulec/moto#308
-    raise unittest.SkipTest('moto mock doesn\'t work with python3.4')
-
-
-AWS_ACCESS_KEY = "XXXXXXXXXXXXXXXXXXXX"
-AWS_SECRET_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-
-
-def create_bucket():
-    conn = boto3.resource('s3', region_name='us-east-1')
-    # We need to create the bucket since this is all in Moto's 'virtual' AWS account
-    conn.create_bucket(Bucket='mybucket')
-    return conn
-
-
-class TestS3Target(unittest.TestCase, FileSystemTargetTestMixin):
-
-    def setUp(self):
-        f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
-        self.tempFileContents = (
-            b"I'm a temporary file for testing\nAnd this is the second line\n"
-            b"This is the third.")
-        self.tempFilePath = f.name
-        f.write(self.tempFileContents)
-        f.close()
-        self.addCleanup(os.remove, self.tempFilePath)
-
-        self.mock_s3 = mock_s3()
-        self.mock_s3.start()
-        self.addCleanup(self.mock_s3.stop)
-
-    def create_target(self, format=None, **kwargs):
-        client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        create_bucket()
-        return S3Target('s3://mybucket/test_file', client=client, format=format, **kwargs)
-
-    def test_read(self):
-        client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        create_bucket()
-        client.put(self.tempFilePath, 's3://mybucket/tempfile')
-        t = S3Target('s3://mybucket/tempfile', client=client)
-        read_file = t.open()
-        file_str = read_file.read()
-        self.assertEqual(self.tempFileContents, file_str.encode('utf-8'))
-
-    def test_read_no_file(self):
-        t = self.create_target()
-        self.assertRaises(FileNotFoundException, t.open)
-
-    def test_read_no_file_sse(self):
-        t = self.create_target(encrypt_key=True)
-        self.assertRaises(FileNotFoundException, t.open)
-
-    def test_read_iterator_long(self):
-        # write a file that is 5X the boto buffersize
-        # to test line buffering
-        old_buffer = key.Key.BufferSize
-        key.Key.BufferSize = 2
-        try:
-            tempf = tempfile.NamedTemporaryFile(mode='wb', delete=False)
-            temppath = tempf.name
-            firstline = ''.zfill(key.Key.BufferSize * 5) + os.linesep
-            contents = firstline + 'line two' + os.linesep + 'line three'
-            tempf.write(contents.encode('utf-8'))
-            tempf.close()
-
-            client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-            create_bucket()
-            client.put(temppath, 's3://mybucket/largetempfile')
-            t = S3Target('s3://mybucket/largetempfile', client=client)
-            with t.open() as read_file:
-                lines = [line for line in read_file]
-        finally:
-            key.Key.BufferSize = old_buffer
-
-        self.assertEqual(3, len(lines))
-        self.assertEqual(firstline, lines[0])
-        self.assertEqual("line two" + os.linesep, lines[1])
-        self.assertEqual("line three", lines[2])
-
-    def test_get_path(self):
-        t = self.create_target()
-        path = t.path
-        self.assertEqual('s3://mybucket/test_file', path)
-
-    def test_get_path_sse(self):
-        t = self.create_target(encrypt_key=True)
-        path = t.path
-        self.assertEqual('s3://mybucket/test_file', path)
-
-
-class TestS3Client(unittest.TestCase):
-    def setUp(self):
-        f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
-        self.tempFilePath = f.name
-        self.tempFileContents = b"I'm a temporary file for testing\n"
-        f.write(self.tempFileContents)
-        f.close()
-        self.addCleanup(os.remove, self.tempFilePath)
-
-        self.mock_s3 = mock_s3()
-        self.mock_s3.start()
-        self.mock_sts = mock_sts()
-        self.mock_sts.start()
-        self.addCleanup(self.mock_s3.stop)
-        self.addCleanup(self.mock_sts.stop)
-
-    @patch('boto3.resource')
-    def test_init_without_init_or_config(self, mock):
-        """If no config or arn provided, boto3 client
-           should be called with default parameters.
-           Delegating ENV or Task Role credential handling
-           to boto3 itself.
-        """
-        S3Client().s3
-        mock.assert_called_with('s3', aws_access_key_id=None,
-                                aws_secret_access_key=None, aws_session_token=None)
-
-    @with_config({'s3': {'aws_access_key_id': 'foo', 'aws_secret_access_key': 'bar'}})
-    @patch('boto3.resource')
-    def test_init_with_config(self, mock):
-        S3Client().s3
-        mock.assert_called_with(
-            's3', aws_access_key_id='foo',
-            aws_secret_access_key='bar',
-            aws_session_token=None)
-
-    @patch('boto3.resource')
-    @patch('boto3.client')
-    @with_config({'s3': {'aws_role_arn': 'role', 'aws_role_session_name': 'name'}})
-    def test_init_with_config_and_roles(self, sts_mock, s3_mock):
-        S3Client().s3
-        sts_mock.client.assume_role.called_with(
-            RoleArn='role', RoleSessionName='name')
-
-    def test_put(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        s3_client.put(self.tempFilePath, 's3://mybucket/putMe')
-        self.assertTrue(s3_client.exists('s3://mybucket/putMe'))
-
-    def test_put_sse_deprecated(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        with self.assertRaises(DeprecatedBotoClientException):
-            s3_client.put(self.tempFilePath,
-                          's3://mybucket/putMe', encrypt_key=True)
-
-    def test_put_string(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        s3_client.put_string("SOMESTRING", 's3://mybucket/putString')
-        self.assertTrue(s3_client.exists('s3://mybucket/putString'))
-
-    def test_put_string_sse_deprecated(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        with self.assertRaises(DeprecatedBotoClientException):
-            s3_client.put('SOMESTRING',
-                          's3://mybucket/putMe', encrypt_key=True)
-
-    @skipOnTravis("passes and fails intermitantly, suspecting it's a race condition not handled by moto")
-    def test_put_multipart_multiple_parts_non_exact_fit(self):
-        """
-        Test a multipart put with two parts, where the parts are not exactly the split size.
-        """
-        # 5MB is minimum part size
-        part_size = 8388608
-        file_size = (part_size * 2) - 1000
-        self._run_multipart_test(part_size, file_size)
-
-    @skipOnTravis("passes and fails intermitantly, suspecting it's a race condition not handled by moto")
-    def test_put_multipart_multiple_parts_exact_fit(self):
-        """
-        Test a multipart put with multiple parts, where the parts are exactly the split size.
-        """
-        # 5MB is minimum part size
-        part_size = 8388608
-        file_size = part_size * 2
-        self._run_multipart_test(part_size, file_size)
-
-    def test_put_multipart_multiple_parts_with_sse_deprecated(self):
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        with self.assertRaises(DeprecatedBotoClientException):
-            s3_client.put_multipart('path', 'path', encrypt_key=True)
-
-    def test_put_multipart_empty_file(self):
-        """
-        Test a multipart put with an empty file.
-        """
-        # 5MB is minimum part size
-        part_size = 8388608
-        file_size = 0
-        self._run_multipart_test(part_size, file_size)
-
-    def test_put_multipart_less_than_split_size(self):
-        """
-        Test a multipart put with a file smaller than split size; should revert to regular put.
-        """
-        # 5MB is minimum part size
-        part_size = 8388608
-        file_size = 5000
-        self._run_multipart_test(part_size, file_size)
-
-    def test_exists(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        self.assertTrue(s3_client.exists('s3://mybucket/'))
-        self.assertTrue(s3_client.exists('s3://mybucket'))
-        self.assertFalse(s3_client.exists('s3://mybucket/nope'))
-        self.assertFalse(s3_client.exists('s3://mybucket/nope/'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempfile')
-        self.assertTrue(s3_client.exists('s3://mybucket/tempfile'))
-        self.assertFalse(s3_client.exists('s3://mybucket/temp'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempdir0_$folder$')
-        self.assertTrue(s3_client.exists('s3://mybucket/tempdir0'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempdir1/')
-        self.assertTrue(s3_client.exists('s3://mybucket/tempdir1'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempdir2/subdir')
-        self.assertTrue(s3_client.exists('s3://mybucket/tempdir2'))
-        self.assertFalse(s3_client.exists('s3://mybucket/tempdir'))
-
-    def test_get(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        s3_client.put(self.tempFilePath, 's3://mybucket/putMe')
-
-        tmp_file = tempfile.NamedTemporaryFile(delete=True)
-        tmp_file_path = tmp_file.name
-
-        s3_client.get('s3://mybucket/putMe', tmp_file_path)
-        with open(tmp_file_path, 'r') as f:
-            content = f.read()
-        self.assertEquals(content, self.tempFileContents.decode("utf-8"))
-        tmp_file.close()
-
-    def test_get_as_string(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        s3_client.put(self.tempFilePath, 's3://mybucket/putMe')
-
-        contents = s3_client.get_as_string('s3://mybucket/putMe')
-
-        self.assertEquals(contents, self.tempFileContents.decode("utf-8"))
-
-    def test_get_key(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        s3_client.put(self.tempFilePath, 's3://mybucket/key_to_find')
-        self.assertTrue(s3_client.get_key('s3://mybucket/key_to_find').key)
-        self.assertFalse(s3_client.get_key('s3://mybucket/does_not_exist'))
-
-    def test_isdir(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        self.assertTrue(s3_client.isdir('s3://mybucket'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempdir0_$folder$')
-        self.assertTrue(s3_client.isdir('s3://mybucket/tempdir0'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/tempdir1/')
-        self.assertTrue(s3_client.isdir('s3://mybucket/tempdir1'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/key')
-        self.assertFalse(s3_client.isdir('s3://mybucket/key'))
-
-    def test_mkdir(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        self.assertTrue(s3_client.isdir('s3://mybucket'))
-        s3_client.mkdir('s3://mybucket')
-
-        s3_client.mkdir('s3://mybucket/dir')
-        self.assertTrue(s3_client.isdir('s3://mybucket/dir'))
-
-        self.assertRaises(MissingParentDirectory,
-                          s3_client.mkdir, 's3://mybucket/dir/foo/bar', parents=False)
-
-        self.assertFalse(s3_client.isdir('s3://mybucket/dir/foo/bar'))
-
-    def test_listdir(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        s3_client.put_string("", 's3://mybucket/hello/frank')
-        s3_client.put_string("", 's3://mybucket/hello/world')
-
-        self.assertEqual(['s3://mybucket/hello/frank', 's3://mybucket/hello/world'],
-                         list(s3_client.listdir('s3://mybucket/hello')))
-
-    def test_list(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        s3_client.put_string("", 's3://mybucket/hello/frank')
-        s3_client.put_string("", 's3://mybucket/hello/world')
-
-        self.assertEqual(['frank', 'world'],
-                         list(s3_client.list('s3://mybucket/hello')))
-
-    def test_listdir_key(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        s3_client.put_string("", 's3://mybucket/hello/frank')
-        s3_client.put_string("", 's3://mybucket/hello/world')
-
-        self.assertEqual([True, True],
-                         [s3_client.exists('s3://' + x.bucket_name + '/' + x.key) for x in s3_client.listdir('s3://mybucket/hello', return_key=True)])
-
-    def test_list_key(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        s3_client.put_string("", 's3://mybucket/hello/frank')
-        s3_client.put_string("", 's3://mybucket/hello/world')
-
-        self.assertEqual([True, True],
-                         [s3_client.exists('s3://' + x.bucket_name + '/' + x.key) for x in s3_client.listdir('s3://mybucket/hello', return_key=True)])
-
-    def test_remove(self):
-        create_bucket()
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        self.assertRaises(
-            ClientError,
-            lambda: s3_client.remove('s3://bucketdoesnotexist/file')
-        )
-
-        self.assertFalse(s3_client.remove('s3://mybucket/doesNotExist'))
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/existingFile0')
-        self.assertTrue(s3_client.remove('s3://mybucket/existingFile0'))
-        self.assertFalse(s3_client.exists('s3://mybucket/existingFile0'))
-
-        self.assertRaises(
-            InvalidDeleteException,
-            lambda: s3_client.remove('s3://mybucket/')
-        )
-
-        self.assertRaises(
-            InvalidDeleteException,
-            lambda: s3_client.remove('s3://mybucket')
-        )
-
-        s3_client.put(self.tempFilePath, 's3://mybucket/removemedir/file')
-        self.assertRaises(
-            InvalidDeleteException,
-            lambda: s3_client.remove(
-                's3://mybucket/removemedir', recursive=False)
-        )
-
-        # test that the marker file created by Hadoop S3 Native FileSystem is removed
-        s3_client.put(self.tempFilePath, 's3://mybucket/removemedir/file')
-        s3_client.put_string("", 's3://mybucket/removemedir_$folder$')
-        self.assertTrue(s3_client.remove('s3://mybucket/removemedir'))
-        self.assertFalse(s3_client.exists(
-            's3://mybucket/removemedir_$folder$'))
-
-    @skipOnTravis("passes and fails intermitantly, suspecting it's a race condition not handled by moto")
-    def test_copy_multiple_parts_non_exact_fit(self):
-        """
-        Test a multipart put with two parts, where the parts are not exactly the split size.
-        """
-        # First, put a file into S3
-        self._run_copy_test(self.test_put_multipart_multiple_parts_non_exact_fit)
-
-    @skipOnTravis("passes and fails intermitantly, suspecting it's a race condition not handled by moto")
-    def test_copy_multiple_parts_exact_fit(self):
-        """
-        Test a copy multiple parts, where the parts are exactly the split size.
-        """
-        self._run_copy_test(self.test_put_multipart_multiple_parts_exact_fit)
-
-    def test_copy_less_than_split_size(self):
-        """
-        Test a copy with a file smaller than split size; should revert to regular put.
-        """
-        self._run_copy_test(self.test_put_multipart_less_than_split_size)
-
-    def test_copy_empty_file(self):
-        """
-        Test a copy with an empty file.
-        """
-        self._run_copy_test(self.test_put_multipart_empty_file)
-
-    @mock_s3
-    @skipOnTravis('https://travis-ci.org/spotify/luigi/jobs/145895385')
-    def test_copy_dir(self):
-        """
-        Test copying 20 files from one folder to another
-        """
-        create_bucket()
-        n = 20
-        copy_part_size = (1024 ** 2) * 5
-
-        # Note we can't test the multipart copy due to moto issue #526
-        # so here I have to keep the file size smaller than the copy_part_size
-        file_size = 5000
-
-        s3_dir = 's3://mybucket/copydir/'
-        file_contents = b"a" * file_size
-        tmp_file = tempfile.NamedTemporaryFile(mode='wb', delete=True)
-        tmp_file_path = tmp_file.name
-        tmp_file.write(file_contents)
-        tmp_file.flush()
-
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-
-        for i in range(n):
-            file_path = s3_dir + str(i)
-            s3_client.put_multipart(tmp_file_path, file_path)
-            self.assertTrue(s3_client.exists(file_path))
-
-        s3_dest = 's3://mybucket/copydir_new/'
-        response = s3_client.copy(s3_dir, s3_dest, threads=10, part_size=copy_part_size)
-
-        self._run_copy_response_test(response)
-
-        for i in range(n):
-            original_size = s3_client.get_key(s3_dir + str(i)).size
-            copy_size = s3_client.get_key(s3_dest + str(i)).size
-            self.assertEqual(original_size, copy_size)
-
-    @mock_s3
-    def _run_copy_test(self, put_method, is_multipart=False):
-        create_bucket()
-        # Run the method to put the file into s3 into the first place
-        put_method()
-
-        # As all the multipart put methods use `self._run_multipart_test`
-        # we can just use this key
-        original = 's3://mybucket/putMe'
-        copy = 's3://mybucket/putMe_copy'
-
-        # Copy the file from old location to new
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        if is_multipart:
-            # 5MB is minimum part size, use it here so we don't have to generate huge files to test
-            # the multipart upload in moto
-            part_size = (1024 ** 2) * 5
-            response = s3_client.copy(original, copy, part_size=part_size, threads=4)
+from os.path import dirname, exists, join, relpath
+
+from mmdet.core import BitmapMasks, PolygonMasks, build_optimizer
+
+
+def _get_config_directory():
+    """ Find the predefined detector config directory """
+    try:
+        # Assume we are running in the source mmdetection repo
+        repo_dpath = dirname(dirname(__file__))
+    except NameError:
+        # For IPython development when this __file__ is not defined
+        import mmdet
+        repo_dpath = dirname(dirname(mmdet.__file__))
+    config_dpath = join(repo_dpath, 'configs')
+    if not exists(config_dpath):
+        raise Exception('Cannot find config path')
+    return config_dpath
+
+
+def test_config_build_detector():
+    """
+    Test that all detection models defined in the configs can be initialized.
+    """
+    from mmcv import Config
+    from mmdet.models import build_detector
+
+    config_dpath = _get_config_directory()
+    print('Found config_dpath = {!r}'.format(config_dpath))
+
+    import glob
+    config_fpaths = list(glob.glob(join(config_dpath, '**', '*.py')))
+    config_fpaths = [p for p in config_fpaths if p.find('_base_') == -1]
+    config_names = [relpath(p, config_dpath) for p in config_fpaths]
+
+    print('Using {} config files'.format(len(config_names)))
+
+    for config_fname in config_names:
+        config_fpath = join(config_dpath, config_fname)
+        config_mod = Config.fromfile(config_fpath)
+
+        config_mod.model
+        config_mod.train_cfg
+        config_mod.test_cfg
+        print('Building detector, config_fpath = {!r}'.format(config_fpath))
+
+        # Remove pretrained keys to allow for testing in an offline environment
+        if 'pretrained' in config_mod.model:
+            config_mod.model['pretrained'] = None
+
+        detector = build_detector(
+            config_mod.model,
+            train_cfg=config_mod.train_cfg,
+            test_cfg=config_mod.test_cfg)
+        assert detector is not None
+
+        assert optimizer is not None
+
+        if 'roi_head' in config_mod.model.keys():
+            # for two stage detector
+            # detectors must have bbox head
+            assert detector.roi_head.with_bbox and detector.with_bbox
+            assert detector.roi_head.with_mask == detector.with_mask
+
+            head_config = config_mod.model['roi_head']
+            _check_roi_head(head_config, detector.roi_head)
+        # else:
+        #     # for single stage detector
+        #     # detectors must have bbox head
+        #     # assert detector.with_bbox
+        #     head_config = config_mod.model['bbox_head']
+        #     _check_bbox_head(head_config, detector.bbox_head)
+
+
+def test_config_data_pipeline():
+    """
+    Test whether the data pipeline is valid and can process corner cases.
+    CommandLine:
+        xdoctest -m tests/test_config.py test_config_build_data_pipeline
+    """
+    from mmcv import Config
+    from mmdet.datasets.pipelines import Compose
+    import numpy as np
+
+    config_dpath = _get_config_directory()
+    print('Found config_dpath = {!r}'.format(config_dpath))
+
+    # Only tests a representative subset of configurations
+    # TODO: test pipelines using Albu, current Albu throw None given empty GT
+    config_names = [
+        'wider_face/ssd300_wider_face.py',
+        'pascal_voc/ssd300_voc0712.py',
+        'pascal_voc/ssd512_voc0712.py',
+        # 'albu_example/mask_rcnn_r50_fpn_1x.py',
+        'foveabox/fovea_align_r50_fpn_gn-head_mstrain_640-800_4x4_2x_coco.py',
+        'mask_rcnn/mask_rcnn_r50_fpn_poly_1x_coco.py',
+        'fp16/mask_rcnn_r50_fpn_fp16_1x_coco.py',
+    ]
+
+    def dummy_masks(h, w, num_obj=3, mode='bitmap'):
+        assert mode in ('polygon', 'bitmap')
+        if mode == 'bitmap':
+            masks = np.random.randint(0, 2, (num_obj, h, w), dtype=np.uint8)
+            masks = BitmapMasks(masks, h, w)
         else:
-            response = s3_client.copy(original, copy, threads=4)
+            masks = []
+            for i in range(num_obj):
+                masks.append([])
+                masks[-1].append(
+                    np.random.uniform(0, min(h - 1, w - 1), (8 + 4 * i, )))
+                masks[-1].append(
+                    np.random.uniform(0, min(h - 1, w - 1), (10 + 4 * i, )))
+            masks = PolygonMasks(masks, h, w)
+        return masks
 
-        self._run_copy_response_test(response)
+    print('Using {} config files'.format(len(config_names)))
 
-        # We can't use etags to compare between multipart and normal keys,
-        # so we fall back to using the file size
-        original_size = s3_client.get_key(original).size
-        copy_size = s3_client.get_key(copy).size
-        self.assertEqual(original_size, copy_size)
+    for config_fname in config_names:
+        config_fpath = join(config_dpath, config_fname)
+        config_mod = Config.fromfile(config_fpath)
 
-    @mock_s3
-    def _run_multipart_test(self, part_size, file_size, **kwargs):
-        create_bucket()
-        file_contents = b"a" * file_size
+        # remove loading pipeline
+        loading_pipeline = config_mod.train_pipeline.pop(0)
+        loading_ann_pipeline = config_mod.train_pipeline.pop(0)
+        config_mod.test_pipeline.pop(0)
 
-        s3_path = 's3://mybucket/putMe'
-        tmp_file = tempfile.NamedTemporaryFile(mode='wb', delete=True)
-        tmp_file_path = tmp_file.name
-        tmp_file.write(file_contents)
-        tmp_file.flush()
+        train_pipeline = Compose(config_mod.train_pipeline)
+        test_pipeline = Compose(config_mod.test_pipeline)
 
-        s3_client = S3Client(AWS_ACCESS_KEY, AWS_SECRET_KEY)
+        print(
+            'Building data pipeline, config_fpath = {!r}'.format(config_fpath))
 
-        s3_client.put_multipart(tmp_file_path, s3_path,
-                                part_size=part_size, **kwargs)
-        self.assertTrue(s3_client.exists(s3_path))
-        file_size = os.path.getsize(tmp_file.name)
-        key_size = s3_client.get_key(s3_path).size
-        self.assertEqual(file_size, key_size)
-        tmp_file.close()
+        print('Test training data pipeline: \n{!r}'.format(train_pipeline))
+        img = np.random.randint(0, 255, size=(888, 666, 3), dtype=np.uint8)
+        if loading_pipeline.get('to_float32', False):
+            img = img.astype(np.float32)
+        mode = 'bitmap' if loading_ann_pipeline.get('poly2mask',
+                                                    True) else 'polygon'
+        results = dict(
+            filename='test_img.png',
+            img=img,
+            img_shape=img.shape,
+            ori_shape=img.shape,
+            gt_bboxes=np.array([[35.2, 11.7, 39.7, 15.7]], dtype=np.float32),
+            gt_labels=np.array([1], dtype=np.int64),
+            gt_masks=dummy_masks(img.shape[0], img.shape[1], mode=mode),
+        )
+        results['bbox_fields'] = ['gt_bboxes']
+        results['mask_fields'] = ['gt_masks']
+        output_results = train_pipeline(results)
+        assert output_results is not None
 
-    def _run_copy_response_test(self, response):
-        num, size = response
-        self.assertIsInstance(response, tuple)
+        print('Test testing data pipeline: \n{!r}'.format(test_pipeline))
+        results = dict(
+            filename='test_img.png',
+            img=img,
+            img_shape=img.shape,
+            ori_shape=img.shape,
+            gt_bboxes=np.array([[35.2, 11.7, 39.7, 15.7]], dtype=np.float32),
+            gt_labels=np.array([1], dtype=np.int64),
+            gt_masks=dummy_masks(img.shape[0], img.shape[1], mode=mode),
+        )
+        results['bbox_fields'] = ['gt_bboxes']
+        results['mask_fields'] = ['gt_masks']
+        output_results = test_pipeline(results)
+        assert output_results is not None
 
-        # only check >= minimum possible values
-        self.assertGreaterEqual(num, 1)
-        self.assertGreaterEqual(size, 0)
+        # test empty GT
+        print('Test empty GT with training data pipeline: \n{!r}'.format(
+            train_pipeline))
+        results = dict(
+            filename='test_img.png',
+            img=img,
+            img_shape=img.shape,
+            ori_shape=img.shape,
+            gt_bboxes=np.zeros((0, 4), dtype=np.float32),
+            gt_labels=np.array([], dtype=np.int64),
+            gt_masks=dummy_masks(
+                img.shape[0], img.shape[1], num_obj=0, mode=mode),
+        )
+        results['bbox_fields'] = ['gt_bboxes']
+        results['mask_fields'] = ['gt_masks']
+        output_results = train_pipeline(results)
+        assert output_results is not None
+
+        print('Test empty GT with testing data pipeline: \n{!r}'.format(
+            test_pipeline))
+        results = dict(
+            filename='test_img.png',
+            img=img,
+            img_shape=img.shape,
+            ori_shape=img.shape,
+            gt_bboxes=np.zeros((0, 4), dtype=np.float32),
+            gt_labels=np.array([], dtype=np.int64),
+            gt_masks=dummy_masks(
+                img.shape[0], img.shape[1], num_obj=0, mode=mode),
+        )
+        results['bbox_fields'] = ['gt_bboxes']
+        results['mask_fields'] = ['gt_masks']
+        output_results = test_pipeline(results)
+        assert output_results is not None
+
+
+def _check_roi_head(config, head):
+    # check consistency between head_config and roi_head
+    assert config['type'] == head.__class__.__name__
+
+    # check roi_align
+    bbox_roi_cfg = config.bbox_roi_extractor
+    bbox_roi_extractor = head.bbox_roi_extractor
+    _check_roi_extractor(bbox_roi_cfg, bbox_roi_extractor)
+
+    # check bbox head infos
+    bbox_cfg = config.bbox_head
+    bbox_head = head.bbox_head
+    _check_bbox_head(bbox_cfg, bbox_head)
+
+    if head.with_mask:
+        # check roi_align
+        if config.mask_roi_extractor:
+            mask_roi_cfg = config.mask_roi_extractor
+            mask_roi_extractor = head.mask_roi_extractor
+            _check_roi_extractor(mask_roi_cfg, mask_roi_extractor,
+                                 bbox_roi_extractor)
+
+        # check mask head infos
+        mask_head = head.mask_head
+        mask_cfg = config.mask_head
+        _check_mask_head(mask_cfg, mask_head)
+
+    # check arch specific settings, e.g., cascade/htc
+    if config['type'] in ['CascadeRoIHead', 'HybridTaskCascadeRoIHead']:
+        assert config.num_stages == len(head.bbox_head)
+        assert config.num_stages == len(head.bbox_roi_extractor)
+
+        if head.with_mask:
+            assert config.num_stages == len(head.mask_head)
+            assert config.num_stages == len(head.mask_roi_extractor)
+
+    elif config['type'] in ['MaskScoringRoIHead']:
+        assert (hasattr(head, 'mask_iou_head')
+                and head.mask_iou_head is not None)
+        mask_iou_cfg = config.mask_iou_head
+        mask_iou_head = head.mask_iou_head
+        assert (mask_iou_cfg.fc_out_channels ==
+                mask_iou_head.fc_mask_iou.in_features)
+
+    elif config['type'] in ['GridRoIHead']:
+        grid_roi_cfg = config.grid_roi_extractor
+        grid_roi_extractor = head.grid_roi_extractor
+        _check_roi_extractor(grid_roi_cfg, grid_roi_extractor,
+                             bbox_roi_extractor)
+
+        config.grid_head.grid_points = head.grid_head.grid_points
+
+
+def _check_roi_extractor(config, roi_extractor, prev_roi_extractor=None):
+    import torch.nn as nn
+    if isinstance(roi_extractor, nn.ModuleList):
+        if prev_roi_extractor:
+            prev_roi_extractor = prev_roi_extractor[0]
+        roi_extractor = roi_extractor[0]
+
+    assert (len(config.featmap_strides) == len(roi_extractor.roi_layers))
+    assert (config.out_channels == roi_extractor.out_channels)
+    from torch.nn.modules.utils import _pair
+    assert (_pair(
+        config.roi_layer.out_size) == roi_extractor.roi_layers[0].out_size)
+
+    if 'use_torchvision' in config.roi_layer:
+        assert (config.roi_layer.use_torchvision ==
+                roi_extractor.roi_layers[0].use_torchvision)
+    elif 'aligned' in config.roi_layer:
+        assert (
+            config.roi_layer.aligned == roi_extractor.roi_layers[0].aligned)
+
+    if prev_roi_extractor:
+        assert (roi_extractor.roi_layers[0].aligned ==
+                prev_roi_extractor.roi_layers[0].aligned)
+        assert (roi_extractor.roi_layers[0].use_torchvision ==
+                prev_roi_extractor.roi_layers[0].use_torchvision)
+
+
+def _check_mask_head(mask_cfg, mask_head):
+    import torch.nn as nn
+    if isinstance(mask_cfg, list):
+        for single_mask_cfg, single_mask_head in zip(mask_cfg, mask_head):
+            _check_mask_head(single_mask_cfg, single_mask_head)
+    elif isinstance(mask_head, nn.ModuleList):
+        for single_mask_head in mask_head:
+            _check_mask_head(mask_cfg, single_mask_head)
+    else:
+        assert mask_cfg['type'] == mask_head.__class__.__name__
+        assert mask_cfg.in_channels == mask_head.in_channels
+        assert (
+            mask_cfg.conv_out_channels == mask_head.conv_logits.in_channels)
+        class_agnostic = mask_cfg.get('class_agnostic', False)
+        out_dim = (1 if class_agnostic else mask_cfg.num_classes)
+        assert mask_head.conv_logits.out_channels == out_dim
+
+
+def _check_bbox_head(bbox_cfg, bbox_head):
+    import torch.nn as nn
+    if isinstance(bbox_cfg, list):
+        for single_bbox_cfg, single_bbox_head in zip(bbox_cfg, bbox_head):
+            _check_bbox_head(single_bbox_cfg, single_bbox_head)
+    elif isinstance(bbox_head, nn.ModuleList):
+        for single_bbox_head in bbox_head:
+            _check_bbox_head(bbox_cfg, single_bbox_head)
+    else:
+        assert bbox_cfg['type'] == bbox_head.__class__.__name__
+        assert bbox_cfg.in_channels == bbox_head.in_channels
+        with_cls = bbox_cfg.get('with_cls', True)
+        if with_cls:
+            fc_out_channels = bbox_cfg.get('fc_out_channels', 2048)
+            assert (fc_out_channels == bbox_head.fc_cls.in_features)
+            assert bbox_cfg.num_classes + 1 == bbox_head.fc_cls.out_features
+
+        with_reg = bbox_cfg.get('with_reg', True)
+        if with_reg:
+            out_dim = (4 if bbox_cfg.reg_class_agnostic else 4 *
+                       bbox_cfg.num_classes)
+            assert bbox_head.fc_reg.out_features == out_dim
+
+
+def _check_anchorhead(config, head):
+    # check consistency between head_config and roi_head
+    assert config['type'] == head.__class__.__name__
+    assert config.in_channels == head.in_channels
+
+    num_classes = (
+        config.num_classes -
+        1 if config.loss_cls.get('use_sigmoid', False) else config.num_classes)
+    if config['type'] == 'ATSSHead':
+        assert (config.feat_channels == head.atss_cls.in_channels)
+        assert (config.feat_channels == head.atss_reg.in_channels)
+        assert (config.feat_channels == head.atss_centerness.in_channels)
+    else:
+        assert (config.in_channels == head.conv_cls.in_channels)
+        assert (config.in_channels == head.conv_reg.in_channels)
+        assert (head.conv_cls.out_channels == num_classes * head.num_anchors)
+        assert head.fc_reg.out_channels == 4 * head.num_anchors

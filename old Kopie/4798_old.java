@@ -1,7 +1,5 @@
 package de.danoeh.antennapod.fragment;
 
-    private void performSearch(String query) {
-
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipboardManager;
@@ -146,7 +144,8 @@ public class AddFeedFragment extends Fragment {
         startActivity(intent);
     }
 
-    private void performSearch(EditText searchEditText) {
+    private void performSearch(String query) {
+
         String query = searchEditText.getText().toString();
         if (query.matches("http[s]?://.*")) {
             addUrl(query);

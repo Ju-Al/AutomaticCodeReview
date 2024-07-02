@@ -208,8 +208,6 @@ public class Producer {
                                 Thread.sleep(3000);
                             } catch (InterruptedException ignored) {
                             }
-                        }
-                        if (messageNum > 0 && ++num >= msgNumLimit) {
                             break;
                         }
                     }

@@ -1,5 +1,4 @@
 /*
-        logger::info("sumeragi")    <<  "pro:"  <<  config::PeerServiceConfig::getInstance().getPrivateKey();
 Copyright Soramitsu Co., Ltd. 2016 All Rights Reserved.
 http://soramitsu.co.jp
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -262,7 +261,7 @@ namespace sumeragi {
 
         logger::info("sumeragi")    <<  "hash:" <<  event.transaction().hash();
         logger::info("sumeragi")    <<  "pub:"  <<  config::PeerServiceConfig::getInstance().getMyPublicKey();
-        logger::info("sumeragi")    <<  "pro:"  <<  config::PeerServiceConfig::getInstance().getMyPrivateKey();
+        logger::info("sumeragi")    <<  "pro:"  <<  config::PeerServiceConfig::getInstance().getPrivateKey();
         logger::info("sumeragi")    <<  "sog:"  <<  signature::sign(
                                                     event.transaction().hash(),
                                                     config::PeerServiceConfig::getInstance().getMyPublicKey(),

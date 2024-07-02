@@ -1,56 +1,126 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-            Utf8String requestUtf8 = request.Path.ToUtf8String(TextEncoder.Utf8);
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
+using Microsoft.Net.Sockets;
 using System;
+using System.Buffers;
+using System.Collections.Sequences;
+using System.Diagnostics;
 using System.Text;
+using System.Text.Formatting;
 using System.Text.Http;
-using System.Text.Http.SingleSegment;
 using System.Text.Utf8;
 
 namespace Microsoft.Net.Http
 {
-    public class ApiRoutingTable<TRequestId>
+    public class TcpConnectionFormatter : ITextOutput, IDisposable
     {
-        const int tablecapacity = 20;
-        byte[][] _uris = new byte[tablecapacity][];
-        TRequestId[] _requestIds = new TRequestId[tablecapacity];
-        HttpMethod[] _verbs = new HttpMethod[tablecapacity];
-        Action<HttpRequest, TcpConnectionFormatter>[] _handlers = new Action<HttpRequest, TcpConnectionFormatter>[tablecapacity];
-        int _count;
+        static byte[] s_terminator = new Utf8String("0\r\n\r\n").Bytes.ToArray();
+        const int ChunkPrefixSize = 10;
 
-        public TRequestId GetRequestId(HttpRequestLine requestLine)
+        TcpConnection _connection;
+        int _written;
+        byte[] _buffer;
+        bool _headerSent;
+
+        public TcpConnectionFormatter(TcpConnection connection, int bufferSize = 4096)
         {
-            for(int i=0; i<_count; i++) {
-                if (requestLine.RequestUri.Equals(_uris[i]) && requestLine.Method == _verbs[i]) return _requestIds[i];
-            }
-            return default(TRequestId);
+            _connection = connection;
+            _buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
         }
 
-        public bool TryHandle(HttpRequest request, TcpConnectionFormatter response)
+        public TextEncoder Encoding => TextEncoder.InvariantUtf8;
+
+        public Span<byte> Buffer {
+            get {
+                var buffer = _buffer.Slice(ChunkPrefixSize + _written);
+                if (buffer.Length > 2) return buffer.Slice(0, buffer.Length - 2);
+                return Span<byte>.Empty;
+            }
+        }
+
+        public void Advance(int bytes)
         {
-            // TODO: this should not allocate new string
-            Utf8String requestUtf8 = request.Path.ToUtf8String(TextEncoder.InvariantUtf8);
-            for (int i = 0; i < _count; i++)
+            _written += bytes;
+            if (_written >= _buffer.Length) throw new InvalidOperationException();
+        }
+
+        public void Enlarge(int desiredBufferLength = 0)
+        {
+            if (_written < 1) throw new NotImplementedException();
+            Send();
+            _written = 0;
+        }
+
+        private void Send()
+        {
+            ReadOnlySpan<byte> toSend;
+            // if send headers
+            if (!_headerSent)
             {
-                // TODO: this should check the verb too
-                if (requestUtf8.Equals(new Utf8String(_uris[i])))
-                {
-                    _handlers[i](request, response);
-                    return true;
-                }
+                toSend = _buffer.Slice(ChunkPrefixSize, _written);
+                _written = 0;
+                _headerSent = true;
             }
-            return false;
+            else
+            {
+                var chunkPrefixBuffer = _buffer.Slice(0, ChunkPrefixSize);
+                var prefixLength = WriteChunkPrefix(chunkPrefixBuffer, _written);
+
+                _buffer[ChunkPrefixSize + _written++] = 13;
+                _buffer[ChunkPrefixSize + _written++] = 10;
+
+                toSend = _buffer.Slice(ChunkPrefixSize - prefixLength, _written + prefixLength);
+                _written = 0;
+            }
+
+            var array = toSend.ToArray();
+            Console.WriteLine(new Utf8String(toSend).ToString());
+            _connection.Send(toSend);
         }
 
-        public void Add(HttpMethod method, string requestUri, TRequestId requestId, Action<HttpRequest, TcpConnectionFormatter> handler = null)
+        void Finish()
         {
-            if (_count == tablecapacity) throw new NotImplementedException("ApiReoutingTable does not resize yet.");
-            _uris[_count] = new Utf8String(requestUri).Bytes.ToArray();
-            _requestIds[_count] = requestId;
-            _verbs[_count] = method;
-            _handlers[_count] = handler;
-            _count++;
+            if (_written > 0)
+            {
+                Send();
+                _connection.Send((ReadOnlySpan<byte>)s_terminator);
+            }
+        }
+
+        public void Dispose()
+        {
+            Finish();
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = null;
+        }
+        int WriteChunkPrefix(Span<byte> chunkPrefixBuffer, int chunkLength)
+        {
+            if (!PrimitiveFormatter.TryFormat(chunkLength, chunkPrefixBuffer, out var written, 'X', EncodingData.InvariantUtf8))
+            {
+                throw new Exception("cannot format chunk length");
+            }
+
+            for (int i = written - 1; i >= 0; i--)
+            {
+                chunkPrefixBuffer[ChunkPrefixSize - written + i - 2] = chunkPrefixBuffer[i];
+            }
+
+            chunkPrefixBuffer[ChunkPrefixSize - 2] = 13;
+            chunkPrefixBuffer[ChunkPrefixSize - 1] = 10;
+
+            return written + 2;
+        }
+
+        /// <summary>
+        ///  Append End of Headers
+        /// </summary>
+        public void AppendEoh()
+        {
+            if (_headerSent) throw new Exception("headers already sent");
+            this.AppendHttpNewLine();
+            Send();
         }
     }
 }

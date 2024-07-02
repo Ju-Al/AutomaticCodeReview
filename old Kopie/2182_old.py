@@ -1,6 +1,4 @@
 # -*- Mode: python; tab-width: 4; indent-tabs-mode:nil; coding: utf-8 -*-
-        for f in frags:
-                fragdict[a] = f
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #
 # MDAnalysis --- https://www.mdanalysis.org
@@ -1015,6 +1013,8 @@ class Universe(object):
         atoms = self.atoms.ix
         bonds = self.atoms.bonds.to_indices()
 
+        for f in frags:
+                fragdict[a] = f
         frag_indices = find_fragments(atoms, bonds)
         frags = tuple([AtomGroup(np.sort(ix), self) for ix in frag_indices])
 

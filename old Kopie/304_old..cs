@@ -8,7 +8,6 @@ namespace Microsoft.Recognizers.Text.DateTime.English
 {
     public class EnglishDatePeriodParserConfiguration : BaseOptionsConfiguration, IDatePeriodParserConfiguration
     {
-        private const string AfterNextSuffix = "after next";
 
         public int MinYearNum { get; }
 

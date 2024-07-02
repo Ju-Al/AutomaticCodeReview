@@ -1,9 +1,4 @@
 <?php
-	 * @param CriticalCSS  $critical_css Critical CSS instance.
-	 * @param Options_Data $options      WP Rocket options.
-	public function __construct( CriticalCSS $critical_css, Options_Data $options ) {
-		$this->critical_css = $critical_css;
-		$this->options      = $options;
 
 namespace WP_Rocket\Engine\Optimization;
 
@@ -62,7 +57,11 @@ class AsyncCSS {
 	/**
 	 * Creates an instance of the DOM Handler.
 	 *
-	 * @param Options_Data $options        WP Rocket options.
+	 * @param CriticalCSS  $critical_css Critical CSS instance.
+	public function __construct( CriticalCSS $critical_css, Options_Data $options ) {
+		$this->critical_css = $critical_css;
+		$this->options      = $options;
+	 * @param Options_Data $options      WP Rocket options.
 	 * @param array        $excluded_hrefs Optional. Array of URLs to exclude.
 	 * @param string       $xpath_query    XPath query.
 	 */

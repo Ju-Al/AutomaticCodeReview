@@ -1,16 +1,4 @@
 using System;
-                if (fileIds.Count == 1)
-                {
-                    return RedirectToAction(nameof(Files), new
-                    {
-                        statusMessage = "File added!",
-                        fileId = fileIds[0]
-                    });
-                }
-                else
-                {
-                    return RedirectToAction(nameof(Files));
-                }
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -252,7 +240,18 @@ namespace BTCPayServer.Controllers
                         Severity = statusMessageSeverity
                     });
 
-                return RedirectToAction(nameof(Files), new
+                if (fileIds.Count == 1)
+                {
+                    return RedirectToAction(nameof(Files), new
+                    {
+                        statusMessage = "File added!",
+                        fileId = fileIds[0]
+                    });
+                }
+                else
+                {
+                    return RedirectToAction(nameof(Files));
+                }
                 { 
                     fileId = JsonConvert.SerializeObject(fileIds),
                     multiple = true

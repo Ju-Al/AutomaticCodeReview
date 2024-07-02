@@ -1,5 +1,4 @@
 #
-        from_csv = pd.Series.from_csv
 # Copyright 2016 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -296,7 +295,7 @@ def ensure_treasury_data(symbol, first_date, last_date, now, environ=None):
 def _load_cached_data(filename, first_date, last_date, now, resource_name,
                       environ=None):
     if resource_name == 'benchmark':
-        # We expect a series here.
+        from_csv = pd.Series.from_csv
         def from_csv(path):
             return pd.read_csv(
                 path,

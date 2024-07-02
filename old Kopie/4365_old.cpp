@@ -282,7 +282,6 @@ int get_gpu(const InitArguments& args) {
   }
   return use_gpu;
 }
-
 bool check_arg(char const* arg, char const* expected);
 bool check_int_arg(char const* arg, char const* expected, int* value);
 bool check_str_arg(char const* arg, char const* expected, std::string& value);

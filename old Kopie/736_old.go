@@ -1,7 +1,4 @@
 // Copyright (C) 2019-2020 Algorand, Inc.
-	var addrWithChecksum []byte
-	addrWithChecksum = append(addr[:], addr.GetChecksum()...)
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,7 +80,9 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 
 // String returns a string representation of Address
 func (addr Address) String() string {
-	addrWithChecksum := make([]byte, crypto.DigestSize+checksumLength)
+	var addrWithChecksum []byte
+	addrWithChecksum = append(addr[:], addr.GetChecksum()...)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addrWithChecksum)
 	copy(addrWithChecksum[:crypto.DigestSize], addr[:])
 	shortAddressHash := crypto.Hash(addr[:])
 	copy(addrWithChecksum[crypto.DigestSize:], shortAddressHash[len(shortAddressHash)-checksumLength:])

@@ -1,5 +1,4 @@
 // +build relic
-		return nil, nil, nil, nil
 
 package crypto
 
@@ -152,7 +151,7 @@ func (s *feldmanVSSQualState) End() (PrivateKey, PublicKey, []PublicKey, error) 
 	// If the leader is disqualified, all keys are ignored
 	// otherwise, the keys are valid
 	if s.disqualified {
-		return nil, nil, nil, errors.New("leader is disquified")
+		return nil, nil, nil, nil
 	}
 
 	// private key of the current node

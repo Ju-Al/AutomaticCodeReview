@@ -1,5 +1,4 @@
 /*
-      walPath = new Path(walPath, FileType.RECOVERY.getDirectory());
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -49,7 +48,7 @@ public class RecoveryPath {
       // drop wal
       walPath = walPath.getParent();
 
-      walPath = new Path(walPath,
+      walPath = new Path(walPath, FileType.RECOVERY.getDirectory());
           FileType.RECOVERY.getDirectory() + '/' + context.getUniqueNameAllocator().getNextName());
       walPath = new Path(walPath, uuid);
 

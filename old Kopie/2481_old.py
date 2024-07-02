@@ -1,19 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-        if sys.hexversion >= 0x03050000:
-            # On Python >= 3.5 we can reverse the ordereddict in-place and thus
-            # apply an additional performance improvement in history_iter.
-            # On my machine, this gets us down from 550ms to 72us with 500k old
-            # items.
-            history = history_iter(start_time, reverse=True)
-        else:
-            # On Python 3.4, we can't do that, so we'd need to copy the entire
-            # history to a list. There, filter first and then reverse it here.
-            history = reversed(list(history_iter(start_time, reverse=False)))
-
-        return 'text/html', json.dumps(list(history))
-        return 'text/html', jinja.render('history.html', title='History',
-                session_interval=config.get('ui', 'history-session-interval'))
 # Copyright 2016 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
@@ -269,7 +255,20 @@ def qute_history(url):
         except ValueError as e:
             raise QuteSchemeError("Query parameter start_time is invalid", e)
 
-        return 'text/html', json.dumps(history_data(start_time))
+        if sys.hexversion >= 0x03050000:
+            # On Python >= 3.5 we can reverse the ordereddict in-place and thus
+            # apply an additional performance improvement in history_iter.
+            # On my machine, this gets us down from 550ms to 72us with 500k old
+            # items.
+            history = history_iter(start_time, reverse=True)
+        else:
+            # On Python 3.4, we can't do that, so we'd need to copy the entire
+            # history to a list. There, filter first and then reverse it here.
+            history = reversed(list(history_iter(start_time, reverse=False)))
+
+        return 'text/html', jinja.render('history.html', title='History',
+                session_interval=config.get('ui', 'history-session-interval'))
+        return 'text/html', json.dumps(list(history))
     else:
         if (
             config.get('content', 'allow-javascript') and

@@ -1,7 +1,4 @@
 <?php
-
-            $label = isset($el['label']) ? $this->translate($el['label']) : null;
-            $params[] = ['type' => $type, 'value' => $value, 'label' => $label];
 /**
  * Configurable form.
  *
@@ -379,7 +376,9 @@ class Form extends \Laminas\Form\Form implements
                     ?? $this->vufindConfig['Site']['displayDateFormat'] ?? 'Y-m-d';
                 $value = date($format, strtotime($value));
             }
-            $el['value'] = $value;
+
+            $label = isset($el['label']) ? $this->translate($el['label']) : null;
+            $params[] = ['type' => $type, 'value' => $value, 'label' => $label];
             $el['label'] = isset($el['label']) ? $this->translate($el['label'])
                 : null;
             $params[] = $el;

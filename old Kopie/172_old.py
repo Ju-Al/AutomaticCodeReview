@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 
 """A fabfile with functionality to prepare, install, and configure
-bigchaindb, including its storage backend.
-"""A Fabric fabfile with functionality to prepare, install, and configure
-BigchainDB, including its storage backend (RethinkDB).
-"""
-
-from __future__ import with_statement, unicode_literals
-
 import requests
 from time import *
 import os
@@ -19,31 +12,38 @@ from fabric import colors as c
 from fabric.api import *
 from fabric.api import local, puts, settings, hide, abort, lcd, prefix
 from fabric.api import run, sudo, cd, get, local, lcd, env, hide
-from fabric.api import sudo, env
-from fabric.api import task, parallel
 from fabric.contrib import files
 from fabric.contrib.files import append, exists
 from fabric.contrib.console import confirm
 from fabric.contrib.project import rsync_project
-from fabric.contrib.files import sed
-from fabric.operations import run, put
-from fabric.context_managers import settings
 from fabric.decorators import roles
 from fabtools import *
-
 from hostlist import hosts_dev
-from hostlist import public_dns_names
-
-# Ignore known_hosts
-# http://docs.fabfile.org/en/1.10/usage/env.html#disable-known-hosts
-env.disable_known_hosts = True
-
 env.hosts = hosts_dev
 env.roledefs = {
     "role1": hosts_dev,
     "role2": [hosts_dev[0]],
     }
 env.roles = ["role1"]
+# base software rollout
+bigchaindb, including its storage backend.
+BigchainDB, including its storage backend (RethinkDB).
+"""
+
+from __future__ import with_statement, unicode_literals
+
+from fabric.api import sudo, env
+from fabric.api import task, parallel
+from fabric.contrib.files import sed
+from fabric.operations import run, put
+from fabric.context_managers import settings
+
+from hostlist import public_dns_names
+
+# Ignore known_hosts
+# http://docs.fabfile.org/en/1.10/usage/env.html#disable-known-hosts
+env.disable_known_hosts = True
+
 # What remote servers should Fabric connect to? With what usernames?
 env.user = 'ubuntu'
 env.hosts = public_dns_names
@@ -57,7 +57,6 @@ newrelic_license_key = 'you_need_a_real_license_key'
 
 ######################################################################
 
-# base software rollout
 # DON'T PUT @parallel
 @task
 def set_hosts(hosts):

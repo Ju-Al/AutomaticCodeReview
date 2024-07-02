@@ -103,8 +103,6 @@ export default PageObject.create({
       delete: clickable('.cron-job-delete')
     }
   }),
-
-  cronBranches: collection({
     scope: '.form--cron form select:nth(0)',
     itemScope: 'option',
 

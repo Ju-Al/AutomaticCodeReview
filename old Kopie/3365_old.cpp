@@ -792,7 +792,6 @@ void parseStandardConversions(String& s, boolean useURLencode) {
   SMART_CONV(F("%c_m2dhm%"),  minutesToDayHourMinute(arg1))
   SMART_CONV(F("%c_s2dhms%"), secondsToDayHourMinuteSecond(arg1))
   SMART_CONV(F("%c_2hex%"),   formatToHex(arg1, F("")))
-  SMART_CONV(F("%c_u2ip%"),   getIPAddressForUnit(arg1).toString())
   #undef SMART_CONV
 
   // Conversions with 2 parameters

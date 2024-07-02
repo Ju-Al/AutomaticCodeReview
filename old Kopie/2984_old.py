@@ -1,5 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
-    def __init__(self, device, batch_size, iterator, preemph_coeff=0.97, per_sample_coeff=False, num_threads=4, device_id=0):
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,7 +57,7 @@ class PreemphasisPipeline(Pipeline):
             return self.preemph(out)
 
 class PreemphasisPythonPipeline(Pipeline):
-    def __init__(self, device, batch_size, iterator, border='clamp', preemph_coeff=0.97, reflect=True, per_sample_coeff=False,
+    def __init__(self, device, batch_size, iterator, preemph_coeff=0.97, per_sample_coeff=False, num_threads=4, device_id=0):
                  num_threads=4, device_id=0):
         super(PreemphasisPythonPipeline, self).__init__(batch_size, num_threads, device_id, seed=SEED,
                                                         exec_async=False, exec_pipelined=False)

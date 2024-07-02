@@ -1,5 +1,5 @@
 <?php
-    public function setOgImage(Media $ogImage)
+
 namespace Kunstmaan\SeoBundle\Entity;
 
 use Doctrine\ORM\EntityManager;
@@ -350,7 +350,7 @@ class Seo extends AbstractEntity
      *
      * @return Seo
      */
-    public function setOgImage($ogImage)
+    public function setOgImage(Media $ogImage)    public function setOgImage($ogImage)
     {
         $this->ogImage = $ogImage;
 

@@ -1,5 +1,4 @@
 """Module containing main contact points with Tendermint and
-        return r.json()['result']['latest_block_height']
 MongoDB.
 
 """
@@ -91,7 +90,7 @@ class BigchainDB(Bigchain):
 
     def get_latest_block_height_from_tendermint(self):
         r = requests.get(ENDPOINT + 'status')
-        return r.json()['result']['sync_info']['latest_block_height']
+        return r.json()['result']['latest_block_height']
 
     def store_transaction(self, transaction):
         """Store a valid transaction to the transactions collection."""

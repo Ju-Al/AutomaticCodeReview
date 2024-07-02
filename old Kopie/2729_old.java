@@ -106,7 +106,6 @@ public class Collector { // not final for mock
   }
 
   public void accept(List<Span> spans, Callback<Void> callback) {
-    accept(spans, callback, Runnable::run);
   }
 
   /**

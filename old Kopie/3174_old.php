@@ -1,5 +1,4 @@
 <?php
-
 namespace WP_Rocket\Engine\License\API;
 
 class PricingClient {

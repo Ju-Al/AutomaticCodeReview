@@ -923,8 +923,6 @@ func aspListToStrSlice(listVal *asp.List) []string {
 		}
 	}
 	return retSlice
-}
-
 // getCoreBuildLabel returns a core.BuildLabel object providing a BuildDef and its URI
 func getCoreBuildLabel(def *BuildDef, uri lsp.DocumentURI) (buildLabel core.BuildLabel, err error) {
 	fp, err := GetPathFromURL(uri, "file")

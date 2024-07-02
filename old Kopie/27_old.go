@@ -75,7 +75,6 @@ func (cm *ConnectionMaker) queryLoop(queryChan <-chan *ConnectionMakerInteractio
 				}
 			case query.code == CMStatus:
 				query.resultChan <- cm.status()
-			case query.code == CMConnSucceeded:
 				delete(cm.attempting, ConnectionMakerPair{query.foundAt, query.name})
 				delete(cm.failedConnections[query.name].foundAt, query.foundAt)
 			case query.code == CMConnFailed:

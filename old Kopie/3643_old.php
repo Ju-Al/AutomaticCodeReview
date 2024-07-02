@@ -61,8 +61,6 @@ class Settings {
 		$options['remove_unused_css_safelist'] = [];
 
 		update_option( 'wp_rocket_settings', $options );
-	}
-
 	/**
 	 * Determines if Remove Unused CSS option is enabled.
 	 *

@@ -1,17 +1,4 @@
 // Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
-type appDeployVars struct {
-type appDeployOpts struct {
-	appDeployVars
-	store            store
-	workspaceService wsAppReader
-	ecrService       ecrService
-	dockerService    dockerService
-	s3Service        artifactUploader
-	runner           runner
-	addonsSvc        templater
-	projectCFSvc     projectResourcesGetter
-	appCFSvc         cloudformation.CloudFormation
-	sessProvider     sessionProvider
 // SPDX-License-Identifier: Apache-2.0
 
 package cli
@@ -50,7 +37,19 @@ var (
 	errNoLocalManifestsFound = errors.New("no manifest files found")
 )
 
-type svcDeployVars struct {
+type appDeployOpts struct {
+	appDeployVars
+	store            store
+	workspaceService wsAppReader
+	ecrService       ecrService
+	dockerService    dockerService
+	s3Service        artifactUploader
+	runner           runner
+	addonsSvc        templater
+	projectCFSvc     projectResourcesGetter
+	appCFSvc         cloudformation.CloudFormation
+	sessProvider     sessionProvider
+type appDeployVars struct {
 	*GlobalOpts
 	Name         string
 	EnvName      string

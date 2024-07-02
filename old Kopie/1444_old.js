@@ -492,7 +492,6 @@ export default class NetworkStatusStore extends Store {
             (isLocalBlockHeightSyncing || isNetworkBlockHeightSyncing);
         });
 
-        if (this.isNodeRestarting && this.isNodeSyncing) {
           runInAction('set isNodeRestarting = false', () => {
             this.isNodeRestarting = false;
           });

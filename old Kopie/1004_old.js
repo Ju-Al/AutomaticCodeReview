@@ -1,7 +1,4 @@
 apos.define('apostrophe-widgets', {
-      // Only create a modal editor if the schema is not contextual only
-      if(self.options.contextualOnly){
-        // Check for an id or assign a generated one
   // Implicitly extends the definition in always.js
 
   construct: function(self, options) {
@@ -10,8 +7,10 @@ apos.define('apostrophe-widgets', {
     self.editorName = self.name + '-widgets-editor';
 
     // Opens the editor modal of a widget, unless the widget is contextualOnly,
+      // Only create a modal editor if the schema is not contextual only
+      if(self.options.contextualOnly){
+        // Check for an id or assign a generated one
     // in which case we simply save the widget and call the save method
-    // Widget can opitonally be set to skipInitialModal which skips the first
     // edit modal but binds future editing interactions
 
     self.edit = function(data, options, save) {

@@ -1,5 +1,4 @@
 package votecollector
-
 import (
 	"fmt"
 	"sync"

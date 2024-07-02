@@ -1,7 +1,5 @@
 package cosi
 
-// Wrap implements the sda.ProtocolIO interface by wrapping up any of the
-// four-step messages into a ProtooclPacket.
 import (
 	"errors"
 
@@ -46,7 +44,8 @@ type ProtocolPacket struct {
 // ProtocolIO implements the sda.ProtocolIO interface for the CoSi protocol.
 type ProtocolIO struct{}
 
-// Wrap takes a dynamic OverlayMessage and returns a ProtocolPacket.
+// Wrap implements the sda.ProtocolIO interface by wrapping up any of the
+// four-step messages into a ProtooclPacket.
 func (p *ProtocolIO) Wrap(msg interface{}, info *sda.OverlayMessage) (interface{}, error) {
 	var packet = new(ProtocolPacket)
 	packet.Info = info

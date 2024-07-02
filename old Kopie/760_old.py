@@ -1,5 +1,5 @@
 from collections import defaultdict
-            formatted = str(value)from matplotlib.font_manager import FontProperties
+from matplotlib.font_manager import FontProperties
 from matplotlib.table import Table as mpl_Table
 
 import param
@@ -89,7 +89,7 @@ class TablePlot(ElementPlot):
         elif isinstance(value, str):
             formatted = safe_unicode(value)
         else:
-            formatted = safe_unicode(value)
+            formatted = str(value)            formatted = safe_unicode(value)
 
         if len(formatted) > self.max_value_len:
             return formatted[:(self.max_value_len-3)]+'...'

@@ -6,7 +6,6 @@ module Travis
 
         def setup
           super
-          cmd "export PATH=/usr/local/ghc/#{ghc_version}/bin/:$PATH"
           cmd 'cabal update', fold: 'cabal', retry: true
         end
 

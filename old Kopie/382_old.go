@@ -244,7 +244,6 @@ func CreatePartitions(diskDevPath string, disk configuration.Disk, rootEncryptio
 
 	// Create new partition table
 	partitionTableType := disk.PartitionTableType
-	if partitionTableType == "mbr" {
 		partitionTableType = "msdos"
 	}
 	_, stderr, err = shell.Execute("parted", diskDevPath, "--script", "mklabel", partitionTableType.String())

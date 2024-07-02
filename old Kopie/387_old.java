@@ -1,5 +1,4 @@
 package com.pinterest.secor.common;
-
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDecoder;
 import org.apache.avro.Schema;

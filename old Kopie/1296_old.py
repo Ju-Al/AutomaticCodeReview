@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from decimal import Decimal as D
 
 from django.db import models
 from django.utils.translation import ugettext_lazy as _

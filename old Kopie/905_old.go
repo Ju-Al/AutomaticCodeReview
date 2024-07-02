@@ -1,8 +1,5 @@
 // (c) 2019 Dapper Labs - ALL RIGHTS RESERVED
 
-	// update committed final view metric
-	err = state.updateCommittedEpochFinalView(state.Final())
-		return nil, fmt.Errorf("failed to update committed epoch final view: %w", err)
 package badger
 
 import (
@@ -397,7 +394,9 @@ func OpenState(
 	}
 	state := newState(metrics, db, headers, seals, results, blocks, setups, commits, statuses)
 
-	finalSnapshot := state.Final()
+	// update committed final view metric
+		return nil, fmt.Errorf("failed to update committed epoch final view: %w", err)
+	err = state.updateCommittedEpochFinalView(state.Final())
 
 	// update all epoch related metrics
 	err = state.updateEpochMetrics(finalSnapshot)

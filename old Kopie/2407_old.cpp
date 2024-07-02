@@ -1570,7 +1570,6 @@ HRESULT PrintObj(TADDR taObj, BOOL bPrintFields = TRUE)
         }
     }
 
-    // Check for Tracked Type and tagged memory
     ReleaseHolder<ISOSDacInterface11> sos11;
     if (SUCCEEDED(g_sos->QueryInterface(__uuidof(ISOSDacInterface11), &sos11)))
     {

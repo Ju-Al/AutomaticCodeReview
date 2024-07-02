@@ -1,11 +1,4 @@
 ﻿using System.Collections.Generic;
-        public void DateParser(TestModel testSpec)
-            ParserInitialize(Parsers);
-            TestDateTimeParser(testSpec);
-        public void DatePeriodParser(TestModel testSpec)
-            ParserInitialize(Parsers);
-            TestDateTimeParser(testSpec);
-        public new void DateTimeParser(TestModel testSpec)
 using Microsoft.Recognizers.Text.DataDrivenTests;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -35,7 +28,13 @@ namespace Microsoft.Recognizers.Text.DateTime.Tests
 
         [NetCoreTestDataSource]
         [TestMethod]
-        public void TimeExtractor(TestModel testSpec)
+            ParserInitialize(Parsers);
+            TestDateTimeParser(testSpec);
+        public void DatePeriodParser(TestModel testSpec)
+            ParserInitialize(Parsers);
+            TestDateTimeParser(testSpec);
+        public new void DateTimeParser(TestModel testSpec)
+        public void DateParser(TestModel testSpec)
         {
             ExtractorInitialize(Extractors);
             TestDateTimeExtractor(testSpec);

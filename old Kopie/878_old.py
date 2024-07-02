@@ -1,6 +1,4 @@
 #! /usr/bin/env python
-            iterations = int(strprop.text)
-                iterations = int(intprop.text)
 """
 Copyright 2015 BlazeMeter Inc.
 
@@ -1254,7 +1252,8 @@ class JMXasDict(JMX):
 
         strprop = controller.find(".//stringProp[@name='LoopController.loops']")
         if strprop is not None and strprop.text:
-            iterations = strprop.text
+                iterations = int(intprop.text)
+            iterations = int(strprop.text)
         else:
             intprop = controller.find(".//intProp[@name='LoopController.loops']")
             if intprop is not None and intprop.text:

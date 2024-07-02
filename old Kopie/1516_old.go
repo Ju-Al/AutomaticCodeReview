@@ -1,9 +1,4 @@
 // Copyright 2020 The Swarm Authors. All rights reserved.
-func TestMarshal(t *testing.T) {
-	_, kad, ab, _, signer := newTestKademlia(nil, nil, kademlia.Options{})
-	_, err := kad.MarshalJSON()
-	if err != nil {
-		t.Fatal(err)
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -921,7 +916,11 @@ func TestKademlia_SubscribePeersChange(t *testing.T) {
 	})
 }
 
-func TestSnapshot(t *testing.T) {
+func TestMarshal(t *testing.T) {
+	_, err := kad.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	_, kad, ab, _, signer := newTestKademlia(nil, nil, kademlia.Options{})
 	sa, kad, ab, _, signer := newTestKademlia(nil, nil, kademlia.Options{})
 	if err := kad.Start(context.Background()); err != nil {
 		t.Fatal(err)

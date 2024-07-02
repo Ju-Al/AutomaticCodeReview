@@ -1,6 +1,5 @@
 from random import randint
 
-            sleep(self.evolve_speed)
 from pokemongo_bot import inventory
 from pokemongo_bot.human_behaviour import sleep
 from pokemongo_bot.inventory import Pokemon
@@ -132,7 +131,7 @@ class EvolvePokemon(Datastore, BaseTask):
             new_pokemon = inventory.Pokemon(evolution)
             inventory.pokemons().add(new_pokemon)
 
-            sleep(randint(self.min_evolve_speed, self.max_evolve_speed))
+            sleep(self.evolve_speed)
             evolve_result = True
         else:
             # cache pokemons we can't evolve. Less server calls

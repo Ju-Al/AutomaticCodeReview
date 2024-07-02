@@ -92,7 +92,7 @@ func NewDB(ctx context.Context, db *sql.DB) (*DB, error) {
 				user_id = $2 and
 				end_time isnull
 		`),
-		scheduleOnCallNotification: p.P(`
+
 			insert into outgoing_messages (id, message_type, channel_id, schedule_id) values ($1, 'schedule_on_call_status', $2, $3)
 		`),
 		currentTime: p.P(`select now()`),

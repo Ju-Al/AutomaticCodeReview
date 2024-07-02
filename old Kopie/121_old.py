@@ -1,15 +1,5 @@
 from django.core.urlresolvers import reverse
-
-class DashboardViewTests(ClientTestCase):
-    is_staff = True
-
-    def test_dashboard_index_is_for_staff_only(self):
-        urls = ('dashboard:index',
-                'dashboard:order-list',
-                'dashboard:users-index',)
-        for name in urls:
-            response = self.client.get(reverse(name))
-            self.assertTrue('Password' not in response.content)from django.test import TestCase
+from django.test import TestCase
 
 from oscar.apps.dashboard.orders.tests import *
 from oscar.apps.dashboard.reports.tests import *
@@ -27,3 +17,14 @@ class AnonymousUserTests(ClientTestCase):
         response = self.client.get(reverse('dashboard:index'))
         self.assertTrue('Username' in response.content)
 
+
+class DashboardViewTests(ClientTestCase):
+    is_staff = True
+
+    def test_dashboard_index_is_for_staff_only(self):
+        urls = ('dashboard:index',
+                'dashboard:order-list',
+                'dashboard:users-index',)
+        for name in urls:
+            response = self.client.get(reverse(name))
+            self.assertTrue('Password' not in response.content)

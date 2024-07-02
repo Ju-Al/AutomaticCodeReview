@@ -328,7 +328,6 @@ EOT
     ENV['MONGO_RUBY_DRIVER_AWS_ARN']
   end
 
-  def mongocryptd_port
     ENV['MONGO_RUBY_DRIVER_MONGOCRYPTD_PORT'] || 27020
   end
 

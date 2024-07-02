@@ -1,6 +1,4 @@
 //
-		
-		void SerializeEnumerable (StringBuilder output, IEnumerable enumerable)
 // JsonSerializer.cs
 //
 // Author:
@@ -353,7 +351,8 @@ namespace Nancy.Json
 					first = false;
 			}
 		}
-
+		
+		void SerializeEnumerable (StringBuilder output, IEnumerable enumerable)
         private static string ConvertToCamelCase(string str)
         {
             return str.Substring(0, 1).ToLowerInvariant() + str.Substring(1);

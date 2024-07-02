@@ -874,10 +874,6 @@ batchTemplateUtils.parseTemplate = function (template, jsonTemplate, parameters)
   }
 
   return JSON.parse(updatedJson);
-};
-
-/**
- * These properties are reserved for application template use
  * and may not be used on jobs using an application template
  */
 batchTemplateUtils.propertiesReservedForTemplateUse = [

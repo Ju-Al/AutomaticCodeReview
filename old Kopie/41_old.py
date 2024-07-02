@@ -1776,7 +1776,6 @@ class JMeterScenarioBuilder(JMX):
         if self.scenario.get("store-cookie", True):
             self.append(self.TEST_PLAN_SEL, self._get_cookie_mgr())
             self.append(self.TEST_PLAN_SEL, etree.Element("hashTree"))
-        self.append(self.TEST_PLAN_SEL, self._get_dns_cache_mgr())
         self.append(self.TEST_PLAN_SEL, etree.Element("hashTree"))
 
     def __add_defaults(self):

@@ -1,8 +1,4 @@
 # Provides CRUD+ for Donations, which are digital representations of one of the ways Diaperbanks take in new inventory
-    ActiveRecord::Base.transaction do
-      donation = current_organization.donations.find(params[:id])
-      donation.storage_location.decrease_inventory(donation)
-      donation.destroy!
 class DonationsController < ApplicationController
   before_action :authorize_admin, only: [:destroy]
 
@@ -80,7 +76,10 @@ class DonationsController < ApplicationController
   end
 
   def destroy
-    service = DonationDestroyService.new(organization_id: current_organization.id, donation_id: params[:id])
+    ActiveRecord::Base.transaction do
+      donation = current_organization.donations.find(params[:id])
+      donation.storage_location.decrease_inventory(donation)
+      donation.destroy!
     service.call
 
     if service.success?

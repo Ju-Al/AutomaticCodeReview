@@ -1,5 +1,4 @@
 // Copyright 2019 Proyectos y Sistemas de Mantenimiento SL (eProsima).
-    writer.make_persistent(db_file_name(), guid_prefix()).asynchronously(eprosima::fastrtps::rtps::RTPSWriterPublishMode::ASYNCHRONOUS_WRITER).init();
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -239,7 +238,7 @@ TEST_F(BlackBoxPersistence, AsyncRTPSAsReliableWithPersistence)
 
     ASSERT_TRUE(reader.isInitialized());
 
-    writer.make_persistent(db_file_name(), guid_prefix()).history_depth(10).asynchronously(eprosima::fastrtps::rtps::RTPSWriterPublishMode::ASYNCHRONOUS_WRITER).init();
+    writer.make_persistent(db_file_name(), guid_prefix()).asynchronously(eprosima::fastrtps::rtps::RTPSWriterPublishMode::ASYNCHRONOUS_WRITER).init();
 
     ASSERT_TRUE(writer.isInitialized());
 

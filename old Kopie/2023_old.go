@@ -1,5 +1,4 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-		return nil, errNoSubnetFound
 // SPDX-License-Identifier: Apache-2.0
 
 package task
@@ -63,7 +62,7 @@ func (r *EnvRunner) Run() ([]*Task, error) {
 		return nil, fmt.Errorf(fmtErrPublicSubnetsFromEnv, r.Env, err)
 	}
 	if len(subnets) == 0 {
-		return nil, fmt.Errorf(fmtErrNoSubnetFoundInEnv, r.Env)
+		return nil, errNoSubnetFound
 	}
 
 	// Use only environment security group https://github.com/aws/copilot-cli/issues/1882.

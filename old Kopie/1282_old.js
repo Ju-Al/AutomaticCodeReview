@@ -1,8 +1,4 @@
 import React from 'react';
-    const intlProvider = rendered.find(IntlProvider).childAt(0);
-    expect(spy).toHaveBeenCalledWith(
-      intlProvider.instance().getContext()
-    );
 import {mount} from 'enzyme';
 import {IntlProvider} from '../../../src/react-intl'
 import useIntl from '../../../src/components/useIntl';
@@ -29,8 +25,11 @@ describe('useIntl() hook', () => {
         <FunctionComponent spy={spy} />
       </IntlProvider>
     );
+    const intlProvider = rendered.find(IntlProvider).childAt(0);
 
-    const providedIntl = rendered.find(IntlProvider).childAt(0).instance().getContext();
+    expect(spy).toHaveBeenCalledWith(
+      intlProvider.instance().getContext()
+    );
     const expectedHookReturns = [providedIntl.formatMessage, providedIntl];
     expect(spy).toHaveBeenCalledWith(expectedHookReturns);
   });

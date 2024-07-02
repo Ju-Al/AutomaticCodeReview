@@ -1,5 +1,4 @@
 <?php
-		$query = new Query(Environment::get('queryString'));
 
 /*
  * This file is part of Contao.
@@ -1076,7 +1075,7 @@ abstract class Controller extends System
 	 */
 	public static function addToUrl($strRequest, $blnAddRef=true, $arrUnset=array())
 	{
-		if (static::$objQuery === null)
+		$query = new Query(Environment::get('queryString'));
 		{
 			static::$objQuery = Query::createFromRFC3986(Environment::get('queryString'));
 		}

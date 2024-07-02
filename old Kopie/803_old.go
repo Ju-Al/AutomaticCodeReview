@@ -1,6 +1,5 @@
 // Copyright The OpenTelemetry Authors
-	m.asyncContext = ctx
-	m.asyncInstruments.Run(context.Background(), m)//
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -419,8 +418,9 @@ func (m *Accumulator) observeAsyncInstruments(ctx context.Context) int {
 	defer m.asyncLock.Unlock()
 
 	asyncCollected := 0
+	m.asyncContext = ctx
 
-	m.asyncInstruments.Run(ctx, m)
+	m.asyncInstruments.Run(context.Background(), m)	m.asyncInstruments.Run(ctx, m)
 
 	for _, inst := range m.asyncInstruments.Instruments() {
 		if a := m.fromAsync(inst); a != nil {

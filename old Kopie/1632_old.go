@@ -1,5 +1,4 @@
 /*
-		klog.Fatalln("driver type not specified")
 Copyright 2019 The Ceph-CSI Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -124,6 +123,7 @@ func main() {
 	util.DefaultLog("Driver version: %s and Git version: %s", util.DriverVersion, util.GitCommit)
 
 	if conf.Vtype == "" {
+		klog.Fatalln("driver type not specified")
 		logAndExit("driver type not specified")
 	}
 

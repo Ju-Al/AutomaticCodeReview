@@ -1,5 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-                try
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -58,7 +57,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (_searchParametersInitialized)
+                try
                 {
                     // Check for any changes to Search Parameters
                     try

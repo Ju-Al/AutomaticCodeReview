@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-            if not verify and verify is not False:
 """
 requests.session
 ~~~~~~~~~~~~~~~~
@@ -437,7 +436,7 @@ class Session(SessionRedirectMixin):
                 proxies.setdefault(k, v)
 
             # Look for configuration.
-            if verify is True or (verify is None and verify is not False):
+            if not verify and verify is not False:
                 verify = os.environ.get('REQUESTS_CA_BUNDLE')
 
             # Curl compatibility.

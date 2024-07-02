@@ -1,7 +1,4 @@
 /******************************************************************************
-        cgLinearSolver->f_maxIter=3000;
-        cgLinearSolver->f_tolerance =1e-9;
-        cgLinearSolver->f_smallDenominatorThreshold=1e-9;
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -93,7 +90,9 @@ struct EulerImplicitDynamic_test : public Elasticity_test<_DataTypes>
         eulerSolver->f_rayleighMass.setValue(rm);
 
         CGLinearSolver::SPtr cgLinearSolver = addNew<CGLinearSolver>   (root);
-        cgLinearSolver->d_maxIter=3000;
+        cgLinearSolver->f_maxIter=3000;
+        cgLinearSolver->f_tolerance =1e-9;
+        cgLinearSolver->f_smallDenominatorThreshold=1e-9;
         cgLinearSolver->d_tolerance =1e-9;
         cgLinearSolver->d_smallDenominatorThreshold=1e-9;
 

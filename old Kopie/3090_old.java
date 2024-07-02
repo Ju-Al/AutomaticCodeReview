@@ -1,5 +1,4 @@
 package com.actiontech.dble.services.rwsplit.handle;
-
 import com.actiontech.dble.backend.datasource.PhysicalDbGroup;
 import com.actiontech.dble.backend.datasource.PhysicalDbInstance;
 import com.actiontech.dble.backend.mysql.ByteUtil;

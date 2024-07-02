@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-        return "{name}=={version}".format(name=self.get_name(cuda_version, idx), version=self.get_version(idx, cuda_version))
 import argparse
 import sys
 # use packaging from PIP as it is always present on system we are testing on
@@ -207,7 +206,7 @@ class BasePackage():
             `cuda_version`: str, optional, default = None
                 Cuda version used for this query
         """
-        pkg_cmd = "{name}=={version}".format(name=self.get_name(cuda_version, idx), version=self.get_version(idx, cuda_version))
+        return "{name}=={version}".format(name=self.get_name(cuda_version, idx), version=self.get_version(idx, cuda_version))
         deps_cmd = " ".join(self.get_dependencies(cuda_version, idx))
         return " ".join([pkg_cmd, deps_cmd])
 

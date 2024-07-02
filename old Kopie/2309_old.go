@@ -752,7 +752,6 @@ func (p *Platform) resourceDeploymentDestroy(
 	if err := deployclient.Delete(ctx, state.Name, metav1.DeleteOptions{}); err != nil {
 		return err
 	}
-
 	step.Update("Deployment deleted")
 	step.Done()
 

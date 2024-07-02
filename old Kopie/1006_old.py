@@ -935,7 +935,6 @@ class Locale(AggregatedStats):
                 'approved_strings',
             )
 
-            # Make output JSON serializable
             for value in values:
                 deadline = value['resource__deadline']
                 if deadline:

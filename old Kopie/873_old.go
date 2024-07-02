@@ -1,6 +1,5 @@
 package globals
 
-const Version = "2.6.0"
 import (
 	"fmt"
 	"time"
@@ -9,7 +8,7 @@ import (
 )
 
 // Version of the Frugal compiler.
-const Version = "2.6.0-RC1"
+const Version = "2.6.0"
 
 // Global variables.
 var (

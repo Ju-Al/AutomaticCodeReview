@@ -137,9 +137,6 @@ func (b *Builder) BuildOn(parentID flow.Identifier, setter func(*flow.Header) er
 	}
 
 	return proposal.Header, nil
-}
-
-// repopulateExecutionTree restores latest state of execution tree mempool based on local chain state information.
 // Repopulating of execution tree is split into two parts:
 // 1) traverse backwards all finalized blocks starting from last finalized block till we reach last sealed block. [lastSealedHeight, lastFinalizedHeight]
 // 2) traverse forward all unfinalized(pending) blocks starting from last finalized block.

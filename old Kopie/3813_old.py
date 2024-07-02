@@ -4139,6 +4139,7 @@ def is_optional_template_param(type):
 
 class CEnumType(CIntLike, CType):
     #  name           string
+    #  doc            string or None which then defaults to "An enumeration."
     #  cname          string or None
     #  typedef_flag   boolean
     #  values         [string], populated during declaration analysis
@@ -4194,7 +4195,7 @@ class CEnumType(CIntLike, CType):
         env.use_utility_code(CythonUtilityCode.load(
             "EnumType", "CpdefEnums.pyx",
             context={"name": self.name,
-                     "items": tuple(self.values),
+                     "items": tuple(self.values)},
                      "enum_doc": self.doc},
             outer_module_scope=env.global_scope()))
 

@@ -59,7 +59,6 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 				NowOverride:           dataplane.now,
 				BackendMode:           "legacy",
 				LookPathOverride:      lookPathAll,
-				OpRecorder:            logutils.NewSummarizer("lest loop"),
 			},
 		)
 

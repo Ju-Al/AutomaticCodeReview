@@ -1,6 +1,4 @@
 /**
-
-std::string gWindowsSeparator((const char*)(const wchar_t*)L"\\", 2);
  * @file win32/fs.cpp
  * @brief Win32 filesystem/directory access/notification
  *
@@ -848,7 +846,12 @@ bool WinFileSystemAccess::copylocal(LocalPath& oldnamePath, LocalPath& newnamePa
 
 bool WinFileSystemAccess::rmdirlocal(LocalPath& namePath)
 {
-    std::wstring name = namePath.localpath.data();
+    string* name = namePath.editStringDirect();
+
+    name->append("", 1);
+    bool r = !!RemoveDirectoryW((LPCWSTR)name->data());
+    name->resize(name->size() - 1);
+
     bool r = !!RemoveDirectoryW(name.data());
     if (!r)
     {

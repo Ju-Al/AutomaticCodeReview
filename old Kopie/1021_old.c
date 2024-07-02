@@ -1,6 +1,4 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
-  data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
-  if (stdout_fd < 0)
  *
  * Copyright (C) 2016 Red Hat, Inc.
  *
@@ -281,8 +279,9 @@ run_script_in_bwrap_container (int rootfs_fd,
 
 
   struct ChildSetupData data = { .stdin_fd = stdin_fd };
+  data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
+  if (stdout_fd < 0)
 
-  /* Only try to log to the journal if we're running in the system
    * context; for unprivileged container builds we don't want to log
    * to the journal, even if we have privileges to do so.
    */

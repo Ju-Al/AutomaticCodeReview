@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-        for (k, v) in list(hooks.items()):
 """
 requests.models
 ~~~~~~~~~~~~~~~
@@ -236,7 +235,7 @@ class Request(RequestHooksMixin):
         hooks = {} if hooks is None else hooks
 
         self.hooks = default_hooks()
-        for (k, v) in hooks.items():
+        for (k, v) in list(hooks.items()):
             self.register_hook(event=k, hook=v)
 
         self.method = method

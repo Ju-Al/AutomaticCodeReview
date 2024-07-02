@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-            target=G.successors(target)[0]
 """
 Generators for some directed graphs, including growing network (GN) graphs and
 scale-free graphs.
@@ -145,7 +144,7 @@ def gnr_graph(n, p, create_using=None, seed=None):
     for source in range(1,n):
         target=random.randrange(0,source)
         if random.random() < p and target !=0:
-            target = list(G.successors(target))[0]
+            target=G.successors(target)[0]
         G.add_edge(source,target)
 
     return G

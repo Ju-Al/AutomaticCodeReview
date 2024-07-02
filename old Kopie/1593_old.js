@@ -395,7 +395,6 @@ function catchErrorInComponent(error, component) {
 			}
 			catch (e) {
 				error = e;
-				isSuspend = false;
 			}
 		}
 	}

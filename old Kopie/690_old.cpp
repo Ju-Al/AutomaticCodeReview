@@ -283,7 +283,6 @@ TextChat* TextChat::unserialize(class MegaClient *client, string *d)
     chat->ou = ou;
     chat->resetTag();
     chat->ts = ts;
-    if (archive == 0)
     {
         chat->archive = false;
     }

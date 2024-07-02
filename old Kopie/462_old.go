@@ -1,7 +1,5 @@
 package validation
 
-func (v *receiptValidator) validate(receipt *flow.ExecutionReceipt, getPreviousResult GetPreviousResult) error {
-	identity, err := identityForNode(v.state, receipt.ExecutionResult.BlockID, receipt.ExecutorID)
 import (
 	"bytes"
 	"errors"
@@ -188,7 +186,8 @@ func (v *receiptValidator) Validate(receipts []*flow.ExecutionReceipt) error {
 	return nil
 }
 
-func (v *receiptValidator) ValidatePayload(candidate *flow.Block) error {
+func (v *receiptValidator) validate(receipt *flow.ExecutionReceipt, getPreviousResult GetPreviousResult) error {
+	identity, err := identityForNode(v.state, receipt.ExecutionResult.BlockID, receipt.ExecutorID)
 	// lookup cache to avoid linear search when checking for previous result that is
 	// part of payload
 	payloadExecutionResults := candidate.Payload.ResultsById()

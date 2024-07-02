@@ -352,8 +352,6 @@ public final class MySqlCdcSources {
             config.setProperty("database.ssl.truststore.password", password);
             return this;
         }
-
-        /**
          * Specifies how the source should behave when it detects that the
          * backing database has been shut down (read class javadoc for details
          * and special cases).

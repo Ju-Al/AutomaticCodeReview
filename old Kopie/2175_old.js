@@ -1,10 +1,4 @@
 ////////////////////////////////////////////////////////////////////////////
-        }
-        // Create default config
-        let url = new URL(this.server);
-        let secure = (url.protocol === 'https:')?'s':'';
-        let port = (url.port === undefined)?'9080':url.port;
-        let realmUrl = `realm${secure}://${url.hostname}:${port}/default`;
 //
 // Copyright 2016 Realm Inc.
 //
@@ -648,8 +642,13 @@ const instanceMethods = {
             if (config.sync.partial !== undefined && config.sync.fullSynchronization !== undefined) {
                 throw new Error("'partial' and 'fullSynchronization' were both set. 'partial' has been deprecated, use only 'fullSynchronization'");
             }
+        }
 
-            if (config.sync.url) {
+        // Create default config
+        let url = new URL(this.server);
+        let secure = (url.protocol === 'https:')?'s':'';
+        let port = (url.port === undefined)?'9080':url.port;
+        let realmUrl = `realm${secure}://${url.hostname}:${port}/default`;
                 config.sync.url = new URL(config.sync.url, {})
 
             }

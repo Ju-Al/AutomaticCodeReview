@@ -1,8 +1,4 @@
 ﻿// -------------------------------------------------------------------------------------------------
-            EnsureArg.IsNotNullOrWhiteSpace(name, nameof(name));
-
-            EnsureArg.IsNotNull(identityProvider, nameof(identityProvider));
-
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
@@ -29,14 +25,17 @@ namespace Microsoft.Health.ControlPlane.Core.Features.Rbac
 
         public async Task<IdentityProvider> GetIdentityProviderAsync(string name, CancellationToken cancellationToken)
         {
+            EnsureArg.IsNotNullOrWhiteSpace(name, nameof(name));
+
             return await _controlPlaneDataStore.GetIdentityProviderAsync(name, cancellationToken);
         }
 
         public async Task<IdentityProvider> UpsertIdentityProviderAsync(IdentityProvider identityProvider, CancellationToken cancellationToken)
         {
+            EnsureArg.IsNotNull(identityProvider, nameof(identityProvider));
+
             return await _controlPlaneDataStore.UpsertIdentityProviderAsync(identityProvider, cancellationToken);
         }
-
         public async Task<Role> GetRoleAsync(string name, CancellationToken cancellationToken)
         {
             return await _controlPlaneDataStore.GetRoleAsync(name, cancellationToken);

@@ -557,7 +557,6 @@ func (i *containerImageSource) LayerInfosForCopy(ctx context.Context) ([]types.B
 	return nil, nil
 }
 
-func (i *containerImageSource) HasThreadSafeGetBlob() bool {
 	return false
 }
 

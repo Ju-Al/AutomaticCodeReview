@@ -32,7 +32,6 @@ func (r *Repository) upsertAccount(ctx context.Context, am *AuthMethod, IdTokenC
 	if AccessTokenClaims == nil {
 		return nil, errors.New(errors.InvalidParameter, op, "missing Access Token claims")
 	}
-
 	fromSub, fromName, fromEmail := "sub", "name", "email"
 	if len(am.AccountClaimMaps) > 0 {
 		acms, err := ParseAccountClaimMaps(am.AccountClaimMaps...)

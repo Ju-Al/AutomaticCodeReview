@@ -1,13 +1,4 @@
 /*
-			if (n->type != LXC_NET_VETH)
-				continue;
-
-			veth = n->priv.veth_attr.pair;
-			if (n->link)
-				ret = snprintf(buf, sizeof(buf), "%s=%s@%s", eth, veth, n->link);
-			else
-				ret = snprintf(buf, sizeof(buf), "%s=%s", eth, veth);
-			if (ret < 0 || ret >= sizeof(buf))
  * lxc: linux Container library
  *
  * Copyright © 2014-2015 Canonical Ltd.
@@ -449,6 +440,9 @@ static void exec_criu(struct criu_opts *opts)
 			char eth[128], *veth;
 			struct lxc_netdev *n = it->elem;
 
+			if (n->type != LXC_NET_VETH)
+				continue;
+
 			if (n->name) {
 				if (strlen(n->name) >= sizeof(eth))
 					goto err;
@@ -456,7 +450,11 @@ static void exec_criu(struct criu_opts *opts)
 			} else
 				sprintf(eth, "eth%d", netnr);
 
-			switch (n->type) {
+			if (n->link)
+				ret = snprintf(buf, sizeof(buf), "%s=%s@%s", eth, veth, n->link);
+			else
+				ret = snprintf(buf, sizeof(buf), "%s=%s", eth, veth);
+			if (ret < 0 || ret >= sizeof(buf))
 			case LXC_NET_VETH:
 				veth = n->priv.veth_attr.pair;
 

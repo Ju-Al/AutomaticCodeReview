@@ -1,168 +1,484 @@
-/*
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2014-2019, Lawrence Livermore National Security, LLC.
+// Produced at the Lawrence Livermore National Laboratory.
+// Written by the LBANN Research Team (B. Van Essen, et al.) listed in
+// the CONTRIBUTORS file. <lbann-dev@llnl.gov>
+//
+// LLNL-CODE-697807.
+// All rights reserved.
+//
+// This file is part of LBANN: Livermore Big Artificial Neural Network
+// Toolkit. For details, see http://software.llnl.gov/LBANN or
+// https://github.com/LLNL/LBANN.
+//
+// Licensed under the Apache License, Version 2.0 (the "Licensee"); you
+// may not use this file except in compliance with the License.  You may
+// obtain a copy of the License at:
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied. See the License for the specific language governing
+// permissions and limitations under the license.
+////////////////////////////////////////////////////////////////////////////////
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+#define LBANN_DATA_TYPE_WEIGHTS_INSTANTIATE
+#include "lbann/weights/data_type_weights.hpp"
+#include "lbann/optimizers/optimizer.hpp"
+#include "lbann/utils/exception.hpp"
+#include "lbann/io/file_io.hpp"
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+#include <layers.pb.h>
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
-// Simple test for hipLaunchCooperativeKernel API.
+#include <algorithm>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
-/* HIT_START
- * BUILD: %t %s ../../test_common.cpp EXCLUDE_HIP_PLATFORM nvcc
- * TEST: %t
- * HIT_END
- */
 
-#include "hip/hip_runtime.h"
-#include "hip/hip_runtime_api.h"
-#include "hip/hcc_detail/device_library_decls.h"
-#include <iostream>
-#include <chrono>
-#include "test_common.h"
+namespace {
 
-using namespace std::chrono;
-
-const static uint BufferSizeInDwords = 448 * 1024 * 1024;
-
-__global__ void test_gws(uint* buf, uint bufSize, long* tmpBuf, long* result)
+/** @brief Get a string version of tensor dimensions */
+std::string stringify_dims(const std::vector<int>& dims)
 {
-    extern __shared__ long tmp[];
-    uint offset = blockIdx.x * blockDim.x + threadIdx.x;
-    uint stride = gridDim.x  * blockDim.x;
-    uint nwm1   = gridDim.x  * gridDim.y * gridDim.z - 1;
-
-    long sum = 0;
-    for (uint i = offset; i < bufSize; i += stride) {
-        sum += buf[i];
-    }
-    tmp[threadIdx.x] = sum;
-
-    __syncthreads();
-
-    if (threadIdx.x == 0) {
-        sum = 0;
-        for (uint i = 0; i < blockDim.x; i++) {
-            sum += tmp[i];
-        }
-        tmpBuf[blockIdx.x] = sum;
-    }
-
-    // TODO replace this line with the sync function once it's available
-    __ockl_gws_barrier(nwm1, 0);
-
-    if (offset == 0) {
-        for (uint i = 1; i < gridDim.x; ++i) {
-          sum += tmpBuf[i];
-       }
-       *result = sum;
-    }
+  std::ostringstream oss;
+  oss << dims.front();
+  for (size_t i = 1; i < dims.size(); ++i)
+    oss << "x" << dims[i];
+  return oss.str();
 }
 
-int main() {
-  float *A, *B, *Ad, *Bd;
-  uint* dA;
-  long* dB;
-  long* dC;
-
-  uint32_t* init = new uint32_t[BufferSizeInDwords];
-  for (uint32_t i = 0; i < BufferSizeInDwords; ++i) {
-    init[i] = i;
-  }
-
-  hipDeviceProp_t deviceProp;
-
-  hipGetDeviceProperties(&deviceProp, 0);
-  if (!deviceProp.cooperativeLaunch) {
-    std::cout << "info: Device doesn't support cooperative launch! skipping the test!
-";
-    passed();
-    return 0;
-  }
-
-  std::cout << "info: running on bus 0x" << deviceProp.pciBusID << " " << deviceProp.name << "
-";
-
-  size_t SIZE = BufferSizeInDwords * sizeof(uint);
-
-  HIPCHECK(hipMalloc((void**)&dA, SIZE));
-  HIPCHECK(hipHostMalloc((void**)&dC, sizeof(long)));
-  HIPCHECK(hipMemcpy(dA, init, SIZE, hipMemcpyHostToDevice));
-
-  hipStream_t stream;
-  HIPCHECK(hipStreamCreate(&stream));
-
-  dim3 dimBlock = dim3(1);
-  dim3 dimGrid  = dim3(1);
-  int numBlocks = 0;
-  uint workgroups[2] = {32, 64};
-
-  system_clock::time_point start = system_clock::now();
-
-  for (uint i = 0; i < 2; ++i) {
-
-    dimBlock.x = workgroups[i];
-    // Calculate the device occupancy to know how many blocks can be run concurrently
-    hipOccupancyMaxActiveBlocksPerMultiprocessor(reinterpret_cast<uint32_t*>(&numBlocks),
-        test_gws, dimBlock.x * dimBlock.y * dimBlock.z, dimBlock.x * sizeof(long));
-
-    dimGrid.x = deviceProp.multiProcessorCount * std::min(numBlocks, 32);
-    HIPCHECK(hipMalloc((void**)&dB, dimGrid.x * sizeof(long)));
- 
-    void *params[4];
-    params[0] = (void*)&dA;
-    params[1] = (void*)&BufferSizeInDwords;
-    params[2] = (void*)&dB;
-    params[3] = (void*)&dC;
-
-    std::cout << "Testing with grid size = " << dimGrid.x << " and block size = " << dimBlock.x << "
-";
-    HIPCHECK(hipLaunchCooperativeKernel(test_gws, dimGrid, dimBlock, params, dimBlock.x * sizeof(long), stream));
-
-    HIPCHECK(hipMemcpy(init, dC, sizeof(long), hipMemcpyDeviceToHost));
-
-    if (*dC != (((long)(BufferSizeInDwords) * (BufferSizeInDwords - 1)) / 2)) {
-        std::cout << "Data validation failed for grid size = " << dimGrid.x << " and block size = " << dimBlock.x << "
-";
-        HIPCHECK(hipStreamDestroy(stream));
-        hipFree(dC);
-        hipFree(dB);
-        hipFree(dA);
-        delete [] init;
-        std::cout << "Test failed! 
-";
-        return 0;
-    } else {
-        std::cout << "info: data validated!
-";
-    }
-
-  }
-
-  system_clock::time_point end = system_clock::now();
-  std::chrono::duration<double> elapsed_seconds = end - start;
-  std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-  std::cout << "finished computation at " << std::ctime(&end_time) <<
-    "elapsed time: " << elapsed_seconds.count() << "s
-";
-
-  HIPCHECK(hipStreamDestroy(stream));
-  hipFree(dC);
-  hipFree(dB);
-  hipFree(dA);
-  delete [] init;
-  passed();
-  return 0;
+/** @brief Get string describing tensor dimensions.
+ *  The tensor is stored in a matrix, although there may be multiple
+ *  dimensions corresponding to the matrix height and width.
+ */
+std::string get_dims_string(const std::vector<int>& matrix_height_dims,
+                            const std::vector<int>& matrix_width_dims) {
+  std::ostringstream oss;
+  oss << "(" << stringify_dims(matrix_height_dims) << ")x"
+      << "(" << stringify_dims(matrix_width_dims) << ")";
+  return oss.str();
 }
+
+} // namespace
+
+namespace lbann {
+
+template <typename TensorDataType>
+data_type_weights<TensorDataType>::data_type_weights(lbann_comm* comm)
+  : weights(comm) {}
+
+template <typename TensorDataType>
+data_type_weights<TensorDataType>::data_type_weights(const WeightsType& other)
+  : weights(other) {
+
+  // Deep copies
+  m_values.reset(other.m_values ? other.m_values->Copy() : nullptr);
+  m_initializer.reset(other.m_initializer ?
+                      other.m_initializer->copy() : nullptr);
+  m_optimizer.reset(other.m_optimizer ?
+                    other.m_optimizer->copy() : nullptr);
+  if (m_optimizer != nullptr) {
+    m_optimizer->set_weights(this);
+  }
+
+}
+
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::operator=(const WeightsType& other) -> WeightsType& {
+  weights::operator=(other);
+
+  // Deep copies
+  m_values.reset(other.m_values ? other.m_values->Copy() : nullptr);
+  m_initializer.reset(other.m_initializer ?
+                      other.m_initializer->copy() : nullptr);
+  m_optimizer.reset(other.m_optimizer ?
+                    other.m_optimizer->copy() : nullptr);
+  if (m_optimizer != nullptr) {
+    m_optimizer->set_weights(this);
+  }
+
+  return *this;
+}
+
+template <typename TensorDataType>
+description data_type_weights<TensorDataType>::get_description() const {
+  description desc = weights::get_description();
+
+  // Optimizer
+  if (m_optimizer != nullptr) {
+    desc.add(m_optimizer->get_description());
+  }
+
+  // Initializer
+  if (m_initializer != nullptr) {
+    desc.add(m_initializer->get_description());
+  }
+
+  return desc;
+}
+
+// -----------------------------------------------
+// Dimension accessors
+// -----------------------------------------------
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_dims(std::vector<int> matrix_height_dims,
+                                                 std::vector<int> matrix_width_dims) {
+  weights::set_dims(matrix_height_dims, matrix_width_dims);
+  if (m_values != nullptr) {
+    const auto& height = get_matrix_height();
+    const auto& width = get_matrix_width();
+    if (m_values->Height() != height || m_values->Width() != width) {
+      LBANN_ERROR("attempted to set weights \"", get_name(), "\" "
+                  "with dimensions ",
+                  get_dims_string(matrix_height_dims, matrix_width_dims), ", "
+                  "but it is already setup with a ",
+                  m_values->Height(), " x ", m_values->Width(), " "
+                  "weights matrix");
+    }
+  }
+}
+
+// -----------------------------------------------
+// Initializer accessors
+// -----------------------------------------------
+
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_initializer() -> InitializerType* {
+  return const_cast<InitializerType*>(static_cast<const data_type_weights&>(*this).get_initializer());
+}
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_initializer() const
+  -> const InitializerType* {
+  return m_initializer.get();
+}
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_initializer(
+  std::unique_ptr<weights_initializer>&& init) {
+  using InitializerPtrType = InitializerType*;
+  // Verify the dynamic type is compatible
+  if (init && dynamic_cast<InitializerPtrType>(init.get()))
+    // Safely transfer the memory; both release() and reset() are
+    // noexcept so this is memory-safe. The dynamic_cast in the if
+    // statement verifies the dynamic type; no need to redo it.
+    m_initializer.reset(static_cast<InitializerPtrType>(init.release()));
+  else if (init)
+    // The provided pointer was not null, but the dynamic_cast
+    // failed. This is an error.
+    LBANN_ERROR("Initializer has incompatible dynamic type.");
+  else
+    // The provided pointer was null. Set the held pointer to null.
+    m_initializer.reset();
+}
+
+// -----------------------------------------------
+// Optimizer accessors
+// -----------------------------------------------
+
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_optimizer()
+  -> OptimizerType* {
+  return const_cast<OptimizerType*>(
+           static_cast<const WeightsType&>(*this).get_optimizer());
+}
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_optimizer() const
+  -> const OptimizerType* {
+  if (is_frozen()) {
+    return nullptr;
+  } else {
+    return m_optimizer.get();
+  }
+}
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_optimizer(
+  std::unique_ptr<optimizer>&& opt) {
+  using OptimizerPtrType = OptimizerType*;
+  if (opt && dynamic_cast<OptimizerPtrType>(opt.get()))
+    m_optimizer.reset(static_cast<OptimizerPtrType>(opt.release()));
+  else if (opt)
+    LBANN_ERROR("Optimizer has incompatible dynamic type");
+  else
+    m_optimizer.reset();
+}
+
+// -----------------------------------------------
+// Setup
+// -----------------------------------------------
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::setup() {
+  // Return immediately if weights have already been setup
+  if (m_values != nullptr) { return; }
+
+  weights::setup();
+
+  auto matrix_dist = get_matrix_distribution();
+  // Construct weights matrix
+  m_values.reset(AbsDistMatrixType::Instantiate(*matrix_dist.grid,
+                                                matrix_dist.root,
+                                                matrix_dist.colDist,
+                                                matrix_dist.rowDist,
+                                                (matrix_dist.blockHeight == 1
+                                                 && matrix_dist.blockWidth == 1 ?
+                                                 El::ELEMENT : El::BLOCK),
+                                                matrix_dist.device));
+  m_values->AlignWith(matrix_dist);
+  m_values->Resize(get_matrix_height(), get_matrix_width());
+  if (m_initializer != nullptr) {
+    m_initializer->fill(*m_values);
+  } else {
+    El::Zero(*m_values);
+  }
+
+  // Setup optimizer
+  if (m_optimizer != nullptr) {
+    m_optimizer->setup(this);
+  }
+
+}
+
+// -----------------------------------------------
+// Weight matrix accessors
+// -----------------------------------------------
+
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_values() -> AbsDistMatrixType& {
+  return const_cast<AbsDistMatrixType&>(static_cast<const data_type_weights&>(*this).get_values());
+}
+template <typename TensorDataType>
+auto data_type_weights<TensorDataType>::get_values() const
+  -> const AbsDistMatrixType& {
+  if (m_values == nullptr) {
+    LBANN_ERROR("attempted to access values of "
+                "weights \"" + get_name() + "\" "
+                "before they are setup");
+  }
+  return *m_values;
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_values(const AbsDistMatrixType& values) {
+  El::Copy(values, get_values());
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_value(TensorDataType value, int index) {
+
+#ifdef LBANN_DEBUG
+  // Check that tensor position is valid
+  const auto& size = get_size();
+  if (index < 0 || index >= size) {
+    LBANN_ERROR("attempted to set value in "
+                "weights \"", get_name(), "\""
+                "at index ", index, ", "
+                "but there are ", size, " values");
+  }
+#endif // LBANN_DEBUG
+
+  // Set matrix entry
+  const auto& height = get_matrix_height();
+  set_value(value, index % height, index / height);
+
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_value(TensorDataType value, std::vector<int> pos) {
+
+  // Get tensor dimensions
+  const auto& dims = get_dims();
+
+#ifdef LBANN_DEBUG
+  // Check that tensor position is valid
+  bool valid = dims.size() == pos.size();
+  for (size_t i = 0 ; i < dims.size(); ++i) {
+    valid = valid && pos[i] >= 0 && pos[i] < dims[i];
+  }
+  if (!valid) {
+    LBANN_ERROR("attempted to set value in "
+                "weights \"", get_name(), "\""
+                "at position (", stringify_dims(pos), ") "
+                "in a tensor with dimensions ", stringify_dims(dims));
+      }
+#endif // LBANN_DEBUG
+
+  // Get index of weight value and set
+  int index = 0;
+  for (size_t i = 0; i < dims.size(); ++i) {
+    index = index * dims[i] + pos[i];
+  }
+  set_value(value, index);
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::set_value(TensorDataType value, int row, int col) {
+
+#ifdef LBANN_DEBUG
+  // Check that matrix entry is valid
+  const auto& height = get_matrix_height();
+  const auto& width = get_matrix_width();
+  if (row < 0 || row >= height || col < 0 || col > width ) {
+    LBANN_ERROR("attempted to set weights value "
+                "in weights \"", get_name(), "\""
+                "at entry (", row, ",", col, ") "
+                "in a ", height, "x", width, " matrix");
+  }
+#endif // LBANN_DEBUG
+
+  // Set value if it is local
+  auto& values = get_values();
+  if (values.IsLocal(row, col)) {
+    values.SetLocal(values.LocalRow(row), values.LocalCol(col), value);
+  }
+
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::reconcile_values() {
+  auto& values = get_values();
+  if (values.RedundantSize() > 1) {
+    El::Scale(DataType(1) / values.RedundantSize(), values);
+    get_comm().allreduce(values, values.RedundantComm());
+  }
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::reconcile_values(Al::request& req) {
+  auto& values = get_values();
+  if (values.RedundantSize() > 1) {
+    El::Scale(DataType(1) / values.RedundantSize(), values);
+    get_comm().nb_allreduce(values, values.RedundantComm(), req);
+  }
+}
+
+// -----------------------------------------------
+// Checkpointing
+// -----------------------------------------------
+
+template <typename TensorDataType>
+bool data_type_weights<TensorDataType>::save_to_checkpoint_shared(lbann::persist& p)
+{
+  // define name to store weight values
+  char l_name[512];
+  sprintf(l_name, "weights_%s_%lldx%lld", get_name().c_str(), m_values->Height(), m_values->Width());
+  // write weights using persist call -- uses Elemental's write function.
+  p.write_distmat(persist_type::model, l_name, m_values.get());
+  // if saving training state, also write out state of optimizer
+  if (m_optimizer != nullptr) {
+    m_optimizer->save_to_checkpoint_shared(p, get_name());
+  }
+
+  return true;
+}
+
+template <typename TensorDataType>
+void data_type_weights<TensorDataType>::write_proto(lbann_data::WeightsData* proto) const {
+
+  // Set proto properties
+  proto->Clear();
+  proto->set_name(get_name());
+  for (const auto& d : get_dims()) {
+    proto->mutable_shape()->add_dim(d);
+  }
+  proto->set_height(get_matrix_height());
+  proto->set_width(get_matrix_width());
+
+  // Write weight values to prototext on world master process
+  CircMatDT<TensorDataType, El::Device::CPU> values = *m_values; /// @todo What if weights are on GPU?
+  values.SetRoot(0); /// @todo What if world master is not process 0?
+  if (get_comm().am_world_master()) {
+    const auto& local_values = values.LockedMatrix();
+    const El::Int height = local_values.Height();
+    const El::Int width = local_values.Width();
+    /// @todo OpenMP parallelization
+    /** @todo Our matrices are column-major while Numpy expects
+     *  row-major matrices. This row-wise iteration is fine for
+     *  matrices and column vectors, but it can mess up the order of
+     *  the weights if a high-dimensional tensor is represented as a
+     *  matrix. This is what we need for quantization on convolution
+     *  kernel weights.
+     */
+    for (El::Int i = 0; i < height; ++i) {
+      for (El::Int j = 0; j < width; ++j) {
+        proto->add_data(local_values(i,j));
+      }
+    }
+  }
+
+}
+
+template <typename TensorDataType>
+bool data_type_weights<TensorDataType>::load_from_checkpoint_shared(lbann::persist& p)
+{
+  // define filename containing saved weight values
+  auto f_name = El::BuildString("weights_", get_name(), "_",
+                                m_values->Height(), "x", m_values->Width(),
+                                ".bin");
+  p.read_distmat(persist_type::model, f_name.c_str(), m_values.get());
+  if (m_optimizer != nullptr) {
+    m_optimizer->load_from_checkpoint_shared(p, get_name());
+  }
+
+  return true;
+}
+
+template <typename TensorDataType>
+bool data_type_weights<TensorDataType>::load_from_save(std::string const& ckpt_dir,
+                                                       std::vector<std::string> const& weight_list){
+  // create weight file name to match to weight list entry
+  auto l_name = El::BuildString("model_weights_", get_name(), "_",
+                                m_values->Height(), "x", m_values->Width(), ".bin");
+  auto it = std::find(weight_list.begin(),weight_list.end(),l_name);
+  // If match is found read in weight values.
+  if(it != weight_list.end()) {
+    std::string full_path = ckpt_dir + *it;
+    if(get_comm().am_world_master()) {
+      std::cout << "Loading " << get_name() << " <- " << *it << "\n";
+    }
+    // check whether file exists
+    int exists = lbann::exists(full_path.c_str());
+    if (! exists) {
+      throw lbann_exception(std::string("Failed to read weight matrix: ") + full_path);
+      return false;
+    }
+    El::Read(*m_values,full_path, El::BINARY, true);
+  }
+  return true;
+}
+
+template <typename TensorDataType>
+bool data_type_weights<TensorDataType>::save_to_checkpoint_distributed(lbann::persist& p){
+  // Functions identically to shared checkpoint except weights and parameters are saved on a per rank basis
+  auto l_name = El::BuildString("weights_", get_name(),
+                                "_", m_values->LocalHeight(),
+                                "x", m_values->LocalWidth(), ".bin");
+  p.write_rank_distmat(persist_type::model, l_name.c_str(), *m_values);
+  if (m_optimizer != nullptr) {
+    m_optimizer->save_to_checkpoint_distributed(p, get_name());
+  }
+  return true;
+}
+
+template <typename TensorDataType>
+bool data_type_weights<TensorDataType>::load_from_checkpoint_distributed(lbann::persist& p){
+  // Functions identically to shared checkpoint except weights and parameters are loaded on a per rank basis
+  auto l_name = El::BuildString("weights_", get_name(),
+                                "_", m_values->LocalHeight(),
+                                "x", m_values->LocalWidth(), ".bin");
+  p.read_rank_distmat(persist_type::model, l_name.c_str(), *m_values);
+  if (m_optimizer != nullptr) {
+    m_optimizer->load_from_checkpoint_distributed(p, get_name());
+  }
+  return true;
+}
+
+template class data_type_weights<DataType>;
+  template class data_type_weights<T>;
+
+#define LBANN_INSTANTIATE_CPU_HALF
+#include "lbann/macros/instantiate.hpp"
+
+}  // namespace lbann

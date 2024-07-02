@@ -1,5 +1,4 @@
 /******************************************************************************
-            msg_error("PluginManager") << "File not found: " << plugin;
 *                 SOFA, Simulation Open-Framework Architecture                *
 *                    (c) 2006 INRIA, USTL, UJF, CNRS, MGH                     *
 *                                                                             *
@@ -430,7 +429,7 @@ bool PluginManager::pluginIsLoaded(const std::string& plugin)
         if (!FileSystem::isFile(plugin))
         {
             // path is invalid
-            msg_error("PluginManager") << "Could not check if the plugin is loaded as the path is invalid: " << plugin;
+            msg_error("PluginManager") << "File not found: " << plugin;
             return false;
         }
 

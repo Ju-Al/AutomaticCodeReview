@@ -1,5 +1,4 @@
 /* $Id$ */
-	uint32 cur_ticks = GetTickCount();
 
 /*
  * This file is part of OpenTTD.
@@ -1191,7 +1190,7 @@ static void CheckPaletteAnim()
 void VideoDriver_Win32::MainLoop()
 {
 	MSG mesg;
-	uint32 cur_ticks = timeGetTime();
+	uint32 cur_ticks = GetTickCount();
 	uint32 last_cur_ticks = cur_ticks;
 	uint32 next_tick = cur_ticks + MILLISECONDS_PER_TICK;
 

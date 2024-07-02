@@ -51,8 +51,6 @@ class ProjectionUtil {
         return null;
     }
   }
-
-  static UnboundPredicate<Integer> truncateIntegerStrict(
       String name, BoundPredicate<Integer> pred, Transform<Integer, Integer> transform) {
     int boundary = pred.literal().value();
     switch (pred.op()) {

@@ -1,5 +1,5 @@
 // 
-        [DefaultValue(25)]// Copyright (c) 2004-2021 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
+// Copyright (c) 2004-2021 Jaroslaw Kowalski <jaak@jkowalski.net>, Kim Christensen, Julian Verdurmen
 // 
 // All rights reserved.
 // 
@@ -280,7 +280,7 @@ namespace NLog.Targets
         /// Gets or sets the port number that SMTP Server is listening on.
         /// </summary>
         /// <docgen category='SMTP Options' order='15' />
-        public Layout<int> SmtpPort { get; set; }
+        [DefaultValue(25)]        public Layout<int> SmtpPort { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the default Settings from System.Net.MailSettings should be used.

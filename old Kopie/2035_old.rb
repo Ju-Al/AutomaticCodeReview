@@ -1,5 +1,4 @@
 module RSpec
-            return filter_applies_to_any_value?(key, value, metadata) if Array === metadata[key] && !(Proc === value)
   module Core
     # Contains metadata filtering logic. This has been extracted from
     # the metadata classes because it operates ON a metadata hash but
@@ -16,6 +15,7 @@ module RSpec
         # @private
         def filter_applies?(key, value, metadata)
           silence_metadata_example_group_deprecations do
+            return filter_applies_to_any_value?(key, value, metadata) if Array === metadata[key] && !(Proc === value)
             return location_filter_applies?(value, metadata)          if key == :locations
             return id_filter_applies?(value, metadata)                if key == :ids
             return filters_apply?(key, value, metadata)               if Hash === value

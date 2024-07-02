@@ -47,7 +47,6 @@ var (
 
 	// Aurora-Serverless-specific errors.
 	errInvalidRDSNameCharacters = errors.New("value must start with a letter")
-
 	errInvalidSecretNameCharacters = errors.New("value must contain only letters, numbers, period, hyphens and underscore")
 )
 

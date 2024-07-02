@@ -1,5 +1,4 @@
 // Copyright (c) 2015-2018 Runtime Verification, Inc. (RV-Match team). All Rights Reserved.
-        ocamlProgramHeader(sb, true);
 package org.kframework.backend.ocaml;
 
 import com.google.common.base.Joiner;
@@ -399,7 +398,7 @@ public class DefinitionToOcaml implements Serializable {
 
     public String execute(K k, int depth, String file) {
         StringBuilder sb = new StringBuilder();
-        ocamlProgramHeader(sb, true, "open List\n");
+        ocamlProgramHeader(sb, true);
         ocamlTermInput(new KRun.InitialConfiguration(k), sb); //declares input
         generateMain(sb);
         ocamlOpenFile("out", file, sb); //declares out

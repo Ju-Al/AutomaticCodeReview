@@ -245,7 +245,6 @@ class FlowHandler(RequestHandler):
                         request.port = int(v)
                     elif k == "headers":
                         request.headers.set_state(v)
-                    elif k == "content":
                         print(v)
                         response.content = str(v)
                     else:

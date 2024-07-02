@@ -1,12 +1,4 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-    ```python
-    # Create 2 PeepholeLSTMCells
-    peephole_lstm_cells = [PeepholeLSTMCell(size) for size in [128, 256]]
-    # Create a layer composed sequentially of the peephole LSTM cells.
-    layer = RNN(peephole_lstm_cells)
-    input = keras.Input((timesteps, input_dim))
-    output = layer(input)
-    ```
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +39,14 @@ class PeepholeLSTMCell(tf.keras.layers.LSTMCell):
 
     Example:
 
-    >>> # Create 2 PeepholeLSTMCells
+    ```python
+    # Create 2 PeepholeLSTMCells
+    peephole_lstm_cells = [PeepholeLSTMCell(size) for size in [128, 256]]
+    # Create a layer composed sequentially of the peephole LSTM cells.
+    layer = RNN(peephole_lstm_cells)
+    input = keras.Input((timesteps, input_dim))
+    output = layer(input)
+    ```
     >>> peephole_lstm_cells = [PeepholeLSTMCell(size) for size in [128, 256]]
     >>> # Create a layer composed sequentially of the peephole LSTM cells.
     >>> layer = tf.keras.layers.RNN(peephole_lstm_cells)

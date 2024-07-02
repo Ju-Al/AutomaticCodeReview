@@ -79,7 +79,6 @@ module Travis
           def smalltalk_version
             config[:smalltalk].to_s
           end
-          
           def travis_smalltalk_config
             config[:smalltalk_config].to_s
           end

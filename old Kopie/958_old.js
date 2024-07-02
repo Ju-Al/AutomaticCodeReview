@@ -1,5 +1,4 @@
 // Sandstorm - Personal Cloud Sandbox
-// Copyright (c) 2015 Sandstorm Development Group, Inc. and contributors
 // All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
