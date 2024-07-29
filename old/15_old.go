@@ -374,6 +374,8 @@ func (wp *wsPeer) writeLoop() {
 				return
 			}
 			continue
+		case <-wp.closing:
+			return
 		default:
 		}
 		// if nothing high prio, send anything

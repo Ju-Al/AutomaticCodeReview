@@ -75,15 +75,23 @@ func (cm *ConnectionMaker) queryLoop(queryChan <-chan *ConnectionMakerInteractio
 				}
 			case query.code == CMStatus:
 				query.resultChan <- cm.status()
+			case query.code == CMConnSucceeded:
+				delete(cm.attempting, ConnectionMakerPair{query.foundAt, query.name})
+				delete(cm.failedConnections[query.name].foundAt, query.foundAt)
+			case query.code == CMConnFailed:
+				delete(cm.attempting, ConnectionMakerPair{query.foundAt, query.name})
 			default:
 				log.Fatal("Unexpected connection maker query:", query)
 			}
 		case now := <-tick:
+		ConnectionLoop:
 			for name, failedConn := range cm.failedConnections {
 				if now.After(failedConn.tryAfter) {
 					if _, found := cm.router.Ourself.ConnectionTo(name); found {
 						delete(cm.failedConnections, name)
 						continue
+					} else if len(failedConn.foundAt) == 0 {
+						delete(cm.failedConnections, name)
 					} else if failedConn.attemptCount == MaxAttemptCount {
 						delete(cm.failedConnections, name)
 						continue

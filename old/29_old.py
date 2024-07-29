@@ -128,9 +128,7 @@ class WeightNormalization(Wrapper):
                 trainable=True,
                 aggregation=tf_variables.VariableAggregation.MEAN)
 
-            with ops.control_dependencies([self.layer.g.assign(
-                    self._init_norm(self.layer.v))]):
-                self._compute_weights()
+            self.layer.g.assign(self._init_norm(self.layer.v))
             self._compute_weights()
 
             self.layer.built = True

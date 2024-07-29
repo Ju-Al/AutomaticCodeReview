@@ -131,6 +131,24 @@ func (o *SingleFileProgramGenerator) GetOutputDir(dir string, p *parser.Program)
 func (o *SingleFileProgramGenerator) DefaultOutputDir() string {
 	return o.SingleFileGenerator.DefaultOutputDir()
 }
+
+// MultipleFileProgramGenerator is an implementation of the ProgramGenerator
+// interface which generates source code in one file.
+type MultipleFileProgramGenerator struct {
+	MultipleFileGenerator
+}
+
+func NewMultipleFileProgramGenerator(generator MultipleFileGenerator) ProgramGenerator {
+	return &MultipleFileProgramGenerator{generator}
+}
+
+// Generate the Program in the given directory.
+func (o *MultipleFileProgramGenerator) Generate(program *parser.Program, outputDir string) error {
+	for _, scope := range program.Scopes {
+		if err := o.generateFile(program, scope, outputDir); err != nil {
+			return err
+		}
+	}
 	// Ensure code compiles. If it doesn't, it's likely because they didn't
 	// generate the Thrift structs referenced in their Frugal file.
 	return o.CheckCompile(fmt.Sprintf(".%s%s", string(os.PathSeparator), outputDir))

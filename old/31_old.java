@@ -151,7 +151,7 @@ public class MediaWikiImageView extends ImageView {
         // from the network.
         ImageContainer newContainer = mImageLoader.get(mUrl,
                 new ImageListener() {
-                    @Override
+
                     public void onErrorResponse(final VolleyError error) {
                         if(!tryOriginal) {
                             post(new Runnable() {

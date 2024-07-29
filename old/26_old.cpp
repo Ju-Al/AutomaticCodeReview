@@ -65,7 +65,7 @@ GimbalJoint::GimbalJoint(const std::string &name, OpenSim::Body& parent,
 			Joint(name, parent, locationInParent,orientationInParent,
 					body, locationInBody, orientationInBody, reverse)
 {
-	setAuthors("Tim Dorn");
+	setAuthors("Tim Dorn, Ajay Steh");
 	constructCoordinates();
 }
 
