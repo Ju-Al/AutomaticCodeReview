@@ -1,0 +1,4 @@
+    {
+        return (double) @this.amount;
+    }
+}

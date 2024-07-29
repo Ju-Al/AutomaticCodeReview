@@ -1,0 +1,72 @@
+/*
+ * Copyright 2018 ConsenSys AG.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+package tech.pegasys.pantheon.ethereum.p2p.discovery;
+
+import tech.pegasys.pantheon.crypto.SECP256K1;
+import tech.pegasys.pantheon.ethereum.p2p.peers.Endpoint;
+
+import java.util.OptionalInt;
+import java.util.stream.Stream;
+
+public class PeerDiscoveryTestHelper {
+
+  public static SECP256K1.KeyPair[] generateKeyPairs(final int count) {
+    return Stream.generate(SECP256K1.KeyPair::generate)
+        .limit(count)
+        .toArray(SECP256K1.KeyPair[]::new);
+  }
+
+  public static DiscoveryPeer[] generatePeers(final SECP256K1.KeyPair... keypairs) {
+    return Stream.of(keypairs)
+        .map(kp -> kp.getPublicKey().getEncodedBytes())
+        .map(bytes -> new DiscoveryPeer(bytes, new Endpoint("127.0.0.1", 1, OptionalInt.empty())))
+        .toArray(DiscoveryPeer[]::new);
+  }
+
+  public static DiscoveryPeer[] generateDiscoveryPeers(final SECP256K1.KeyPair... keypairs) {
+    return Stream.of(generatePeers(keypairs)).map(DiscoveryPeer::new).toArray(DiscoveryPeer[]::new);
+      this.bootstrapPeers = peers;
+      return this;
+    }
+
+    public AgentBuilder setBootstrapPeers(final DiscoveryPeer... peers) {
+      this.bootstrapPeers = Arrays.asList(peers);
+      return this;
+    }
+
+    public AgentBuilder setWhiteList(final NodeWhitelistController whitelist) {
+      this.whitelist = whitelist;
+      return this;
+    }
+
+    public AgentBuilder setBlacklist(final PeerBlacklist blacklist) {
+      this.blacklist = blacklist;
+      return this;
+    }
+
+    public AgentBuilder setActive(final boolean active) {
+      this.active = active;
+      return this;
+    }
+
+    public MockPeerDiscoveryAgent build() {
+      final DiscoveryConfiguration config = new DiscoveryConfiguration();
+      config.setBootstrapPeers(bootstrapPeers);
+      config.setBindPort(nextAvailablePort.incrementAndGet());
+      config.setActive(active);
+
+      return new MockPeerDiscoveryAgent(
+          SECP256K1.KeyPair.generate(), config, () -> true, blacklist, whitelist, agents);
+    }
+  }
+}
