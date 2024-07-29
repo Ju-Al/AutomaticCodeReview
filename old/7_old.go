@@ -15,7 +15,32 @@ import (
 	"time"
 )
 
-type StatsEntry struct {
+////////////////////// HELPERS FUNCTIONS / STRUCT /////////////////
+// StreamStats is used to compute the statistics
+// it reprensent the time to an action (setup, shamir round, coll round etc)
+// use it to compute streaming mean + dev
+type StreamStats struct {
+	min float64
+	max float64
+
+	n    int
+	oldM float64
+	newM float64
+	oldS float64
+	newS float64
+	dev  float64
+}
+
+// Update will update the time struct with the min / max  change
+// + compute new avg + new dev
+// k is the number of times we've added something ("index" of the update)
+// needed to compute the avg + dev
+// streaming dev algo taken from http://www.johndcook.com/blog/standard_deviation/
+func (t *StreamStats) Update(newTime float64) {
+	t.n += 1
+	// nothings takes 0 ms to complete, so we know it's the first time
+	if t.min > newTime || t.min == 0.0 {
+		t.min = newTime
 	}
 	if t.max < newTime {
 		t.max = newTime

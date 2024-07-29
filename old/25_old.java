@@ -659,32 +659,14 @@ public abstract class AbstractInputFormat<K,V> implements InputFormat<K,V> {
         }
         for (Map.Entry<KeyExtent,List<Range>> extentRanges : tserverBin.getValue().entrySet()) {
           Range ke = extentRanges.getKey().toDataRange();
-          for (Range r : extentRanges.getValue()) {
-            if (autoAdjust) {
-              // divide ranges into smaller ranges, based on the tablets
-              RangeInputSplit split = new RangeInputSplit(tableName, tableId, ke.clip(r), new String[] {location});
+          if (batchScan && supportBatchScan) {
+            // group ranges by tablet to be read by a BatchScanner
+            ArrayList<Range> clippedRanges = new ArrayList<Range>();
+            for(Range r: extentRanges.getValue())
+              clippedRanges.add(ke.clip(r));
 
-              split.setOffline(tableConfig.isOfflineScan());
-              split.setIsolatedScan(tableConfig.shouldUseIsolatedScanners());
-              split.setUsesLocalIterators(tableConfig.shouldUseLocalIterators());
-              split.setMockInstance(mockInstance);
-              split.setFetchedColumns(tableConfig.getFetchedColumns());
-              split.setPrincipal(principal);
-              split.setToken(token);
-              split.setInstanceName(instance.getInstanceName());
-              split.setZooKeepers(instance.getZooKeepers());
-              split.setAuths(auths);
-              split.setIterators(tableConfig.getIterators());
-              split.setLogLevel(logLevel);
-
-              splits.add(split);
-            } else {
-              // don't divide ranges
-              ArrayList<String> locations = splitsToAdd.get(r);
-              if (locations == null)
-                locations = new ArrayList<String>(1);
-              locations.add(location);
-              splitsToAdd.put(r, locations);
+            org.apache.accumulo.core.client.mapred.BatchInputSplit split = new org.apache.accumulo.core.client.mapred.BatchInputSplit(tableName, tableId, clippedRanges, new String[] {location});
+            split.setFetchedColumns(tableConfig.getFetchedColumns());
             split.setPrincipal(principal);
             split.setToken(token);
             split.setInstanceName(instance.getInstanceName());

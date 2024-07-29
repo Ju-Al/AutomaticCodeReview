@@ -3,14 +3,20 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
+	"path/filepath"
 
+	"github.com/hashicorp/waypoint/internal/assets"
+	"github.com/hashicorp/waypoint/internal/pkg/epinject"
 	"github.com/hashicorp/waypoint/sdk/component"
 	"github.com/hashicorp/waypoint/sdk/terminal"
 )
 
 // Builder uses `docker build` to build a Docker iamge.
-type Builder struct{}
+type Builder struct {
+	DisableCEB bool
 }
 
 // BuildFunc implements component.Builder
