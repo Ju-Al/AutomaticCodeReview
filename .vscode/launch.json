@@ -1,0 +1,56 @@
+{
+    // Verwendet IntelliSense zum Ermitteln möglicher Attribute.
+    // Zeigen Sie auf vorhandene Attribute, um die zugehörigen Beschreibungen anzuzeigen.
+    // Weitere Informationen finden Sie unter https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "Main",
+            "request": "launch",
+            "mainClass": "example1.accommodation.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        },
+        {
+            "type": "java",
+            "name": "Main(1)",
+            "request": "launch",
+            "mainClass": "example1.filemanager.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        },
+        {
+            "type": "java",
+            "name": "Main(2)",
+            "request": "launch",
+            "mainClass": "example1.order.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        },
+        {
+            "type": "java",
+            "name": "Main(3)",
+            "request": "launch",
+            "mainClass": "example1.person.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        },
+        {
+            "type": "java",
+            "name": "Main(4)",
+            "request": "launch",
+            "mainClass": "example1.shapes.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        },
+        {
+            "type": "java",
+            "name": "Main(5)",
+            "request": "launch",
+            "mainClass": "example2.shapes.Main",
+            "projectName": "AutomaticCodeReview_e1ce0ce3"
+        }
+    ]
+}
