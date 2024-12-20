@@ -1,0 +1,28 @@
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:1:	PackageCase:	Package name contains upper case characters
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:7:	UnnecessaryImport:	Unused import 'java.util.function.Predicate'
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:9:	AtLeastOneConstructor:	Each class should declare at least one constructor
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:10:	MethodArgumentCouldBeFinal:	Parameter 'salesData' is not assigned and could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:16:	LocalVariableCouldBeFinal:	Local variable 'processedSales' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:17:	LocalVariableCouldBeFinal:	Local variable 'sale' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:28:	LocalVariableCouldBeFinal:	Local variable 'processedSale' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:39:	MethodArgumentCouldBeFinal:	Parameter 'purchaseData' is not assigned and could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:45:	LongVariable:	Avoid excessively long variable names like processedPurchases
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:45:	LocalVariableCouldBeFinal:	Local variable 'processedPurchases' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:46:	LocalVariableCouldBeFinal:	Local variable 'purchase' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:57:	LocalVariableCouldBeFinal:	Local variable 'processedPurchase' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:68:	MethodArgumentCouldBeFinal:	Parameter 'date' is not assigned and could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:72:	AvoidCatchingGenericException:	Avoid catching generic exceptions such as NullPointerException, RuntimeException, Exception in try-catch block
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:73:	PreserveStackTrace:	Thrown exception does not preserve the stack trace of exception 'e' on all code paths
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:77:	MethodArgumentCouldBeFinal:	Parameter 'sale' is not assigned and could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:84:	MethodArgumentCouldBeFinal:	Parameter 'purchase' is not assigned and could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:92:	LocalVariableCouldBeFinal:	Local variable 'processor' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:94:	LocalVariableCouldBeFinal:	Local variable 'salesData' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:95:	LocalVariableCouldBeFinal:	Local variable 'sale1' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:100:	LocalVariableCouldBeFinal:	Local variable 'purchaseData' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:101:	LocalVariableCouldBeFinal:	Local variable 'purchase1' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:106:	LocalVariableCouldBeFinal:	Local variable 'processedSales' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:107:	LongVariable:	Avoid excessively long variable names like processedPurchases
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:107:	LocalVariableCouldBeFinal:	Local variable 'processedPurchases' could be declared final
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:109:	SystemPrintln:	Usage of System.out/err
+Documents/Privat/Uni/SoSe24/MA-Testdateien/AutomaticCodeReview/example6/dataProcessor/DataProcessor.java:110:	SystemPrintln:	Usage of System.out/err
+LoosePackageCoupling	-	No packages or classes specified
