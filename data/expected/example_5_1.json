@@ -1,0 +1,16 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "method_names": [
+                "SMSAuthorizer"
+            ],
+            "reason": "The DebitPaymentProcessor class directly depends on the concrete implementation of SMSAuthorizer. This means the payment processor shouldn’t be concerned with how its payment is validated, whether that be by SMS, a robot check, or an email. This violates the Dependency Inversion Principle since the high-level class DebitPaymentProcessor is directly dependent on a low-level class. ",
+            "suggestion": "Instead of depending on concrete implementations, the high-level class DebitPaymentProcessor should depend on abstractions. Create an abstract class Authorizer. Now you can create SMSAuthorizer and NotARobotAuthorizer, which implement the Authorizer class.",
+            "code": [ 
+                "class SMSAuthorizer:\r\n    def __init__(self):\r\n        self.authenticated = False\r\n\r\n    def verify_code(self, code: str):\r\n        print(\"Verifying code\")\r\n        self.authenticated = True\r\n\r\n    def is_authenticated(self):\r\n        return self.authenticated"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

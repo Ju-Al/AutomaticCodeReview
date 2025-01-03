@@ -1,2 +1,7 @@
 .DS_Store
 .env
+gpt/__pycache__/system_prompt.cpython-312.pyc
+gpt/__pycache__/config.cpython-312.pyc
+gpt/__pycache__/models.cpython-312.pyc
+gpt/__pycache__/openai_client.cpython-312.pyc
+gpt/__pycache__/output_schema.cpython-312.pyc

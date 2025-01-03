@@ -24,14 +24,11 @@ def statement(invoice, plays):
         else:
             raise ValueError(f"Unknown type: {play['type']}")
 
-        # Add volume credits
         volume_credits += max(perf['audience'] - 30, 0)
 
-        # Add extra credit for every ten comedy attendees
         if play['type'] == "comedy":
             volume_credits += perf['audience'] // 5
 
-        # Append performance details to result
         result += f" {play['name']}: {format_currency(this_amount / 100)} ({perf['audience']} seats)\n"
         total_amount += this_amount
 

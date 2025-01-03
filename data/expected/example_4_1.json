@@ -1,0 +1,16 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "This code violates the Interface Segregation Principle because the CreditPaymentProcessor class is forced to implement the auth_sms method, even though it does not use it.",
+            "suggestion": "In order to comply with the Interface Segregation Principle create another abstract class (e.g. SMSPaymentProcessor) that implements the auth_sms method and implements the PaymentProcessor class. So the CreditPaymentProcessor can use the PaymentProcessor and the DebitPaymentProcessor can use the SMSPaymentProcessor.",
+            "code": [
+                "@abstractmethod\r\n    def auth_sms(self, order, code: str):\r\n        ..."
+                ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

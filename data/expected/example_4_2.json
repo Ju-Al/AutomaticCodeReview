@@ -1,0 +1,16 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "method_names": [
+                "ShapeInterface"
+            ],
+            "reason": "In this implementation, every shape you create would have to implement the volume method. However, you cannot calculate a volume from every shape. This interface forces the Square class to implement a method that it does not need. This violates the Interface Segregation Principle",
+            "suggestion": "In order to comply with the Interface Segregation Principle create another interface (e.g. ThreeDimensionalShapeInterface) that has the contract volume and three-dimensional shapes can implement this interface.",
+            "code": [
+                "@abstractmethod\r\n    def volume(self):\r\n        pass"
+                ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

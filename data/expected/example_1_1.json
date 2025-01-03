@@ -1,0 +1,20 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "add_item",
+                "total_price",
+                "pay"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order is responsible for both order management and payment. There is also a breach of the Single Responsibility Principle because the order is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into three separate classes: one for the payment (e.g. PaymentProcessor), one for the order quantities and one for the prices.",
+            "code": [
+                "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")",
+                "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

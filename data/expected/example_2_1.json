@@ -1,0 +1,29 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "method_names": [
+                "PaymentProcessor"
+            ],
+            "reason": "The current PaymentProcessor class violates the open-closed principle, as the existing source code of the class would have to be modified for each new payment method (such as PayPal, credit card or bank transfer).",
+            "suggestion": "In order to comply with the open-closed principle, the PaymentProcessor class should be implemented as an abstract base class. A separate class is then created for each specific payment method, which inherits from this abstract class (e.g. CreditCardPaymentProcessor, PayPalPaymentProcessor). ",
+            "code": [
+                "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "total_price",
+                "add_items"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "code": [
+                "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violation found. Please see the details below."
+}

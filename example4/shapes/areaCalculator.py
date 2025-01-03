@@ -2,9 +2,14 @@ from abc import ABC, abstractmethod
 import math
 import json
 
+
 class Shape(ABC):
     @abstractmethod
     def area(self):
+        pass
+
+    @abstractmethod
+    def volume(self):
         pass
 
 class AreaCalculator:
@@ -27,13 +32,16 @@ class VolumeCalculator(AreaCalculator):
             total_volume += shape.area()
         return total_volume
 
-
 class Square(Shape):
     def __init__(self, length) -> None:
         self.length = length
     
     def area(self):
         return self.length ** 2
+    
+    def volume(self):
+        # Da es ein 2D-Shape ist, wird diese Methode nicht wirklich benötigt
+        raise NotImplementedError("Square is a 2D shape")
 
 class Circle(Shape):
     def __init__(self, radius) -> None:
@@ -41,7 +49,21 @@ class Circle(Shape):
 
     def area(self):
         return math.pi * self.radius ** 2
-
+    
+    def volume(self):
+        # Da es ein 2D-Shape ist, wird diese Methode nicht wirklich benötigt
+        raise NotImplementedError("Square is a 2D shape")
+    
+class Dice(Shape):
+    def __init__(self, length) -> None:
+        self.length = length
+    
+    def area(self):
+        return 6 ** pow(self.length, 2) 
+    
+    def volume(self):
+        return 6 ** pow(self.length, 3)
+    
 class SumCalculator:
     def __init__(self, areaCalculator: AreaCalculator) -> None:
         self.calculator = areaCalculator
@@ -54,9 +76,8 @@ class SumCalculator:
 
     def HTML(self):
         return f"Sum of the areas of provided shapes: {self.calculator.sum()}"
-
-
-shapes = [Circle(2), Square(5), Square(6)]
+    
+shapes = [Circle(2), Square(5), Square(6), Dice(2)]
 
 # Area Calculation
 area_calculator = AreaCalculator(shapes)
@@ -66,8 +87,7 @@ print(area_outputter.to_json())
 print(area_outputter.to_html())
 
 # Volume Calculation (example)
-solid_shapes = [Circle(3), Square(4)]
-volume_calculator = VolumeCalculator(solid_shapes)
+volume_calculator = VolumeCalculator(shapes)
 volume_outputter = SumCalculator(volume_calculator)
 
 print(volume_outputter.to_json())

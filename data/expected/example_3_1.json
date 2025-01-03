@@ -1,0 +1,29 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Paypal uses email addresses for verification, whereas credit and debit cards use security codes. This means we are abusing the Liskov Substitution Principle because we are using a subclass in a way that is not compatible with its parent class.",
+            "suggestion": "The security code authentication should be removed from the abstract class. Instead, each concrete implementation (PayPal, credit card) should define in its respective __init__ method which type of authentication it requires. This allows each payment method to implement its own suitable authentication method without violating the specifications of the base class.",
+            "code": [
+               ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "total_prices",
+                "add_items"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "code": [
+                "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+            ]
+        }
+
+    ],
+    "overall_feedback": "2 principle violation found. Please see the details below."
+}

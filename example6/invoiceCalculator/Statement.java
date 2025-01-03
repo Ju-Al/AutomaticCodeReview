@@ -40,15 +40,12 @@ public class Statement {
                     throw new IllegalArgumentException("Unknown type: " + play.getType());
             }
 
-            // Add volume credits
             volumeCredits += Math.max(perf.getAudience() - 30, 0);
 
-            // Extra credit for every ten comedy attendees
             if ("comedy".equals(play.getType())) {
                 volumeCredits += Math.floor(perf.getAudience() / 5);
             }
 
-            // Append performance details to result
             result.append(String.format(" %s: %s (%d seats)\n",
                     play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));
             totalAmount += thisAmount;

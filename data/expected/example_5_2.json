@@ -1,0 +1,15 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService directly depends on the concrete implementation of MySQLDatabase. This violates the Dependency Inversion Principle since the high-level class UserService is directly dependent on a low-level class.",
+            "suggestion": "Instead of depending on concrete implementations, the high-level class UserService should depend on abstractions. Create a Database interface as an abstraction.",
+            "code": [
+                ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

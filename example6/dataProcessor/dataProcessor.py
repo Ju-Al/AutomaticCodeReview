@@ -1,6 +1,5 @@
 class DataProcessor:
     def process_sales_data(self, sales_data):
-        # Duplizierter Validierungscode
         if not sales_data:
             raise ValueError("Sales data cannot be empty")
         
@@ -9,14 +8,12 @@ class DataProcessor:
         
         processed_sales = []
         for sale in sales_data:
-            # Duplizierte Validierungslogik
             if 'amount' not in sale:
                 raise ValueError(f"Invalid sale record: {sale}")
             
             if 'date' not in sale:
                 raise ValueError(f"Invalid sale record: {sale}")
             
-            # Komplexe Verarbeitungslogik
             processed_sale = {
                 'amount': float(sale['amount']),
                 'date': self.normalize_date(sale['date']),
@@ -27,7 +24,6 @@ class DataProcessor:
         return processed_sales
     
     def process_purchase_data(self, purchase_data):
-        # Fast identischer Code wie bei Sales Data
         if not purchase_data:
             raise ValueError("Purchase data cannot be empty")
         
@@ -36,14 +32,12 @@ class DataProcessor:
         
         processed_purchases = []
         for purchase in purchase_data:
-            # Fast gleiche Validierungslogik
             if 'amount' not in purchase:
                 raise ValueError(f"Invalid purchase record: {purchase}")
             
             if 'date' not in purchase:
                 raise ValueError(f"Invalid purchase record: {purchase}")
             
-            # Ähnliche Verarbeitungslogik
             processed_purchase = {
                 'amount': float(purchase['amount']),
                 'date': self.normalize_date(purchase['date']),
@@ -54,22 +48,18 @@ class DataProcessor:
         return processed_purchases
     
     def normalize_date(self, date):
-        # Datumsformatierungslogik
         try:
-            # Verschiedene Datumsformatierungen normalisieren
             return str(date)
         except Exception as e:
             raise ValueError(f"Invalid date format: {date}")
     
     def validate_sale(self, sale):
-        # Verkaufsvalidierung
         return (
             sale.get('amount', 0) > 0 and 
             sale.get('date') is not None
         )
     
     def validate_purchase(self, purchase):
-        # Kaufvalidierung
         return (
             purchase.get('amount', 0) > 0 and 
             purchase.get('date') is not None

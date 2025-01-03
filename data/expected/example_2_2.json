@@ -1,0 +1,17 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The current AreaCalculator class violates the open-closed principle, as the existing source code of the class would have to be modified for the sum of additional shapes such as triangles, pentagons, hexagons. ",
+            "suggestion": "In order to comply with the open-closed principle would be to introduce a ShapeInterface as an abstract class that defines a area() method. Each concrete shape (such as Circle, Rectangle, Triangle) then implements this interface and provides its own specific area calculation method. The AreaCalculator only needs to know about the interface and call the respective area() method without knowing which concrete shape it's dealing with. This way, new shapes can be easily integrated by adding new classes that implement the ShapeInterface, without having to modify existing code.",
+            "code": [
+                "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)\n"
+                ]
+        }
+
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

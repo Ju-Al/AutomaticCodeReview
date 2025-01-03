@@ -1,0 +1,16 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Don't Repeat Yourself",
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The code violates the DRY (Don't Repeat Yourself) principle in several places. The calculation of the amounts (this_amount) and the bonus points (volume_credits) contains repetitive logic for different theatre performance types. In addition, the currency formatting (division by 100) is performed several times in the code.",
+            "suggestion": "The repetitive code parts should be outsourced to separate functions: A function for calculating the amounts (calculateAmount), a function for calculating the bonus points (calculateVolumeCredits), a central function for currency conversion and formatting and a separate class for the different performance types with their specific calculation logic",
+            "code": [
+                "def statement(invoice, plays):\r\n    total_amount = 0\r\n    volume_credits = 0\r\n    result = f\"Statement for {invoice['customer']}\\n\"\r\n\r\n    def format_currency(amount):\r\n        return f\"${amount:,.2f}\"\r\n\r\n    for perf in invoice['performances']:\r\n        play = plays[perf['playID']]\r\n        if play is None:\r\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\r\n\r\n        this_amount = 0\r\n        if play['type'] == \"tragedy\":\r\n            this_amount = 40000\r\n            if perf['audience'] > 30:\r\n                this_amount += 1000 * (perf['audience'] - 30)\r\n        elif play['type'] == \"comedy\":\r\n            this_amount = 30000\r\n            if perf['audience'] > 20:\r\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\r\n            this_amount += 300 * perf['audience']\r\n        else:\r\n            raise ValueError(f\"Unknown type: {play['type']}\")\r\n\r\n        volume_credits += max(perf['audience'] - 30, 0)\r\n\r\n        if play['type'] == \"comedy\":\r\n            volume_credits += perf['audience'] \/\/ 5\r\n\r\n        result += f\" {play['name']}: {format_currency(this_amount \/ 100)} ({perf['audience']} seats)\\n\"\r\n        total_amount += this_amount\r\n\r\n    result += f\"Amount owed is {format_currency(total_amount \/ 100)}\\n\"\r\n    result += f\"You earned {volume_credits} credits\\n\"\r\n    return result"
+               ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

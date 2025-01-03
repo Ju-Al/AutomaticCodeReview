@@ -1,0 +1,18 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class is responsible for both summarize the areas of the provided shapes and the logic for outputting the data.",
+            "suggestion": "Split the AreaCalculator class into two separate classes: one outputting the data (e.g., SumCalculatorOutputter) and another for the summaration logic (e.g., AreaCalculator class).",
+            "code": [
+                "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                "def output(self):\n        return f\"Sum of the areas of provided shapes: {self.sum()}\""
+                ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}
