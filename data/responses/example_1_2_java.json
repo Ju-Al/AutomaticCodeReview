@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    9,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class must be modified each time a new shape type is added for area calculation. This violates the OCP as it must be changed to accommodate new types.",
+            "suggestion": "Implement a common interface, such as 'Shape', with a method 'area'. Each shape class should implement this interface, and the AreaCalculator should rely on the interface to calculate areas instead of type-checking each shape.",
+            "code": [
+                "    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }"
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    23
+                ]
+            ],
+            "method_names": [
+                "output"
+            ],
+            "reason": "The method 'output' is handling presentation logic in the AreaCalculator class which should only calculate areas. This violates the SRP as it includes presentation format responsibilities.",
+            "suggestion": "Separate the responsibility of formatting output from the AreaCalculator class. Create a new class called something like 'AreaCalculatorFormatter' to handle the presentation layer.",
+            "code": [
+                "    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 364,
+        "prompt_tokens": 1819,
+        "total_tokens": 2183
+    }
+}

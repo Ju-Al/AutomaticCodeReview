@@ -5,3 +5,11 @@ gpt/__pycache__/config.cpython-312.pyc
 gpt/__pycache__/models.cpython-312.pyc
 gpt/__pycache__/openai_client.cpython-312.pyc
 gpt/__pycache__/output_schema.cpython-312.pyc
+/venv/
+__pycache__/
+/venv/
+.venv/
+env/
+ENV/
+venv.bak/
+env.bak/

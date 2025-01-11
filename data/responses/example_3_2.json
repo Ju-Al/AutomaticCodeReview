@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    25,
+                    31
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator class inherits from AreaCalculator but overrides the sum method to calculate volume instead of area. This violates the open/closed principle as changes to the VolumeCalculator affect the function signature within the same method, potentially causing issues if the base class is used polymorphically.",
+            "suggestion": "Introduce a base class/interface for calculators that define a general method, and have distinct AreaCalculator and VolumeCalculator implement their specific logic while adhering to this interface. This will keep the classes open for extension but closed for changes.",
+            "code": [
+                "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume\n"
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    25,
+                    31
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "VolumeCalculator's sum method alters the expected behavior inherited from AreaCalculator. Instead of computing and returning the sum of areas, it inaccurately aggregates volume based on area. This fails the Liskov Substitution Principle because VolumeCalculator instances cannot be substituted where AreaCalculator is expected without altering program behavior.",
+            "suggestion": "Ensure that VolumeCalculator implements a method relevant to volume or adjust the inheritance hierarchy and method naming such that polymorphic use doesn't lead to incorrect or unexpected behaviors.",
+            "code": [
+                "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume\n"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 368,
+        "prompt_tokens": 1892,
+        "total_tokens": 2260
+    }
+}

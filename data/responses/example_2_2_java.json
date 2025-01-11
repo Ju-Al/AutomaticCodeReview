@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class uses instanceof to check the type of shape and then calculate its area. This approach requires modification of the existing sum method whenever a new shape type is added.",
+            "suggestion": "Use polymorphism by creating an interface, e.g., 'Shape', with a method 'area'. Each shape class should implement this interface and provide the specific area implementation.",
+            "code": [
+                "    public double sum() {",
+                "        double totalArea = 0;",
+                "",
+                "        for (Object shape : shapes) {",
+                "            if (shape instanceof Square) {",
+                "                Square square = (Square) shape;",
+                "                totalArea += Math.pow(square.getLength(), 2);",
+                "            } else if (shape instanceof Circle) {",
+                "                Circle circle = (Circle) shape;",
+                "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                "            }",
+                "        }",
+                "",
+                "        return totalArea;",
+                "    }"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 235,
+        "prompt_tokens": 1937,
+        "total_tokens": 2172
+    }
+}

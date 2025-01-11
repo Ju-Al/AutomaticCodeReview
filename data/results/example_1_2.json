@@ -1,0 +1,65 @@
+[
+    {
+        "example_id": "example_1_2",
+        "test_case": "Issue Recognition",
+        "metric": "Recognition",
+        "score": 0.0,
+        "reason": "Single Responsibility Principle not recognized"
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review reason for Open/Closed Principle in example_1_2",
+        "metric": "Correctness",
+        "score": 0.2,
+        "reason": "The actual output addresses a design principle, while the expected output describes responsibilities of the AreaCalculator class, showing a mismatch in focus and content."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+        "metric": "Correctness",
+        "score": 0.0,
+        "reason": "The actual output introduces an interface for shapes, which is unrelated to the expected task of splitting the AreaCalculator into separate classes for outputting and summaration logic."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review method names for Open/Closed Principle in example_1_2",
+        "metric": "Correctness",
+        "score": 0.5,
+        "reason": "The actual output is missing the element 'output' which is present in the expected output."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
+        "metric": "Correctness",
+        "score": 0.0,
+        "reason": "Actual output 'Open/Closed Principle' does not match expected output 'Single Responsibility Principle'."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review reason for Open/Closed Principle in example_1_2",
+        "metric": "Relevance",
+        "score": 0,
+        "reason": "Actual Output discusses the Open/Closed Principle violation, which is not mentioned in Expected Output. However, it does relate to the AreaCalculator class and shape handling, showing partial relevance."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+        "metric": "Relevance",
+        "score": 0,
+        "reason": "The Actual Output suggests introducing an interface for shapes, which does not align with the Expected Output's requirement to split the AreaCalculator class into two specific classes."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review method names for Open/Closed Principle in example_1_2",
+        "metric": "Relevance",
+        "score": 0,
+        "reason": "The Actual Output partially aligns with the Expected Output by including 'sum' but misses 'output', indicating incomplete relevance."
+    },
+    {
+        "example_id": "example_1_2",
+        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
+        "metric": "Relevance",
+        "score": 0,
+        "reason": "Actual Output mentions 'Open/Closed Principle' while Expected Output requires 'Single Responsibility Principle', indicating complete misalignment with the context."
+    }
+]

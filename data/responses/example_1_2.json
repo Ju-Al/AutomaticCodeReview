@@ -1,0 +1,27 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    9,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class's sum method violates the Open/Closed Principle because it requires modification every time a new shape type is added. It should be open for extension but closed for modification.",
+            "suggestion": "Introduce an interface for shapes to calculate their area, such as an `Area` method, and ensure each shape class implements this interface.",
+            "code": [
+                "    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 222,
+        "prompt_tokens": 1667,
+        "total_tokens": 1889
+    }
+}

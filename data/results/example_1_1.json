@@ -1,0 +1,23 @@
+[
+    {
+        "example_id": "example_1_1",
+        "test_case": "Issue Recognition",
+        "metric": "Recognition",
+        "score": 1.0,
+        "reason": "Single Responsibility Principle recognized"
+    },
+    {
+        "example_id": "example_1_1",
+        "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+        "metric": "Correctness",
+        "score": 0.6,
+        "reason": "The actual output acknowledges multiple responsibilities but omits specific details about prices and quantities mentioned in the expected output."
+    },
+    {
+        "example_id": "example_1_1",
+        "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+        "metric": "Answer Relevancy",
+        "score": 1.0,
+        "reason": "The score is 1.00 because the output is perfectly relevant to the input and there are no irrelevant statements. Great job!"
+    }
+]

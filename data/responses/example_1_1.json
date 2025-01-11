@@ -1,0 +1,50 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    7
+                ],
+                [
+                    18,
+                    32
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "pay"
+            ],
+            "reason": "The Order class is handling multiple responsibilities, including item management and payment processing.",
+            "suggestion": "Refactor the payment processing logic into a separate class, such as PaymentProcessor, and pass it to the Order class.",
+            "code": [
+                "    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n",
+                "    def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    18,
+                    32
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method violates the open/closed principle as it requires modification to add new payment methods.",
+            "suggestion": "Implement a payment strategy pattern where each payment type is handled by a different strategy class, allowing for extension without modifying the existing code.",
+            "code": [
+                "    def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 466,
+        "prompt_tokens": 1755,
+        "total_tokens": 2221
+    }
+}
