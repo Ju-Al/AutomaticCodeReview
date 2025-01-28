@@ -11,8 +11,8 @@ public class PaypalPaymentProcessor extends PaymentProcessor {
 
     @Override
     public void pay(Order order) {
-        System.out.println("Processing debit card payment");
-        System.out.println("Verifying security code: " + this.securityCode);
+        System.out.println("Processing paypal payment");
+        System.out.println("Verifying email: " + this.securityCode);
         order.setStatus("paid");
     }
 

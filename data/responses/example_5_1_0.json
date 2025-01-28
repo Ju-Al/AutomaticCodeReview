@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    63,
+                    66
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The method signature of 'pay' in PaypalPaymentProcessor does not match that in the abstract class PaymentProcessor due to the additional 'security_code' parameter specifically used in PaypalPaymentProcessor.",
+            "suggestion": "Remove the 'security_code' parameter from the 'pay' method of 'PaypalPaymentProcessor' to match the 'pay' method in the PaymentProcessor.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order, security_code: str):\n    print(\"Processing paypal payment\")\n    print(f\"Verifying email: {self.security_code}\")\n    order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order):\n    print(\"Processing paypal payment\")\n    print(f\"Verifying email: {self.security_code}\")\n    order.status = \"paid\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    43,
+                    47
+                ]
+            ],
+            "method_names": [
+                "DebitPaymentProcessor"
+            ],
+            "reason": "The 'DebitPaymentProcessor' directly depends on a concrete implementation 'SMSAuthorizer', rather than depending on an abstraction.",
+            "suggestion": "Depend on an abstraction (interface) for authorization to allow for different implementations of authorizers without changing this code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception(\"Not authenticated\")\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception(\"Not authenticated\")\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 609,
+        "prompt_tokens": 2544,
+        "total_tokens": 3153
+    }
+}

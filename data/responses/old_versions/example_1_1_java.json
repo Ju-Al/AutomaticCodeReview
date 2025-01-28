@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    26,
+                    42
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The Order class is managing the payment process, which should be a responsibility of a separate class.",
+            "suggestion": "Create a separate PaymentProcessor class that handles payment logic, and use it in the Order class.",
+            "code": [
+                "    public void pay(String paymentType, String securityCode) {\n        switch (paymentType.toLowerCase()) {\n            case \"debit\":\n                System.out.println(\"Processing debit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n\n            case \"credit\":\n                System.out.println(\"Processing credit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n\n            default:\n                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n        }\n    }\n"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    26,
+                    42
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method requires modification for each new payment type, violating the Open/Closed Principle.",
+            "suggestion": "Apply the Strategy Pattern, where different payment strategies implement a common interface.",
+            "code": [
+                "    public void pay(String paymentType, String securityCode) {\n        switch (paymentType.toLowerCase()) {\n            case \"debit\":\n                System.out.println(\"Processing debit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n\n            case \"credit\":\n                System.out.println(\"Processing credit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n\n            default:\n                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n        }\n    }\n"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 513,
+        "prompt_tokens": 1921,
+        "total_tokens": 2434
+    }
+}

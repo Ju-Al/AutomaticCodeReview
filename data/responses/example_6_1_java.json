@@ -4,99 +4,36 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    13,
-                    63
+                    7,
+                    54
                 ]
             ],
             "method_names": [
                 "generateStatement"
             ],
-            "reason": "The generateStatement method in the Statement class handles multiple responsibilities including calculation logic for different play types, generating the output string, and handling currency formatting.",
-            "suggestion": "Refactor the generateStatement method in the Statement class by extracting the logic for calculation and formatting into separate methods or classes, enhancing maintainability and readability.",
-            "code": [
-                " public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
-                "        double totalAmount = 0;",
-                "        int volumeCredits = 0;",
-                "        StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");",
-                "        NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);",
-                "        for (Performance perf : invoice.getPerformances()) {",
-                "            Play play = plays.get(perf.getPlayID());",
-                "            double thisAmount = 0;",
-                "            if (play == null) {",
-                "                throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());",
-                "            }",
-                "            switch (play.getType()) {",
-                "                case \"tragedy\":",
-                "                    thisAmount = 40000;",
-                "                    if (perf.getAudience() > 30) {",
-                "                        thisAmount += 1000 * (perf.getAudience() - 30);",
-                "                    }",
-                "                    break;",
-                "                case \"comedy\":",
-                "                    thisAmount = 30000;",
-                "                    if (perf.getAudience() > 20) {",
-                "                        thisAmount += 10000 + 500 * (perf.getAudience() - 20);",
-                "                    }",
-                "                    thisAmount += 300 * perf.getAudience();",
-                "                    break;",
-                "                default:",
-                "                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
-                "            }",
-                "            volumeCredits += Math.max(perf.getAudience() - 30, 0);",
-                "            if (\"comedy\".equals(play.getType())) {",
-                "                volumeCredits += Math.floor(perf.getAudience() / 5);",
-                "            }",
-                "            result.append(String.format(\" %s: %s (%d seats)\\n\",",
-                "                    play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));",
-                "            totalAmount += thisAmount;",
-                "        }",
-                "        result.append(String.format(\"Amount owed is %s\\n\", currencyFormat.format(totalAmount / 100)));",
-                "        result.append(String.format(\"You earned %d credits\\n\", volumeCredits));",
-                "        return result.toString();",
-                "    }"
-            ]
-        },
-        {
-            "principle": "Open/Closed Principle",
-            "lines": [
-                [
-                    22,
-                    40
-                ],
-                [
-                    42,
-                    46
-                ]
-            ],
-            "method_names": [
-                "generateStatement"
-            ],
-            "reason": "The switch-case statement inside the generateStatement method has to be modified for any new play type that needs different charges, making it closed for extension.",
-            "suggestion": "Use a strategy pattern where each play type has its own charge calculation logic, allowing for new types without modifying existing code.",
-            "code": [
-                "            switch (play.getType()) {",
-                "                case \"tragedy\":",
-                "                    thisAmount = 40000;",
-                "                    if (perf.getAudience() > 30) {",
-                "                        thisAmount += 1000 * (perf.getAudience() - 30);",
-                "                    }",
-                "                    break;",
-                "                case \"comedy\":",
-                "                    thisAmount = 30000;",
-                "                    if (perf.getAudience() > 20) {",
-                "                        thisAmount += 10000 + 500 * (perf.getAudience() - 20);",
-                "                    }",
-                "                    thisAmount += 300 * perf.getAudience();",
-                "                    break;",
-                "                default:",
-                "                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());"
+            "reason": "The generateStatement method has multiple responsibilities: calculating amounts and credits, formatting them, and compiling the final output.",
+            "suggestion": "Refactor the generateStatement method to separate concerns: create separate methods for calculating the amount and credits, formatting the output, and compiling the final statement.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n    double totalAmount = 0;\n    int volumeCredits = 0;\n    StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");\n    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);\n\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        double thisAmount = 0;\n\n        if (play == null) {\n            throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());\n        }\n\n        switch (play.getType()) {\n            case \"tragedy\":\n                thisAmount = 40000;\n                if (perf.getAudience() > 30) {\n                    thisAmount += 1000 * (perf.getAudience() - 30);\n                }\n                break;\n\n            case \"comedy\":\n                thisAmount = 30000;\n                if (perf.getAudience() > 20) {\n                    thisAmount += 10000 + 500 * (perf.getAudience() - 20);\n                }\n                thisAmount += 300 * perf.getAudience();\n                break;\n\n            default:\n                throw new IllegalArgumentException(\"Unknown type: \" + play.getType());\n        }\n\n        volumeCredits += Math.max(perf.getAudience() - 30, 0);\n\n        if (\"comedy\".equals(play.getType())) {\n            volumeCredits += Math.floor(perf.getAudience() / 5);\n        }\n\n        result.append(String.format(\" %s: %s (%d seats)\\n\",\n                play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));\n        totalAmount += thisAmount;\n    }\n\n    result.append(String.format(\"Amount owed is %s\\n\", currencyFormat.format(totalAmount / 100)));\n    result.append(String.format(\"You earned %d credits\\n\", volumeCredits));\n    return result.toString();\n}",
+                        "suggested_code"
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);\n    double totalAmount = calculateTotalAmount(invoice, plays);\n    int volumeCredits = calculateVolumeCredits(invoice, plays);\n    return formatStatement(invoice, plays, totalAmount, volumeCredits, currencyFormat);\n}",
+                        "\nprivate static double calculateTotalAmount(Invoice invoice, Map<String, Play> plays) {\n    double totalAmount = 0;\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        if (play == null) {\n            throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());\n        }\n        totalAmount += calculateAmount(perf, play);\n    }\n    return totalAmount;\n}\n",
+                        "private static int calculateVolumeCredits(Invoice invoice, Map<String, Play> plays) {\n    int volumeCredits = 0;\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        if (play == null) {\n            throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());\n        }\n        volumeCredits += Math.max(perf.getAudience() - 30, 0);\n        if (\"comedy\".equals(play.getType())) {\n            volumeCredits += Math.floor(perf.getAudience() / 5);\n        }\n    }\n    return volumeCredits;\n}\n",
+                        "private static double calculateAmount(Performance perf, Play play) {\n    double thisAmount = 0;\n    switch (play.getType()) {\n        case \"tragedy\":\n            thisAmount = 40000;\n            if (perf.getAudience() > 30) {\n                thisAmount += 1000 * (perf.getAudience() - 30);\n            }\n            break;\n        case \"comedy\":\n            thisAmount = 30000;\n            if (perf.getAudience() > 20) {\n                thisAmount += 10000 + 500 * (perf.getAudience() - 20);\n            }\n            thisAmount += 300 * perf.getAudience();\n            break;\n        default:\n            throw new IllegalArgumentException(\"Unknown type: \" + play.getType());\n    }\n    return thisAmount;\n}\n",
+                        "private static String formatStatement(Invoice invoice, Map<String, Play> plays, double totalAmount, int volumeCredits, NumberFormat currencyFormat) {\n    StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        double thisAmount = calculateAmount(perf, play);\n        result.append(String.format(\" %s: %s (%d seats)\\n\",\n                play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));\n    }\n    result.append(String.format(\"Amount owed is %s\\n\", currencyFormat.format(totalAmount / 100)));\n    result.append(String.format(\"You earned %d credits\\n\", volumeCredits));\n    return result.toString();\n}\n"
+                    ]
+                }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 806,
-        "prompt_tokens": 2317,
-        "total_tokens": 3123
+        "completion_tokens": 1370,
+        "prompt_tokens": 2914,
+        "total_tokens": 4284
     }
 }

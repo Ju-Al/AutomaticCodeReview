@@ -51,6 +51,18 @@ class CreditPaymentProcessor(PaymentProcessor):
 
     def auth_sms(self, order, code: str):
         raise Exception("Not implemented")
+    
+class PaypalPaymentProcessor(PaymentProcessor):
+    def __init__(self, security_code: str):
+        self.security_code = security_code
+
+    def pay(self, order, security_code: str):
+        print("Processing paypal payment")
+        print(f"Verifying email: {self.security_code}")
+        order.status = "paid"
+    
+    def auth_sms(self, order, code: str):
+        raise Exception("Not implemented")
 
 
 order = Order()

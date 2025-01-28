@@ -1,0 +1,392 @@
+[
+    [
+        {
+            "example_id": "example_1_1-0",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "True Positive: Single Responsibility Principle; False Positive: Open/Closed Principle; False Negative: None. Precision = 1/2, Recall = 1/1, F1-Score = 0.667."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-0",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the violation of the Single Responsibility Principle by mentioning order management and payment processing. However, the expected output also mentions pricing and quantities, which the actual output does not cover."
+        },
+        {
+            "example_id": "example_1_1-0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest the creation of a PaymentProcessor class for SRP adherence. However, the expected output also suggests splitting the Order class further, which the actual output does not mention."
+        },
+        {
+            "example_id": "example_1_1-0",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual output is missing 'total_price' compared to expected, reducing thematic alignment."
+        },
+        {
+            "example_id": "example_1_1-0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual Output modifies 'order.status' in 'PaymentProcessor', aligning partially with Expected Output's suggestion to use 'order', but lacks the other methods and class structures present in Expected Output."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives include 'Single Responsibility Principle', with no False Positives or False Negatives, resulting in perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output correctly identifies the Single Responsibility Principle violation in handling orders and payments but misses the additional responsibility of managing prices and quantities mentioned in the Expected Output."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating payment logic into a 'PaymentProcessor' class, aligning them partially. However, the expected output further suggests splitting the 'Order' class into two additional classes for quantities and prices, which is not addressed in the actual output."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only includes 'pay', missing 'add_item' and 'total_price' from Expected Output, indicating partial thematic alignment."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest using a class for PaymentProcessor and modifying order status, but the actual output lacks the Order class and its methods present in the expected output."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The Single Responsibility Principle is correctly identified (TP), but the Open/Closed Principle is a false positive (FP). There are no false negatives, resulting in a precision of 0.5, recall of 1.0, and an F1-Score of approximately 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle related to order management and payment, but the expected output includes additional details about prices and quantities that the actual output lacks."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating responsibilities, but the actual output only addresses payment processing, missing the expected suggestion to split order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual output only includes 'pay', missing 'add_item' and 'total_price' which are present in expected output."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Actual output suggests adding a PaymentProcessor and using an order object, aligning with expected output. However, it lacks the Order class implementation and total_price() method, resulting in partial thematic alignment."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match perfectly with TP as 'Single Responsibility Principle', and no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output addresses the dual responsibility of managing order items and processing payments, aligning with the expected output's mention of principle violation. However, it lacks the additional detail about responsibility for prices and quantities, reducing the alignment."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating the payment processing into a different class (PaymentProcessor), but the actual output only mentions using it alongside Order, while the expected output specifies splitting Order into additional classes for order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output is missing 'add_item' and 'total_price' from Expected Output, but includes 'pay' which aligns with Expected Output."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual and expected outputs both suggest separating payment processing into a different class. The actual output includes detailed implementation using a static method, while the expected suggests a non-static method. Both align well thematically, but differ in implementation details."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles match exactly between actual and expected outputs, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle with order management and payment handling. The actual output misses the mention of handling both prices and quantities."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separation of concerns, focusing on decomposing the Order class. Actual output emphasizes separating payment processing, aligning partially with the expected suggestion for a PaymentProcessor class, but lacks details on handling order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output only includes 'pay', missing 'add_item' and 'total_price' which are also present in expected output."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "The actual output introduces a PaymentProcessor class and modifies the method signature to include an order parameter, aligning partially with expected changes, but lacks the Order class and overall restructuring present in the expected output."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives are identical with no False Positives or False Negatives, resulting in perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a Single Responsibility Principle violation related to order management and payment responsibilities, but the expected output also mentions issues with managing prices and quantities, which is missing in the actual output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separating concerns to adhere to the single responsibility principle, specifically mentioning a PaymentProcessor class. However, the actual output does not address splitting order quantities and prices into separate classes as the expected output does."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output only includes 'pay', while the expected output includes 'addItem', 'totalPrice', and 'pay', indicating partial thematic alignment but lacking detail and completeness."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output adds an Order class and modifies payment processing, while expected output uses an interface and divides responsibilities. Both focus on order management but differ significantly in structure and implementation details."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "Actual and expected outputs are identical with a perfect match of 'Single Responsibility Principle'."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle concerning the 'Order' class handling multiple duties. However, the actual output focuses on payment processing and status updating, while the expected output also mentions order management and handling prices and quantities."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating concerns by using a 'PaymentProcessor' class. However, the actual output focuses only on payment processing and security, while the expected output suggests further separation into three classes for different responsibilities."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output only includes 'pay' while expected output includes 'addItem', 'totalPrice', and 'pay', indicating partial thematic alignment but missing key components."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output focuses on refactoring the 'pay' method to use a 'PaymentProcessor' class, while the expected output includes a broader refactoring involving 'OrderQuantityManager' and 'PriceCalculator'. Both address restructuring but diverge significantly in scope and detail."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match perfectly with Single Responsibility Principle as TP, resulting in perfect Precision, Recall, and F1-Score."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, focusing on order management and payment. However, the expected output mentions an additional issue with managing prices and quantities, which is not addressed in the actual output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating the payment logic into a PaymentProcessor class, but the expected output suggests further separation into three classes, while the actual output only mentions separating payment processing."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only includes 'pay' while Expected Output requires 'addItem', 'totalPrice', and 'pay', leading to incomplete thematic alignment."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output suggests separating payment processing into its own class, aligning partially with Expected Output's use of an interface, but lacks full alignment with the expected modular structure and interface application."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, resulting in a perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, but the actual output focuses on payment processing and security while the expected output mentions order management and pricing responsibilities. There is thematic alignment but different specifics are highlighted."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest refactoring the Order class and mention creating a separate payment class. However, the expected output further specifies splitting into three classes, while the actual output only addresses the payment aspect."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only contains 'pay', missing 'addItem' and 'totalPrice' from Expected Output, indicating partial thematic alignment but lacking in detail and completeness."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output focuses on payment processing with a class PaymentProcessor, whereas Expected Output emphasizes order management and a separate PaymentProcessor interface. The thematic alignment is weak as Actual Output lacks order management and Expected Output's PaymentProcessor lacks implementation details."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual violation list matches the expected violation list exactly, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output addresses multiple responsibilities of the Order class, similar to the expected output, but lacks detail on pricing and quantities."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating concerns to adhere to the Single Responsibility Principle, specifically mentioning a PaymentProcessor class. However, the expected output also suggests splitting the Order class further, which is not addressed in the actual output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Actual Output is missing 'totalPrice' compared to Expected Output, impacting thematic alignment."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output addresses encapsulation by introducing a new class for payment but lacks modularization seen in the expected output, which separates concerns using multiple classes and an interface."
+        }
+    ]
+]

@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_4",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in the actual output match the expected output, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs correctly identify the violation of the open/closed principle due to the need for modifying the AreaCalculator class when adding new shapes, though the Expected Output provides more examples."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs suggest introducing a base class or interface for shapes to comply with the open-closed principle. Actual output mentions area computation and adding new shapes without altering logic, aligning well with the expected output's emphasis on ShapeInterface and concrete shape implementation. Minor difference in wording but high thematic alignment."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output 'sum' matches exactly with the expected output 'sum', showing complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs refactor the original code to use polymorphism for calculating areas but differ slightly in syntax (e.g., 'self.side' vs 'self.length'). The thematic alignment and context are very similar, focusing on using an abstract class and method for area calculation."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs discuss the violation of the single responsibility principle, but the actual output focuses more on method-level detail while the expected output describes class-level responsibilities."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest separating concerns by dividing logic into different components, but the actual output focuses on method or class separation, while expected specifies class separation with distinct roles."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual output is missing 'sum' compared to expected output, reducing thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output and Expected Output both involve restructuring code for better encapsulation and separation of concerns, but Actual Output lacks the additional functionalities like JSON and HTML output present in Expected Output."
+        }
+    ]
+]

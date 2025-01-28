@@ -1,0 +1,48 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    3,
+                    7
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor interface forces all its subclasses to implement the auth_sms method, which is only applicable to the DebitCardPaymentProcessor, leaving other implementations with useless code.",
+            "suggestion": "Split the PaymentProcessor interface into smaller interfaces, such as AuthenticatableProcessor, to segregate responsibilities and ensure classes only implement relevant methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n\n    public abstract void auth_sms(Order order, String code);\n}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String securityCode) {\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n\n}",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {\n\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String code) {\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n}",
+                        "public interface AuthenticatableProcessor {\n    void auth_sms(Order order, String code);\n}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    // Removed auth_sms implementation\n\n}",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {\n\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    // Removed auth_sms implementation\n\n}",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor implements AuthenticatableProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        if (!this.authenticated) {\n            throw new IllegalStateException(\"Not authentificated\");\n        }\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String code) {\n        System.out.println(\"Authenticating via SMS\");\n        this.authenticated = true;\n    }\n\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 965,
+        "prompt_tokens": 2819,
+        "total_tokens": 3784
+    }
+}

@@ -1,0 +1,54 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    54,
+                    66
+                ],
+                [
+                    72,
+                    78
+                ]
+            ],
+            "method_names": [
+                "JSON",
+                "HTML"
+            ],
+            "reason": "These methods handle the serialization and formatting of output, which is a separate responsibility from calculation. The SumCalculator class should focus on calculation, and another class should handle formatting/output.",
+            "suggestion": "Create a separate OutputFormatter class that takes the output from SumCalculator and handles JSON and HTML formatting.",
+            "code": [
+                "    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    16,
+                    25
+                ],
+                [
+                    27,
+                    36
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The VolumeCalculator class inherits from AreaCalculator and overrides the sum method with different logic. This violates LSP because VolumeCalculator is incompatible with any client that depends on AreaCalculator's sum returning an area sum.",
+            "suggestion": "Ensure that the VolumeCalculator class aligns more with AreaCalculator\u2019s intended functionality by altering the class structure or by introducing a more suited hierarchy.",
+            "code": [
+                "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 446,
+        "prompt_tokens": 2032,
+        "total_tokens": 2478
+    }
+}

@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    22
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "UserService class handles both user management and database connection, which are separate responsibilities.",
+            "suggestion": "Introduce a separate class to manage the connection and interaction with the database, allowing UserService to focus solely on user operations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class UserService {\n    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }\n\n    public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "class UserService {\n    private DatabaseManager databaseManager;\n\n    public UserService(DatabaseManager databaseManager) {\n        this.databaseManager = databaseManager;\n    }\n\n    public String getUser(int id) {\n        return databaseManager.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.databaseManager.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.databaseManager.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.databaseManager.deleteUserData(id);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    3,
+                    22
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "UserService directly depends on the concrete implementation of MySQLDatabase, rather than an abstraction, making it less flexible to change the implementation of the database.",
+            "suggestion": "Use an interface or an abstraction for database operations, allowing easy substitution of different database implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class UserService {\n    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }\n\n    public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "interface UserDataRepository {\n    String getUserData(int id);\n    void addUserData(int id, String name);\n    void updateUserData(int id, String name);\n    void deleteUserData(int id);\n}\n\nclass UserService {\n    private UserDataRepository database;\n\n    public UserService(UserDataRepository database) {\n        this.database = database;\n    }\n\n    public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 880,
+        "prompt_tokens": 2586,
+        "total_tokens": 3466
+    }
+}

@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    5,
+                    8
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "VolumeCalculator inherits from AreaCalculator but overrides the sum method to calculate volume instead of area, which changes the expected behavior of the sum method. It violates the Liskov Substitution Principle as the VolumeCalculator cannot be used in place of an AreaCalculator without changing behavior.",
+            "suggestion": "Create an abstract class or interface for calculations that both AreaCalculator and VolumeCalculator can implement. This way, they can have clearly defined responsibilities for area and volume calculations, respectively.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator implements Calculator {\n    private List<SolidShape> shapes;\n\n    public VolumeCalculator(List<SolidShape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalVolume = 0;\n        for (SolidShape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 333,
+        "prompt_tokens": 2683,
+        "total_tokens": 3016
+    }
+}

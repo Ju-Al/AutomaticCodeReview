@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_6_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.0,
+            "reason": "The actual output has 2 false positives ('Single Responsibility Principle', 'Open/Closed Principle') as none are in the expected output. The expected output has 1 non-violation, leading to a false positive rate of 1.0."
+        },
+        {
+            "example_id": "example_6_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "The actual output has no overlap with the expected output, resulting in a 100% false negative rate."
+        },
+        {
+            "example_id": "example_6_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No True Positives as there are no matching principles in both lists. Two False Positives: 'Single Responsibility Principle' and 'Open/Closed Principle'. One False Negative: 'Don't Repeat Yourself'. Precision and Recall are both 0, resulting in an F1-Score of 0."
+        }
+    ],
+    []
+]

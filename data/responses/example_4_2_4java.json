@@ -1,0 +1,75 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    21,
+                    24
+                ],
+                [
+                    35,
+                    38
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The method `volume()` in `Circle` and `Square` classes throws UnsupportedOperationException, indicating that they do not fully implement the `Shape` interface. This violates the Liskov Substitution Principle, which expects derived classes to be replaceable without altering the desired properties of the program.",
+            "suggestion": "Remove the `volume` method from the `Shape` interface and create a new interface `VolumetricShape` for shapes that have volume.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Circle implements Shape {",
+                        "public double volume() {\n    throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Circle implements Shape {",
+                        "// Removed volume method as Circle does not have volume."
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Square implements Shape {",
+                        "public double volume() {\n    throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Square implements Shape {",
+                        "// Removed volume method as Square does not have volume."
+                    ]
+                },
+                {
+                    "original_code": [
+                        "interface Shape {\n    public double area();\n\n    public double volume();\n}"
+                    ],
+                    "suggestion_code": [
+                        "interface Shape {\n    public double area();\n}",
+                        "interface VolumetricShape extends Shape {\n    public double volume();\n}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Dice implements Shape {"
+                    ],
+                    "suggestion_code": [
+                        "public class Dice implements VolumetricShape {"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    private List<VolumetricShape> shapes;\n\n    public VolumeCalculator(List<VolumetricShape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalVolume = 0;\n        for (VolumetricShape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 578,
+        "prompt_tokens": 2805,
+        "total_tokens": 3383
+    }
+}

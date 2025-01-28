@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.8,
+            "reason": "There are no false positives as the actual output is a subset of the expected output. TN is zero since all expected violations are present in the actual output."
+        },
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "Single Responsibility Principle is a TP, while Liskov Substitution Principle is a FN, resulting in a False Negative Rate of 0.5."
+        },
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.6666666666666667,
+            "reason": "Actual output has 1 TP (Single Responsibility Principle) and 1 FN (Liskov Substitution Principle), leading to a precision of 1.0 and a recall of 0.5, resulting in a moderate F1-Score."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1_java",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the violation of the Single Responsibility Principle in the Order class, but the actual output provides more details about payment processors and order status, which diverges from the expected focus on prices and quantities."
+        },
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1_java",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses delegating payment status updates, while the expected output suggests splitting the Order class into two. Both mention structural changes to Order but focus on different aspects."
+        },
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1_java",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output addresses different actions ('Order', 'pay') compared to the expected actions ('totalPrices', 'addItems'), showing limited thematic alignment."
+        },
+        {
+            "example_id": "example_3_1_java",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output includes the 'addItem' method matching the expected output, but lacks the 'totalPrice' method, and instead includes unrelated 'pay' functionality."
+        }
+    ]
+]

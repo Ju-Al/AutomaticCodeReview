@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    6,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "VolumeCalculator inherits from AreaCalculator but the sum() method calculates the total area rather than total volume, indicating a design problem.",
+            "suggestion": "Introduce a different method in the VolumeCalculator that properly calculates volumes if needed, or ensure the class is strictly for area calculation by adhering to the purpose of AreaCalculator.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    private List<SolidShape> solidShapes;\n\n    public VolumeCalculator(List<SolidShape> solidShapes) {\n        this.solidShapes = solidShapes;\n    }\n\n    public double calculateVolume() {\n        double totalVolume = 0;\n        for (SolidShape solidShape : solidShapes) {\n            totalVolume += solidShape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 348,
+        "prompt_tokens": 2683,
+        "total_tokens": 3031
+    }
+}

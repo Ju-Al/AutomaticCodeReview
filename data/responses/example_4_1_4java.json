@@ -1,0 +1,107 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    27
+                ],
+                [
+                    11,
+                    23
+                ],
+                [
+                    25,
+                    33
+                ],
+                [
+                    35,
+                    42
+                ],
+                [
+                    44,
+                    52
+                ],
+                [
+                    54,
+                    61
+                ],
+                [
+                    63,
+                    69
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The Order class manages items, quantities, and prices, violating SRP by handling both order management and payment status. The PaymentProcessor subclasses (PaypalPaymentProcessor, CreditCardPaymentProcessor, DebitCardPaymentProcessor) contain payment logic irrelevant to certain payment methods but still modify order status.",
+            "suggestion": "Refactor to separate concerns: Create individual Order management and Payment management classes. Extract payment functionalities into a dedicated hierarchy without affecting Orders directly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order { ... }",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor { ... }",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor { ... }",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor { ... }"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public double calculateTotal() {\n        double total = 0;\n        for(int i = 0; i < prices.size(); i++) {\n            total += prices.get(i) * quantities.get(i);\n        }\n        return total;\n    }\n}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n        // Perform specific paypal processing logic\n    }\n\n    public void authenticate() {\n        this.authenticated = true;\n        System.out.println(\"Authenticated via paypal\");\n    }\n}",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        // Perform specific credit card processing logic\n    }\n}",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        if (!this.authenticated) {\n            throw new IllegalStateException(\"Not authenticated\");\n        }\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        // Perform specific debit card processing logic\n    }\n\n    @Override\n    public void auth_sms(Order order, String code) {\n        System.out.println(\"Authenticating via SMS\");\n        this.authenticated = true;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    4,
+                    9
+                ],
+                [
+                    11,
+                    23
+                ],
+                [
+                    25,
+                    33
+                ],
+                [
+                    35,
+                    42
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor class forces implementation of auth_sms, even for classes where it is not relevant, violating ISP.",
+            "suggestion": "Split the PaymentProcessor interface into smaller, more specific interfaces. Create an AuthSupport interface for authentication-related methods, allowing payment processors to implement what they need.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor { ... }",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor { ... }",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor { ... }",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor { ... }"
+                    ],
+                    "suggestion_code": [
+                        "interface PaymentProvider {\n    void pay(Order order);\n}\n\ninterface AuthSupport {\n    void authenticate(Order order, String code);\n}",
+                        "class PaypalPaymentProcessor implements PaymentProvider, AuthSupport {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n    }\n\n    @Override\n    public void authenticate(Order order, String code) {\n        this.authenticated = true;\n        // Specific authentication logic for Paypal\n    }\n}",
+                        "class CreditCardPaymentProcessor implements PaymentProvider {\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n    }\n}",
+                        "class DebitCardPaymentProcessor implements PaymentProvider, AuthSupport {\n    private boolean authenticated;\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        if (!this.authenticated) {\n            throw new IllegalStateException(\"Not authenticated\");\n        }\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n    }\n\n    @Override\n    public void authenticate(Order order, String code) {\n        System.out.println(\"Authenticating via SMS\");\n        this.authenticated = true;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1522,
+        "prompt_tokens": 2817,
+        "total_tokens": 4339
+    }
+}

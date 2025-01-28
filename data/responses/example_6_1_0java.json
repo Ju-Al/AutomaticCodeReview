@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    47
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The 'generateStatement' method in the 'Statement' class has multiple responsibilities: calculating amounts, generating statement text, and handling play types.",
+            "suggestion": "Refactor the 'generateStatement' method to separate the responsibilities of calculating amounts, generating text, and managing play types into separate methods or classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n        double totalAmount = 0;\n        int volumeCredits = 0;\n        StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");\n        NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);\n\n        for (Performance perf : invoice.getPerformances()) {\n            Play play = plays.get(perf.getPlayID());\n            double thisAmount = 0;\n\n            if (play == null) {\n                throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());\n            }\n\n            switch (play.getType()) {\n                case \"tragedy\":\n                    thisAmount = 40000;\n                    if (perf.getAudience() > 30) {\n                        thisAmount += 1000 * (perf.getAudience() - 30);\n                    }\n                    break;\n\n                case \"comedy\":\n                    thisAmount = 30000;\n                    if (perf.getAudience() > 20) {\n                        thisAmount += 10000 + 500 * (perf.getAudience() - 20);\n                    }\n                    thisAmount += 300 * perf.getAudience();\n                    break;\n\n                default:\n                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());\n            }\n\n            volumeCredits += Math.max(perf.getAudience() - 30, 0);\n\n            if (\"comedy\".equals(play.getType())) {\n                volumeCredits += Math.floor(perf.getAudience() / 5);\n            }\n\n            result.append(String.format(\" %s: %s (%d seats)\\n\",\n                    play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));\n            totalAmount += thisAmount;\n        }\n\n        result.append(String.format(\"Amount owed is %s\\n\", currencyFormat.format(totalAmount / 100)));\n        result.append(String.format(\"You earned %d credits\\n\", volumeCredits));\n        return result.toString();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n    StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");\n\n    double totalAmount = calculateTotalAmount(invoice, plays);\n    int volumeCredits = calculateTotalVolumeCredits(invoice, plays);\n\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        result.append(formatPerformanceResult(play, perf));\n    }\n\n    result.append(String.format(\"Amount owed is %s\\n\", formatCurrency(totalAmount)));\n    result.append(String.format(\"You earned %d credits\\n\", volumeCredits));\n    return result.toString();\n}\n\nprivate static double calculateTotalAmount(Invoice invoice, Map<String, Play> plays) {\n    double totalAmount = 0;\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        double thisAmount = calculatePlayAmount(play, perf);\n        totalAmount += thisAmount;\n    }\n    return totalAmount;\n}\n\nprivate static int calculateTotalVolumeCredits(Invoice invoice, Map<String, Play> plays) {\n    int volumeCredits = 0;\n    for (Performance perf : invoice.getPerformances()) {\n        Play play = plays.get(perf.getPlayID());\n        volumeCredits += calculatePerformanceVolumeCredits(play, perf);\n    }\n    return volumeCredits;\n}\n\nprivate static double calculatePlayAmount(Play play, Performance perf) {\n    double thisAmount = 0;\n    switch (play.getType()) {\n        case \"tragedy\":\n            thisAmount = 40000;\n            if (perf.getAudience() > 30) {\n                thisAmount += 1000 * (perf.getAudience() - 30);\n            }\n            break;\n        case \"comedy\":\n            thisAmount = 30000;\n            if (perf.getAudience() > 20) {\n                thisAmount += 10000 + 500 * (perf.getAudience() - 20);\n            }\n            thisAmount += 300 * perf.getAudience();\n            break;\n        default:\n            throw new IllegalArgumentException(\"Unknown type: \" + play.getType());\n    }\n    return thisAmount;\n}\n\nprivate static int calculatePerformanceVolumeCredits(Play play, Performance perf) {\n    int volumeCredits = 0;\n    volumeCredits += Math.max(perf.getAudience() - 30, 0);\n    if (\"comedy\".equals(play.getType())) {\n        volumeCredits += Math.floor(perf.getAudience() / 5);\n    }\n    return volumeCredits;\n}\n\nprivate static String formatPerformanceResult(Play play, Performance perf) {\n    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);\n    double thisAmount = calculatePlayAmount(play, perf);\n    return String.format(\" %s: %s (%d seats)\\n\",\n            play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience());\n}\n\nprivate static String formatCurrency(double amount) {\n    NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);\n    return currencyFormat.format(amount / 100);\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1371,
+        "prompt_tokens": 2914,
+        "total_tokens": 4285
+    }
+}

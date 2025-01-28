@@ -1,0 +1,69 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    70,
+                    76
+                ],
+                [
+                    78,
+                    82
+                ]
+            ],
+            "method_names": [
+                "JSON",
+                "HTML"
+            ],
+            "reason": "The class SumCalculator has multiple responsibilities: it calculates sums and formats them in different outputs (JSON and HTML).",
+            "suggestion": "Create separate classes for JSON and HTML output responsibilities. For example, JSONOutputter and HTMLOutputter classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def calculate(self):\n        return self.calculator.sum()\n\nclass JSONOutputter:\n    def __init__(self, calculator: SumCalculator) -> None:\n        self.calculator = calculator\n\n    def output(self):\n        data = {\n            'sum': self.calculator.calculate()\n        }\n        return json.dumps(data)\n\nclass HTMLOutputter:\n    def __init__(self, calculator: SumCalculator) -> None:\n        self.calculator = calculator\n\n    def output(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.calculate()}\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    30,
+                    39
+                ],
+                [
+                    42,
+                    51
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The Square and Circle classes raise NotImplementedError in their volume method, which breaks the Liskov Substitution Principle. They do not provide a valid implementation for all parts of the interface.",
+            "suggestion": "Separate the area and volume responsibilities or provide a default implementation that makes logical sense for all shapes like returning None or 0 for non-volumetric shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                    ],
+                    "suggestion_code": [
+                        "def volume(self):\n        return 0  # or another appropriate value indicating no volume",
+                        "def volume(self):\n        return 0  # or another appropriate value indicating no volume"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 659,
+        "prompt_tokens": 2587,
+        "total_tokens": 3246
+    }
+}

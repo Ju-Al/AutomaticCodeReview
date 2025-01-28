@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_6_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.2,
+            "reason": "There are 2 false positives: 'Single Responsibility Principle' and 'Open/Closed Principle'. The expected list has 1 non-violation, leading to a high false positive rate."
+        },
+        {
+            "example_id": "example_6_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "Expected 'Don't Repeat Yourself' as a violation but it is missing in the actual output, resulting in a false negative rate of 1."
+        },
+        {
+            "example_id": "example_6_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives since actual and expected lists have no common principles. There are 2 False Positives and 1 False Negative, leading to both Precision and Recall being 0."
+        }
+    ],
+    []
+]

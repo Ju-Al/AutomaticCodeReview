@@ -29,7 +29,7 @@ class VolumeCalculator(AreaCalculator):
     def sum(self):
         total_volume = 0
         for shape in self.shapes:
-            total_volume += shape.area()
+            total_volume += shape.volume()
         return total_volume
 
 class Square(Shape):
@@ -40,8 +40,7 @@ class Square(Shape):
         return self.length ** 2
     
     def volume(self):
-        # Da es ein 2D-Shape ist, wird diese Methode nicht wirklich benötigt
-        raise NotImplementedError("Square is a 2D shape")
+        raise NotImplementedError("The volume cannot be calculated.")
 
 class Circle(Shape):
     def __init__(self, radius) -> None:
@@ -51,8 +50,7 @@ class Circle(Shape):
         return math.pi * self.radius ** 2
     
     def volume(self):
-        # Da es ein 2D-Shape ist, wird diese Methode nicht wirklich benötigt
-        raise NotImplementedError("Square is a 2D shape")
+        raise NotImplementedError("The volume cannot be calculated")
     
 class Dice(Shape):
     def __init__(self, length) -> None:

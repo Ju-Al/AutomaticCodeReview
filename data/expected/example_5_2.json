@@ -7,8 +7,17 @@
             ],
             "reason": "The UserService directly depends on the concrete implementation of MySQLDatabase. This violates the Dependency Inversion Principle since the high-level class UserService is directly dependent on a low-level class.",
             "suggestion": "Instead of depending on concrete implementations, the high-level class UserService should depend on abstractions. Create a Database interface as an abstraction.",
-            "code": [
-                ]
+            "changes": [
+                {
+                    "original_code": [
+                        "class UserService:\r\n    def __init__(self):\r\n        self.database = MySQLDatabase()\r\n    \r\n    def get_user(self, id: int) -> str:\r\n        return self.database.get_user_data(id)\r\n    \r\n    def add_user(self, id: int, data: str) -> None:\r\n        self.database.add_user_data(id, data)\r\n    \r\n    def update_user(self, id: int, data: str) -> None:\r\n        self.database.update_user_data(id, data)\r\n    \r\n    def delete_user(self, id: int) -> None:\r\n        self.database.delete_user_data(id)\r\n"
+                        ],
+                    "suggestion_code": [
+                        "class DatabaseInterface(ABC):\r\n    @abstractmethod\r\n    def get_user_data(self, id: int) -> Optional[str]:\r\n        pass\r\n\r\n    @abstractmethod\r\n    def add_user_data(self, id: int, data: str) -> None:\r\n        pass\r\n\r\n    @abstractmethod\r\n    def update_user_data(self, id: int, data: str) -> None:\r\n        pass\r\n\r\n    @abstractmethod\r\n    def delete_user_data(self, id: int) -> None:\r\n        pass",
+                        "def __init__(self, database: DatabaseInterface):\r\n    self.database = database"
+                    ]
+                }
+            ]
         }
     ],
     "overall_feedback": "1 principle violation found. Please see the details below."

@@ -1,0 +1,37 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    4,
+                    7
+                ]
+            ],
+            "method_names": [
+                "upgrade"
+            ],
+            "reason": "UnitUpgrader is checking the type of the apartment using getClass() to determine behavior, which is a violation of LSP. This means derived classes are not substitutable for base classes without altering behavior.",
+            "suggestion": "Incorporate the ability to determine numberOfBedrooms upgrade into the Apartment hierarchy, allowing each derived class to dictate how many bedrooms they should gain during an upgrade.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void upgrade(Apartment apartment) {\n    apartment.squareFootage += 40;\n\n    if (apartment.getClass() != Studio.class)\n        apartment.numberOfBedrooms += 1;\n}"
+                    ],
+                    "suggestion_code": [
+                        "public void upgrade(Apartment apartment) {\n    apartment.squareFootage += 40;\n    apartment.increaseBedrooms();\n}",
+                        "public abstract class Apartment {\n    public int squareFootage;\n    public int numberOfBedrooms;\n\n    abstract void setSquareFootage(int sqft);\n    public abstract void increaseBedrooms();\n}",
+                        "public class Studio extends Apartment {\n    public Studio() {\n        this.numberOfBedrooms = 0;\n    }\n\n    public void setSquareFootage(int sqft) {\n        this.squareFootage = sqft;\n    }\n\n    public void increaseBedrooms() {\n        // Studios do not have an extra bedroom upon upgrade.\n    }\n}",
+                        "public class PenthouseSuite extends Apartment {\n    public PenthouseSuite() {\n        this.numberOfBedrooms = 4;\n    }\n\n    public void setSquareFootage(int sqft) {\n        this.squareFootage = sqft;\n    }\n\n    public void increaseBedrooms() {\n        this.numberOfBedrooms += 1; // Assume every other apartment gains an extra bedroom when upgraded.\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 478,
+        "prompt_tokens": 2296,
+        "total_tokens": 2774
+    }
+}

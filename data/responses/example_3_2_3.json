@@ -1,0 +1,59 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    19,
+                    29
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator class inherits from AreaCalculator but modifies the behavior of the sum method to calculate volumes, not areas. This violates the Liskov Substitution Principle because a VolumeCalculator cannot be used interchangeably with an AreaCalculator as it does not adhere to the expected contract.",
+            "suggestion": "Instead of inheriting from AreaCalculator, consider creating a new method specific for volume calculation or using composition rather than inheritance.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume\n"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, shapes):\n        self.shapes = shapes\n\n    def compute_volume(self):\n        total_volume = 0\n        # Assuming a method volume exists in 3D shape classes\n        for shape in self.shapes:\n            if hasattr(shape, 'volume'):\n                total_volume += shape.volume()\n        return total_volume\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    47,
+                    59
+                ]
+            ],
+            "method_names": [
+                "JSON",
+                "HTML"
+            ],
+            "reason": "The SumCalculator class is responsible for both calculating the sum and formatting the output in different formats. These are two separate responsibilities.",
+            "suggestion": "Separate the formatting responsibility into a different class, like a Formatter, which could handle converting data to JSON, HTML, etc.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\"\n"
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def calculate_sum(self):\n        return self.calculator.sum()\n\nclass Formatter:\n    @staticmethod\n    def toJSON(data):\n        return json.dumps(data)\n\n    @staticmethod\n    def toHTML(data):\n        return f\"Sum of the areas of the provided shapes: {data['sum']}\"\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 644,
+        "prompt_tokens": 2489,
+        "total_tokens": 3133
+    }
+}

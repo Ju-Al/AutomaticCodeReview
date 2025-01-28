@@ -14,6 +14,6 @@ public class Circle implements Shape {
 
     @Override
     public double volume() {
-        return 0;
+        throw new UnsupportedOperationException("The volume cannot be calculated");
     }
 }

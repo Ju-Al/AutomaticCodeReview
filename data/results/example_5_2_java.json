@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "There are no false positives as the actual and expected violation lists match perfectly."
+        },
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 1.0,
+            "reason": "No false negatives as the actual and expected violation lists are identical with only 'Dependency Inversion Principle'."
+        },
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "Actual and expected outputs are identical, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2_java",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the tight coupling of UserService to MySQLDatabase and address the Dependency Inversion Principle. However, the actual output lacks explicit mention of the principle violation."
+        },
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2_java",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest using an interface for database operations and having UserService depend on it. However, the actual output specifically mentions MySQLDatabase, which is not in the expected output."
+        },
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2_java",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_5_2_java",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2_java",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output only contains the constructor and database initialization, missing methods for user operations present in the expected output."
+        }
+    ]
+]

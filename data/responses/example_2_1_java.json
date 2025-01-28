@@ -4,41 +4,63 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    3,
-                    23
+                    6,
+                    26
+                ],
+                [
+                    8,
+                    15
                 ]
             ],
             "method_names": [
-                "Order"
+                "Order",
+                "PaymentProcessor.pay"
             ],
-            "reason": "The Order class is handling multiple responsibilities: managing items, quantities, prices and maintaining the order status.",
-            "suggestion": "Separate the Order class into smaller classes, such as `Product` to handle `items`, `quantities`, and `prices`, and `OrderStatus` to handle the status.",
-            "code": [
-                "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+            "reason": "The Order class is handling both data management and processing logic for orders, while PaymentProcessor class is directly modifying Order's state, which could be encapsulated to avoid loose coupling.",
+            "suggestion": "Split the responsibilities: create separate classes for handling order items, maintaining order status, and processing payments. Introduce an interface for payment processing to adhere to the Dependency Inversion Principle as well.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "class Order {\n    private OrderDetails orderDetails;\n    private OrderStatus orderStatus;\n\n    public Order() {\n        this.orderDetails = new OrderDetails();\n        this.orderStatus = new OrderStatus(\"open\");\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        orderDetails.addItem(new OrderItem(name, quantity, price));\n    }\n\n    public String getStatus() {\n        return orderStatus.getStatus();\n    }\n\n    protected void setStatus(String status) {\n        orderStatus.setStatus(status);\n    }\n}",
+                        "class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "class OrderDetails {\n    private List<OrderItem> items;\n\n    public OrderDetails() {\n        this.items = new ArrayList<>();\n    }\n\n    public void addItem(OrderItem item) {\n        items.add(item);\n    }\n}\n\nclass OrderStatus {\n    private String status;\n\n    public OrderStatus(String status) {\n        this.status = status;\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}\n\nclass OrderItem {\n    private String name;\n    private int quantity;\n    private double price;\n    \n    public OrderItem(String name, int quantity, double price) {\n        this.name = name;\n        this.quantity = quantity;\n        this.price = price;\n    }\n}"
+                    ]
+                }
             ]
         },
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Dependency Inversion Principle",
             "lines": [
                 [
-                    6,
-                    20
+                    8,
+                    15
                 ]
             ],
             "method_names": [
-                "addItem"
+                "PaymentProcessor.pay"
             ],
-            "reason": "The Order class allows direct modification of item details, which may lead to changes in multiple areas if new item attributes need to be added.",
-            "suggestion": "Create a separate `Item` class that holds item-related details. This will make it easier to extend functionalities without modifying the Order class.",
-            "code": [
-                "    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }"
+            "reason": "The PaymentProcessor class is tightly coupled with the Order class due to direct state modification causing dependency issues.",
+            "suggestion": "Introduce an abstraction layer for the payment process, allowing different payment methods or processors to be swapped without altering current behavior. Separate payment behavior in an interface which the PaymentProcessor can implement.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "interface PaymentMethod {\n    void pay(Order order, String securityCode);\n}\n\nclass PaymentProcessor implements PaymentMethod {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 484,
-        "prompt_tokens": 1799,
-        "total_tokens": 2283
+        "completion_tokens": 1021,
+        "prompt_tokens": 2396,
+        "total_tokens": 3417
     }
 }

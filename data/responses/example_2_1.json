@@ -5,30 +5,38 @@
             "lines": [
                 [
                     3,
-                    8
+                    10
                 ],
                 [
-                    12,
-                    17
+                    13,
+                    19
                 ]
             ],
             "method_names": [
-                "Order",
-                "pay"
+                "Order.__init__",
+                "PaymentProcessor.pay"
             ],
-            "reason": "The Order class is responsible for managing cart items as well as maintaining order status within the order. Similarly, the PaymentProcessor class both processes the payment and manages the order status, directly changing the order status within its method.",
-            "suggestion": "Each class should adhere to a single responsibility. Separate the management of order items and order status into distinct classes. Additionally, isolate the responsibility of the PaymentProcessor class to only handle payment processing logic.",
-            "code": [
-                "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"",
-                "    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
-                "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n"
+            "reason": "The Order class manages order items, quantities, prices, and the order status, which violates the Single Responsibility Principle. The PaymentProcessor class directly modifies the Order's status, coupling payment logic with order status management.",
+            "suggestion": "Separate order status management and payment processing into distinct classes. Consider creating an OrderManager class for managing the order and its status. For the PaymentProcessor, separate verification and payment execution.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []",
+                        "class OrderManager:\n    def __init__(self, order: Order):\n        self.order = order\n        self.status = 'open'\n\n    def set_status(self, status: str) -> None:\n        self.status = status",
+                        "class PaymentProcessor:\n    def verify_security_code(self, security_code: str) -> bool:\n        print(\"Verifying security code\")\n        return True  # Assume verification logic\n\n    def pay(self, order_manager: OrderManager, security_code: str):\n        if self.verify_security_code(security_code):\n            print(\"Processing payment\")\n            order_manager.set_status(\"paid\")\n        else:\n            print(\"Invalid security code\")"
+                    ]
+                }
             ]
         }
     ],
     "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 286,
-        "prompt_tokens": 1660,
-        "total_tokens": 1946
+        "completion_tokens": 438,
+        "prompt_tokens": 2257,
+        "total_tokens": 2695
     }
 }

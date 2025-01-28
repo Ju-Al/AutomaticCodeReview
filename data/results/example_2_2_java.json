@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "There are no false positives as the actual and expected violation lists are identical."
+        },
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 1.0,
+            "reason": "There are no false negatives as 'Open/Closed Principle' is present in both lists, resulting in a False Negative Rate of 0."
+        },
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected violation lists are identical, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2_java",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the same issue with AreaCalculator: modification needed for new shapes, aligning well with the open-closed principle violation. The actual output focuses on 'instanceof', while the expected explicitly names the principle, showing slight variance in detail."
+        },
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs discuss implementing polymorphism using an interface for shapes with an area method. However, the actual output lacks detail on the open-closed principle and integrating new shapes without modifying existing code, which is present in the expected output."
+        },
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2_java",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly with identical content in the designated field."
+        },
+        {
+            "example_id": "example_2_2_java",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2_java",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual and expected outputs are nearly identical in logic and structure, with only minor formatting differences such as line breaks."
+        }
+    ]
+]

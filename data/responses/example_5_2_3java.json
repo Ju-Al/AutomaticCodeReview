@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    4,
+                    5
+                ],
+                [
+                    10,
+                    12
+                ]
+            ],
+            "method_names": [
+                "UserService constructor",
+                "setDatabase"
+            ],
+            "reason": "The UserService class directly depends on a concrete implementation of the MySQLDatabase, violating the dependency inversion principle. High-level modules like UserService should not depend on low-level modules like MySQLDatabase.",
+            "suggestion": "Introduce an interface for the database operations and let UserService depend on the interface rather than a concrete implementation. This allows for easier substitution of different database implementations and adheres to the Dependency Inversion Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class UserService {\n    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }",
+                        "    public String getUser(int id) {\n        return database.getUserData(id);\n    }"
+                    ],
+                    "suggestion_code": [
+                        "interface Database {\n    String getUserData(int id);\n    void addUserData(int id, String name);\n    void updateUserData(int id, String name);\n    void deleteUserData(int id);\n}\n\nclass MySQLDatabase implements Database {\n    private Map<Integer, String> userData;\n\n    public MySQLDatabase() {\n        userData = new HashMap<>();\n        userData.put(1, \"Alice\");\n        userData.put(2, \"Bob\");\n        userData.put(3, \"Charlie\");\n    }\n\n    @Override\n    public String getUserData(int id) {\n        if (userData.containsKey(id)) {\n            return \"User ID: \" + id + \", Name: \" + userData.get(id);\n        }\n        return \"User not found\";\n    }\n\n    @Override\n    public void addUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUserData to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n\n    @Override\n    public void updateUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUserData to add new user.\");\n        }\n    }\n\n    @Override\n    public void deleteUserData(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n}\n\npublic class UserService {\n    private Database database;\n\n    public UserService(Database database) {\n        this.database = database;\n    }",
+                        "    public String getUser(int id) {\n        return database.getUserData(id);\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 694,
+        "prompt_tokens": 2586,
+        "total_tokens": 3280
+    }
+}

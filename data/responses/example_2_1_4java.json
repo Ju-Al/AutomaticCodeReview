@@ -1,0 +1,61 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    27
+                ]
+            ],
+            "method_names": [
+                "Order"
+            ],
+            "reason": "The Order class is handling both order details and order status management, which are considered two distinct responsibilities.",
+            "suggestion": "Separate the responsibility of maintaining order details and order status into two different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n}",
+                        "public class OrderStatus {\n    private String status;\n\n    public OrderStatus() {\n        this.status = \"open\";\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    6,
+                    11
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is dependent on the concrete Order class and directly modifies its state, which violates the DIP principle.",
+            "suggestion": "Introduce an interface for order status management and have the Order class implement it. The PaymentProcessor should depend on this interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n    System.out.println(\"Processing payment\");\n    System.out.println(\"Verifying security code: \" + securityCode);\n    order.setStatus(\"paid\");\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface OrderStatusManager {\n    void setStatus(String status);\n    String getStatus();\n}",
+                        "public class Order implements OrderStatusManager {\n    // Existing code\n\n    @Override\n    public String getStatus() {\n        return status;\n    }\n\n    @Override\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public void pay(OrderStatusManager order, String securityCode) {\n    System.out.println(\"Processing payment\");\n    System.out.println(\"Verifying security code: \" + securityCode);\n    order.setStatus(\"paid\");\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 815,
+        "prompt_tokens": 2396,
+        "total_tokens": 3211
+    }
+}

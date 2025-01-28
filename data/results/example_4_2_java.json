@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_4_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.1,
+            "reason": "There are 3 false positives: 'Liskov Substitution Principle', 'Open/Closed Principle', and 'Single Responsibility Principle'. The expected list has 1 non-violation, leading to a high false positive rate."
+        },
+        {
+            "example_id": "example_4_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "All expected principles are missing in the actual output, resulting in a 100% false negative rate."
+        },
+        {
+            "example_id": "example_4_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives; all principles in Actual Output are False Positives, and the Expected Output principle is a False Negative."
+        }
+    ],
+    []
+]

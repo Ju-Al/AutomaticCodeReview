@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_5_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There are 2 false positives: 'Liskov Substitution Principle' and 'Single Responsibility Principle', and 0 non-violations in the expected list, leading to a false positive rate of 1.0."
+        },
+        {
+            "example_id": "example_5_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "Dependency Inversion Principle is a FN as it is expected but not in the actual list, with no TP identified."
+        },
+        {
+            "example_id": "example_5_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No true positives; all principles are either false positives or false negatives."
+        }
+    ],
+    []
+]

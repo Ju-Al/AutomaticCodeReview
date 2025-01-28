@@ -1,0 +1,47 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    27,
+                    29
+                ],
+                [
+                    35,
+                    37
+                ],
+                [
+                    43,
+                    45
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Each payment processor class requires modification of the 'pay' method if any new payment logic (like logging or additional processing) needs to be added, which violates the open/closed principle.",
+            "suggestion": "Introduce a base class or a decorator for shared logic in the payment processing methods to ensure that new processors or logic extensions don't require changes to existing implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\n    def process_payment(self, order, verification_entity: str, entity_value: str):\n        print(f\"Processing payment using {verification_entity}\")\n        print(f\"Verifying {verification_entity}: {entity_value}\")\n        order.status = \"paid\"",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        self.process_payment(order, 'credit card security code', security_code)",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        self.process_payment(order, 'debit card security code', security_code)",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, email: str):\n        self.process_payment(order, 'Paypal email', email)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 575,
+        "prompt_tokens": 2394,
+        "total_tokens": 2969
+    }
+}

@@ -1,0 +1,42 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    21
+                ],
+                [
+                    13,
+                    15
+                ]
+            ],
+            "method_names": [
+                "Order",
+                "pay"
+            ],
+            "reason": "The Order class is handling multiple responsibilities: managing order items and their details, and storing order status. The PaymentProcessor class is handling the payment processing including setting the order status, which could be separate responsibilities.",
+            "suggestion": "Separate the logic of managing order items and status into different classes. Furthermore, create a method within the Order class to update its status instead of letting the PaymentProcessor handle it directly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<OrderItem> items;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(OrderItem item) {\n        this.items.add(item);\n    }\n\n    public List<OrderItem> getItems() {\n        return items;\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public class OrderItem {\n    private String name;\n    private int quantity;\n    private double price;\n\n    public OrderItem(String name, int quantity, double price) {\n        this.name = name;\n        this.quantity = quantity;\n        this.price = price;\n    }\n\n    // getters\n    public String getName() {\n         return name;\n    }\n\n    public int getQuantity() {\n         return quantity;\n    }\n\n    public double getPrice() {\n         return price;\n    }\n}",
+                        "public class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 741,
+        "prompt_tokens": 2396,
+        "total_tokens": 3137
+    }
+}

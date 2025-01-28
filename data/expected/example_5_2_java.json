@@ -1,0 +1,24 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService directly depends on the concrete implementation of MySQLDatabase. This violates the Dependency Inversion Principle since the high-level class UserService is directly dependent on a low-level class.",
+            "suggestion": "Instead of depending on concrete implementations, the high-level class UserService should depend on abstractions. Create a Database interface as an abstraction.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class UserService {\r\n    private MySQLDatabase database;\r\n\r\n    public UserService() {\r\n        this.database = new MySQLDatabase();\r\n    }\r\n\r\n    public String getUser(int id) {\r\n        return database.getUserData(id);\r\n    }\r\n\r\n    public void addUser(int id, String data) {\r\n        this.database.addUserData(id, data);\r\n    }\r\n\r\n    public void updateUser(int id, String data) {\r\n        this.database.updateUserData(id, data);\r\n    }\r\n\r\n    public void deleteUser(int id) {\r\n        this.database.deleteUserData(id);\r\n    }\r\n}"
+                        ],
+                    "suggestion_code": [
+                        "abstract class DatabaseInterface {\r\n\r\n    public abstract Optional<String> getUserData(int id);\r\n\r\n    public abstract void addUserData(int id, String data);\r\n\r\n    public abstract void updateUserData(int id, String data);\r\n\r\n    public abstract void deleteUserData(int id);\r\n}",
+                        "private DatabaseInterface database;\r\n\r\n    public UserService() {\r\n        this.database = new DatabaseInterface();\r\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

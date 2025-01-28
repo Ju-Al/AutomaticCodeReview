@@ -1,0 +1,37 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    36,
+                    45
+                ]
+            ],
+            "method_names": [
+                "CreditPaymentProcessor.pay"
+            ],
+            "reason": "The CreditPaymentProcessor class does not require an authorizer, unlike the DebitPaymentProcessor. This indicates that the interface forced the class to implement methods or accept parameters it does not need.",
+            "suggestion": "The authorizer should be optional and only required for processors that need it. Consider separating authentication into another interface used specifically by payment processors that need to authenticate.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception(\"Not authenticated\")\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n"
+                    ],
+                    "suggestion_code": [
+                        "class AuthenticatedPaymentProcessor(PaymentProcessor, ABC):\n    def __init__(self, authorizer: SMSAuthorizer):\n        self.authorizer = authorizer\n\n    def authenticate(self):\n        if not self.authorizer.is_authenticated():\n            raise Exception(\"Not authenticated\")\n",
+                        "class DebitPaymentProcessor(AuthenticatedPaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        super().__init__(authorizer)\n        self.security_code = security_code\n\n    def pay(self, order):\n        self.authenticate()\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 623,
+        "prompt_tokens": 2477,
+        "total_tokens": 3100
+    }
+}

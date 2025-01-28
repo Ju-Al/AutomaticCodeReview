@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There are 2 false positives: 'Single Responsibility Principle' and 'Open/Closed Principle'. With 0 non-violations in the expected list, the false positive rate is 1."
+        },
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "The actual output contains the expected 'Liskov Substitution Principle' but includes extra principles not in the expected output, leading to a False Negative Rate of 0."
+        },
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "Only 'Liskov Substitution Principle' is a true positive. 'Single Responsibility Principle' and 'Open/Closed Principle' are false positives, and there are no false negatives. Precision is 0.33 and recall is 1, resulting in an F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the issue of VolumeCalculator incorrectly using AreaCalculator's method; however, the actual output lacks mention of the Liskov Substitution Principle violation and does not explicitly state the mismatch in intended calculation (volume vs. area)."
+        },
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output suggests separating area and volume calculations but lacks detail on abstract classes and interfaces as in expected output."
+        },
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only matches one of the three elements in Expected Output, missing 'AreaCalculator' and 'Shape'."
+        },
+        {
+            "example_id": "example_3_2_java",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2_java",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output correctly implements the VolumeCalculator class with its sum method but lacks the additional context found in the expected output, such as the AreaCalculator class and the Shape interface."
+        }
+    ]
+]

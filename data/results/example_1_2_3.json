@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_3",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "There is 1 TP (Open/Closed Principle), 0 FP, and 1 FN (Single Responsibility Principle). Precision is 1, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the open/closed principle due to the need to modify the sum method for new shapes. The actual output is slightly less detailed, not mentioning specific shapes like triangles or pentagons."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Actual output suggests implementing a method in each shape class, aligning with the expected output's emphasis on individualized area calculation per shape. However, it lacks explicit mention of an interface or abstract class, which is a key detail in the expected output for adhering to the open-closed principle."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the single element 'sum'."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output suggests adding an area method to Circle and Square classes, aligning with the expected output. However, the expected output further suggests creating a base Shape class, which is not addressed in the actual output."
+        }
+    ]
+]

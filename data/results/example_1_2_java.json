@@ -1,0 +1,83 @@
+[
+    [
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "There are no false positives since both lists contain the same principles."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 1.0,
+            "reason": "All principles in the expected list are present in the actual list, resulting in zero false negatives."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles match exactly between actual and expected lists."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the SRP violation in AreaCalculator, focusing on separation of calculation and presentation responsibilities, but with slight differences in phrasing."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating responsibilities in the AreaCalculator class but differ slightly in naming and the specific separation of concerns (formatting vs. output and logic)."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output contains only 'output', missing the 'sum' present in the expected output, showing partial thematic alignment but lacks completeness."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output only includes the 'output' method, missing the detailed 'sum' method logic present in the expected output, affecting thematic alignment and detail."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the violation of the open-closed principle by the AreaCalculator class, highlighting the need for modification when adding new shapes. The actual output is slightly less specific about the types of shapes than the expected output."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs discuss implementing a common interface for shapes to calculate areas, focusing on abstracting shape details from AreaCalculator. The actual output mentions using an interface named 'Shape' and suggests avoiding type-checking, aligning closely with the expected output's mention of 'ShapeInterface' and maintaining open-closed principle. Minor difference in terminology used ('Shape' vs 'ShapeInterface')."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly in content and context."
+        },
+        {
+            "example_id": "example_1_2_java",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2_java",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual and expected outputs are identical in logic and structure, differing only in newline character formatting, which is minor."
+        }
+    ]
+]

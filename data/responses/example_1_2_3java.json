@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    24
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating areas and formatting the output.",
+            "suggestion": "Separate the calculation logic and the formatting logic into distinct methods or classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double calculateTotalArea() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += ((Shape)shape).calculateArea();\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String formatOutput() {\n        return \"Sum of the areas of provided shapes: \" + calculateTotalArea();\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 331,
+        "prompt_tokens": 2419,
+        "total_tokens": 2750
+    }
+}

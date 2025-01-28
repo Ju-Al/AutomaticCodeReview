@@ -1,0 +1,67 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    3,
+                    11
+                ]
+            ],
+            "method_names": [
+                "VolumeCalculator"
+            ],
+            "reason": "VolumeCalculator overrides sum method but uses the area calculation from the parent class, AreaCalculator, which is conceptually incorrect.",
+            "suggestion": "Separate the area and volume calculations into distinct classes or use different method names to reflect their purpose accurately.",
+            "code": [
+                "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}"
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    15
+                ],
+                [
+                    5,
+                    13
+                ]
+            ],
+            "method_names": [
+                "main",
+                "toHTML"
+            ],
+            "reason": "The `main` method in the Main class is responsible for multiple actions: creating shapes, calculators, and displaying output. The `toHTML` method is doing formatting and calculating in one method.",
+            "suggestion": "Refactor the `main` method into smaller methods, each handling one task. Separate calculation and formatting responsibilities into different classes or methods.",
+            "code": [
+                "public static void main(String[] args) {\n    List<Shape> shapes = new ArrayList<>();\n    shapes.add(new Circle(2));\n    shapes.add(new Square(5));\n    shapes.add(new Square(6));\n\n    AreaCalculator calculator = new AreaCalculator(shapes);\n    SumCalculator sumCalculator = new SumCalculator(calculator);\n    System.out.println(sumCalculator.toHTML());\n\n    List<Shape> solidShapes = new ArrayList<>();\n    solidShapes.add(new Circle(3));\n    VolumeCalculator volumeCalculator = new VolumeCalculator(solidShapes);\n\n    SumCalculator volumeOutputter = new SumCalculator(volumeCalculator);\n    System.out.println(volumeOutputter.toHTML());\n  }\n}",
+                "public String toHTML() {\n        return String.format(\"<p>Sum of the areas of provided shapes: %.2f</p>\", calculator.sum());\n    }"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    13
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator assumes all Shapes can only provide area, not allowing for extension to other measurements (e.g., volume for solid shapes) without modification.",
+            "suggestion": "Define an interface or abstract method that specifies the type of measurement, allowing different classes to implement area, volume, etc., calculations accordingly.",
+            "code": [
+                "public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            } else {\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n            }\n        }\n        return totalArea;\n    }"
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 662,
+        "prompt_tokens": 2086,
+        "total_tokens": 2748
+    }
+}

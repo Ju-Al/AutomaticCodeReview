@@ -1,0 +1,74 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    4,
+                    8
+                ],
+                [
+                    8,
+                    10
+                ],
+                [
+                    10,
+                    12
+                ],
+                [
+                    12,
+                    14
+                ],
+                [
+                    14,
+                    16
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class is directly depending on the concrete MySQLDatabase class. This makes the UserService class tightly coupled to a specific database implementation, preventing easy substitution of different database types.",
+            "suggestion": "Define a Database interface that provides the necessary methods for user data handling. Then, implement this interface in the MySQLDatabase class. UserService should depend on this Database interface, promoting a looser coupling.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class UserService {\n    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }\n\n    public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class UserService {\n    private Database database;\n\n    public UserService(Database database) {\n        this.database = database;\n    }\n\n    public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    0,
+                    2
+                ]
+            ],
+            "method_names": [
+                "MySQLDatabase"
+            ],
+            "reason": "The MySQLDatabase class has hard-coded logic for managing user data. Any changes to the database logic require modification of this class, making it not closed for modification.",
+            "suggestion": "Introduce a Database interface and let MySQLDatabase implement this interface. This allows the class to be extended without modifying the existing code structure.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase {\n    private Map<Integer, String> userData;\n\n    public MySQLDatabase() {\n        userData = new HashMap<>();\n        userData.put(1, \"Alice\");\n        userData.put(2, \"Bob\");\n        userData.put(3, \"Charlie\");\n    }\n\n    public String getUserData(int id) {\n        if (userData.containsKey(id)) {\n            return \"User ID: \" + id + \", Name: \" + userData.get(id);\n        }\n        return \"User not found\";\n    }\n\n    public void addUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUserData to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n\n    public void updateUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUserData to add new user.\");\n        }\n    }\n\n    public void deleteUserData(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "interface Database {\n    String getUserData(int id);\n    void addUserData(int id, String name);\n    void updateUserData(int id, String name);\n    void deleteUserData(int id);\n}\n\nclass MySQLDatabase implements Database {\n    private Map<Integer, String> userData;\n\n    public MySQLDatabase() {\n        userData = new HashMap<>();\n        userData.put(1, \"Alice\");\n        userData.put(2, \"Bob\");\n        userData.put(3, \"Charlie\");\n    }\n\n    public String getUserData(int id) {\n        if (userData.containsKey(id)) {\n            return \"User ID: \" + id + \", Name: \" + userData.get(id);\n        }\n        return \"User not found\";\n    }\n\n    public void addUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUserData to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n\n    public void updateUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUserData to add new user.\");\n        }\n    }\n\n    public void deleteUserData(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1392,
+        "prompt_tokens": 2586,
+        "total_tokens": 3978
+    }
+}

@@ -4,41 +4,79 @@
             "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    16,
+                    10,
+                    15
+                ],
+                [
+                    26,
+                    27
+                ],
+                [
+                    42,
+                    43
+                ],
+                [
+                    52,
+                    53
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor interface forces implementation of the auth_sms method even if it doesn't make sense for all payment processors (e.g., CreditPaymentProcessor, PaypalPaymentProcessor).",
+            "suggestion": "Separate the auth_sms method into a different interface, like AuthSMSProcessor, and implement it only where required.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...\n\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
+                        "def auth_sms(self, order, code: str):\n        raise Exception('Not implemented')",
+                        "def auth_sms(self, order, code: str):\n        raise Exception('Not implemented')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...",
+                        "class AuthSMSProcessor:\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
+                        "class DebitPaymentProcessor(PaymentProcessor, AuthSMSProcessor):\n    def auth_sms(self, order, code: str):\n        print('Authenticating via SMS')\n        self.authenticated = True",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    pass",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    pass"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    9
+                ],
+                [
+                    17,
                     19
                 ]
             ],
             "method_names": [
-                "auth_sms"
+                "Order",
+                "add_item"
             ],
-            "reason": "The PaymentProcessor interface requires all implementations to implement auth_sms, even if certain implementations, like CreditPaymentProcessor, do not need or cannot provide this functionality.",
-            "suggestion": "Refactor the PaymentProcessor interface to separate authentication responsibilities from payment processing responsibilities. Create a separate interface for SMS authentication and let the DebitPaymentProcessor implement it, but not the CreditPaymentProcessor.",
-            "code": [
-                "    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ..."
-            ]
-        },
-        {
-            "principle": "Liskov Substitution Principle",
-            "lines": [
-                [
-                    55,
-                    57
-                ]
-            ],
-            "method_names": [
-                "auth_sms"
-            ],
-            "reason": "The implementation of the method auth_sms in the CreditPaymentProcessor class raises an exception, which may lead to unexpected behaviors if a client expects auth_sms to work among all payment processors.",
-            "suggestion": "Adapt the system to either handle or remove the auth_sms method from classes that do not support it, and ensure appropriate checks or interface segregation to prevent misuse.",
-            "code": [
-                "    def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")"
+            "reason": "The Order class is handling multiple responsibilities: managing item list and allowing item modifications. It can potentially handle other functionalities like calculating totals which should be kept separate.",
+            "suggestion": "Split the Order class and its functionalities to separate classes, e.g., OrderManager and Order.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self, items, quantities, prices):\n        self.items = items\n        self.quantities = quantities\n        self.prices = prices\n        self.status = 'open'",
+                        "class OrderManager:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float):\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ]
+                }
             ]
         }
     ],
     "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 269,
-        "prompt_tokens": 1867,
-        "total_tokens": 2136
+        "completion_tokens": 761,
+        "prompt_tokens": 2552,
+        "total_tokens": 3313
     }
 }

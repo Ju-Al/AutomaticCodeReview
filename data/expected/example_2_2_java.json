@@ -1,0 +1,27 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The current AreaCalculator class violates the open-closed principle, as the existing source code of the class would have to be modified for the sum of additional shapes such as triangles, pentagons, hexagons. ",
+            "suggestion": "In order to comply with the open-closed principle would be to introduce a ShapeInterface as an abstract class that defines a area() method. Each concrete shape (such as Circle, Rectangle, Triangle) then implements this interface and provides its own specific area calculation method. The AreaCalculator only needs to know about the interface and call the respective area() method without knowing which concrete shape it's dealing with. This way, new shapes can be easily integrated by adding new classes that implement the ShapeInterface, without having to modify existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\r\n        double totalArea = 0;\r\n\r\n        for (Object shape : shapes) {\r\n            if (shape instanceof Square) {\r\n                Square square = (Square) shape;\r\n                totalArea += Math.pow(square.getLength(), 2);\r\n            } else if (shape instanceof Circle) {\r\n                Circle circle = (Circle) shape;\r\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\r\n            }\r\n        }\r\n\r\n        return totalArea;\r\n    }\r\n\r\n"
+                    ],
+                    "suggestion_code": [
+                        "interface Shape {\r\n    double area();\r\n}\r\n\r\n",
+                        "class Circle implements Shape {\r\n    private double radius;\r\n\r\n    public Circle(double radius) {\r\n        this.radius = radius;\r\n    }\r\n\r\n    @Override\r\n    public double area() {\r\n        return Math.PI * Math.pow(radius, 2);\r\n    }\r\n}\r\n\r\n",
+                        "class Square implements Shape {\r\n    private double side;\r\n\r\n    public Square(double side) {\r\n        this.side = side;\r\n    }\r\n\r\n    @Override\r\n    public double area() {\r\n        return Math.pow(side, 2);\r\n    }\r\n}\r\n\r\n",
+                        "public double sum() {\r\n        return shapes.stream().mapToDouble(Shape::area).sum();\r\n    }\r\n}\r\n\r\n"
+                    ]
+                }
+            ]
+        }
+
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

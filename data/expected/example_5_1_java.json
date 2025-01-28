@@ -1,0 +1,46 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "method_names": [
+                "SMSAuthorizer"
+            ],
+            "reason": "The DebitPaymentProcessor class directly depends on the concrete implementation of SMSAuthorizer. This means the payment processor shouldn’t be concerned with how its payment is validated, whether that be by SMS, a robot check, or an email. This violates the Dependency Inversion Principle since the high-level class DebitPaymentProcessor is directly dependent on a low-level class. ",
+            "suggestion": "Instead of depending on concrete implementations, the high-level class DebitPaymentProcessor should depend on abstractions. Create an abstract class Authorizer. Now you can create SMSAuthorizer and NotARobotAuthorizer, which implement the Authorizer class.",
+            "changes": [
+                {
+                    "original_code": [ 
+                        "public class SMSAuthorizer {\r\n    private boolean authenticated;\r\n\r\n    public SMSAuthorizer() {\r\n        this.authenticated = false;\r\n    }\r\n\r\n    public void verify_code(String code) {\r\n        System.out.println(\"Verifying code\");\r\n        this.authenticated = true;\r\n    }\r\n\r\n    public boolean is_authentificated() {\r\n        return this.authenticated;\r\n    }\r\n}"
+                    ],
+                    "suggestion_code": [
+                        "abstract class Authorizer {\r\n    public abstract boolean isAuthenticated();\r\n}\r\n\r\n",
+                        "class SMSAuthorizer extends Authorizer {\r\n    private boolean authenticated;\r\n\r\n    public SMSAuthorizer() {\r\n        this.authenticated = false;\r\n    }\r\n\r\n    public void verifyCode(String code) {\r\n        System.out.println(\"Verifying code\");\r\n        this.authenticated = true;\r\n    }\r\n\r\n    @Override\r\n    public boolean isAuthenticated() {\r\n        return this.authenticated;\r\n    }\r\n}\r\n\r\n",
+                        "class NotARobotAuthorizer extends Authorizer {\r\n    private boolean authenticated;\r\n\r\n    public NotARobotAuthorizer() {\r\n        this.authenticated = false;\r\n    }\r\n\r\n    public void ask() {\r\n        System.out.println(\"Are you a robot?!!! [\u2510\u2235]\u2518\");\r\n        this.authenticated = true;\r\n    }\r\n\r\n    @Override\r\n    public boolean isAuthenticated() {\r\n        return this.authenticated;\r\n    }\r\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "totalPrices",
+                "addItems"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\r\n        this.items.add(name);\r\n        this.quantities.add(quantity);\r\n        this.prices.add(price);\r\n    }\r\n\r\n",
+                        "public double totalPrice() {\r\n        double total = 0;\r\n        for (int i = 0; i < this.quantities.size(); i++) {\r\n            total += this.quantities.get(i) * this.prices.get(i);\r\n        }\r\n        return total;\r\n    }\r\n\r\n"
+                    ],
+                    "suggestion_code": [
+                        "class OrderQuantityManager {\r\n    private List<Order> items;\r\n    private String status;\r\n\r\n    public OrderQuantityManager() {\r\n        this.items = new ArrayList<>();\r\n        this.status = \"open\";\r\n    }\r\n\r\n    public void addItem(String name, int quantity, float price) {\r\n        Order item = new Order(name, quantity, price);\r\n        this.items.add(item);\r\n    }\r\n\r\n    public List<Order> getItems() {\r\n        return items;\r\n    }\r\n\r\n    public String getStatus() {\r\n        return status;\r\n    }\r\n\r\n    public void setStatus(String status) {\r\n        this.status = status;\r\n    }\r\n}\r\n\r\n",
+                        "class PriceCalculator {\r\n    public static float calculateTotal(OrderQuantityManager orderManager) {\r\n        float total = 0;\r\n        for (Order item : orderManager.getItems()) {\r\n            total += item.getQuantity() * item.getPrice();\r\n        }\r\n        return total;\r\n    }\r\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

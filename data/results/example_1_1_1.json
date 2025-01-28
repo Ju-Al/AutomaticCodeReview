@@ -1,114 +1,41 @@
 [
-    {
-        "example_id": "example_1_1",
-        "test_case": "Issue Recognition",
-        "metric": "Recognition",
-        "score": 1.0,
-        "reason": "Single Responsibility Principle recognized"
-    },
-    {
-        "example_id": "example_1_1",
-        "test_case": "Review reason for Single Responsibility Principle in example_1_1",
-        "metric": "Correctness",
-        "score": 0.4,
-        "reason": "Actual output mentions multiple responsibilities like item management and payment but misses talking about prices and quantities which are in the expected output."
-    }
-]
-
-
-
-
-[
-    {
-        "example_id": "example_1_1",
-        "test_case": "Issue Recognition",
-        "metric": "Recognition",
-        "score": 1.0,
-        "reason": "Single Responsibility Principle recognized"
-    },
-    {
-        "example_id": "example_1_1",
-        "test_case": "Review reason for Single Responsibility Principle in example_1_1",
-        "metric": "Correctness",
-        "score": 0.6,
-        "reason": "The actual output acknowledges multiple responsibilities but omits specific details about prices and quantities mentioned in the expected output."
-    },
-    {
-        "example_id": "example_1_1",
-        "test_case": "Review reason for Single Responsibility Principle in example_1_1",
-        "metric": "Answer Relevancy",
-        "score": 1.0,
-        "reason": "The score is 1.00 because the output is perfectly relevant to the input and there are no irrelevant statements. Great job!"
-    }
-]
-
-
-
-
-
-
-[
-    {
-        "example_id": "example_1_2",
-        "test_case": "Issue Recognition",
-        "metric": "Recognition",
-        "score": 0.0,
-        "reason": "Single Responsibility Principle not recognized"
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review reason for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.2,
-        "reason": "The actual output addresses a design principle, while the expected output describes responsibilities of the AreaCalculator class, showing a mismatch in focus and content."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.0,
-        "reason": "The actual output introduces an interface for shapes, which is unrelated to the expected task of splitting the AreaCalculator into separate classes for outputting and summaration logic."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review method names for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.5,
-        "reason": "The actual output is missing the element 'output' which is present in the expected output."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.0,
-        "reason": "Actual output 'Open/Closed Principle' does not match expected output 'Single Responsibility Principle'."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review reason for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "Actual Output discusses the Open/Closed Principle violation, which is not mentioned in Expected Output. However, it does relate to the AreaCalculator class and shape handling, showing partial relevance."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "The Actual Output suggests introducing an interface for shapes, which does not align with the Expected Output's requirement to split the AreaCalculator class into two specific classes."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review method names for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "The Actual Output partially aligns with the Expected Output by including 'sum' but misses 'output', indicating incomplete relevance."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "Actual Output mentions 'Open/Closed Principle' while Expected Output requires 'Single Responsibility Principle', indicating complete misalignment with the context."
-    }
+    [
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives include 'Single Responsibility Principle', with no False Positives or False Negatives, resulting in perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output correctly identifies the Single Responsibility Principle violation in handling orders and payments but misses the additional responsibility of managing prices and quantities mentioned in the Expected Output."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating payment logic into a 'PaymentProcessor' class, aligning them partially. However, the expected output further suggests splitting the 'Order' class into two additional classes for quantities and prices, which is not addressed in the actual output."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only includes 'pay', missing 'add_item' and 'total_price' from Expected Output, indicating partial thematic alignment."
+        },
+        {
+            "example_id": "example_1_1-1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest using a class for PaymentProcessor and modifying order status, but the actual output lacks the Order class and its methods present in the expected output."
+        }
+    ]
 ]

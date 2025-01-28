@@ -1,0 +1,42 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    15,
+                    21
+                ],
+                [
+                    38,
+                    40
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The CreditPaymentProcessor violates the Interface Segregation Principle because it is forced to implement the auth_sms method, which is not required for credit payments.",
+            "suggestion": "Separate the authentication logic into another interface or class so that DebitPaymentProcessor can use it independently without forcing CreditPaymentProcessor to implement it.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...\n\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n\n    def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...",
+                        "class SMSAuth(ABC):\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
+                        "class DebitPaymentProcessor(PaymentProcessor, SMSAuth):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n        self.authenticated = False\n\n    def pay(self, order):\n        if not self.authenticated:\n            raise Exception(\"Not authenticated\")\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n\n    def auth_sms(self, order, code: str):\n        print(\"Authenticating via SMS\")\n        self.authenticated = True",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 596,
+        "prompt_tokens": 2464,
+        "total_tokens": 3060
+    }
+}

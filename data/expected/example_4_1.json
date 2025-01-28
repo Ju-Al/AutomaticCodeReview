@@ -7,10 +7,43 @@
             ],
             "reason": "This code violates the Interface Segregation Principle because the CreditPaymentProcessor class is forced to implement the auth_sms method, even though it does not use it.",
             "suggestion": "In order to comply with the Interface Segregation Principle create another abstract class (e.g. SMSPaymentProcessor) that implements the auth_sms method and implements the PaymentProcessor class. So the CreditPaymentProcessor can use the PaymentProcessor and the DebitPaymentProcessor can use the SMSPaymentProcessor.",
-            "code": [
-                "@abstractmethod\r\n    def auth_sms(self, order, code: str):\r\n        ..."
-                ]
+            "changes": [
+                {
+                    "original_code": [
+                        "@abstractmethod\r\n    def auth_sms(self, order, code: str):\r\n        ...",
+                        "class CreditPaymentProcessor(PaymentProcessor):\r\n    def __init__(self, security_code: str):\r\n        self.security_code = security_code\r\n\r\n    def pay(self, order: Order):\r\n        print(\"Processing credit payment type\")\r\n        print(f\"Verifying security code: {self.security_code}\")\r\n        order.status = \"paid\"\r\n\r\n    def auth_sms(self, order, code: str):\r\n        raise Exception(\"Not implemented\")"
+                        ],
+                    "suggestion_code": [
+                        "class SMSAuthorizer:\r\n    def __init__(self):\r\n        self.authenticated = False\r\n\r\n    def verify_code(self, code: str):\r\n        print(\"Verifying code\")\r\n        self.authenticated = True\r\n\r\n    def is_authenticated(self):\r\n        return self.authenticated\r\n\r\n\r\n",
+                        "class PaymentProcessor(ABC):\r\n    @abstractmethod\r\n    def pay(self, order: Order):\r\n        ...\r\n\r\n\r\n",
+                        "class DebitPaymentProcessor(PaymentProcessor):\r\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\r\n        self.security_code = security_code\r\n        self.authorizer = authorizer\r\n\r\n    def pay(self, order):\r\n        if not self.authorizer.is_authenticated():\r\n            raise Exception(\"Not authenticated\")\r\n        print(\"Processing debit payment type\")\r\n        print(f\"Verifying security code: {self.security_code}\")\r\n        order.status = \"paid\"\r\n\r\n\r\n",
+                        "class CreditPaymentProcessor(PaymentProcessor):\r\n    def __init__(self, security_code: str):\r\n        self.security_code = security_code\r\n\r\n    def pay(self, order: Order):\r\n        print(\"Processing credit payment type\")\r\n        print(f\"Verifying security code: {self.security_code}\")\r\n        order.status = \"paid\"\r\n\r\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\r\n    def __init__(self, security_code: str):\r\n        self.security_code = security_code\r\n\r\n    def pay(self, order, security_code: str):\r\n        print(\"Processing paypal payment\")\r\n        print(f\"Verifying email: {self.security_code}\")\r\n        order.status = \"paid\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "total_prices",
+                "add_items"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class OrderQuantityManager:\r\n    def __init__(self):\r\n        self.items = []\r\n        self.status = \"open\"\r\n\r\n    def add_item(self, name: str, quantity: int, price: float) -> None:\r\n        item = Order(name, quantity, price)\r\n        self.items.append(item)\r\n\r\n    def get_items(self):\r\n        return self.items\r\n\r\n",
+                        "class PriceCalculator:\r\n    @staticmethod\r\n    def calculate_total(order_manager: OrderQuantityManager) -> float:\r\n        total = 0\r\n        for item in order_manager.get_items():\r\n            total += item.quantity * item.price\r\n        return total\r\n\r\n"
+                    ]
+                }
+            ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below."
+    "overall_feedback": "2 principle violation found. Please see the details below."
 }

@@ -1,0 +1,62 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    6,
+                    12
+                ]
+            ],
+            "method_names": [
+                "VolumeCalculator.sum"
+            ],
+            "reason": "The VolumeCalculator class inherits from AreaCalculator and overrides the sum method to sum areas instead of volumes. This is misleading and violates the LSP because VolumeCalculator should calculate volumes, not areas.",
+            "suggestion": "Create a new method in the Shape interface for volume calculations and ensure that VolumeCalculator uses it. Define a new SolidShape interface for 3D shapes to avoid confusion between 2D and 3D shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    private List<SolidShape> solidShapes;\n\n    public VolumeCalculator(List<SolidShape> solidShapes) {\n        this.solidShapes = solidShapes;\n    }\n\n    public double sumVolumes() {\n        double totalVolume = 0;\n        for (SolidShape solidShape : solidShapes) {\n            totalVolume += solidShape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    21,
+                    21
+                ],
+                [
+                    29,
+                    31
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator.sum"
+            ],
+            "reason": "The AreaCalculator class's sum method has the responsibility of checking whether the shape is valid. Responsibility for type-checking is extraneous to summation logic and should be separated.",
+            "suggestion": "Remove the instanceof checks from the sum method and ensure that only valid Shape objects are added to the list initially.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += shape.area();\n        } else {\n            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n        }\n    }\n    return totalArea;\n}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        totalArea += shape.area();\n    }\n    return totalArea;\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 561,
+        "prompt_tokens": 2683,
+        "total_tokens": 3244
+    }
+}

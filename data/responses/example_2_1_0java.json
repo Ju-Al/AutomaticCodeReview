@@ -1,0 +1,36 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    31
+                ]
+            ],
+            "method_names": [
+                "addItem"
+            ],
+            "reason": "The Order class is managing item details and the order's status, which are two distinct responsibilities. The responsibility of managing items could be externalized to a separate class.",
+            "suggestion": "Create a new class, OrderItem, to manage item details separately from order status. The Order class should focus solely on order management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public void addItem(String name, int quantity, double price) {\n    this.items.add(name);\n    this.quantities.add(quantity);\n    this.prices.add(price);\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<OrderItem> items;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(OrderItem item) {\n        this.items.add(item);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public class OrderItem {\n    private String name;\n    private int quantity;\n    private double price;\n\n    public OrderItem(String name, int quantity, double price) {\n        this.name = name;\n        this.quantity = quantity;\n        this.price = price;\n    }\n\n    public String getName() {\n        return name;\n    }\n\n    public int getQuantity() {\n        return quantity;\n    }\n\n    public double getPrice() {\n        return price;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 607,
+        "prompt_tokens": 2396,
+        "total_tokens": 3003
+    }
+}

@@ -1,0 +1,49 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    43,
+                    50
+                ]
+            ],
+            "method_names": [
+                "DebitPaymentProcessor.__init__"
+            ],
+            "reason": "The `DebitPaymentProcessor` class requires an `SMSAuthorizer` for its operations, but the base class `PaymentProcessor` does not require it, which means the behavior changes when using a subclass which violates the Liskov Substitution Principle.",
+            "suggestion": "Consider making `SMSAuthorizer` an optional component or part of the base class `PaymentProcessor` through a more generalized interface like `Authorizer` to ensure all payment processors can be interchangeable.",
+            "code": [
+                "    def __init__(self, security_code: str, authorizer: SMSAuthorizer):",
+                "        self.security_code = security_code",
+                "        self.authorizer = authorizer"
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    11
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The `Order` class holds not just order-related data but also manages item addition, making it have more than one responsibility.",
+            "suggestion": "Consider moving the `add_item` method to a separate class responsible for order item management, or simplify the responsibility of the `Order` class by using data classes or similar constructs for line items.",
+            "code": [
+                "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                "        self.items.append(name)",
+                "        self.quantities.append(quantity)",
+                "        self.prices.append(price)"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 325,
+        "prompt_tokens": 1880,
+        "total_tokens": 2205
+    }
+}

@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    23
+                ]
+            ],
+            "method_names": [
+                "Order"
+            ],
+            "reason": "The Order class is handling multiple responsibilities: managing items, quantities, prices and maintaining the order status.",
+            "suggestion": "Separate the Order class into smaller classes, such as `Product` to handle `items`, `quantities`, and `prices`, and `OrderStatus` to handle the status.",
+            "code": [
+                "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    6,
+                    20
+                ]
+            ],
+            "method_names": [
+                "addItem"
+            ],
+            "reason": "The Order class allows direct modification of item details, which may lead to changes in multiple areas if new item attributes need to be added.",
+            "suggestion": "Create a separate `Item` class that holds item-related details. This will make it easier to extend functionalities without modifying the Order class.",
+            "code": [
+                "    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 484,
+        "prompt_tokens": 1799,
+        "total_tokens": 2283
+    }
+}

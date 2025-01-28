@@ -1,0 +1,48 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Paypal uses email addresses for verification, whereas credit and debit cards use security codes. This means we are abusing the Liskov Substitution Principle because we are using a subclass in a way that is not compatible with its parent class.",
+            "suggestion": "The security code authentication should be removed from the abstract class. Instead, each concrete implementation (PayPal, credit card) should define in its respective __init__ method which type of authentication it requires. This allows each payment method to implement its own suitable authentication method without violating the specifications of the base class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "@Override\r\n    public void pay(Order order, String securityCode) {\r\n        System.out.println(\"Processing paypal payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public abstract class PaymentProcessor {\r\n    public abstract void pay(Order order);\r\n}\r\n\r\n",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {\r\n\r\n    private String securityCode;\r\n\r\n    public CreditCardPaymentProcessor(String securityCode) {\r\n        this.securityCode = securityCode;\r\n    }\r\n\r\n    @Override\r\n    public void pay(Order order) {\r\n        System.out.println(\"Processing debit card payment\");\r\n        System.out.println(\"Verifying security code: \" + this.securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n\r\n}\r\n\r\n",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\r\n    private boolean authenticated;\r\n    private String securityCode;\r\n\r\n    public DebitCardPaymentProcessor(String securityCode) {\r\n        this.authenticated = false;\r\n        this.securityCode = securityCode;\r\n    }\r\n\r\n    @Override\r\n    public void pay(Order order) {\r\n        if (!this.authenticated) {\r\n            throw new IllegalStateException(\"Not authentificated\");\r\n        }\r\n        System.out.println(\"Processing debit card payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n\r\n}\r\n\r\n",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\r\n    private boolean authenticated;\r\n    private String securityCode;\r\n\r\n    public PaypalPaymentProcessor(String securityCode) {\r\n        this.authenticated = false;\r\n        this.securityCode = securityCode;\r\n    }\r\n\r\n    @Override\r\n    public void pay(Order order) {\r\n        System.out.println(\"Processing paypal payment\");\r\n        System.out.println(\"Verifying email: \" + this.securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n\r\n}\r\n\r\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "totalPrices",
+                "addItems"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\r\n        this.items.add(name);\r\n        this.quantities.add(quantity);\r\n        this.prices.add(price);\r\n    }\r\n\r\n",
+                        "public double totalPrice() {\r\n        double total = 0;\r\n        for (int i = 0; i < this.quantities.size(); i++) {\r\n            total += this.quantities.get(i) * this.prices.get(i);\r\n        }\r\n        return total;\r\n    }\r\n\r\n"
+                    ],
+                    "suggestion_code": [
+                        "class OrderQuantityManager {\r\n    private List<Order> items;\r\n    private String status;\r\n\r\n    public OrderQuantityManager() {\r\n        this.items = new ArrayList<>();\r\n        this.status = \"open\";\r\n    }\r\n\r\n    public void addItem(String name, int quantity, float price) {\r\n        Order item = new Order(name, quantity, price);\r\n        this.items.add(item);\r\n    }\r\n\r\n    public List<Order> getItems() {\r\n        return items;\r\n    }\r\n\r\n    public String getStatus() {\r\n        return status;\r\n    }\r\n\r\n    public void setStatus(String status) {\r\n        this.status = status;\r\n    }\r\n}\r\n\r\n",
+                        "class PriceCalculator {\r\n    public static float calculateTotal(OrderQuantityManager orderManager) {\r\n        float total = 0;\r\n        for (Order item : orderManager.getItems()) {\r\n            total += item.getQuantity() * item.getPrice();\r\n        }\r\n        return total;\r\n    }\r\n}"
+                    ]
+                }
+            ]
+        }
+
+    ],
+    "overall_feedback": "2 principle violation found. Please see the details below."
+}

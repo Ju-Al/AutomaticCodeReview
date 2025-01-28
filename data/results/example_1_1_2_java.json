@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match perfectly with Single Responsibility Principle as TP, resulting in perfect Precision, Recall, and F1-Score."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, focusing on order management and payment. However, the expected output mentions an additional issue with managing prices and quantities, which is not addressed in the actual output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating the payment logic into a PaymentProcessor class, but the expected output suggests further separation into three classes, while the actual output only mentions separating payment processing."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output only includes 'pay' while Expected Output requires 'addItem', 'totalPrice', and 'pay', leading to incomplete thematic alignment."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output suggests separating payment processing into its own class, aligning partially with Expected Output's use of an interface, but lacks full alignment with the expected modular structure and interface application."
+        }
+    ]
+]

@@ -3,3 +3,38 @@ matplotlib==3.10.0
 seaborn==0.13.2
 deepeval==2.1.5
 openai==1.59.3
+
+
+
+
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "method_names": [
+                "VolumeCalculator",
+                "AreaCalculator",
+                "Shape"
+            ],
+            "reason": "The VolumeCalculator class inherits from AreaCalculator, but it calculates volumes instead of areas. This violates the Liskov Substitution Principle because the subclass (VolumeCalculator) is not consistent with the behaviour of the superclass (AreaCalculator).",
+            "suggestion": "Create an abstract base class for calculations (e.g. Calculator), separate classes for area and volume calculations that implements the Calculator class, separate interfaces for 2D and 3D shapes. The 2D interface implements the area method, the 3D interface the volume method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {\r\n    protected List<Shape> shapes;\r\n\r\n    public AreaCalculator(List<Shape> shapes) {\r\n        System.out.println(shapes);\r\n        this.shapes = shapes;\r\n    }\r\n\r\n    public double sum() {\r\n        double totalArea = 0;\r\n        for (Shape shape : shapes) {\r\n            if (shape instanceof Shape) {\r\n                totalArea += shape.area();\r\n            } else {\r\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\r\n            }\r\n        }\r\n        return totalArea;\r\n    }\r\n}\r\n",
+                        "interface Shape {\r\n    double area();\r\n}\r\n",
+                        "public class VolumeCalculator extends AreaCalculator {\r\n    public VolumeCalculator(List<Shape> shapes) {\r\n        super(shapes);\r\n    }\r\n\r\n    @Override\r\n    public double sum() {\r\n        double totalVolume = 0;\r\n        for (Shape shape : shapes) {\r\n            totalVolume += shape.area();\r\n        }\r\n        return totalVolume;\r\n    }\r\n}\r\n"
+                    ],
+                    "suggestion_code": [
+                        "abstract class Shape2D {\r\n    public abstract double area();\r\n}\r\n\r\n",
+                        "abstract class Shape3D {\r\n    public abstract double volume();\r\n}\r\n\r\n",
+                        "abstract class Calculator {\r\n    protected List<Object> shapes;\r\n\r\n    public Calculator(List<Object> shapes) {\r\n        this.shapes = shapes;\r\n    }\r\n\r\n    public abstract double sum();\r\n}\r\n\r\n",
+                        "class AreaCalculator extends Calculator {\r\n    public AreaCalculator(List<Object> shapes) {\r\n        super(shapes);\r\n    }\r\n\r\n    @Override\r\n    public double sum() {\r\n        double totalArea = 0;\r\n        for (Object shape : shapes) {\r\n            if (shape instanceof Shape2D) {\r\n                totalArea += ((Shape2D) shape).area();\r\n            } else {\r\n                throw new IllegalArgumentException(\"Invalid Shape: Shape does not implement Shape2D interface\");\r\n            }\r\n        }\r\n        return totalArea;\r\n    }\r\n}\r\n\r\n",
+                        "class VolumeCalculator extends Calculator {\r\n    public VolumeCalculator(List<Object> shapes) {\r\n        super(shapes);\r\n    }\r\n\r\n    @Override\r\n    public double sum() {\r\n        double totalVolume = 0;\r\n        for (Object shape : shapes) {\r\n            if (shape instanceof Shape3D) {\r\n                totalVolume += ((Shape3D) shape).volume();\r\n            } else {\r\n                throw new IllegalArgumentException(\"Invalid Shape: Shape does not implement Shape3D interface\");\r\n            }\r\n        }\r\n        return totalVolume;\r\n    }\r\n}"   
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below."
+}

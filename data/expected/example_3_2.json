@@ -9,11 +9,22 @@
             ],
             "reason": "The VolumeCalculator class inherits from AreaCalculator, but it calculates volumes instead of areas. This violates the Liskov Substitution Principle because the subclass (VolumeCalculator) is not consistent with the behaviour of the superclass (AreaCalculator).",
             "suggestion": "Create an abstract base class for calculations (e.g. Calculator), separate classes for area and volume calculations that implements the Calculator class, separate interfaces for 2D and 3D shapes. The 2D interface implements the area method, the 3D interface the volume method.",
-            "code": [
-                "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n",
-                "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception(\"Invalid Shape: Shape does not implement Shape interface\")\n        return total_area\n    \n",
-                "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
-                ]
+            "changes": [
+                {
+                    "original_code": [
+                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n",
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception(\"Invalid Shape: Shape does not implement Shape interface\")\n        return total_area\n    \n",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class Shape2D(ABC):\r\n    @abstractmethod\r\n    def area(self):\r\n        pass\r\n\r\n",
+                        "class Shape3D(ABC):\r\n    @abstractmethod\r\n    def volume(self):\r\n        pass\r\n\r\n",
+                        "class Calculator(ABC):\r\n    def __init__(self, shapes=[]) -> None:\r\n        self.shapes = shapes\r\n    \r\n    @abstractmethod\r\n    def sum(self):\r\n        pass\r\n\r\n",
+                        "class AreaCalculator(Calculator):\r\n    def sum(self):\r\n        total_area = 0\r\n        for shape in self.shapes:\r\n            if isinstance(shape, Shape2D):\r\n                total_area += shape.area()\r\n            else:\r\n                raise Exception(\"Invalid Shape: Shape does not implement Shape2D interface\")\r\n        return total_area\r\n\r\n",
+                        "class VolumeCalculator(Calculator):\r\n    def sum(self):\r\n        total_volume = 0\r\n        for shape in self.shapes:\r\n            if isinstance(shape, Shape3D):\r\n                total_volume += shape.volume()\r\n            else:\r\n                raise Exception(\"Invalid Shape: Shape does not implement Shape3D interface\")\r\n        return total_volume\r\n"
+                    ]
+                }
+            ]
         }
     ],
     "overall_feedback": "1 principle violation found. Please see the details below."

@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There is 1 false positive: 'Open/Closed Principle'. The expected list has 0 non-violations."
+        },
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.7,
+            "reason": "The actual output includes the 'Single Responsibility Principle' as expected, but also includes an extra 'Open/Closed Principle', which does not affect the false negative calculation. The false negative rate is 0 since there are no missing expected principles."
+        },
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP: 1 (Single Responsibility Principle), FP: 1 (Open/Closed Principle), FN: 0. Precision: 1/2, Recall: 1/1, F1-Score: 0.6667."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output identifies a violation of the Single Responsibility Principle by mentioning the Order class managing payments, aligning with the expected output's mention of order management and payment responsibility. However, it lacks the detail about prices and quantities."
+        },
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1_java",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual Output suggests creating a PaymentProcessor class, aligning partially with Expected Output's suggestion to split Order class for payments. However, it misses addressing separation for order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output only includes 'pay' whereas the expected output includes 'addItem', 'totalPrice', and 'pay', showing limited alignment and missing thematic elements."
+        },
+        {
+            "example_id": "example_1_1_java",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1_java",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The 'pay' function matches in both outputs, but the actual output lacks 'addItem' and 'totalPrice' methods which are present in the expected output."
+        }
+    ]
+]

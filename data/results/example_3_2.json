@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_3_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.7,
+            "reason": "There is 1 false positive, 'Open/Closed Principle', in the actual output that is not in the expected output."
+        },
+        {
+            "example_id": "example_3_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.8,
+            "reason": "The actual output includes the Liskov Substitution Principle, which matches the expected output, but incorrectly includes the Open/Closed Principle as well."
+        },
+        {
+            "example_id": "example_3_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "There is 1 TP ('Liskov Substitution Principle'), 1 FP ('Open/Closed Principle'), and 0 FN. Precision is 0.5, Recall is 1.0, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address Liskov Substitution Principle violation with VolumeCalculator altering behavior of AreaCalculator by calculating volumes instead of areas. Actual output provides more detail on method behavior."
+        },
+        {
+            "example_id": "example_3_2",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address class structure and method organization, but the actual output lacks the detailed recommendations for class hierarchy and interface segregation found in the expected output."
+        },
+        {
+            "example_id": "example_3_2",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'sum' does not align thematically or contextually with any elements in the expected output list, which includes 'VolumeCalculator', 'AreaCalculator', and 'Shape'."
+        },
+        {
+            "example_id": "example_3_2",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output lacks 'Shape' interface implementation and exception handling present in Expected Output, resulting in partial thematic misalignment."
+        }
+    ]
+]

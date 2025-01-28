@@ -4,189 +4,31 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    3,
-                    24
-                ],
-                [
-                    3,
-                    24
+                    19,
+                    30
                 ]
             ],
             "method_names": [
-                "ValidatePerson",
-                "display"
+                "pay"
             ],
-            "reason": "The ValidatePerson class is responsible for both storing person data (name and age) and validating them, which violates the Single Responsibility Principle. Moreover, the display method combines the responsibilities of validation and output, leading to a lack of separation of concerns.",
-            "suggestion": "Split the ValidatePerson class into two separate classes: one for storing the person's information (e.g., Person class) and another for validation logic (e.g., PersonValidator class). Additionally, the display functionality could be handled by a separate utility or method to enhance separation of concerns.",
-            "code": [
-                "public class ValidatePerson {\n\n    private final String name;\n    private final int age;\n\n    public ValidatePerson(String name, int age) {\n        this.name = name;\n        this.age = age;\n    }",
-                "public void display() {\n    if (validateName(this.name) && validateAge(this.age)) {\n        System.out.println(\"Name: \" + this.name + \" and Age: \" + this.age);\n    } else {\n        System.out.println(\"Invalid\");\n    }\n}"
+            "reason": "The 'Order' class is handling multiple responsibilities: maintaining order data and processing payments, which should be separate responsibilities.",
+            "suggestion": "Separate the payment processing logic into a different class, such as 'PaymentProcessor', and have the 'Order' class use it for payment operations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n\n# Usage\norder = Order()\npayment_processor = PaymentProcessor()\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\npayment_processor.pay(order, \"debit\", \"0372846\")\n"
+                    ]
+                }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "1 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 280,
-        "prompt_tokens": 1685,
-        "total_tokens": 1965
+        "completion_tokens": 500,
+        "prompt_tokens": 2352,
+        "total_tokens": 2852
     }
 }
-
-
-
-
-
-
-
-[
-    {
-        "example_id": "example_1_2",
-        "test_case": "Issue Recognition",
-        "metric": "Recognition",
-        "score": 0.0,
-        "reason": "Single Responsibility Principle not recognized"
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review reason for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.2,
-        "reason": "The actual output addresses a design principle, while the expected output describes responsibilities of the AreaCalculator class, showing a mismatch in focus and content."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.0,
-        "reason": "The actual output introduces an interface for shapes, which is unrelated to the expected task of splitting the AreaCalculator into separate classes for outputting and summaration logic."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review method names for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.5,
-        "reason": "The actual output is missing the element 'output' which is present in the expected output."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
-        "metric": "Correctness",
-        "score": 0.0,
-        "reason": "Actual output 'Open/Closed Principle' does not match expected output 'Single Responsibility Principle'."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review reason for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "Actual Output discusses the Open/Closed Principle violation, which is not mentioned in Expected Output. However, it does relate to the AreaCalculator class and shape handling, showing partial relevance."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "The Actual Output suggests introducing an interface for shapes, which does not align with the Expected Output's requirement to split the AreaCalculator class into two specific classes."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review method names for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "The Actual Output partially aligns with the Expected Output by including 'sum' but misses 'output', indicating incomplete relevance."
-    },
-    {
-        "example_id": "example_1_2",
-        "test_case": "Review principle names for Open/Closed Principle in example_1_2",
-        "metric": "Relevance",
-        "score": 0,
-        "reason": "Actual Output mentions 'Open/Closed Principle' while Expected Output requires 'Single Responsibility Principle', indicating complete misalignment with the context."
-    }
-] -> 3_1
-
-
-
-
-,
-        {
-            "principle": "Don't Repeat Yourself",
-            "lines": [
-                [
-                    11,
-                    17
-                ],
-                [
-                    23,
-                    29
-                ]
-            ],
-            "method_names": [
-                "PaypalPaymentProcessor.pay",
-                "CreditCardPaymentProcessor.pay"
-            ],
-            "reason": "The pay method in PaypalPaymentProcessor and CreditCardPaymentProcessor contains duplicate code for verifying the security code and updating order status.",
-            "suggestion": "Extract a common method for the repeated logic and let each class utilize this shared method, reducing duplication.",
-            "code": [
-                "System.out.println(\"Verifying security code: \" + this.securityCode);",
-                "order.setStatus(\"paid\");"
-            ]
-        } -> 4_1
-
-
-
-
-        {
-            "principle": "Don't Repeat Yourself",
-            "lines": [
-                [
-                    54,
-                    55
-                ],
-                [
-                    58,
-                    59
-                ]
-            ],
-            "method_names": [
-                "JSON",
-                "HTML"
-            ],
-            "reason": "The method calls calculator.sum() twice, which repeats the same operation. It would be more efficient to store the result in a variable and reuse it.",
-            "suggestion": "Store the result from calculator.sum() in a variable and use this variable in both JSON and HTML methods.",
-            "code": [
-                "        data = {\n            'sum': self.calculator.sum()",
-                "        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
-            ]
-        } -> 4_2
-
-
-
-        {
-            "principle": "Don't Repeat Yourself",
-            "lines": [
-                [
-                    38,
-                    41
-                ],
-                [
-                    79,
-                    82
-                ],
-                [
-                    97,
-                    100
-                ]
-            ],
-            "method_names": [
-                "pay",
-                "pay",
-                "pay"
-            ],
-            "reason": "Repeating the implementation logic for processing payments and verifying security code in both PaypalPaymentProcessor and CreditCardPaymentProcessor methods leads to duplicated code that violates the DRY principle.",
-            "suggestion": "Create a common method or base class to handle shared payment processing logic and security code verification, thereby eliminating code duplication. Consider moving repeated logic to the PaymentProcessor class.",
-            "code": [
-                "    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);",
-                "    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);",
-                "    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);"
-            ]
-        } -> 5-1_java

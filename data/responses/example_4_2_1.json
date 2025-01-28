@@ -1,0 +1,110 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    25,
+                    34
+                ],
+                [
+                    36,
+                    37
+                ]
+            ],
+            "method_names": [
+                "VolumeCalculator.sum",
+                "Square.volume",
+                "Circle.volume"
+            ],
+            "reason": "The VolumeCalculator class overrides the sum method to change its behavior based on Shape implementations that can't calculate volume. This design requires modifying classes to extend functionality, violating the open/closed principle.",
+            "suggestion": "Use different interfaces or abstract classes for Shape implementations that support only area calculations while others support both area and volume. Alternatively, handle the NotImplementedError exceptions where they might occur.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume",
+                        "def volume(self):\n    raise NotImplementedError('The volume cannot be calculated.')",
+                        "def volume(self):\n    raise NotImplementedError('The volume cannot be calculated')"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, shapes=[]):\n        self.shapes = shapes\n\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            try:\n                total_volume += shape.volume()\n            except NotImplementedError as e:\n                print(e)\n        return total_volume",
+                        "def volume(self):\n    return 0",
+                        "def volume(self):\n    return 0"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    56,
+                    72
+                ]
+            ],
+            "method_names": [
+                "SumCalculator"
+            ],
+            "reason": "SumCalculator class has multiple responsibilities: it calculates and formats (outputs as JSON or HTML) sums of areas or volumes, which should be separated.",
+            "suggestion": "Separate the formatting concerns into a different class, such as a class specifically for converting the output to JSON or HTML.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n    \n    def calculate(self):\n        return self.calculator.sum()",
+                        "class SumFormatter:\n    def to_json(self, sum_value):\n        return json.dumps({'sum': sum_value})\n\n    def to_html(self, sum_value):\n        return f'Sum of the areas of provided shapes: {sum_value}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    67,
+                    68
+                ],
+                [
+                    71,
+                    72
+                ],
+                [
+                    80,
+                    83
+                ],
+                [
+                    86,
+                    89
+                ]
+            ],
+            "method_names": [
+                "SumCalculator.JSON",
+                "SumCalculator.HTML",
+                "main",
+                "main"
+            ],
+            "reason": "The print statements that handle the output are repetitive for both area and volume calculations.",
+            "suggestion": "Encapsulate the output logic in a separate method or class to handle different outputs in a consistent manner without repetition.",
+            "changes": [
+                {
+                    "original_code": [
+                        "print(area_outputter.to_json())\nprint(area_outputter.to_html())",
+                        "print(volume_outputter.to_json())\nprint(volume_outputter.to_html())"
+                    ],
+                    "suggestion_code": [
+                        "def output_results(calculator):\n    print(calculator.to_json())\n    print(calculator.to_html())\n\noutput_results(area_outputter)",
+                        "output_results(volume_outputter)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 934,
+        "prompt_tokens": 2587,
+        "total_tokens": 3521
+    }
+}

@@ -5,23 +5,31 @@
             "lines": [
                 [
                     2,
-                    19
+                    4
                 ]
             ],
             "method_names": [
-                "MySQLDatabase"
+                "__init__"
             ],
-            "reason": "The MySQLDatabase class is handling both data storage and user interaction concerns by printing messages to the console.",
-            "suggestion": "Refactor the MySQLDatabase class to separate data manipulation from user interaction, perhaps by returning status codes or messages instead of performing print operations, and handling these in a different layer.",
-            "code": [
-                "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return f\"User ID: {id}, Name: {self.user_data[id]}\"\n        return \"User not found\"\n    \n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print(\"User ID already exists. Use update_user_data to modify.\")\n        else:\n            self.user_data[id] = name\n            print(\"User added successfully.\")\n    \n    def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user_data to add new user.\")\n    \n    def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")"
+            "reason": "The MySQLDatabase class is responsible for both storing user data and providing database operations for data manipulation.",
+            "suggestion": "Separate the data storage and manipulation logic by creating a DataRepository class responsible for direct access to data storage, while MySQLDatabase should manage database-specific logic only, such as connecting to the database.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }"
+                    ],
+                    "suggestion_code": [
+                        "class DataRepository:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }",
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.repository = DataRepository()"
+                    ]
+                }
             ]
         }
     ],
     "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 422,
-        "prompt_tokens": 1928,
-        "total_tokens": 2350
+        "completion_tokens": 300,
+        "prompt_tokens": 2525,
+        "total_tokens": 2825
     }
 }

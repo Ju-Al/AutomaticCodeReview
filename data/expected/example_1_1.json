@@ -9,10 +9,18 @@
             ],
             "reason": "This code violates the Single Responsibility Principle because the order is responsible for both order management and payment. There is also a breach of the Single Responsibility Principle because the order is responsible for both prices and quantities.",
             "suggestion": "Split the Order class into three separate classes: one for the payment (e.g. PaymentProcessor), one for the order quantities and one for the prices.",
-            "code": [
-                "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")",
-                "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
-                "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")",
+                        "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\r\n    def __init__(self):\r\n        self.items = []\r\n        self.quantities = []\r\n        self.prices = []\r\n        self.status = \"open\"\r\n\r\n    def add_item(self, name: str, quantity: int, price: float) -> None:\r\n        self.items.append(name)\r\n        self.quantities.append(quantity)\r\n        self.prices.append(price)\r\n\r\n\r\n",
+                        "class PaymentProcessor:\r\n    def pay(self, order: Order, security_code: str):\r\n        print(\"Processing payment\")\r\n        print(f\"Verifying security code: {security_code}\")\r\n        order.status = \"paid\""
+                    ]
+                }
             ]
         }
     ],

@@ -10,7 +10,28 @@
             "code": [ 
                 "class SMSAuthorizer:\r\n    def __init__(self):\r\n        self.authenticated = False\r\n\r\n    def verify_code(self, code: str):\r\n        print(\"Verifying code\")\r\n        self.authenticated = True\r\n\r\n    def is_authenticated(self):\r\n        return self.authenticated"
             ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "total_prices",
+                "add_items"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class OrderQuantityManager:\r\n    def __init__(self):\r\n        self.items = []\r\n        self.status = \"open\"\r\n\r\n    def add_item(self, name: str, quantity: int, price: float) -> None:\r\n        item = Order(name, quantity, price)\r\n        self.items.append(item)\r\n\r\n    def get_items(self):\r\n        return self.items\r\n\r\n",
+                        "class PriceCalculator:\r\n    @staticmethod\r\n    def calculate_total(order_manager: OrderQuantityManager) -> float:\r\n        total = 0\r\n        for item in order_manager.get_items():\r\n            total += item.quantity * item.price\r\n        return total\r\n\r\n"
+                    ]
+                }
+            ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below."
+    "overall_feedback": "2 principle violation found. Please see the details below."
 }
