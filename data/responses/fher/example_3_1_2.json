@@ -1,0 +1,93 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    6
+                ],
+                [
+                    8,
+                    10
+                ],
+                [
+                    14,
+                    16
+                ],
+                [
+                    20,
+                    22
+                ],
+                [
+                    24,
+                    26
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class has responsibilities related to managing items and their details as well as containing business logic for handling order status. The PaymentProcessor and its subclasses are directly modifying the order status, which should be managed elsewhere.",
+            "suggestion": "Separate the order management and payment processing responsibilities. Consider implementing an OrderManager to handle order state changes based on payment processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'\n"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        return 'paid'\n\n\nclass OrderManager:\n    @staticmethod\n    def process_payment(order, processor: PaymentProcessor, security_code: str):\n        payment_status = processor.pay(order, security_code)\n        order.status = payment_status\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    20,
+                    22
+                ],
+                [
+                    24,
+                    26
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing logic in the CreditCardPaymentProcessor, DebitCardPaymentProcessor, and PaypalPaymentProcessor has code duplication in verifying security codes and changing the order status.",
+            "suggestion": "Create a common method for the verification process and order status update to eliminate duplication.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'\n"
+                    ],
+                    "suggestion_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        return self.process_payment(order, security_code, 'credit card')\n\n    def process_payment(self, order, security_code, method):\n        print(f'Processing {method} payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        return self.process_payment(order, security_code, 'debit card')\n\n    def process_payment(self, order, security_code, method):\n        print(f'Processing {method} payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        return self.process_payment(order, security_code, 'paypal')\n\n    def process_payment(self, order, security_code, method):\n        print(f'Processing {method} payment')\n        print(f'Verifying email: {security_code}')\n        return 'paid'\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1384,
+        "prompt_tokens": 2394,
+        "total_tokens": 3778
+    }
+}

@@ -1,0 +1,117 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating areas of shapes and managing the list of shapes, which is a violation of the Single Responsibility Principle.",
+            "suggestion": "Separate the responsibility of calculating areas into its own class or method, allowing AreaCalculator to focus solely on managing the collection of shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def get_shapes(self):",
+                        "        return self.shapes",
+                        "",
+                        "class AreaCalculatorService:",
+                        "    @staticmethod",
+                        "    def sum(areas):",
+                        "        return sum(areas)",
+                        "",
+                        "    @staticmethod",
+                        "    def calculate_area(shape):",
+                        "        if isinstance(shape, Square):",
+                        "            return math.pow(shape.length, 2)",
+                        "        elif isinstance(shape, Circle):",
+                        "            return math.pi * math.pow(shape.radius, 2)",
+                        "        return 0"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    7,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator needs to be modified whenever a new shape type is added, violating the Open/Closed Principle.",
+            "suggestion": "Implement a Shape interface with a method to calculate the area that each shape class (like Circle and Square) can implement. The AreaCalculator can then use polymorphism to calculate areas.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "class Shape:",
+                        "    def area(self):",
+                        "        pass",
+                        "",
+                        "class Square(Shape):",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle(Shape):",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius",
+                        "",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)",
+                        "",
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        return sum(shape.area() for shape in self.shapes)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 848,
+        "prompt_tokens": 2345,
+        "total_tokens": 3193
+    }
+}

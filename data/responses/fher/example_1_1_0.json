@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    28
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `Order` class handles both order management (adding items, calculating total price) and payment processing, violating the Single Responsibility Principle.",
+            "suggestion": "Separate the payment processing logic into a dedicated class, such as `PaymentProcessor`, to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    28
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `pay` method needs to be modified for adding new payment types, violating the Open/Closed Principle.",
+            "suggestion": "Utilize a strategy pattern for payment processing where new payment methods can be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def process_payment(self, order: Order, payment_strategy, security_code):\n        payment_strategy.pay(order, security_code)\n\nclass DebitPayment:\n    def pay(self, order, security_code):\n        print('Processing debit payment type')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\nclass CreditPayment:\n    def pay(self, order, security_code):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 784,
+        "prompt_tokens": 2352,
+        "total_tokens": 3136
+    }
+}

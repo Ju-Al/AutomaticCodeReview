@@ -1,0 +1,78 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    8
+                ],
+                [
+                    10,
+                    14
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing order items and their details, as well as handling order status. These should be separated into distinct classes.",
+            "suggestion": "Create a separate class such as OrderItem to encapsulate item details and manage them independently from the order state management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void setStatus(String status) {\n        this.status = status;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderItem {\n    private String name;\n    private int quantity;\n    private double price;\n\n    public OrderItem(String name, int quantity, double price) {\n        this.name = name;\n        this.quantity = quantity;\n        this.price = price;\n    }\n}",
+                        "public void addItem(OrderItem item) {\n        this.items.add(item);\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    16,
+                    17
+                ],
+                [
+                    21,
+                    22
+                ],
+                [
+                    24,
+                    25
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "All payment processors repeat the code structure for processing payments and setting order status. This leads to code duplication across classes.",
+            "suggestion": "Create a base class or an abstract class for payment processing that encapsulates common functionality and allows each processor to define specific behavior.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        order.setStatus(\"paid\");\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public abstract class AbstractPaymentProcessor implements PaymentProcessor {\n    protected void completePayment(Order order, String securityCode, String paymentType) {\n        System.out.println(\"Processing \" + paymentType + \" payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class PaypalPaymentProcessor extends AbstractPaymentProcessor {\n    @Override\n    public void pay(Order order, String securityCode) {\n        completePayment(order, securityCode, \"paypal\");\n    }\n}",
+                        "public class CreditCardPaymentProcessor extends AbstractPaymentProcessor {\n    @Override\n    public void pay(Order order, String securityCode) {\n        completePayment(order, securityCode, \"credit card\");\n    }\n}",
+                        "public class DebitCardPaymentProcessor extends AbstractPaymentProcessor {\n    @Override\n    public void pay(Order order, String securityCode) {\n        completePayment(order, securityCode, \"debit card\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 841,
+        "prompt_tokens": 2560,
+        "total_tokens": 3401
+    }
+}

@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_3",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in the actual output match the expected output, resulting in perfect TP with no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs address the issue of multiple responsibilities in the testableHtml method, but the actual output lacks the clarity and specificity regarding the length and complexity mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs suggest splitting responsibilities, but the actual output is more general while the expected output specifies splitting the 'testableHtml' function into smaller functions, lacking detail on the exact elements to separate."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both the actual and expected outputs contain identical content in the designated field, indicating complete alignment."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output retains some structure and functionality from the expected output, but it lacks the modularity and clarity of the suggested refactor, such as the use of helper methods for setup and teardown."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review reason for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Reason-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs address the issue of repetition but lack alignment in detail; the actual output mentions 'setup and teardown sections' while the expected output specifies 'SetUp, SuiteSetUp, TearDown, and SuiteTearDown'."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review suggestion for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests encapsulating repeated logic into helper methods, while the expected output specifies detailed functions and classes for various tasks, showing a lack of comprehensive detail in the actual output."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review method names for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly with both containing 'testableHtml'."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review code segments for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Changes-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output includes setup and teardown handling but lacks the overall structure and additional functionality present in the expected output, such as suite handling and the final return statement."
+        }
+    ]
+]

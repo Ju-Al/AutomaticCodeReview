@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_1_4",
+            "metric": "F1-Score",
+            "score": 0.6,
+            "reason": "True Positives are 2 with both principles matching, but there is 1 False Negative (Open/Closed Principle) leading to lower Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review reason for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Reason-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs address redundancy in code, but the actual output is less detailed and does not mention the DRY principle explicitly or the specific areas of repetition like currency formatting and bonus points."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review suggestion for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests creating a helper function for formatting, while the expected output emphasizes outsourcing repetitive code to multiple functions and a class for performance types, showing a lack of alignment in approach and detail."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review method names for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete alignment in content."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review code segments for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Changes-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion_code lacks the detailed structure and logic present in the expected output, particularly in the handling of performance types and calculations."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs discuss the multiple responsibilities of the 'statement' function, but the expected output explicitly mentions the Single Responsibility Principle and additional details about currency and output statement, which are not present in the actual output."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest splitting the 'statement' function, but the actual output lacks specific function names like 'calculate_amount' and 'calculate_volume_credits', which are present in the expected output."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete alignment in content."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output lacks detailed logic in the 'original_code' compared to the expected output, which includes specific handling for performance types and formatting. The 'suggestion_code' also does not address the same level of complexity found in the expected output."
+        }
+    ]
+]

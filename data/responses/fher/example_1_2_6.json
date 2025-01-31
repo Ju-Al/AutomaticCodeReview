@@ -1,0 +1,87 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    19
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating area and formatting output. This violates the SRP.",
+            "suggestion": "Separate the responsibilities of calculating areas and formatting the output into different classes or modules.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def output(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_area(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "class AreaOutputter:",
+                        "    def __init__(self, calculator):",
+                        "        self.calculator = calculator",
+                        "    def output(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.calculator.calculate_area()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    2,
+                    2
+                ]
+            ],
+            "method_names": [
+                "__init__"
+            ],
+            "reason": "The __init__ method of AreaCalculator directly depends on concrete shape classes (Square, Circle), violating DIP.",
+            "suggestion": "Introduce an abstract shape class or interface that Square and Circle can extend, allowing AreaCalculator to depend on abstractions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes"
+                    ],
+                    "suggestion_code": [
+                        "class Shape:",
+                        "    def area(self): pass",
+                        "",
+                        "def __init__(self, shapes: List[Shape] = []) -> None:",
+                        "        self.shapes = shapes"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 583,
+        "prompt_tokens": 2265,
+        "total_tokens": 2848
+    }
+}

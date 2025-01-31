@@ -1,0 +1,116 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    3
+                ],
+                [
+                    5,
+                    5
+                ],
+                [
+                    14,
+                    14
+                ],
+                [
+                    20,
+                    20
+                ],
+                [
+                    26,
+                    26
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing order items and handling the order state. The Payment Processor classes are also directly modifying the order's status, violating SRP.",
+            "suggestion": "Separate the responsibilities of order management and payment processing. The Order class should focus solely on order-related functionalities. Create a separate class to handle the order's payment processing without directly altering its state.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:",
+                        "def __init__(self):",
+                        "self.items = []",
+                        "self.quantities = []",
+                        "self.prices = []",
+                        "self.status = 'open'",
+                        "",
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "self.items.append(name)",
+                        "self.quantities.append(quantity)",
+                        "self.prices.append(price)",
+                        "def pay(self, order, security_code: str):",
+                        "def pay(self, order, security_code: str):"
+                    ],
+                    "suggestion_code": [
+                        "class Order:",
+                        "def __init__(self):",
+                        "self.items = []",
+                        "self.quantities = []",
+                        "self.prices = []",
+                        "self.status = 'open'",
+                        "",
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "self.items.append(name)",
+                        "self.quantities.append(quantity)",
+                        "self.prices.append(price)",
+                        "def process_payment(self, processor: PaymentProcessor, security_code: str):",
+                        "processor.pay(self, security_code)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    14
+                ],
+                [
+                    20,
+                    20
+                ],
+                [
+                    26,
+                    26
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor and its subclasses are not designed to be easily extensible for new payment methods without modifying the existing classes, violating the open/closed principle.",
+            "suggestion": "Ensure new payment methods can be added with minimal modification. Consider using composition or a registry pattern for payment processors instead of direct inheritance.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order, security_code: str):",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order, security_code: str):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentSystem:",
+                        "def __init__(self):",
+                        "self.processors = {}",
+                        "self.register_processor('credit_card', CreditCardPaymentProcessor())",
+                        "self.register_processor('debit_card', DebitCardPaymentProcessor())",
+                        "self.register_processor('paypal', PaypalPaymentProcessor())"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 710,
+        "prompt_tokens": 2394,
+        "total_tokens": 3104
+    }
+}

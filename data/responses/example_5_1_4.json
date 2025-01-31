@@ -1,94 +1,46 @@
 {
     "principle_violations": [
         {
-            "principle": "Single Responsibility Principle",
+            "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    2,
-                    16
-                ],
-                [
-                    37,
-                    44
+                    33,
+                    35
                 ],
                 [
                     47,
-                    54
+                    55
                 ],
                 [
-                    57,
-                    64
+                    58,
+                    65
                 ]
             ],
             "method_names": [
-                "Order.__init__",
-                "Order.add_item",
-                "DebitPaymentProcessor.pay",
-                "CreditPaymentProcessor.pay",
-                "PaypalPaymentProcessor.pay"
+                "pay"
             ],
-            "reason": "Classes handle multiple responsibilities. 'Order' handles storing items and applying payment status. 'PaymentProcessor' subclasses handle payment processing and authentication.",
-            "suggestion": "Separate the responsibilities of order management and payment processing. Consider introducing a separate class for item management within 'Order' and delegate authentication to a distinct interface.",
+            "reason": "The 'pay' method in 'PaymentProcessor' interface has differing arguments and required setups across its implementations, not all clients need all parameters.",
+            "suggestion": "Refactor 'PaymentProcessor' so that methods specific to each implementation are included as separate specialized interfaces. Rely on composition where necessary.",
             "changes": [
                 {
                     "original_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n",
-                        "class DebitPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n",
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'\n\n"
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: Order):\n        ...",
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
                     ],
                     "suggestion_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.status = 'open'\n\n    class Item:\n        def __init__(self, name: str, quantity: int, price: float):\n            self.name = name\n            self.quantity = quantity\n            self.price = price\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        item = self.Item(name, quantity, price)\n        self.items.append(item)\n\n",
-                        "class DebitPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        self._mark_order_as_paid(order)\n\n    def _mark_order_as_paid(self, order):\n        order.status = 'paid'\n\n",
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        self._mark_order_as_paid(order)\n\n    def _mark_order_as_paid(self, order):\n        order.status = 'paid'\n\n",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    ...\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        self._mark_order_as_paid(order)\n\n    def _mark_order_as_paid(self, order):\n        order.status = 'paid'\n\n"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Open/Closed Principle",
-            "lines": [
-                [
-                    25,
-                    26
-                ],
-                [
-                    42,
-                    43
-                ],
-                [
-                    60,
-                    61
-                ]
-            ],
-            "method_names": [
-                "DebitPaymentProcessor.__init__",
-                "CreditPaymentProcessor.pay",
-                "PaypalPaymentProcessor.pay"
-            ],
-            "reason": "Current implementation of payment processors does not allow for easy extension. To introduce new payment logic, changes in existing methods are required.",
-            "suggestion": "Introduce an interface for authentication and extend it for each payment type to implement their specific authentication logic separately.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order: Order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n",
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'\n\n"
-                    ],
-                    "suggestion_code": [
-                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order: Order):\n        if not self._authenticate():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        self._mark_order_as_paid(order)\n\n    def _authenticate(self):\n        return self.authorizer.is_authenticated()\n\n",
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        self._print_processing()\n        order.status = 'paid'\n\n    def _print_processing(self):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n\n",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        self._print_processing()\n        order.status = 'paid'\n\n    def _print_processing(self):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n\n"
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: Order):\n        ...",
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, email: str):\n        self.email = email\n\n    def authenticate(self):\n        print('Authenticating Paypal email')\n\n    def pay(self, order):\n        self.authenticate()\n        print('Processing paypal payment')\n        print(f'Verified email: {self.email}')\n        order.status = 'paid'"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 1677,
+        "completion_tokens": 583,
         "prompt_tokens": 2544,
-        "total_tokens": 4221
+        "total_tokens": 3127
     }
 }

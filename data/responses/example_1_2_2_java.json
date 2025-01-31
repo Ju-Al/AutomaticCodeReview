@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    28
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The `sum` method in `AreaCalculator` uses `instanceof` to determine the shape type and calculate the area. This violates the open/closed principle because adding a new shape like Triangle would require modifying this method.",
+            "suggestion": "Introduce an interface or abstract class `Shape` with a method `area()`. Make each shape class implement this interface or extend the abstract class and implement the `area` method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "package example1.shapes;\n\nimport java.util.List;\n\npublic class AreaCalculator {\n    private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "package example1.shapes;\n\nimport java.util.List;\n\npublic interface Shape {\n    double area();\n}\n\npublic class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    public double getRadius() {\n        return radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}\n\npublic class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    public double getLength() {\n        return length;\n    }\n\n    @Override\n    public double area() {\n        return Math.pow(length, 2);\n    }\n}\n\npublic class AreaCalculator {\n    private List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 647,
+        "prompt_tokens": 2419,
+        "total_tokens": 3066
+    }
+}

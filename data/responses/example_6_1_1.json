@@ -4,55 +4,31 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    1,
-                    38
+                    2,
+                    67
                 ]
             ],
             "method_names": [
                 "statement"
             ],
-            "reason": "The statement function violates the Single Responsibility Principle by handling multiple responsibilities: calculating amounts, managing volume credits, and formatting the output.",
-            "suggestion": "Refactor the statement function to separate the calculation of amounts, managing volume credits, and formatting the output into distinct functions.",
+            "reason": "The 'statement' function performs multiple responsibilities, including processing invoice details, calculating amounts, and formatting the result output.",
+            "suggestion": "Refactor the 'statement' function by splitting its responsibilities into smaller and focused functions or classes for calculation, processing, and formatting separately.",
             "changes": [
                 {
                     "original_code": [
-                        "def statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    def format_currency(amount):\n        return f\"${amount:,.2f}\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = 0\n        if play['type'] == \"tragedy\":\n            this_amount = 40000\n            if perf['audience'] > 30:\n                this_amount += 1000 * (perf['audience'] - 30)\n        elif play['type'] == \"comedy\":\n            this_amount = 30000\n            if perf['audience'] > 20:\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\n            this_amount += 300 * perf['audience']\n        else:\n            raise ValueError(f\"Unknown type: {play['type']}\")\n\n        volume_credits += max(perf['audience'] - 30, 0)\n\n        if play['type'] == \"comedy\":\n            volume_credits += perf['audience'] // 5\n\n        result += f\" {play['name']}: {format_currency(this_amount / 100)} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n\n    result += f\"Amount owed is {format_currency(total_amount / 100)}\\n\"\n    result += f\"You earned {volume_credits} credits\\n\"\n    return result"
+                        "def statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = 0\n        if play['type'] == \"tragedy\":\n            this_amount = 40000\n            if perf['audience'] > 30:\n                this_amount += 1000 * (perf['audience'] - 30)\n        elif play['type'] == \"comedy\":\n            this_amount = 30000\n            if perf['audience'] > 20:\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\n            this_amount += 300 * perf['audience']\n        else:\n            raise ValueError(f\"Unknown type: {play['type']}\")\n\n        if play['type'] == \"tragedy\":\n            volume_credits += max(perf['audience'] - 30, 0)\n        if play['type'] == \"comedy\":\n            volume_credits += max(perf['audience'] - 30, 0)\n            volume_credits += perf['audience'] // 5\n        \n        result += f\"{play['name']}: {f\"${total_amount/ 100:,.2f}\"} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n\n        if play['type'] == \"tragedy\":\n            result += f\"Amount owed for tragedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"\n            result += f\"You earned {volume_credits} credits\\n\"\n        if play['type'] == \"comedy\":\n            result += f\"Amount owed for comedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"\n            result += f\"You earned {volume_credits} credits\\n\"\n    return result"
                     ],
                     "suggestion_code": [
-                        "def statement(invoice, plays):\n    statement_data = {'customer': invoice['customer'], 'performances': []}\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n        statement_data['performances'].append({\n            'play': play,\n            'audience': perf['audience'],\n            'amount': calculate_amount(play, perf['audience']),\n            'volume_credits': calculate_credits(play, perf['audience'])\n        })\n    return render_plain_text(statement_data)\n\n\n  def calculate_amount(play, audience):\n      if play['type'] == \"tragedy\":\n          this_amount = 40000\n          if audience > 30:\n              this_amount += 1000 * (audience - 30)\n      elif play['type'] == \"comedy\":\n          this_amount = 30000\n          if audience > 20:\n              this_amount += 10000 + 500 * (audience - 20)\n          this_amount += 300 * audience\n      else:\n          raise ValueError(f\"Unknown type: {play['type']}\")\n      return this_amount\n\n\n  def calculate_credits(play, audience):\n      credits = max(audience - 30, 0)\n      if play['type'] == 'comedy':\n          credits += audience // 5\n      return credits\n\n\n  def render_plain_text(data):\n      result = f\"Statement for {data['customer']}\\n\"\n      total_amount = 0\n      volume_credits = 0\n      for perf in data['performances']:\n          result += f\" {perf['play']['name']}: {format_currency(perf['amount'] / 100)} ({perf['audience']} seats)\\n\"\n          total_amount += perf['amount']\n          volume_credits += perf['volume_credits']\n      result += f\"Amount owed is {format_currency(total_amount / 100)}\\n\"\n      result += f\"You earned {volume_credits} credits\\n\"\n      return result\n\n\n  def format_currency(amount):\n      return f'${amount:,.2f}'"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Open/Closed Principle",
-            "lines": [
-                [
-                    11,
-                    29
-                ]
-            ],
-            "method_names": [
-                "statement"
-            ],
-            "reason": "The play type handling is rigid and requires modification of conditional logic for new play types.",
-            "suggestion": "Utilize polymorphism to handle different play types by creating classes or strategies for each play type.",
-            "changes": [
-                {
-                    "original_code": [
-                        " if play['type'] == \"tragedy\":\n            this_amount = 40000\n            if perf['audience'] > 30:\n                this_amount += 1000 * (perf['audience'] - 30)\n        elif play['type'] == \"comedy\":\n            this_amount = 30000\n            if perf['audience'] > 20:\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\n            this_amount += 300 * perf['audience']\n        else:\n            raise ValueError(f\"Unknown type: {play['type']}\")"
-                    ],
-                    "suggestion_code": [
-                        "class Play:\n    def __init__(self, name):\n        self.name = name\n\n    def amount(self, audience):\n        raise NotImplementedError\n\n    def volume_credits(self, audience):\n        return max(audience - 30, 0)\n\n\nclass Tragedy(Play):\n    def amount(self, audience):\n        this_amount = 40000\n        if audience > 30:\n            this_amount += 1000 * (audience - 30)\n        return this_amount\n\n\nclass Comedy(Play):\n    def amount(self, audience):\n        this_amount = 30000\n        if audience > 20:\n            this_amount += 10000 + 500 * (audience - 20)\n        this_amount += 300 * audience\n        return this_amount\n\n    def volume_credits(self, audience):\n        return super().volume_credits(audience) + audience // 5\n\n\nplays = {\n    \"hamlet\": Tragedy(\"Hamlet\"),\n    \"as like\": Comedy(\"As You Like It\"),\n    \"othello\": Tragedy(\"Othello\")\n}\n\n\ndef statement(invoice, plays):\n    statement_data = {'customer': invoice['customer'], 'performances': []}\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n        statement_data['performances'].append({\n            'play': play,\n            'audience': perf['audience'],\n            'amount': play.amount(perf['audience']),\n            'volume_credits': play.volume_credits(perf['audience'])\n        })\n    return render_plain_text(statement_data)"
+                        "class PlayCalculator:\n    def __init__(self, play, audience):\n        self.play = play\n        self.audience = audience\n\n    def calculate_amount(self):\n        if self.play['type'] == \"tragedy\":\n            amount = 40000\n            if self.audience > 30:\n                amount += 1000 * (self.audience - 30)\n        elif self.play['type'] == \"comedy\":\n            amount = 30000\n            if self.audience > 20:\n                amount += 10000 + 500 * (self.audience - 20)\n            amount += 300 * self.audience\n        else:\n            raise ValueError(f\"Unknown type: {self.play['type']}\")\n        return amount\n\n    def calculate_volume_credits(self):\n        credits = max(self.audience - 30, 0)\n        if self.play['type'] == \"comedy\":\n            credits += self.audience // 5\n        return credits\n\ndef statement(invoice, plays):\n    result = f\"Statement for {invoice['customer']}\\n\"\n    total_amount = 0\n    volume_credits = 0\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        calculator = PlayCalculator(play, perf['audience'])\n        this_amount = calculator.calculate_amount()\n        this_credits = calculator.calculate_volume_credits()\n\n        result += f\"{play['name']}: ${this_amount / 100:,.2f} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n        volume_credits += this_credits\n\n    result += f\"Amount owed is ${total_amount / 100:,.2f}\\n\"\n    result += f\"You earned {volume_credits} credits\\n\"\n    return result"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 1743,
-        "prompt_tokens": 2568,
-        "total_tokens": 4311
+        "completion_tokens": 1029,
+        "prompt_tokens": 2658,
+        "total_tokens": 3687
     }
 }

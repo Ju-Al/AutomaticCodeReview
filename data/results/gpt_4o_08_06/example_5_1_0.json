@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_0",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "TP is 'Dependency Inversion Principle', FP is 'Liskov Substitution Principle', FN is 'Single Responsibility Principle'. Precision is 0.5, Recall is 0.5, F1-Score is 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output addresses the dependency on a concrete implementation but lacks detail on the implications of the Dependency Inversion Principle violation mentioned in the expected output."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs emphasize the importance of depending on abstractions for authorization. The actual output suggests using an interface, while the expected output specifies creating an abstract class Authorizer and implementing it with specific classes. The thematic alignment is strong, but the expected output provides more detailed guidance."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'DebitPaymentProcessor' and the expected output 'SMSAuthorizer' do not align thematically or contextually."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output provides a suggestion that removes the specific typing of 'authorizer', which aligns with potential simplification, but the expected output lacks any content for comparison, leading to limited thematic and contextual alignment."
+        }
+    ]
+]

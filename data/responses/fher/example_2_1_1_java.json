@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ],
+                [
+                    18,
+                    22
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is responsible not only for managing the order items but also for maintaining the order status. This mixes item management and order status management, which should be separated.",
+            "suggestion": "Consider creating a separate class, such as OrderStatus, to manage the status of the order, which would contain methods for setting and getting the status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void setStatus(String status) {\n        this.status = status;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public class OrderStatus {\n        private String status;\n\n        public OrderStatus() {\n          this.status = \"open\";\n        }\n\n        public String getStatus() {\n          return status;\n        }\n\n        public void setStatus(String status) {\n          this.status = status;\n        }\n    }\n\n    private OrderStatus orderStatus;"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ]
+            ],
+            "method_names": [
+                "addItem"
+            ],
+            "reason": "The Order class is tightly coupled to a specific way of managing orders. Any modifications for new order types or statuses will require changes in the Order class itself, violating the open/closed principle.",
+            "suggestion": "Create an interface for the Order management and implement various order types or statuses that extend this interface, allowing new functionalities to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface OrderInterface {\n        void addItem(String name, int quantity, double price);\n        String getStatus();\n        void setStatus(String status);\n    }\n\n    public class Order implements OrderInterface {\n        // existing code\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 608,
+        "prompt_tokens": 2396,
+        "total_tokens": 3004
+    }
+}

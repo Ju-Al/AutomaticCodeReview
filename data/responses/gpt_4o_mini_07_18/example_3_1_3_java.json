@@ -1,0 +1,94 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    9
+                ],
+                [
+                    22,
+                    29
+                ],
+                [
+                    32,
+                    39
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing the order details as well as containing the business logic for the payment status.",
+            "suggestion": "Extract the payment logic into another class responsible for payment handling to adhere to SRP.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "public void setPaymentStatus(String status) {",
+                        "    if (status.equals(\"paid\")) {",
+                        "        this.status = \"paid\";",
+                        "    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    22,
+                    39
+                ],
+                [
+                    42,
+                    49
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The implementation of payment methods directly modifies the payment processing behavior which violates OCP.",
+            "suggestion": "Implement a strategy pattern to encapsulate payment processing to extend new payment types without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing credit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    // Use a payment strategy that handles the actual processing.",
+                        "    PaymentStrategy strategy = new CreditCardPaymentStrategy();",
+                        "    strategy.processPayment(order, securityCode);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 548,
+        "prompt_tokens": 2560,
+        "total_tokens": 3108
+    }
+}

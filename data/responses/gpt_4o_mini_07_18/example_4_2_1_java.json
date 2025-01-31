@@ -1,0 +1,112 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    24,
+                    42
+                ],
+                [
+                    14,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "area",
+                "volume"
+            ],
+            "reason": "The Shape interface is forcing classes to implement both area() and volume() methods, even though some shapes do not have volume (e.g. Circle and Square).",
+            "suggestion": "Create a separate interface for volumetric shapes to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "interface Shape {",
+                        "    public double area();",
+                        "    public double volume();",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "interface AreaShape {",
+                        "    double area();",
+                        "}",
+                        "",
+                        "interface VolumeShape extends AreaShape {",
+                        "    double volume();",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    14,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The `sum` method in AreaCalculator assumes that every shape can always return an area, but classes like Circle and Square cannot provide a valid volume, which can lead to runtime exceptions when an object is replaced with one of these shapes.",
+            "suggestion": "Refactor to check if a shape implements VolumeShape before calling volume() to ensure only shapes capable of it are processed.",
+            "changes": [
+                {
+                    "original_code": [
+                        "for (Shape shape : shapes) {",
+                        "    totalVolume += shape.volume();",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "for (Shape shape : shapes) {",
+                        "    if (shape instanceof VolumeShape) {",
+                        "        totalVolume += ((VolumeShape) shape).volume();",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    20
+                ],
+                [
+                    24,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The current implementations depend on the specific Shape implementations (like Dice, Circle, Square) directly; any new shape requires changing the existing AreaCalculator and VolumeCalculator classes.",
+            "suggestion": "Refactor AreaCalculator and VolumeCalculator to utilize polymorphism and avoid direct dependencies on shape types.",
+            "changes": [
+                {
+                    "original_code": [
+                        "for (Shape shape : shapes) {",
+                        "    totalArea += shape.area();",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "for (AreaShape shape : shapes) {",
+                        "    totalArea += shape.area();",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 623,
+        "prompt_tokens": 2805,
+        "total_tokens": 3428
+    }
+}

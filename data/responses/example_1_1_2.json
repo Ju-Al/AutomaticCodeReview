@@ -5,21 +5,21 @@
             "lines": [
                 [
                     18,
-                    31
+                    35
                 ]
             ],
             "method_names": [
                 "pay"
             ],
-            "reason": "The 'Order' class has multiple responsibilities: managing order items and handling payment processing.",
-            "suggestion": "Separate the payment processing responsibility into another class, such as a 'PaymentProcessor', and use it alongside the 'Order' class.",
+            "reason": "The 'Order' class handles both order management and payment processing, which are distinct responsibilities in the domain.",
+            "suggestion": "Extract the payment-related logic into a separate class, such as 'PaymentProcessor', and delegate the payment process from the 'Order' class to it.",
             "changes": [
                 {
                     "original_code": [
-                        "def pay(self, payment_type: str, security_code):\n    if payment_type == \"debit\":\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    elif payment_type == \"credit\":\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    else:\n        raise Exception(f\"Unknown payment type: {payment_type}\")"
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")"
                     ],
                     "suggestion_code": [
-                        "class PaymentProcessor:\n    def pay(self, order, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n\n# Usage:\norder = Order()\npayment_processor = PaymentProcessor()\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\npayment_processor.pay(order, \"debit\", \"0372846\")"
+                        "class PaymentProcessor:\n    def pay(self, order, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            order.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")"
                     ]
                 }
             ]
@@ -29,21 +29,21 @@
             "lines": [
                 [
                     18,
-                    31
+                    35
                 ]
             ],
             "method_names": [
                 "pay"
             ],
-            "reason": "The 'pay' method needs to be modified to support any new payment types, violating the open/closed principle.",
-            "suggestion": "Define an interface or abstract class for different payment strategies and implement separate classes for each payment type to support extending without changing existing code.",
+            "reason": "The 'pay' method needs modification whenever a new payment type is introduced.",
+            "suggestion": "Use a strategy pattern or polymorphism to extend the payment types without modifying existing payment-processing code.",
             "changes": [
                 {
                     "original_code": [
-                        "def pay(self, payment_type: str, security_code):\n    if payment_type == \"debit\":\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    elif payment_type == \"credit\":\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    else:\n        raise Exception(f\"Unknown payment type: {payment_type}\")"
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")"
                     ],
                     "suggestion_code": [
-                        "class PaymentProcessor:\n    def pay(self, order, payment):\n        payment.process(order)\n\nclass Payment:\n    def process(self, order):\n        raise NotImplementedError(\"Must implement process method\")\n\nclass DebitPayment(Payment):\n    def __init__(self, security_code):\n        self.security_code = security_code\n\n    def process(self, order):\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n\nclass CreditPayment(Payment):\n    def __init__(self, security_code):\n        self.security_code = security_code\n\n    def process(self, order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n\n# Usage\norder = Order()\npayment_processor = PaymentProcessor()\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\ndebit_payment = DebitPayment(\"0372846\")\npayment_processor.pay(order, debit_payment)"
+                        "class PaymentProcessor:\n    def pay(self, order, payment_strategy):\n        payment_strategy.pay(order)\n\nclass DebitPayment:\n    def pay(self, order):\n        print(\"Processing debit payment type\")\n        order.status = \"paid\"\n\nclass CreditPayment:\n    def pay(self, order):\n        print(\"Processing credit payment type\")\n        order.status = \"paid\""
                     ]
                 }
             ]
@@ -51,8 +51,8 @@
     ],
     "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 1008,
+        "completion_tokens": 652,
         "prompt_tokens": 2352,
-        "total_tokens": 3360
+        "total_tokens": 3004
     }
 }

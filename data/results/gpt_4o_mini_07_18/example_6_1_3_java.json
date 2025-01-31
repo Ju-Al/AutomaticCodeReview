@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_1_3",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only one true positive is identified, with two false negatives and no false positives, resulting in low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs identify the violation of the Single Responsibility Principle in the 'generateStatement' method, but the actual output is more focused on the maintainability aspect, while the expected output emphasizes multiple responsibilities without explicitly mentioning maintainability."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs suggest separating logic into distinct components, but the actual output lacks specific function names and clarity on their roles compared to the expected output's detailed function breakdown."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs contain identical content, demonstrating complete alignment in thematic and contextual aspects."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual suggestion code lacks the detailed calculations and logic present in the expected suggestion code, resulting in a significant difference in clarity and relevance."
+        }
+    ]
+]

@@ -1,0 +1,99 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    10
+                ],
+                [
+                    12,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class handles both area computation and output formatting responsibilities, violating SRP.",
+            "suggestion": "Separate the logic for calculating area and outputting results. Create a separate method or class for output handling.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)",
+                        "",
+                        "    def output(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "    def calculate_sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)",
+                        "",
+                        "    @staticmethod",
+                        "    def format_output(area_sum):",
+                        "        return f'Sum of the areas of provided shapes: {area_sum}'",
+                        "",
+                        "    def output(self):",
+                        "        return self.format_output(self.calculate_sum())"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    8,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation logic is repeated and tightly coupled within the sum method, which makes it harder to change or extend.",
+            "suggestion": "Consider using a visitor pattern or define an abstract base class/interface for shapes that would have an area method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))"
+                    ],
+                    "suggestion_code": [
+                        "    def calculate_area(self, shape):",
+                        "        if isinstance(shape, Square):",
+                        "            return math.pow(shape.length, 2)",
+                        "        elif isinstance(shape, Circle):",
+                        "            return math.pi * math.pow(shape.radius, 2)",
+                        "",
+                        "    def calculate_sum(self):",
+                        "        areas = [self.calculate_area(shape) for shape in self.shapes]"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 676,
+        "prompt_tokens": 2265,
+        "total_tokens": 2941
+    }
+}

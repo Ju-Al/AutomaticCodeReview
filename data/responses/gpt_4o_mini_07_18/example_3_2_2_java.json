@@ -1,0 +1,103 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    12,
+                    17
+                ],
+                [
+                    40,
+                    44
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class not only calculates the area sum but also handles the shapes list management and validity checks, violating the single responsibility principle.",
+            "suggestion": "Separate the responsibility of validating shapes into a separate validation class or method, and keep AreaCalculator focused solely on area calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        if (shape instanceof Shape) {",
+                        "            totalArea += shape.area();",
+                        "        } else {",
+                        "            throw new RuntimeException('Invalid Shape: Shape does not implement Shape interface');",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "",
+                        "private void validateShapes() {",
+                        "    for (Shape shape : shapes) {",
+                        "        if (shape == null) {",
+                        "            throw new RuntimeException('Invalid Shape: Shape cannot be null');",
+                        "        }",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    12,
+                    17
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator's sum method relies on the implementation of the Shape interface directly. If a new Shape type is introduced, the calculation logic might need modification.",
+            "suggestion": "Use a visitor pattern or a strategy pattern to allow for the addition of new Shape types without altering existing classes' implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "",
+                        "public void addShape(Shape shape) {",
+                        "    shapes.add(shape);",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 644,
+        "prompt_tokens": 2683,
+        "total_tokens": 3327
+    }
+}

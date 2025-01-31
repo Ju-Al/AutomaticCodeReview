@@ -1,0 +1,110 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    18
+                ],
+                [
+                    24,
+                    26
+                ],
+                [
+                    30,
+                    31
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum",
+                "JSON"
+            ],
+            "reason": "The SumCalculator class has multiple responsibilities: calculating the sum and formatting the output in JSON and HTML.",
+            "suggestion": "Separate the output formatting responsibilities into different classes or methods to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def JSON(self):",
+                        "    data = {",
+                        "        'sum': self.calculator.sum()",
+                        "    }",
+                        "    return json.dumps(data)",
+                        "",
+                        "def HTML(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class JsonOutputter:",
+                        "    def __init__(self, calculator: AreaCalculator):",
+                        "        self.calculator = calculator",
+                        "",
+                        "    def to_json(self):",
+                        "        data = {",
+                        "            'sum': self.calculator.sum()",
+                        "        }",
+                        "        return json.dumps(data)",
+                        "",
+                        "class HtmlOutputter:",
+                        "    def __init__(self, calculator: AreaCalculator):",
+                        "        self.calculator = calculator",
+                        "",
+                        "    def to_html(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    4,
+                    6
+                ],
+                [
+                    8,
+                    10
+                ]
+            ],
+            "method_names": [
+                "area",
+                "volume"
+            ],
+            "reason": "Some shapes, such as Square and Circle, do not have a meaningful volume, yet they are forced to implement the volume method as part of the Shape interface.",
+            "suggestion": "Create a separate interface for 2D shapes that only requires area calculation, and have 3D shapes implement a different interface that requires volume calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Shape(ABC):",
+                        "    @abstractmethod",
+                        "    def area(self):",
+                        "        pass",
+                        "",
+                        "    @abstractmethod",
+                        "    def volume(self):",
+                        "        pass"
+                    ],
+                    "suggestion_code": [
+                        "class Shape2D(ABC):",
+                        "    @abstractmethod",
+                        "    def area(self):",
+                        "        pass",
+                        "",
+                        "class Shape3D(Shape2D):",
+                        "    @abstractmethod",
+                        "    def volume(self):",
+                        "        pass"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 625,
+        "prompt_tokens": 2587,
+        "total_tokens": 3212
+    }
+}

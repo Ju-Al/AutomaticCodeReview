@@ -136,9 +136,9 @@ def evaluate_test_cases_with_metrics(test_cases: List[LLMTestCase], metrics: Lis
     
     return results
 
-def evaluate_example(example_id: str, client: AzureOpenAI, is_java: bool) -> List[Dict]:
+def evaluate_example(example_id: str, client: AzureOpenAI, is_java: bool, counter: int) -> List[Dict]:
     expected_filepath = f'data/expected/{example_id}_java.json' if is_java else f'data/expected/{example_id}.json'
-    response_filepaths = [f'data/responses/{example_id}_{i}java.json' for i in range(5)] if is_java else [f'data/responses/{example_id}_{i}.json' for i in range(5)]
+    response_filepaths = [f'data/responses/gpt_4o_08_06/{example_id}_{i}_java.json' for i in range(counter)] if is_java else [f'data/responses/{example_id}_{i}.json' for i in range(counter)]
 
     expected_output = load_review(expected_filepath)
     actual_outputs = load_reviews(response_filepaths)
@@ -166,63 +166,10 @@ def evaluate_example(example_id: str, client: AzureOpenAI, is_java: bool) -> Lis
         selected_metrics = select_metrics(all_metrics, ["Correctness"])
         results.append(evaluate_test_cases_with_metrics(test_cases, selected_metrics,  f'{example_id}_{i}'))
 
-        result_filepath = f'data/results/{example_id}_{i}_java.json' if is_java else f'data/results/{example_id}_{i}.json'
+        result_filepath = f'data/results/gpt_4o_08_06/{example_id}_{i}_java.json' if is_java else f'data/results/gpt_4o_08_06/{example_id}_{i}.json'
         write_result(result_filepath, results)
         all_results.append(results)
     return all_results 
-
-"""
-def evaluate_example(example_id: str, client: AzureOpenAI) -> Dict[str, List[float]]:
-    expected_filepath = f'data/expected/{example_id}.json'
-    response_filepaths = [f'data/responses/{example_id}_{i}.json' for i in range(5)]
-    
-    expected_output = load_review(expected_filepath)
-    actual_outputs = load_reviews(response_filepaths)
-
-    all_f1_scores = []
-    correctness_results = []
-
-    for i, actual_output in enumerate(actual_outputs):
-        all_actual_principles = [violation['principle'] for violation in actual_output['principle_violations']]
-        all_expected_principles = [violation['principle'] for violation in expected_output['principle_violations']]
-
-        # F1 score test cases
-        test_cases_f1 = [LLMTestCase(
-                        name=f"F1-Test-Case-{example_id}-{i}",
-                        input="Check principle violations in the document.",
-                        actual_output=all_actual_principles,
-                        expected_output=all_expected_principles
-                    )]
-
-        all_metrics = get_all_metrics(client)
-        selected_f1_metrics = select_metrics(all_metrics, ["F1-Score"])
-
-        f1_results = evaluate_test_cases_with_metrics(test_cases_f1, selected_f1_metrics, example_id)
-        print(f1_results)
-        all_f1_scores.extend([result['score'] for result in f1_results if result['metric'] == 'F1-Score'])
-
-
-        # Correctness test cases
-        test_cases_correctness = generate_test_cases(expected_output, actual_output, example_id)
-        selected_correctness_metrics = select_metrics(all_metrics, ["Correctness"])
-
-        correctness_results.extend(evaluate_test_cases_with_metrics(test_cases_correctness, selected_correctness_metrics, example_id))
-
-    # Berechnung der Mittelwerte und Standardabweichungen für die F1-Scores
-    mean_f1 = np.mean(all_f1_scores)
-    std_f1 = np.std(all_f1_scores)
-
-    print(f"{example_id} - Mean F1: {mean_f1}, Std F1: {std_f1}")
-    print(all_f1_scores)
-
-    return {
-        'f1_scores': {
-            'mean': mean_f1,
-            'std': std_f1,
-            'scores': all_f1_scores
-        },
-        'correctness_results': correctness_results
-    }"""
 
 def evaluate_all_examples(client: AzureOpenAI) -> List[Dict]:
     example_ids = [f"example_{i}_{j}_{k}_java" for i in range(1, 7) for j in range(1, 3) for k in range(0, 5)]
@@ -251,63 +198,37 @@ def load_all_example_results() -> List[Dict]:
     write_result('data/all_evaluation_results.json', all_results)
     return all_results
 
-def short_label(example_id):
-    parts = example_id.split('_')
-    return '.'.join(parts[-2:])
+def calculate_total_tokens_by_example(example_id: str, is_java: bool, counter: int) -> int:
+    response_filepaths = [f'data/responses/gpt_4o_mini_07_18/{example_id}_{i}java.json' for i in range(counter)] if is_java else [f'data/responses/{example_id}_{i}.json' for i in range(counter)]
+    all_results = load_reviews(response_filepaths)
 
-def visualize_results(results: List[Dict]):
-    data = {
-        "example_id": [],
-        "metric": [],
-        "score": []
+    total_tokens = 0
+    for results in all_results:
+        total_tokens += results['usage']['total_tokens']
+    return total_tokens
+
+def calculate_total_tokens(counter: int):
+    total_tokens = 0
+    total_tokens_java = 0
+    total_tokens_python = 0
+    example_ids = [f"example_{i}_{j}" for i in range(1, 7) for j in range(1, 3)]
+    for example_id in example_ids:
+        total_tokens_python += calculate_total_tokens_by_example(example_id, False, counter)
+        total_tokens_java += calculate_total_tokens_by_example(example_id, True, counter)
+
+    total_tokens = total_tokens_python + total_tokens_java
+    print("Total Tokens: ", total_tokens)
+    result = {
+        "total_tokens_python": total_tokens_python,
+        "total_tokens_java": total_tokens_java,
+        "total_tokens": total_tokens
     }
-    
-    for result in results:
-        data["example_id"].append(result["example_id"])
-        data["metric"].append(result["metric"])
-        data["score"].append(result["score"])
-    
-    df = pd.DataFrame(data)
-    
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x="example_id", y="score", hue="metric", data=df, width=0.4)
-    plt.title('Evaluation Scores by Example and Metric')
-    plt.xlabel('Example ID')
-    plt.ylabel('Score')
-    plt.legend(title="Metric")
-    plt.xticks(rotation=45)
-    plt.show()
+    write_result('data/responses/gpt_4o_mini_07_18/total_tokens.json', result)
+    return total_tokens
 
-def plot_f1_scores(f1_scores_data):
-    data = {
-        "example_id": [],
-        "f1_score_mean": [],
-        "f1_score_std": []
-    }
 
-    for example_id, stats in f1_scores_data.items():
-        mean_score = stats['f1']['mean']
-        std_score = stats['f1']['std']
-        data["example_id"].append(example_id)
-        data["f1_score_mean"].append(mean_score)
-        data["f1_score_std"].append(std_score)
-
-    df = pd.DataFrame(data)
-
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x="example_id", y="f1_score_mean", data=df, capsize=.2, palette="Blues_d")
-    plt.errorbar(df["example_id"], df["f1_score_mean"], yerr=df["f1_score_std"], fmt='o', color='r')
-    plt.title('Mean F1-Score by Example')
-    plt.xlabel('Example ID')
-    plt.ylabel('Mean F1-Score')
-    plt.xticks(rotation=45)
-    plt.show()
-
-    for example_id, stats in f1_scores_data.items():
-        print(f"Example ID: {example_id}, Mean F1-Score: {stats['f1']['mean']}, Std Dev: {stats['f1']['std']}")
-
-def aggregate_and_calculate_stats(example_id: str, all_categories: List[str]) -> Dict[str, Dict[str, float]]:
-    response_filepaths = [f'data/results/{example_id}_{i}.json' for i in range(5)]
+def aggregate_and_calculate_stats(example_id: str, all_categories: List[str], is_java: bool, counter: int) -> Dict[str, Dict[str, float]]:
+    response_filepaths = [f'data/results/{example_id}_{i}_java.json' for i in range(counter)] if is_java else [f'data/results/{example_id}_{i}.json' for i in range(counter)]
     all_results = load_reviews(response_filepaths)
 
     f1_scores = []
@@ -317,8 +238,6 @@ def aggregate_and_calculate_stats(example_id: str, all_categories: List[str]) ->
         for result in results:
             test_case_scores = defaultdict(list)
             for i in range(len(result)):
-                # Beispiel-ID extrahieren (falls benötigt, kann hier eine Validierung erfolgen)
-                example_id = result[i]['example_id']
                 
                 # F1-Score sammeln
                 if result[i]['metric'] == 'F1-Score':
@@ -387,232 +306,110 @@ def short_label(example_id):
     parts = example_id.split('_')
     return '.'.join(parts[-2:])
 
-""" def aggregate_and_calculate_stats(example_id: str) -> Dict[str, Dict[str, float]]:
-    response_filepaths = [f'data/results/{example_id}_{i}.json' for i in range(5)]
-    all_results = load_reviews(response_filepaths)
-
-    f1_scores = []
-    correctness_scores = defaultdict(list)
-
-    for results in all_results:
-        for result in results:
-            test_case_scores = defaultdict(list)
-            
-            for i in range(len(result)):
-                if result[i]['metric'] == 'F1-Score':
-                    f1_scores.append(result[i]['score'])
-                if result[i]['metric'] == 'Correctness':
-                    test_case = result[i]['test_case']
-                    
-                    if "reason" in test_case.lower():
-                        category = "reason"
-                    elif "suggestion" in test_case.lower():
-                        category = "suggestion"
-                    elif "method names" in test_case.lower():
-                        category = "method names"
-                    elif "code segments" in test_case.lower():
-                        category = "code segments"
-                    else:
-                        category = "other" 
-                    
-                    test_case_scores[category].append(result[i]['score'])
-            
-            for category, scores in test_case_scores.items():
-                if scores: 
-                    mean = np.mean(scores)
-                    std = np.std(scores)
-                    correctness_scores[category].append({
-                        'mean': mean,
-                        'std': std,
-                        'scores': scores
-                    })
-
-    f1_mean = np.mean(f1_scores) if f1_scores else 0
-    f1_std = np.std(f1_scores) if f1_scores else 0
-
-    correctness_stats = {}
-    for category, test_case_stats in correctness_scores.items():
-        category_means = [tc['mean'] for tc in test_case_stats]
-        overall_mean = np.mean(category_means) if category_means else 0
-        overall_std = np.std(category_means) if category_means else 0
-        correctness_stats[category] = {
-            "mean": overall_mean,
-            "std": overall_std,
-            "test_cases": test_case_stats
-        }
-    for category, stats in correctness_stats.items():
-        print(f"Kategorie: {category}")
-        print(f"  Mean: {stats['mean']}")
-        print(f"  Std: {stats['std']}")
-        print(f"  Scores: {stats['scores']}")
-        print(f"  Test Cases:")
-        for tc in stats['test_cases']:
-            print(f"    - Mean: {tc['mean']}, Std: {tc['std']}, Scores: {tc['scores']}") 
-
-    return {
-        'f1': {'mean': f1_mean, 'std': f1_std, 'scores': f1_scores},
-        'correctness': correctness_stats
-    }
- """
-
-""" def aggregate_scores(data: Dict[str, List[float]], all_example_ids: List[str]):
-    Helper function to aggregate scores for each example id using the specified method.
-    aggregated_data = {key: [] for key in all_example_ids}
-
-    # Populate the aggregated data
-    for key, values in data.items():
-        aggregated_data[key].extend(values)
-
-    # Calculate mean and standard deviation
-    for key in aggregated_data:
-        if not aggregated_data[key]:  # Handle empty lists
-            aggregated_data[key] = {'mean': 0, 'std_dev': 0}
-        else:
-            mean_value = np.mean(aggregated_data[key])
-            std_dev_value = np.std(aggregated_data[key])  # Use ddof=1 for sample standard deviation
-            aggregated_data[key] = {'mean': mean_value, 'std_dev': std_dev_value}
-    
-    return aggregated_data """
-
-def plot_correctness_scores(correctness_scores_data, all_categories):
-    data = {
+def plot_f1_scores(f1_scores_data):
+    data_python = {
         "example_id": [],
-        "category": [],
+        "f1_score_mean": [],
+        "f1_score_std": []
+    }
+    data_java = {
+        "example_id": [],
+        "f1_score_mean": [],
+        "f1_score_std": []
+    }
+
+    for example_id, stats in f1_scores_data['python'].items():
+        data_python["example_id"].append(example_id)
+        data_python["f1_score_mean"].append(stats['f1']['mean'])
+        data_python["f1_score_std"].append(stats['f1']['std'])
+
+    for example_id, stats in f1_scores_data['java'].items():
+        data_java["example_id"].append(example_id)
+        data_java["f1_score_mean"].append(stats['f1']['mean'])
+        data_java["f1_score_std"].append(stats['f1']['std'])
+
+    df_python = pd.DataFrame(data_python)
+    df_java = pd.DataFrame(data_java)
+
+    x_labels_python = [short_label(id_) for id_ in df_python["example_id"]]
+    
+    barWidth = 0.3
+    r1 = np.arange(len(df_python["example_id"]))
+    r2 = [x + barWidth for x in r1]
+
+    plt.figure(figsize=(12, 6))
+
+    plt.bar(r1, df_python["f1_score_mean"], width=barWidth, color='royalblue', edgecolor='black', label='Python', yerr=df_python["f1_score_std"], capsize=3)
+    plt.bar(r2, df_java["f1_score_mean"], width=barWidth, color='cyan', edgecolor='black', label='Java', yerr=df_java["f1_score_std"], capsize=3)
+    plt.ylim(0, 1.2)
+    plt.xlabel('Examples ID', fontweight='bold')
+    plt.xticks([r for r in range(len(df_python["example_id"]))], x_labels_python)
+    plt.ylabel('Mean F1 Score', fontweight='bold')
+    plt.title('Mean F1-Score by Example', fontweight='bold')
+    plt.legend()
+
+    plt.show()
+
+
+    for example_id, stats in f1_scores_data.items():
+        print(f"Example ID: {example_id}, Mean F1-Score: {stats['f1']['mean']}, Std Dev: {stats['f1']['std']}")
+
+
+def plot_correctness(data, category):
+    all_example_ids = ['example_1_1', 'example_1_2', 'example_2_1', 'example_2_2', 'example_3_1', 'example_3_2', 'example_4_1', 'example_4_2', 'example_5_1', 'example_5_2', 'example_6_1', 'example_6_2']
+    
+    data_correctness_python = {
+        "example_id": [],
         "correctness_mean": [],
         "correctness_std": []
     }
 
-    for example_id, category_stats in correctness_scores_data.items():
-        for category in all_categories:
-            mean_score = category_stats[category]['mean']
-            std_score = category_stats[category]['std']
-            data["example_id"].append(example_id)
-            data["category"].append(category)
-            data["correctness_mean"].append(mean_score)
-            data["correctness_std"].append(std_score)
-
-    df = pd.DataFrame(data)
-
-    plt.figure(figsize=(16, 8))
-    sns.barplot(x="example_id", y="correctness_mean", hue="category", data=df, dodge=True, capsize=.2, palette="muted")
-    for idx, row in df.iterrows():
-        plt.errorbar(row["example_id"], row["correctness_mean"], yerr=row["correctness_std"], fmt='o', color='r')
-    plt.title('Mean Correctness Score by Example and Category')
-    plt.xlabel('Example ID')
-    plt.ylabel('Mean Correctness Score')
-    plt.xticks(rotation=45)
-    plt.legend(title="Category")
-    plt.show()
-
-    for example_id, category_stats in correctness_scores_data.items():
-        for category in all_categories:
-            mean = category_stats[category]['mean']
-            std = category_stats[category]['std']
-            print(f"Example ID: {example_id}, Category: {category}, Mean Correctness: {mean}, Std Dev: {std}")
-
-def plot_correctness_reasons(results: List[List[Dict]]):
-    data_correctness = {
-        "example_id": {},
-        "example_id_java": {}
+    data_correctness_java = {
+        "example_id": [],
+        "correctness_mean": [],
+        "correctness_std": []
     }
 
-    all_example_ids = ['example_1_1', 'example_1_2', 'example_2_1', 'example_2_2', 'example_3_1', 'example_3_2', 'example_4_1', 'example_4_2', 'example_5_1', 'example_5_2', 'example_6_1', 'example_6_2']
-    all_example_ids_java = [id_ + '_java' for id_ in all_example_ids]
+    for example_id in all_example_ids:
+        stats_python = data['python'].get(example_id, {})
+        stats_java = data['java'].get(example_id, {})
+        
+        if stats_python and 'correctness' in stats_python and category in stats_python["correctness"]:
+            data_correctness_python["example_id"].append(example_id)
+            data_correctness_python["correctness_mean"].append(stats_python["correctness"][category]["mean"])
+            data_correctness_python["correctness_std"].append(stats_python["correctness"][category]["std"])
+        
+        if stats_java and 'correctness' in stats_java and category in stats_java["correctness"]:
+            data_correctness_java["example_id"].append(example_id + "_java")
+            data_correctness_java["correctness_mean"].append(stats_java["correctness"][category]["mean"])
+            data_correctness_java["correctness_std"].append(stats_java["correctness"][category]["std"])
 
-    for example_results in results:
-        for result in example_results:
-            if result["metric"] == "Correctness" and "reason" in result["test_case"]:
-                if "java" in result["example_id"]:
-                    if result["example_id"] not in data_correctness["example_id_java"]:
-                        data_correctness["example_id_java"][result["example_id"]] = []
-                    data_correctness["example_id_java"][result["example_id"]].append(result["score"])
-                else:
-                    if result["example_id"] not in data_correctness["example_id"]:
-                        data_correctness["example_id"][result["example_id"]] = []
-                    data_correctness["example_id"][result["example_id"]].append(result["score"])
+    df_python = pd.DataFrame(data_correctness_python)
+    df_java = pd.DataFrame(data_correctness_java)
 
-    data_correctness["example_id"] = {key: data_correctness["example_id"].get(key, [0]) for key in all_example_ids}
-    data_correctness["example_id_java"] = {key: data_correctness["example_id_java"].get(key, [0]) for key in all_example_ids_java}
-
-    aggregated_data_id = aggregate_scores(data_correctness["example_id"], all_example_ids)
-    aggregated_data_java = aggregate_scores(data_correctness["example_id_java"], all_example_ids_java)
-
-    correctness_scores_id_sorted = [aggregated_data_id[id_]['mean'] for id_ in all_example_ids]
-    correctness_scores_java_sorted = [aggregated_data_java[id_]['mean'] for id_ in all_example_ids_java]
-
-    std = [aggregated_data_id[id_]['std_dev'] for id_ in all_example_ids]
-    std_java = [aggregated_data_java[id_]['std_dev'] for id_ in all_example_ids_java]
-
-    print(aggregated_data_id)
-
-    x_labels = [short_label(id_) for id_ in all_example_ids]
+    x_labels_python = [short_label(id_) for id_ in df_python["example_id"]]
+    x_labels_java = [short_label(id_.replace("_java", "")) for id_ in df_java["example_id"]]
 
     barWidth = 0.3
-    r1 = np.arange(len(all_example_ids))
+    r1 = np.arange(len(df_python["example_id"]))
     r2 = [x + barWidth for x in r1]
 
     plt.figure(figsize=(12, 6))
 
-    plt.bar(r1, correctness_scores_id_sorted, width=barWidth, color='blue', edgecolor='black', yerr=std,label='python')
-    plt.bar(r2, correctness_scores_java_sorted, width=barWidth, color='cyan', edgecolor='black', yerr=std_java, label='java')
+    plt.bar(r1, df_python["correctness_mean"], width=barWidth, color='blue', edgecolor='black', yerr=df_python["correctness_std"], label='Python', capsize=3)
+    plt.bar(r2, df_java["correctness_mean"], width=barWidth, color='cyan', edgecolor='black', yerr=df_java["correctness_std"], label='Java', capsize=3)
 
     plt.xlabel('Examples-ID', fontweight='bold')
-    plt.xticks([r + barWidth/2 for r in range(len(all_example_ids))], x_labels, rotation=45)
+    plt.xticks([r + barWidth / 2 for r in range(len(x_labels_python))], x_labels_python, rotation=45)
     plt.ylabel('Correctness Score', fontweight='bold')
-    plt.title('Correctness Score of Reason in each example', fontweight='bold')
+    plt.title(f'Correctness Score of {category.capitalize()} in each example', fontweight='bold')
     plt.legend()
-
-    plt.show()
-def plot_correctness_suggestion(results: List[List[Dict]]):
-    data_correctness = {
-        "example_id": {},
-        "example_id_java": {}
-    }
-
-    all_example_ids = ['example_1_1', 'example_1_2', 'example_2_1', 'example_2_2', 'example_3_1', 'example_3_2', 'example_4_1', 'example_4_2', 'example_5_1', 'example_5_2', 'example_6_1', 'example_6_2']
-    all_example_ids_java = [id_ + '_java' for id_ in all_example_ids]
-
-    for example_results in results:
-        for result in example_results:
-            if result["metric"] == "Correctness" and "suggestion" in result["test_case"]:
-                if "java" in result["example_id"]:
-                    if result["example_id"] not in data_correctness["example_id_java"]:
-                        data_correctness["example_id_java"][result["example_id"]] = []
-                    data_correctness["example_id_java"][result["example_id"]].append(result["score"])
-                else:
-                    if result["example_id"] not in data_correctness["example_id"]:
-                        data_correctness["example_id"][result["example_id"]] = []
-                    data_correctness["example_id"][result["example_id"]].append(result["score"])
-
-    data_correctness["example_id"] = {key: data_correctness["example_id"].get(key, [0]) for key in all_example_ids}
-    data_correctness["example_id_java"] = {key: data_correctness["example_id_java"].get(key, [0]) for key in all_example_ids_java}
-
-    aggregated_data_id = aggregate_scores(data_correctness["example_id"], all_example_ids)
-    aggregated_data_java = aggregate_scores(data_correctness["example_id_java"], all_example_ids_java)
-
-    correctness_scores_id_sorted = [aggregated_data_id[id_] for id_ in all_example_ids]
-    correctness_scores_java_sorted = [aggregated_data_java[id_] for id_ in all_example_ids_java]
-
-    x_labels = [short_label(id_) for id_ in all_example_ids]
-
-    barWidth = 0.3
-    r1 = np.arange(len(all_example_ids))
-    r2 = [x + barWidth for x in r1]
-
-    plt.figure(figsize=(12, 6))
-
-    plt.bar(r1, correctness_scores_id_sorted, width=barWidth, color='blue', edgecolor='black', label='python')
-    plt.bar(r2, correctness_scores_java_sorted, width=barWidth, color='cyan', edgecolor='black', label='java')
-
-    plt.xlabel('Examples-ID', fontweight='bold')
-    plt.xticks([r + barWidth/2 for r in range(len(all_example_ids))], x_labels, rotation=45)
-    plt.ylabel('Correctness Score', fontweight='bold')
-    plt.title('Correctness Score of Suggestion in each example', fontweight='bold')
-    plt.legend()
+    plt.ylim(0, 1.1)  # Assuming correctness is a score between 0 and 1
 
     plt.show()
 
 def main():
+    counter = 5
     load_dotenv()
 
     API_BASE = os.getenv("AZURE_OPENAI_API_BASE")
@@ -630,25 +427,41 @@ def main():
     example_ids = [f"example_{i}_{j}" for i in range(1, 7) for j in range(1, 3)]
     all_categories = ['reason', 'suggestion', 'method names', 'code segments']
 
-    # Evaluate and save results for each example
     for example_id in example_ids:
-        print(f"Evaluating example: {example_id}")
-        evaluate_example(example_id, client)
+        for i in range(counter):
+            if not os.path.exists(f'data/results/{example_id}_{i}.json'):
+                print(f"Evaluating example: {example_id}_{i}")
+                evaluate_example(example_id, client, False, counter)
+            if not os.path.exists(f'data/results/{example_id}_{i}_java.json'):
+                print(f"Evaluating example: {example_id}_{i}_java")
+                evaluate_example(example_id, client, True, counter)
+            else:
+                print(f"file for {example_id} already exist")
 
     # Aggregating and calculating stats
-    aggregated_data = {}
+    aggregated_data = {
+        'python': {},
+        'java': {}
+    }
     for example_id in example_ids:
-        stats = aggregate_and_calculate_stats(example_id, all_categories)
-        aggregated_data[example_id] = stats
+        stats = aggregate_and_calculate_stats(example_id, all_categories, False, counter)
+        stats_java = aggregate_and_calculate_stats(example_id, all_categories, True, counter)
+        aggregated_data['python'][example_id] = stats
+        aggregated_data['java'][example_id] = stats_java
+    
 
+    #print(aggregated_data)
     # Plotting F1 results
-    plot_f1_scores(aggregated_data)
+    #plot_f1_scores(aggregated_data)
+    #plot_correctness(aggregated_data, "code segments")
+    calculate_total_tokens(counter)
+    #plot_correctness_scores(aggregated_data, all_categories)
 
     # Plotting Correctness results
     # Extract correctness data 
-    correctness_data = {example_id: stats['correctness'] for example_id, stats in aggregated_data.items()}
-    plot_correctness_scores(correctness_data, all_categories)
-    #evaluate_example("example_1_2", azure_openai, False)
+    #correctness_data = {example_id: stats['correctness'] for example_id, stats in aggregated_data.items()}
+    #plot_correctness_scores(correctness_data, all_categories)
+    #evaluate_example("example_1_2", client, False)
     #load_all_example_results(azure_openai)
     #results = load_review("data/all_evaluation_results.json")
     #write_result("all_evaluation_results.json", results)

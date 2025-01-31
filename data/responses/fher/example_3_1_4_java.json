@@ -1,0 +1,110 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    22
+                ],
+                [
+                    40,
+                    50
+                ],
+                [
+                    58,
+                    68
+                ],
+                [
+                    76,
+                    86
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing both the order details (items, quantities, and prices) and the order status. Payment processing logic is being handled in separate classes, but the Order class should not be concerned with the payment status.",
+            "suggestion": "Separate payment handling into a dedicated class that interacts with the Order class. For instance, create a Payment class that takes care of payments and updates the order status only after a payment is confirmed.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing paypal payment\");",
+                        "    System.out.println(\"Verifying email: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public class Payment {",
+                        "    public void processPayment(PaymentProcessor processor, Order order, String securityCode) {",
+                        "        processor.pay(order, securityCode);",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    22
+                ],
+                [
+                    24,
+                    40
+                ],
+                [
+                    42,
+                    58
+                ],
+                [
+                    60,
+                    76
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The existing Order class would require modifications to allow for new types of payments or changes to payment handling, violating the principle that software entities should be open for extension but closed for modification.",
+            "suggestion": "Implement an abstract Payment class or interface that can be extended for new payment methods so that adding new payment processors does not require changes in the Order class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing paypal payment\");",
+                        "    System.out.println(\"Verifying email: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void process(PaymentProcessor processor, Order order, String securityCode) {",
+                        "    processor.pay(order, securityCode);",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 666,
+        "prompt_tokens": 2560,
+        "total_tokens": 3226
+    }
+}

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_4",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 ('Single Responsibility Principle'), FP is 0, FN is 1 ('Liskov Substitution Principle'). Precision is 1, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the Single Responsibility Principle violation and mention managing prices and quantities. The actual output provides additional detail on managing order items and status, which aligns with the expected output's focus but is more detailed."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest dividing responsibilities into separate classes, but focus on different aspects: actual suggests managing items and status, while expected suggests splitting quantities and prices."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output partially aligns with the expected output as both have similar elements like 'addItem' vs 'addItems', but 'Order' vs 'totalPrices' shows significant thematic difference."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest refactoring but differ significantly in approach. Actual output encapsulates items in a new class 'OrderItems', while expected output uses 'OrderQuantityManager' and 'PriceCalculator'. Thematic alignment is weak as the expected output also introduces a new function 'totalPrice', which the actual output omits."
+        }
+    ]
+]

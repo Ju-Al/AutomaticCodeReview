@@ -1,0 +1,170 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    23
+                ],
+                [
+                    25,
+                    41
+                ],
+                [
+                    43,
+                    58
+                ],
+                [
+                    60,
+                    75
+                ],
+                [
+                    77,
+                    92
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum",
+                "area",
+                "volume"
+            ],
+            "reason": "The AreaCalculator and VolumeCalculator classes handle multiple responsibilities: calculating areas and volumes, along with deduplicating logic in multiple areas.",
+            "suggestion": "Create separate classes or methods for area and volume calculations to adhere strictly to SRP.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.volume()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def calculate_total_area(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape')",
+                        "        return total_area",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes):",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_volume(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.volume()",
+                        "        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    43,
+                    58
+                ],
+                [
+                    60,
+                    75
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The sum methods in AreaCalculator and VolumeCalculator need modification for new shape types, violating OCP.",
+            "suggestion": "Implement a shape registry pattern or factory method to create calculators for various shapes without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.volume()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class ShapeFactory:",
+                        "    def create_shapes(self):",
+                        "        return [Circle(2), Square(5), Square(6), Dice(2)]",
+                        "    def create_area_calculator(self):",
+                        "        return AreaCalculator(self.create_shapes())",
+                        "    def create_volume_calculator(self):",
+                        "        return VolumeCalculator(self.create_shapes())"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    77,
+                    92
+                ]
+            ],
+            "method_names": [
+                "JSON",
+                "HTML"
+            ],
+            "reason": "SumCalculator depends on AreaCalculator and VolumeCalculator directly. It should depend on an abstraction instead.",
+            "suggestion": "Introduce an interface or abstract class for calculators and make SumCalculator depend on that.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:",
+                        "    def __init__(self, areaCalculator: AreaCalculator) -> None:",
+                        "        self.calculator = areaCalculator",
+                        "    def JSON(self):",
+                        "        data = {",
+                        "            'sum': self.calculator.sum()",
+                        "        }",
+                        "        return json.dumps(data)",
+                        "    def HTML(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class ICalculator(ABC):",
+                        "    @abstractmethod",
+                        "    def calculate(self):",
+                        "        pass",
+                        "class SumCalculator:",
+                        "    def __init__(self, calculator: ICalculator) -> None:",
+                        "        self.calculator = calculator",
+                        "    def JSON(self):",
+                        "        data = {",
+                        "            'sum': self.calculator.calculate()",
+                        "        }",
+                        "        return json.dumps(data)",
+                        "    def HTML(self):",
+                        "        return f'Sum: {self.calculator.calculate()}'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1057,
+        "prompt_tokens": 2587,
+        "total_tokens": 3644
+    }
+}

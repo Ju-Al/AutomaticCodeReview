@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    13
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class has multiple responsibilities, such as handling order item addition and storing order-related data.",
+            "suggestion": "Separate the Order class responsibilities by creating a dedicated class for item management, encapsulating item details.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.status = \"open\"\n\n    def add_item(self, item: 'OrderItem') -> None:\n        self.items.append(item)\n\nclass OrderItem:\n    def __init__(self, name: str, quantity: int, price: float):\n        self.name = name\n        self.quantity = quantity\n        self.price = price\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    22,
+                    37
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Adding new payment methods requires modifying existing PaymentProcessor implementation, as there is no mechanism for setting payment type dynamically or managing security credentials based on payment type.",
+            "suggestion": "Introduce a security credential abstraction and payment information strategy to allow new payment methods to be added without changing existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n\nclass DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n\nclass PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\"\n"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentCredentials(ABC):\n    @abstractmethod\n    def get_credentials(self):\n        pass\n\nclass CreditCardCredentials(PaymentCredentials):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def get_credentials(self):\n        return f'Security Code: {self.security_code}'\n\nclass PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, credentials: PaymentCredentials):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, credentials: PaymentCredentials):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying credentials: {credentials.get_credentials()}\")\n        order.status = \"paid\"\n\n# Similarly extend for other payment processors based on the same pattern"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 824,
+        "prompt_tokens": 2394,
+        "total_tokens": 3218
+    }
+}

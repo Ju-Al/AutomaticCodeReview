@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_2",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 (Dependency Inversion Principle), FP is 1 (Single Responsibility Principle), FN is 0. Precision is 0.5, Recall is 1, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_2",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify the issue of UserService's dependency on MySQLDatabase, but the expected output explicitly mentions the violation of the Dependency Inversion Principle while the actual output focuses on flexibility concerns."
+        },
+        {
+            "example_id": "example_5_2_2",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both suggest using an abstraction for database operations, but the actual output lacks specific mention of the UserService class."
+        },
+        {
+            "example_id": "example_5_2_2",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output in both content and context."
+        },
+        {
+            "example_id": "example_5_2_2",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest using an interface or abstract class for database operations, but the actual uses an interface while the expected uses an abstract class with different method signatures and initialization."
+        }
+    ]
+]

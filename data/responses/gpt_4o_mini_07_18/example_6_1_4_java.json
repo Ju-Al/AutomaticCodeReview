@@ -1,0 +1,90 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    78
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The generateStatement method in the Statement class is responsible for generating the statement, calculating amounts, and determining volume credits, leading to a violation of SRP.",
+            "suggestion": "Refactor the Statement class to separate the calculation of amounts and volume credits into helper methods or classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "  double totalAmount = 0;",
+                        "  int volumeCredits = 0;",
+                        "  // Combined responsibility logic",
+                        "  // (calculating amount and building the result string)",
+                        "  // More code..."
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "  double totalAmount = calculateTotalAmount(invoice, plays);",
+                        "  int volumeCredits = calculateVolumeCredits(invoice, plays);",
+                        "  StringBuilder result = buildResultString(invoice, totalAmount, volumeCredits);",
+                        "  return result.toString();",
+                        "}",
+                        "",
+                        "private static double calculateTotalAmount(Invoice invoice, Map<String, Play> plays) {",
+                        "  // Logic to calculate total amount",
+                        "}",
+                        "",
+                        "private static int calculateVolumeCredits(Invoice invoice, Map<String, Play> plays) {",
+                        "  // Logic to calculate volume credits",
+                        "}",
+                        "",
+                        "private static StringBuilder buildResultString(Invoice invoice, double totalAmount, int volumeCredits) {",
+                        "  // Logic to build the result string from totals",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    28,
+                    78
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The logic for calculating amounts and volume credits for different play types is duplicated in the generateStatement method.",
+            "suggestion": "Consolidate the duplicated code for calculating amounts and volume credits into separate methods, removing repetition.",
+            "changes": [
+                {
+                    "original_code": [
+                        "switch (play.getType()) {",
+                        "  case \"tragedy\":",
+                        "    // Logic for tragedy",
+                        "    break;",
+                        "  case \"comedy\":",
+                        "    // Logic for comedy",
+                        "    break;",
+                        "  default:",
+                        "    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "double amount = calculateAmount(play, perf);",
+                        "volumeCredits += calculateVolumeCredits(play, perf);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 634,
+        "prompt_tokens": 3090,
+        "total_tokens": 3724
+    }
+}

@@ -1,0 +1,99 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    19
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating areas and handling output formatting.",
+            "suggestion": "Separate the area calculation logic from the output functionality by creating two distinct classes: one for calculating areas and another for displaying the results.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "areas = []",
+                        "for shape in self.shapes:",
+                        "if isinstance(shape, Square):",
+                        "areas.append(math.pow(shape.length, 2))",
+                        "elif isinstance(shape, Circle):",
+                        "areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "return sum(areas)",
+                        "def output(self):",
+                        "return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes):",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)",
+                        "",
+                        "class AreaOutputter:",
+                        "    def __init__(self, area_calculator):",
+                        "        self.area_calculator = area_calculator",
+                        "    def output(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.area_calculator.sum()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    9,
+                    12
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation logic for different shapes is duplicated with different computations.",
+            "suggestion": "Utilize polymorphism by creating an interface for shapes that has an `area` method, allowing each shape to implement its own area calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if isinstance(shape, Square):",
+                        "areas.append(math.pow(shape.length, 2))",
+                        "elif isinstance(shape, Circle):",
+                        "areas.append(math.pi * math.pow(shape.radius, 2))"
+                    ],
+                    "suggestion_code": [
+                        "class Shape:",
+                        "    def area(self):",
+                        "        raise NotImplementedError",
+                        "",
+                        "class Square(Shape):",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle(Shape):",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)",
+                        "",
+                        "areas.append(shape.area())"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 677,
+        "prompt_tokens": 2265,
+        "total_tokens": 2942
+    }
+}

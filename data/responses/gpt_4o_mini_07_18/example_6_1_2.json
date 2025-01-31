@@ -1,0 +1,134 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    41
+                ]
+            ],
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The `statement` function combines multiple responsibilities: calculating the amounts for each play type, formatting the output string, and managing the volume credits. This makes it hard to maintain and test.",
+            "suggestion": "Split the `statement` function into multiple functions, each handling a singular responsibility. Consider creating separate functions for calculating amounts, formatting results, and for handling volume credits.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def statement(invoice, plays):",
+                        "    total_amount = 0",
+                        "    volume_credits = 0",
+                        "    result = f\"Statement for {invoice['customer']}\\n\"",
+                        "",
+                        "    for perf in invoice['performances']:",
+                        "        play = plays[perf['playID']]",
+                        "        if play is None:",
+                        "            raise ValueError(f\"Unknown play: {perf['playID']}\")",
+                        "",
+                        "        this_amount = 0",
+                        "        if play['type'] == \"tragedy\":",
+                        "            this_amount = 40000",
+                        "            if perf['audience'] > 30:",
+                        "                this_amount += 1000 * (perf['audience'] - 30)",
+                        "        elif play['type'] == \"comedy\":",
+                        "            this_amount = 30000",
+                        "            if perf['audience'] > 20:",
+                        "                this_amount += 10000 + 500 * (perf['audience'] - 20)",
+                        "            this_amount += 300 * perf['audience']",
+                        "        else:",
+                        "            raise ValueError(f\"Unknown type: {play['type']}\")",
+                        "",
+                        "        if play['type'] == \"tragedy\":",
+                        "            volume_credits += max(perf['audience'] - 30, 0)",
+                        "        if play['type'] == \"comedy\":",
+                        "            volume_credits += max(perf['audience'] - 30, 0)",
+                        "            volume_credits += perf['audience'] // 5",
+                        "        ",
+                        "        result += f\"{play['name']}: {f\"${total_amount/ 100:,.2f}\"} ({perf['audience']} seats)\\n\"",
+                        "        total_amount += this_amount",
+                        "",
+                        "        if play['type'] == \"tragedy\":",
+                        "            result += f\"Amount owed for tragedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"",
+                        "            result += f\"You earned {volume_credits} credits\\n\"",
+                        "        if play['type'] == \"comedy\":",
+                        "            result += f\"Amount owed for comedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"",
+                        "            result += f\"You earned {volume_credits} credits\\n\"",
+                        "    return result"
+                    ],
+                    "suggestion_code": [
+                        "def statement(invoice, plays):",
+                        "    total_amount = 0",
+                        "    volume_credits = 0",
+                        "    result = f\"Statement for {invoice['customer']}\\n\"",
+                        "",
+                        "    for perf in invoice['performances']:",
+                        "        play = plays[perf['playID']]",
+                        "        if play is None:",
+                        "            raise ValueError(f\"Unknown play: {perf['playID']}\")",
+                        "",
+                        "        this_amount, volume_credits = calculate_amount_and_credits(perf, play, volume_credits)",
+                        "",
+                        "        result += f\"{play['name']}: {f\"${this_amount / 100:,.2f}\"} ({perf['audience']} seats)\\n\"",
+                        "        total_amount += this_amount",
+                        "    result += f\"Total amount: {f\"${total_amount / 100:,.2f}\"}\\n\"",
+                        "    result += f\"You earned {volume_credits} credits\\n\"",
+                        "    return result",
+                        "",
+                        "def calculate_amount_and_credits(perf, play, volume_credits):",
+                        "    this_amount = 0",
+                        "    if play['type'] == \"tragedy\":",
+                        "        this_amount = 40000",
+                        "        if perf['audience'] > 30:",
+                        "            this_amount += 1000 * (perf['audience'] - 30)",
+                        "        volume_credits += max(perf['audience'] - 30, 0)",
+                        "    elif play['type'] == \"comedy\":",
+                        "        this_amount = 30000",
+                        "        if perf['audience'] > 20:",
+                        "            this_amount += 10000 + 500 * (perf['audience'] - 20)",
+                        "        this_amount += 300 * perf['audience']",
+                        "        volume_credits += max(perf['audience'] - 30, 0)",
+                        "        volume_credits += perf['audience'] // 5",
+                        "    else:",
+                        "        raise ValueError(f\"Unknown type: {play['type']}\")",
+                        "    return this_amount, volume_credits"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    24,
+                    42
+                ]
+            ],
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The logic for accumulating volume credits is repeated for both tragedy and comedy plays, leading to redundancy in the code.",
+            "suggestion": "Create a separate function or abstract the logic into a single method that calculates volume credits based on the play type and performance data.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if play['type'] == \"tragedy\":",
+                        "    volume_credits += max(perf['audience'] - 30, 0)",
+                        "if play['type'] == \"comedy\":",
+                        "    volume_credits += max(perf['audience'] - 30, 0)",
+                        "    volume_credits += perf['audience'] // 5"
+                    ],
+                    "suggestion_code": [
+                        "volume_credits = calculate_volume_credits(perf, play, volume_credits)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1425,
+        "prompt_tokens": 2658,
+        "total_tokens": 4083
+    }
+}

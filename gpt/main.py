@@ -48,9 +48,9 @@ def main():
             if not os.path.exists(f'data/responses/{example_id}_{i}_java.json'):
                 file_paths = collect_file_paths(directory, 'java')
                 print(f"Processing files for {example_id}_{i} from {directory} with files {file_paths}")
-                process_files(file_paths, f'{example_id}_{i}java')
+                process_files(file_paths, f'{example_id}_{i}_java')
             else:
-                print(f"file for {example_id} already exist")
+                print(f"file for {example_id}_{i} already exist")
 
 if __name__ == "__main__":
     main()

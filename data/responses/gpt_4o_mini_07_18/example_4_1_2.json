@@ -1,0 +1,97 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    67,
+                    68
+                ],
+                [
+                    77,
+                    78
+                ],
+                [
+                    88,
+                    89
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms",
+                "pay"
+            ],
+            "reason": "The payment processing classes handle both payment processing and authentication logic, violating the principle that a class should have only one reason to change.",
+            "suggestion": "Separate the authentication responsibilities into a dedicated class or a strategy interface to improve modularity and adhere to SRP.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order):",
+                        "def auth_sms(self, order, code: str):",
+                        "def pay(self, order, security_code: str):"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order):",
+                        "def authenticate(self, order, code: str):",
+                        "def pay(self, order):"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    7,
+                    10
+                ],
+                [
+                    39,
+                    48
+                ],
+                [
+                    36,
+                    39
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms",
+                "pay"
+            ],
+            "reason": "The PaymentProcessor interface forces all payment processors to implement authentication methods even if they may not use them, leading to unnecessary implementation details.",
+            "suggestion": "Split the interface into two separate interfaces: one for payment processing and another for authentication, allowing classes to implement only the methods they require.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):",
+                        "    @abstractmethod",
+                        "    def pay(self, order):",
+                        "        ...",
+                        "    @abstractmethod",
+                        "    def auth_sms(self, order, code: str):",
+                        "        ...",
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "class CreditPaymentProcessor(PaymentProcessor):"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):",
+                        "    @abstractmethod",
+                        "    def pay(self, order):",
+                        "        ...",
+                        "class AuthenticationProcessor(ABC):",
+                        "    @abstractmethod",
+                        "    def auth_sms(self, order, code: str):",
+                        "        ..."
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 527,
+        "prompt_tokens": 2552,
+        "total_tokens": 3079
+    }
+}

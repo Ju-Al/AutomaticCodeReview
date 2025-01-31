@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_4",
+            "metric": "F1-Score",
+            "score": 0.6,
+            "reason": "Single Responsibility Principle is a True Positive, but Don't Repeat Yourself is a False Negative, indicating incomplete adherence to expected violations."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output mentions multiple responsibilities but lacks the specificity of the Single Responsibility Principle violation highlighted in the expected output."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest breaking down a method into smaller functions, but the actual output is less specific than the expected output, which clearly lists the functions to be created."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly, both containing the same content 'testable_html'."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output retains the original code structure but lacks clarity in function separation as seen in the expected output, which uses helper methods for better organization."
+        }
+    ]
+]

@@ -1,0 +1,103 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    16,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has the responsibility of calculating the area of different shapes and handling the output formatting, which violates the Single Responsibility Principle.",
+            "suggestion": "Separate the concerns by creating a new class just for formatting output, while keeping the AreaCalculator focused solely on calculating the area.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "public String output() {",
+                        "    return \"Sum of the areas of provided shapes: \" + sum();",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "public class AreaOutputFormatter {",
+                        "    private AreaCalculator calculator;",
+                        "",
+                        "    public AreaOutputFormatter(AreaCalculator calculator) {",
+                        "        this.calculator = calculator;",
+                        "    }",
+                        "",
+                        "    public String formatOutput() {",
+                        "        return \"Sum of the areas of provided shapes: \" + calculator.sum();",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    5,
+                    5
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator"
+            ],
+            "reason": "The AreaCalculator class uses a List<Object> to handle different shape types, which breaks the Liskov Substitution Principle. Any new shape class would need additional checks in the AreaCalculator instead of relying on a common interface.",
+            "suggestion": "Create a Shape interface with a method to calculate area. Ensure all shape classes implement this interface to allow the AreaCalculator to handle any shape uniformly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;",
+                        "public AreaCalculator(List<Object> shapes) {",
+                        "    this.shapes = shapes;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;",
+                        "public AreaCalculator(List<Shape> shapes) {",
+                        "    this.shapes = shapes;",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 748,
+        "prompt_tokens": 2419,
+        "total_tokens": 3167
+    }
+}

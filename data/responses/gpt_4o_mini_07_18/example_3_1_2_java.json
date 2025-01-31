@@ -1,0 +1,73 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    7
+                ],
+                [
+                    24,
+                    25
+                ],
+                [
+                    34,
+                    35
+                ],
+                [
+                    44,
+                    45
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The Order class handles both the order's data management and modifies its own status based on payment processing. Each class should have a single responsibility.",
+            "suggestion": "The payment logic should be separated from the Order class. Consider creating a separate OrderStatusManager class to handle order status changes triggered by payment processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode, OrderStatusManager statusManager) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        statusManager.updateStatus(order, \"paid\");\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Higher level modules (like Order and different payment processors) are directly dependent on lower-level modules, violating the dependency inversion principle.",
+            "suggestion": "Introduce an abstraction for handling payment operations that the higher-level module can depend on, allowing for better scalability and easier testing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "statusManager.updateStatus(order, \"paid\");"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 548,
+        "prompt_tokens": 2560,
+        "total_tokens": 3108
+    }
+}

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_0",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives match perfectly with no False Positives or False Negatives, resulting in perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs correctly identify the violation of the Liskov Substitution Principle due to VolumeCalculator changing expected behavior from area to volume calculation. The actual output provides slightly more detail on method change, but thematically aligns well with the expected output."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Actual Output suggests creating an abstract class or interface for calculations with responsibilities for area and volume, aligning with Expected Output's suggestion of an abstract base class and interfaces, but lacks the detail on separate interfaces for 2D and 3D shapes."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual output 'sum' does not align with expected output 'VolumeCalculator', 'AreaCalculator', 'Shape'. They address different subjects with no thematic or contextual overlap."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual suggestion lacks structure of abstract classes and validation for shape type, while expected includes these elements. Both aim to refactor VolumeCalculator with interfaces, but actual output simplifies by using SolidShape directly."
+        }
+    ]
+]

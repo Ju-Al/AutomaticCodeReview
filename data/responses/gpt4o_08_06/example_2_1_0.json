@@ -1,0 +1,35 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    13,
+                    17
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method of the PaymentProcessor class handles both the payment processing logic and the order status update, which are separate responsibilities.",
+            "suggestion": "Separate the order status update logic from the pay method into a separate method within the Order class, such as update_status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")\n",
+                        "def update_status(self, status: str) -> None:\n        self.status = status\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 281,
+        "prompt_tokens": 2257,
+        "total_tokens": 2538
+    }
+}

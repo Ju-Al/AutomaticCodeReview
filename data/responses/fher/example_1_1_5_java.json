@@ -1,0 +1,78 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    10
+                ],
+                [
+                    44,
+                    47
+                ],
+                [
+                    31,
+                    33
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "addItem",
+                "totalPrice"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing the order items and quantities, calculating the total price, and processing payment. This violates SRP because changes in one responsibility may affect others.",
+            "suggestion": "Separate the payment processing into another class, such as PaymentProcessor, and leave the Order class purely for managing the order items and total price calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public double totalPrice() {",
+                        "public void pay(String paymentType, String securityCode) {"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor { public void pay(Order order, String paymentType, String securityCode) {...} }",
+                        "public void addItem(String name, int quantity, double price) {...}",
+                        "public double totalPrice() {...}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    31,
+                    33
+                ],
+                [
+                    44,
+                    47
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method in the Order class needs to be modified to support new payment types, violating the open/closed principle. Any addition of new payment types requires changes to this method.",
+            "suggestion": "Create a Payment interface that each payment type implements, and the Order class can call an abstract method without needing changes to its business logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {",
+                        "switch (paymentType.toLowerCase()) {"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Payment payment) { payment.process(this); }",
+                        "interface Payment { void process(Order order); }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 473,
+        "prompt_tokens": 2518,
+        "total_tokens": 2991
+    }
+}

@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    26
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "getStatus"
+            ],
+            "reason": "The Order class manages both item properties and payment status, leading to multiple responsibilities.",
+            "suggestion": "Separate the payment-related methods (like setting the order status) into another class or utilize events to update the status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n}\n\npublic class PaymentStatus {\n    private String status;\n\n    public PaymentStatus() {\n        this.status = \"open\";\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    34,
+                    40
+                ],
+                [
+                    43,
+                    49
+                ],
+                [
+                    52,
+                    58
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Adding further payment processors would require modifying the implementation, violating the open/closed principle.",
+            "suggestion": "Implement a new interface for payment processors tailored for extension, for example, by utilizing strategy or composition.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, PaymentStatus status, String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        status.setStatus(\"paid\");\n    }\n}",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, PaymentStatus status, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        status.setStatus(\"paid\");\n    }\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, PaymentStatus status, String securityCode) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        status.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 1086,
+        "prompt_tokens": 2560,
+        "total_tokens": 3646
+    }
+}

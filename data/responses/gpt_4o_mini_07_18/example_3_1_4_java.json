@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    18
+                ],
+                [
+                    32,
+                    39
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class handles multiple responsibilities: managing order items and their details, as well as managing order status.",
+            "suggestion": "Separate the order management responsibilities from the status management. Consider creating a separate OrderStatus class to handle the status of the order.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "        this.items.add(name);",
+                        "        this.quantities.add(quantity);",
+                        "        this.prices.add(price);",
+                        "    }",
+                        "    public void setStatus(String status) {",
+                        "        this.status = status;",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "        this.items.add(name);",
+                        "        this.quantities.add(quantity);",
+                        "        this.prices.add(price);",
+                        "    }",
+                        "// New OrderStatus class to manage status",
+                        "public class OrderStatus {",
+                        "    private String status;",
+                        "    public OrderStatus() {",
+                        "        this.status = \"open\";",
+                        "    }",
+                        "    public String getStatus() {",
+                        "        return status;",
+                        "    }",
+                        "    public void setStatus(String status) {",
+                        "        this.status = status;",
+                        "    }",
+                        "}",
+                        "// Update the Order class to use OrderStatus",
+                        "private OrderStatus orderStatus;",
+                        "this.orderStatus = new OrderStatus();",
+                        "public String getStatus() {",
+                        "    return orderStatus.getStatus();",
+                        "}",
+                        "public void setStatus(String status) {",
+                        "    orderStatus.setStatus(status);",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 459,
+        "prompt_tokens": 2560,
+        "total_tokens": 3019
+    }
+}

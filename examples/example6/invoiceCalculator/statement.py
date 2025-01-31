@@ -3,9 +3,6 @@ def statement(invoice, plays):
     volume_credits = 0
     result = f"Statement for {invoice['customer']}\n"
 
-    def format_currency(amount):
-        return f"${amount:,.2f}"
-
     for perf in invoice['performances']:
         play = plays[perf['playID']]
         if play is None:
@@ -24,16 +21,21 @@ def statement(invoice, plays):
         else:
             raise ValueError(f"Unknown type: {play['type']}")
 
-        volume_credits += max(perf['audience'] - 30, 0)
-
+        if play['type'] == "tragedy":
+            volume_credits += max(perf['audience'] - 30, 0)
         if play['type'] == "comedy":
+            volume_credits += max(perf['audience'] - 30, 0)
             volume_credits += perf['audience'] // 5
-
-        result += f" {play['name']}: {format_currency(this_amount / 100)} ({perf['audience']} seats)\n"
+        
+        result += f"{play['name']}: {f"${total_amount/ 100:,.2f}"} ({perf['audience']} seats)\n"
         total_amount += this_amount
 
-    result += f"Amount owed is {format_currency(total_amount / 100)}\n"
-    result += f"You earned {volume_credits} credits\n"
+        if play['type'] == "tragedy":
+            result += f"Amount owed for tragedy is {f"${total_amount/ 100:,.2f}"}\n"
+            result += f"You earned {volume_credits} credits\n"
+        if play['type'] == "comedy":
+            result += f"Amount owed for comedy is {f"${total_amount/ 100:,.2f}"}\n"
+            result += f"You earned {volume_credits} credits\n"
     return result
 
 plays = {

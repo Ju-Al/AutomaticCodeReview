@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    18
+                ],
+                [
+                    20,
+                    60
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The generateStatement method in the Statement class is responsible for multiple tasks: calculating amounts, generating the statement string, and managing volume credits.",
+            "suggestion": "Refactor the code to separate the responsibility of calculating the amounts and generating the statement into individual methods or classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "double totalAmount = 0;",
+                        "int volumeCredits = 0;",
+                        "StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");",
+                        "for (Performance perf : invoice.getPerformances()) {",
+                        "   Play play = plays.get(perf.getPlayID());",
+                        "   double thisAmount = 0;",
+                        "   // ... Rest of amount calculations",
+                        "   // volumeCredits calculations",
+                        "   result.append(String.format(...));",
+                        "   totalAmount += thisAmount;",
+                        "   // Final result calculations",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "     double totalAmount = calculateTotalAmount(invoice, plays);",
+                        "     int volumeCredits = calculateVolumeCredits(invoice, plays);",
+                        "     return generateStatementString(invoice, totalAmount, volumeCredits);",
+                        "}",
+                        "private static double calculateTotalAmount(Invoice invoice, Map<String, Play> plays) {",
+                        "    // Logic for amount calculations",
+                        "    return totalAmount;",
+                        "}",
+                        "private static int calculateVolumeCredits(Invoice invoice, Map<String, Play> plays) {",
+                        "    // Logic for calculating volume credits",
+                        "    return volumeCredits;",
+                        "}",
+                        "private static String generateStatementString(Invoice invoice, double totalAmount, int volumeCredits) {",
+                        "    // Logic for generating the statement string",
+                        "    return result.toString();",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 511,
+        "prompt_tokens": 3090,
+        "total_tokens": 3601
+    }
+}

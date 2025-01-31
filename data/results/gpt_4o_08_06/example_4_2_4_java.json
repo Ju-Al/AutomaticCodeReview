@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_4",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives as the actual output and expected output lists do not match at all."
+        }
+    ],
+    []
+]

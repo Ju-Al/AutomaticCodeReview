@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_2",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 'Open/Closed Principle'; FP is 'Single Responsibility Principle'; no FN. Precision is 0.5, Recall is 1, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the open-closed principle due to the need for modifying the AreaCalculator class to add new shapes. The actual output lacks specific examples of shapes, which slightly reduces detail alignment."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs focus on using polymorphism to handle shape area calculations without needing to know specific shapes. Actual Output suggests polymorphic behavior, while Expected Output details using an interface for this purpose. The Actual Output lacks mention of the interface but aligns well otherwise."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly in content and context."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs refactor the code to promote polymorphism by introducing an area method for shape classes, but the actual output misses an abstract Shape class and uses static method for summing areas."
+        }
+    ]
+]

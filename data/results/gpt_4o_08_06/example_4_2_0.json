@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_0",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No True Positives as actual and expected lists have no common principles. All actuals are False Positives, and the expected is a False Negative, resulting in undefined Precision and Recall."
+        }
+    ],
+    []
+]

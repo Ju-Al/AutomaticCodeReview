@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_4",
+            "metric": "F1-Score",
+            "score": 0.2,
+            "reason": "Only the 'Single Responsibility Principle' is identified as a True Positive, while there are two False Positives and one False Negative, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output discusses payment processing logic and order status management in relation to maintainability, while the expected output specifically indicates a violation of the Single Responsibility Principle related to price and quantity, leading to a thematic misalignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest separating responsibilities, but the actual output focuses on payment processing and order status management, while the expected output specifies splitting the Order class into quantities and prices, indicating a lack of direct thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'pay' does not align thematically or contextually with the expected outputs 'totalPrices' and 'addItems'."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual suggestion code does not address the same functionality as the expected suggestion code, focusing instead on a payment process rather than item management."
+        }
+    ]
+]

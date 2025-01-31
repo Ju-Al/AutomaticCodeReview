@@ -1,0 +1,61 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating the area and outputting the result, which are considered separate responsibilities.",
+            "suggestion": "Separate the area calculation logic from the output formatting logic, perhaps by creating a new class for outputting results.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }",
+                        "public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }",
+                        "public String formatOutput(double sum) {\n        return \"Sum of the areas of provided shapes: \" + sum;\n    }\n\n    public String output() {\n        return formatOutput(sum());\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    12,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class needs changes if new shapes (e.g., Rectangle, Triangle) are added, violating the open/closed principle.",
+            "suggestion": "Use an interface for shapes that defines a method to calculate the area, allowing the AreaCalculator to work with any shape that implements this interface without needing modification.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }"
+                    ],
+                    "suggestion_code": [
+                        "for (Object shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += ((Shape) shape).calculateArea();\n            }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 698,
+        "prompt_tokens": 2419,
+        "total_tokens": 3117
+    }
+}

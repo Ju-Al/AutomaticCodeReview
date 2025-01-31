@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "One TP: 'Single Responsibility Principle'. One FN: 'Don't Repeat Yourself'. No FP. Precision is 1 and Recall is 0.5, leading to F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the 'testableHtml' method violating the Single Responsibility Principle by handling multiple responsibilities. The actual output mentions specific tasks like constructing HTML and interacting with WikiPage, aligning well with the expected output's focus on excessive responsibilities."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest breaking down functionality into smaller units, but the actual output focuses on separating HTML content construction from WikiPage interaction, while the expected output specifies splitting the testableHtml function into setup, teardown, path processing, and string formatting."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output precisely matches the expected output, indicating complete alignment in content."
+        },
+        {
+            "example_id": "example_6_2_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual and expected outputs both modularize the setup and teardown logic into separate methods, improving clarity and maintainability. However, the expected output includes a check for the 'Test' attribute before proceeding, which the actual output lacks, affecting alignment."
+        }
+    ]
+]

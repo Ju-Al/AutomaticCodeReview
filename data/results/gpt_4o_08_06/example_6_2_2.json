@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_2",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "One True Positive (Single Responsibility Principle), no False Positives, and one False Negative (Don't Repeat Yourself). Precision is 1.0, Recall is 0.5, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify violation of SRP and mention multiple responsibilities, but actual output specifies tasks like setup and teardown, which is more detailed than expected output."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest splitting a method into smaller functions with similar focuses on setup and teardown logic, but the actual output lacks specific mentions of path processing and string formatting."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly in both content and format."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual and expected outputs both refactor setup and teardown functionalities into separate functions, improving modularity. However, the expected output uses Java, while the actual output uses Python, resulting in differences in syntax and specific implementation details."
+        }
+    ]
+]

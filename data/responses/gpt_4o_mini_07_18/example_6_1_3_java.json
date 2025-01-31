@@ -1,0 +1,71 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    21,
+                    24
+                ],
+                [
+                    38,
+                    92
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The 'generateStatement' method in the 'Statement' class has multiple responsibilities: calculating amounts, handling credits, and formatting the statement. This violates the SRP by making the method harder to maintain and understand.",
+            "suggestion": "Split the calculation logic and string formatting into separate methods or classes. One approach would be to create a 'StatementFormatter' class to handle the output formatting, and separate methods within 'Statement' to handle the calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "        for (Performance perf : invoice.getPerformances()) {",
+                        "            ...",
+                        "            result.append(String.format(\" %s: %s (%d seats)\\n\", ...);",
+                        "        }",
+                        "        result.append(String.format(\"Amount owed is %s\\n\", ...);",
+                        "        result.append(String.format(\"You earned %d credits\\n\", volumeCredits);",
+                        "        return result.toString();",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public static class Statement {",
+                        "    public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "        // calculations and logic here",
+                        "        double totalAmount = calculateTotalAmount(invoice, plays);",
+                        "        int volumeCredits = calculateVolumeCredits(invoice, plays);",
+                        "        return formatStatement(invoice, totalAmount, volumeCredits);",
+                        "    }",
+                        "",
+                        "    private static double calculateTotalAmount(Invoice invoice, Map<String, Play> plays) {",
+                        "        double totalAmount = 0;",
+                        "        ... // logic to calculate total amount",
+                        "        return totalAmount;",
+                        "    }",
+                        "",
+                        "    private static int calculateVolumeCredits(Invoice invoice, Map<String, Play> plays) {",
+                        "        int volumeCredits = 0;",
+                        "        ... // logic to calculate credits",
+                        "        return volumeCredits;",
+                        "    }",
+                        "",
+                        "    private static String formatStatement(Invoice invoice, double totalAmount, int volumeCredits) {",
+                        "        StringBuilder result = new StringBuilder();",
+                        "        result.append(\"Statement for \" + invoice.getCustomer() + \"\\n\");",
+                        "        ... // formatting logic",
+                        "        return result.toString();",
+                        "    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 594,
+        "prompt_tokens": 3090,
+        "total_tokens": 3684
+    }
+}

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_4",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "There is 1 True Positive ('Single Responsibility Principle'), 1 False Positive ('Open/Closed Principle'), and 1 False Negative ('Interface Segregation Principle'), leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output discusses the PaymentProcessor class and its multiple responsibilities, while the expected output focuses on the order class violating the Single Responsibility Principle; both mention excessive responsibilities, but the specifics differ significantly."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output discusses separating payment processing and SMS authentication, while the expected output suggests splitting the Order class into quantities and prices, showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output lists 'pay' and 'auth_sms', while the expected output includes 'totalPrices' and 'addItems', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output addresses payment processing and authentication, while the expected output focuses on order management and price calculation, showing no thematic or contextual alignment."
+        }
+    ]
+]

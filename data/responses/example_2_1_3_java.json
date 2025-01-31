@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    17
+                ],
+                [
+                    27,
+                    30
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing order data and handling item-specific details. Similarly, PaymentProcessor directly modifies the order's status, which ties payment handling with order state management.",
+            "suggestion": "Refactor the responsibilities into distinct classes or methods. Use a separate class for handling items in the Order, and isolate payment functionality to avoid directly modifying the Order's state.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) { this.items.add(name); this.quantities.add(quantity); this.prices.add(price); }",
+                        "public void pay(Order order, String securityCode) { System.out.println(\"Processing payment\"); System.out.println(\"Verifying security code: \" + securityCode); order.setStatus(\"paid\"); }"
+                    ],
+                    "suggestion_code": [
+                        "public class Item { private String name; private int quantity; private double price; /* Getters and Setters */ public Item(String name, int quantity, double price) { this.name = name; this.quantity = quantity; this.price = price; } } public void addItem(Item item) { this.items.add(item); }",
+                        "public void pay(Order order, PaymentDetails paymentDetails) { if(paymentVerifier.verify(paymentDetails)) { // Payment logic here order.setStatus(\"paid\"); } }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 316,
+        "prompt_tokens": 2396,
+        "total_tokens": 2712
+    }
+}

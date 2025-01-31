@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_3",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "Actual and expected outputs are identical with no false positives or negatives, ensuring perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_3",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs highlight the same issue: UserService's dependency on MySQLDatabase violating the Dependency Inversion Principle. The actual output is slightly more detailed but aligns well with the expected output."
+        },
+        {
+            "example_id": "example_5_2_3",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs emphasize creating an interface for database operations and having UserService depend on it, aligning with the Dependency Inversion Principle. The actual output provides slightly more detail about benefits."
+        },
+        {
+            "example_id": "example_5_2_3",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output includes 'UserService constructor' and 'setDatabase' while Expected Output only mentions 'UserService', indicating partial thematic alignment but lacks contextual precision."
+        },
+        {
+            "example_id": "example_5_2_3",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest using an interface or abstract class for the database, improving code flexibility. However, the actual output provides a more detailed implementation in the suggestion_code compared to the expected output's abstract class structure, and lacks some user operations like addUser, updateUser, and deleteUser from the original_code."
+        }
+    ]
+]

@@ -1,9 +1,37 @@
 {
-    "principle_violations": [],
-    "overall_feedback": "0 principle violations found. The Python code adheres to the principles and is well-organized. Each class and method has a single responsibility and adheres to good software design principles. No changes are necessary. Congratulations on writing clean and efficient code!",
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    33
+                ]
+            ],
+            "method_names": [
+                "get_user_data",
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The MySQLDatabase class does not adhere to a single responsibility. It combines both data handling and user management logic.",
+            "suggestion": "Separate the user management logic into a dedicated class, such as UserManager, while maintaining MySQLDatabase solely for database connections and interactions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: 'Alice',\n            2: 'Bob',\n            3: 'Charlie'\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return f\"User ID: {id}, Name: {self.user_data[id]}\"\n        return 'User not found'\n    \n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print('User ID already exists. Use update_user_data to modify.')\n        else:\n            self.user_data[id] = name\n            print('User added successfully.')\n    \n    def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print('User updated successfully.')\n        else:\n            print('User ID does not exist. Use add_user_data to add new user.')\n    \n    def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print('User deleted successfully.')\n        else:\n            print('User ID not found.')"
+                    ],
+                    "suggestion_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.storage = {}\n\nclass UserManager:\n    def __init__(self, db: MySQLDatabase):\n        self.database = db\n    \n    def get_user(self, id: int) -> str:\n        return self.database.storage.get(id, 'User not found')\n    \n    def add_user(self, id: int, name: str) -> None:\n        if id in self.database.storage:\n            print('User ID already exists.')\n        else:\n            self.database.storage[id] = name\n            print('User added successfully.')\n    \n    def update_user(self, id: int, name: str) -> None:\n        if id in self.database.storage:\n            self.database.storage[id] = name\n            print('User updated successfully.')\n        else:\n            print('User ID does not exist.')\n    \n    def delete_user(self, id: int) -> None:\n        if id in self.database.storage:\n            del self.database.storage[id]\n            print('User deleted successfully.')\n        else:\n            print('User ID not found.')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. The MySQLDatabase class should be revised for coherent single responsibility adherence.",
     "usage": {
-        "completion_tokens": 66,
+        "completion_tokens": 747,
         "prompt_tokens": 2525,
-        "total_tokens": 2591
+        "total_tokens": 3272
     }
 }

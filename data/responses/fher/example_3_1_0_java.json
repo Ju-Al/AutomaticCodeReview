@@ -1,0 +1,127 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    20
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "getStatus",
+                "setStatus"
+            ],
+            "reason": "The Order class handles both order data management (items, quantities, prices) and payment status management, which should be separated into different classes.",
+            "suggestion": "Create a separate class or structure to manage payment related functions and status changes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {",
+                        "    private List<String> items;",
+                        "    private List<Integer> quantities;",
+                        "    private List<Double> prices;",
+                        "    private String status;",
+                        "",
+                        "    public Order() {",
+                        "        this.items = new ArrayList<>();",
+                        "        this.quantities = new ArrayList<>();",
+                        "        this.prices = new ArrayList<>();",
+                        "        this.status = 'open';",
+                        "    }",
+                        "",
+                        "    public void addItem(String name, int quantity, double price) {",
+                        "        this.items.add(name);",
+                        "        this.quantities.add(quantity);",
+                        "        this.prices.add(price);",
+                        "    }",
+                        "",
+                        "    public String getStatus() {",
+                        "        return status;",
+                        "    }",
+                        "",
+                        "    public void setStatus(String status) {",
+                        "        this.status = status;",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {",
+                        "    private List<String> items;",
+                        "    private List<Integer> quantities;",
+                        "    private List<Double> prices;",
+                        "",
+                        "    public Order() {",
+                        "        this.items = new ArrayList<>();",
+                        "        this.quantities = new ArrayList<>();",
+                        "        this.prices = new ArrayList<>();",
+                        "    }",
+                        "",
+                        "    public void addItem(String name, int quantity, double price) {",
+                        "        this.items.add(name);",
+                        "        this.quantities.add(quantity);",
+                        "        this.prices.add(price);",
+                        "    }",
+                        "",
+                        "    // Consider providing methods here to access the items, quantities, etc. without handling status.",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    20,
+                    58
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Adding new payment methods requires modification of existing code, rather than allowing for extensions of the PaymentProcessor interface.",
+            "suggestion": "Use a factory pattern to create payment processors dynamically, allowing for new processors to be added without changing existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public interface PaymentProcessor {",
+                        "    public void pay(Order order, String securityCode);",
+                        "}",
+                        "",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order, String securityCode) {",
+                        "        System.out.println('Processing paypal payment');",
+                        "        System.out.println('Verifying email: ' + securityCode);",
+                        "        order.setStatus('paid');",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessor {",
+                        "    public void pay(Order order, String securityCode);",
+                        "}",
+                        "",
+                        "public class PaymentProcessorFactory {",
+                        "    public static PaymentProcessor getPaymentProcessor(String type) {",
+                        "        switch(type) {",
+                        "            case 'paypal': return new PaypalPaymentProcessor();",
+                        "            case 'creditcard': return new CreditCardPaymentProcessor();",
+                        "            case 'debitcard': return new DebitCardPaymentProcessor();",
+                        "            default: throw new IllegalArgumentException('Unknown payment type');",
+                        "        }",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 887,
+        "prompt_tokens": 2560,
+        "total_tokens": 3447
+    }
+}

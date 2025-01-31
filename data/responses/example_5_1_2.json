@@ -4,56 +4,34 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    3,
-                    13
+                    47,
+                    49
+                ],
+                [
+                    64,
+                    67
+                ],
+                [
+                    73,
+                    77
                 ]
             ],
             "method_names": [
-                "add_item"
+                "DebitPaymentProcessor.pay",
+                "CreditPaymentProcessor.pay",
+                "PaypalPaymentProcessor.pay"
             ],
-            "reason": "The Order class is handling both order data management and payment status, which should be separate responsibilities.",
-            "suggestion": "Separate the order management from payment status handling, possibly by creating a Payment class to manage payment-related operations.",
+            "reason": "Payment processing logic and user authentication are mixed together within the payment processor classes.",
+            "suggestion": "Separate the authentication logic into dedicated responsibilities and ensure PaymentProcessor handles only payment initiation.",
             "changes": [
                 {
                     "original_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception(\"Not authenticated\")\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {self.security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass Payment:\n    def __init__(self):\n        self.status = 'open'\n\n    def set_status(self, status: str):\n        self.status = status"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Interface Segregation Principle",
-            "lines": [
-                [
-                    37,
-                    42
-                ],
-                [
-                    45,
-                    50
-                ],
-                [
-                    53,
-                    60
-                ]
-            ],
-            "method_names": [
-                "pay"
-            ],
-            "reason": "The CreditPaymentProcessor and PaypalPaymentProcessor use separate pay methods with different required arguments, leading to interface misuse.",
-            "suggestion": "Standardize the pay method to ensure consistency across all payment processors. Remove the security_code from the PaypalPaymentProcessor's pay method signature as it is redundant.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
-                    ],
-                    "suggestion_code": [
-                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        Payment().set_status('paid')",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        Payment().set_status('paid')"
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order):\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"",
+                        "class AuthenticationHandler:\n    def __init__(self, method):\n        self.method = method\n\n    def verify(self):\n        print(\"Verifying authentication with method:\", self.method)\n        return True"
                     ]
                 }
             ]
@@ -62,31 +40,31 @@
             "principle": "Dependency Inversion Principle",
             "lines": [
                 [
-                    28,
-                    32
+                    47,
+                    49
                 ]
             ],
             "method_names": [
-                "pay"
+                "DebitPaymentProcessor.__init__"
             ],
-            "reason": "The DebitPaymentProcessor directly depends on SMSAuthorizer, leading to tight coupling between the payment processor and the specific authorizer implementation.",
-            "suggestion": "Implement an abstraction for authorizers and use it in the payment processor, allowing different authorizer types to be used interchangeably.",
+            "reason": "The DebitPaymentProcessor is tightly coupled to the SMSAuthorizer class, making future changes or substitution of the authorization logic difficult.",
+            "suggestion": "Inject an interface for authentication at initialization instead of directly using SMSAuthorizer.",
             "changes": [
                 {
                     "original_code": [
-                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'"
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer"
                     ],
                     "suggestion_code": [
-                        "class Authorizer(ABC):\n    @abstractmethod\n    def is_authenticated(self):\n        ...\n\nclass SMSAuthorizer(Authorizer):\n    def __init__(self):\n        self.authenticated = False\n\n    def verify_code(self, code: str):\n        print('Verifying code')\n        self.authenticated = True\n\n    def is_authenticated(self):\n        return self.authenticated\n\nclass DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: Authorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        Payment().set_status('paid')"
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: Authorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "overall_feedback": "Two principle violations found. See details above.",
     "usage": {
-        "completion_tokens": 1266,
+        "completion_tokens": 608,
         "prompt_tokens": 2544,
-        "total_tokens": 3810
+        "total_tokens": 3152
     }
 }

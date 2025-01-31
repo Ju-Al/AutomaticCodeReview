@@ -1,0 +1,84 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    24,
+                    40
+                ],
+                [
+                    50,
+                    78
+                ],
+                [
+                    91,
+                    112
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor class encapsulates multiple responsibilities: processing payments and handling authentication via SMS. This makes the class harder to maintain and extend.",
+            "suggestion": "Separate the concerns of payment processing and SMS authentication into different classes, such as a separate AuthenticationService class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n\n    public abstract void auth_sms(Order order, String code);\n}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String securityCode) {\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n}",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        if (!this.authenticated) {\n            throw new IllegalStateException(\"Not authentificated\");\n        }\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String code) {\n        System.out.println(\"Authenticating via SMS\");\n        this.authenticated = true;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n}",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class AuthenticationService {\n    public void auth_sms(PaymentProcessor processor, Order order, String code) {\n        System.out.println(\"Authenticating via SMS\");\n        // logic for SMS authentication and setting processor state appropriately\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    24,
+                    40
+                ],
+                [
+                    50,
+                    78
+                ],
+                [
+                    91,
+                    112
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is not easily extensible to support new payment methods without modifying the existing class; it should be open for extension and closed for modification.",
+            "suggestion": "Use the Strategy pattern to allow for adding new payment methods without modifying existing code. Each payment method implementing the PaymentProcessor interface can be added without changing the existing processing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n    public abstract void auth_sms(Order order, String code);\n}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    // instance variables and payment implementation\n}",
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    // instance variables and payment implementation\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessor {\n    void pay(Order order);\n}",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n    // instance variables and payment implementation\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n    // instance variables and payment implementation\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1089,
+        "prompt_tokens": 2817,
+        "total_tokens": 3906
+    }
+}

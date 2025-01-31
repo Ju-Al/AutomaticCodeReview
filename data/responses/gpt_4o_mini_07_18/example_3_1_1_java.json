@@ -1,0 +1,114 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    42
+                ],
+                [
+                    18,
+                    20
+                ],
+                [
+                    26,
+                    28
+                ],
+                [
+                    34,
+                    36
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay",
+                "pay"
+            ],
+            "reason": "The `Order` class has multiple responsibilities: managing order items, quantities, prices, and status, which should be separated into different classes. Additionally, the `PaymentProcessor` classes directly modify the `Order` status.",
+            "suggestion": "Separate the responsibility of managing order items and payment processing into distinct classes. Consider creating an `OrderManager` class to handle order modifications and keep payment processing logic separate without directly altering the order's state.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "this.items.add(name);",
+                        "}",
+                        "public void setStatus(String status) {",
+                        "this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderManager {",
+                        "public void addItem(Order order, String name, int quantity, double price) {",
+                        "order.getItems().add(name);",
+                        "order.getQuantities().add(quantity);",
+                        "order.getPrices().add(price);",
+                        "}",
+                        "public void updateStatus(Order order, String status) {",
+                        "order.setStatus(status);",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "orderManager.updateStatus(order, \"paid\");"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    6,
+                    8
+                ],
+                [
+                    12,
+                    15
+                ],
+                [
+                    21,
+                    24
+                ],
+                [
+                    30,
+                    33
+                ],
+                [
+                    38,
+                    41
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing methods in the `PaymentProcessor` implementations need to be modified for new payment types, violating the open/closed principle.",
+            "suggestion": "Use the Strategy pattern to allow new payment methods to be added without modifying existing code. Each new payment method can extend the `PaymentProcessor` interface without altering the existing processors.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "System.out.println(\"Processing paypal payment\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "PaymentProcessorContext context = new PaymentProcessorContext(new PaypalPaymentProcessor());",
+                        "context.executePayment(order, securityCode);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 623,
+        "prompt_tokens": 2560,
+        "total_tokens": 3183
+    }
+}

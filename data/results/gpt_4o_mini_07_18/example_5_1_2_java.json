@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_2",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in Actual Output match those in Expected Output, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output mentions the DebitCardPaymentProcessor and Order class mixing responsibilities, but it does not specifically address the Single Responsibility Principle as clearly as the expected output does, which directly ties the violation to price and quantity responsibilities."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses payment processing and authorization responsibilities, while the expected output focuses on splitting the Order class, leading to a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output contains 'pay' and 'addItem', while the expected output has 'totalPrices' and 'addItems', showing a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion_code lacks clarity and relevance compared to the expected output, as it does not address the need for validation in the addItem method and fails to provide a complete structure for managing orders."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output identifies coupling issues, but lacks the detail about the Dependency Inversion Principle and the implications of direct dependency highlighted in the expected output."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "While both outputs discuss using abstractions instead of concrete implementations, the actual output lacks the detail and specific class examples provided in the expected output, leading to a lower alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output contains unrelated elements like 'verify_code' and 'pay', while the expected output specifically identifies 'SMSAuthorizer', showing no thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests changing 'SMSAuthorizer' to a general 'Authorizer', but does not include the additional context and class structure in the expected output, leading to a significant misalignment."
+        }
+    ]
+]

@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ],
+                [
+                    15,
+                    25
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for both managing items and handling order status, while the PaymentProcessor class is responsible for processing payments. This mixes concerns, violating the SRP.",
+            "suggestion": "Separate the payment processing logic from the Order class by utilizing a separate class or function to manage order status changes instead of incorporating payment functionality directly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self._status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def get_status(self) -> str:\n        return self._status\n\n    def set_status(self, status: str) -> None:\n        self._status = status",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    15,
+                    25
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is currently closed for modification. Any changes in payment processing such as additional checks or different payment methods require altering this class.",
+            "suggestion": "Implement a strategy pattern where various payment methods can be encapsulated into different classes or functions without modifying the PaymentProcessor itself.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class PaymentMethod:\n    def pay(self, order: Order, security_code: str):\n        raise NotImplementedError\n\nclass CreditCardPayment(PaymentMethod):\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 779,
+        "prompt_tokens": 2257,
+        "total_tokens": 3036
+    }
+}

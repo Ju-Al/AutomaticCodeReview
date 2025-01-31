@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_0",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The Only TP is 'Single Responsibility Principle'. FN is 'Open/Closed Principle'. No FP identified. Precision is 1.0, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs identify the violation of the Single Responsibility Principle in the Order class, but they focus on different aspects: item details vs. prices and quantities."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest splitting the Order class but differ in focus; actual suggests separating item details, while expected focuses on quantities and prices."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output 'addItem' partially aligns with the expected output 'addItems', but it is missing 'totalPrice' which is crucial for full alignment."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output simplifies the item handling with OrderItem class but lacks the total price calculation found in Expected Output."
+        }
+    ]
+]

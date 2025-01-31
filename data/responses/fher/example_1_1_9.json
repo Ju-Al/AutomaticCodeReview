@@ -1,0 +1,38 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    11
+                ],
+                [
+                    14,
+                    28
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing order details and also handling payment processing, violating the Single Responsibility Principle.",
+            "suggestion": "Separate the payment processing logic into a dedicated PaymentProcessor class to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def __init__(self, order):\n        self.order = order\n\n    def pay(self, payment_type: str, security_code):\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.order.status = \"paid\"\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n            self.order.status = \"paid\"\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n\norder = Order()\npayment_processor = PaymentProcessor(order)\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\npayment_processor.pay(\"debit\", \"0372846\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 496,
+        "prompt_tokens": 2352,
+        "total_tokens": 2848
+    }
+}

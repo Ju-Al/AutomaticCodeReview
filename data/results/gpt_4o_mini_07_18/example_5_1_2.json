@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_2",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only 'Single Responsibility Principle' is a True Positive; there are False Positives ('Don't Repeat Yourself') and False Negatives ('Dependency Inversion Principle')."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses multiple responsibilities related to payment processing, while the expected output focuses on the Single Responsibility Principle regarding an order class, showing a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output addresses the verification logic of the PaypalPaymentProcessor, while the expected output discusses splitting the Order class into two separate classes, indicating a lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output only mentions 'pay', while the expected output includes 'total_prices' and 'add_items', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output discusses payment processing and email verification, while the expected output focuses on order management and pricing calculations, indicating no thematic or contextual alignment."
+        }
+    ]
+]

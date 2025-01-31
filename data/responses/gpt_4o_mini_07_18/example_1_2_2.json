@@ -1,0 +1,84 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    21
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class handles both the calculation of areas and the output formatting, which means it has more than one responsibility.",
+            "suggestion": "Create a separate class for output formatting or logging, so AreaCalculator can focus solely on area calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def output(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "class OutputFormatter:",
+                        "    @staticmethod",
+                        "    def format(areas_sum):",
+                        "        return f'Sum of the areas of provided shapes: {areas_sum}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    8,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation is repeated when determining the area for different shapes. This logic could be encapsulated within the shape classes.",
+            "suggestion": "Implement a common interface method in the shape classes for area calculation, allowing the AreaCalculator to call this method, reducing duplicate logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if isinstance(shape, Square):",
+                        "    areas.append(math.pow(shape.length, 2))",
+                        "elif isinstance(shape, Circle):",
+                        "    areas.append(math.pi * math.pow(shape.radius, 2))"
+                    ],
+                    "suggestion_code": [
+                        "areas.append(shape.area())"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 564,
+        "prompt_tokens": 2265,
+        "total_tokens": 2829
+    }
+}

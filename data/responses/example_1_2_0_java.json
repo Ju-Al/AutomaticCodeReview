@@ -1,0 +1,104 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    11,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class directly checks the type of each shape and calculates its area accordingly. Adding a new shape would require modifying this method, violating the Open/Closed principle.",
+            "suggestion": "Introduce a Shape interface with a common method for area calculation and make each shape implement this interface. This ensures the AreaCalculator can operate on any shape without modification.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {",
+                        "    double calculateArea();",
+                        "}",
+                        "",
+                        "public class Square implements Shape {",
+                        "    private double length;",
+                        "",
+                        "    public Square(double length) {",
+                        "        this.length = length;",
+                        "    }",
+                        "",
+                        "    public double getLength() {",
+                        "        return length;",
+                        "    }",
+                        "",
+                        "    @Override",
+                        "    public double calculateArea() {",
+                        "        return Math.pow(length, 2);",
+                        "    }",
+                        "}",
+                        "",
+                        "public class Circle implements Shape {",
+                        "    private double radius;",
+                        "",
+                        "    public Circle(double radius) {",
+                        "        this.radius = radius;",
+                        "    }",
+                        "",
+                        "    public double getRadius() {",
+                        "        return radius;",
+                        "    }",
+                        "",
+                        "    @Override",
+                        "    public double calculateArea() {",
+                        "        return Math.PI * Math.pow(radius, 2);",
+                        "    }",
+                        "}",
+                        "",
+                        "public class AreaCalculator {",
+                        "    private List<Shape> shapes;",
+                        "",
+                        "    public AreaCalculator(List<Shape> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "",
+                        "    public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalArea += shape.calculateArea();",
+                        "        }",
+                        "        return totalArea;",
+                        "    }",
+                        "",
+                        "    public String output() {",
+                        "        return \"Sum of the areas of provided shapes: \" + sum();",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 517,
+        "prompt_tokens": 2419,
+        "total_tokens": 2936
+    }
+}

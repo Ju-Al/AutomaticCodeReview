@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_1",
+            "metric": "F1-Score",
+            "score": 0.2,
+            "reason": "Only one true positive was identified ('Single Responsibility Principle'), while one false negative ('Open/Closed Principle') and one false positive ('Dependency Inversion Principle') were present."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address the dual responsibilities of the AreaCalculator class, but the actual output emphasizes separation of concerns while the expected output focuses on summarizing and outputting data, showing a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "The actual output suggests introducing a separate class for output formatting, while the expected output specifies splitting the AreaCalculator into two distinct classes, indicating a partial alignment in addressing class separation but differing in specific implementation details."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output, both containing the same elements in the same order."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output's suggestion_code introduces a new class structure and methods that significantly differ from the expected suggestion_code, which focuses on JSON and HTML outputs, leading to a lack of thematic alignment."
+        }
+    ]
+]

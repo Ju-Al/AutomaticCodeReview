@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    5
+                ],
+                [
+                    10,
+                    12
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing order items, quantities, and prices, as well as maintaining the order status. The PaymentProcessor class handles payment processing, which could result in needing changes in the Order class if payment processing requires additional data.",
+            "suggestion": "Separate concerns by creating an independent class or module to handle payment processing and keep the Order class focused solely on managing order details.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "order = Order()\n\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\n\nprocessor = PaymentProcessor()\nprocessor.pay(order, '0372846')\nprint(order.status)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.set_status('paid')\n\n    def refund(self, order: Order):\n        print('Processing refund')\n        order.set_status('refunded')\n\nclass RefundProcessor:\n    def process_refund(self, order: Order):\n        print('Refund processed')\n\norder = Order()\n\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\n\nprocessor = PaymentProcessor()\nprocessor.pay(order, '0372846')\nprint(order.status)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    4,
+                    5
+                ],
+                [
+                    10,
+                    12
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The current Order and PaymentProcessor classes need to be modified if new payment methods or order processing features are required, violating the open/closed principle.",
+            "suggestion": "Introduce interfaces for payment processing to allow the payment method to be extended without modifying existing classes. This could include an abstract class with a method like `pay` and different payment processors for different payment methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "order = Order()\n\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\n\nprocessor = PaymentProcessor()\nprocessor.pay(order, '0372846')\nprint(order.status)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        raise NotImplementedError('You should implement this method')\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order: Order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\norder = Order()\n\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\n\nprocessor = CreditCardPaymentProcessor()\nprocessor.pay(order, '0372846')\nprint(order.status)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1303,
+        "prompt_tokens": 2257,
+        "total_tokens": 3560
+    }
+}

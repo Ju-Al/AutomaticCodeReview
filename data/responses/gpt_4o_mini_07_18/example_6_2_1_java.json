@@ -1,0 +1,96 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    8
+                ],
+                [
+                    12,
+                    71
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The testableHtml method is doing too many things: it handles setup and teardown logic and modifies the content of PageData.",
+            "suggestion": "Split the setup and teardown logic into separate methods or classes, thereby keeping the testableHtml method focused on converting PageData into HTML.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String testableHtml(\n",
+                        "PageData pageData,\n",
+                        "boolean includeSuiteSetup\n",
+                        ") throws Exception {\n",
+                        "    // ... logic handling setup and teardown,\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public static String testableHtml(PageData pageData, boolean includeSuiteSetup) throws Exception {\n",
+                        "    StringBuffer buffer = new StringBuffer();\n",
+                        "    handleSetup(pageData, buffer, includeSuiteSetup);\n",
+                        "    buffer.append(pageData.getContent());\n",
+                        "    handleTeardown(pageData, buffer, includeSuiteSetup);\n",
+                        "    pageData.setContent(buffer.toString());\n",
+                        "    return pageData.getHTML();\n",
+                        "}\n\n",
+                        "private static void handleSetup(PageData pageData, StringBuffer buffer, boolean includeSuiteSetup) throws Exception {\n",
+                        "    WikiPage wikiPage = pageData.getWikiPage();\n",
+                        "    if (pageData.hasAttribute(\"Test\")) {\n",
+                        "        // logic for setup\n",
+                        "    }\n",
+                        "}\n\n",
+                        "private static void handleTeardown(PageData pageData, StringBuffer buffer, boolean includeSuiteSetup) throws Exception {\n",
+                        "    WikiPage wikiPage = pageData.getWikiPage();\n",
+                        "    if (pageData.hasAttribute(\"Test\")) {\n",
+                        "        // logic for teardown\n",
+                        "    }\n",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    12,
+                    71
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "There are repeated patterns in the handling of setup and teardown, which could be abstracted into helper methods to enhance maintainability.",
+            "suggestion": "Create a helper method to manage the repetitive logic found in setup and teardown processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if(pageData.hasAttribute(\"Test\")) {\n",
+                        "    // ... setup logic\n",
+                        "}\n",
+                        "if(pageData.hasAttribute(\"Test\")) {\n",
+                        "    // ... teardown logic\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "private static void processSetupTeardown(PageData pageData, StringBuffer buffer, boolean includeSuiteSetup) throws Exception {\n",
+                        "    if (pageData.hasAttribute(\"Test\")) {\n",
+                        "        handleSetup(pageData, buffer, includeSuiteSetup);\n",
+                        "        handleTeardown(pageData, buffer, includeSuiteSetup);\n",
+                        "    }\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 772,
+        "prompt_tokens": 2612,
+        "total_tokens": 3384
+    }
+}

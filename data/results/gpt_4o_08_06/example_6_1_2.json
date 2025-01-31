@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_1_2",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no true positives as the actual and expected lists do not overlap. There is one false positive: 'Single Responsibility Principle', and one false negative: 'Don't Repeat Yourself'."
+        }
+    ],
+    []
+]

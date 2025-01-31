@@ -1,0 +1,64 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    38,
+                    39
+                ],
+                [
+                    45,
+                    46
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both computing areas and validating shapes, while VolumeCalculator extends it but does not differentiate its responsibility clearly.",
+            "suggestion": "Separate the validation logic from the area calculation. Consider creating a dedicated class for shape validation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            self.validate_shape(shape)\n            total_area += shape.area()\n        return total_area\n\n    def validate_shape(self, shape):\n        if not isinstance(shape, Shape):\n            raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            self.validate_shape(shape)\n            total_volume += shape.area()\n        return total_volume\n\n    def validate_shape(self, shape):\n        if not isinstance(shape, Shape):\n            raise Exception('Invalid Shape: Shape does not implement Shape interface')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    41,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in VolumeCalculator does not accommodate different types of volume calculations, violating the open/closed principle.",
+            "suggestion": "Consider creating an interface for 3D shapes and extend the logic to different shape types without altering the existing sum method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            if hasattr(shape, 'volume'):\n                total_volume += shape.volume()\n        return total_volume"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 617,
+        "prompt_tokens": 2489,
+        "total_tokens": 3106
+    }
+}

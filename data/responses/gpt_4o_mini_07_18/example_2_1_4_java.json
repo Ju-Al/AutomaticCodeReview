@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    22
+                ],
+                [
+                    5,
+                    22
+                ],
+                [
+                    25,
+                    42
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay"
+            ],
+            "reason": "The Order class is managing both order details and its own status. It should not handle the payment processing or state changes directly; that responsibility should be delegated.",
+            "suggestion": "Create a separate OrderManager or OrderService class to handle operations like adding items and processing payments.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void setStatus(String status) {\n        this.status = status;\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void setStatus(String status) {\n        this.status = status;\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        orderManager.updateOrderStatus(order, \"paid\");\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    25,
+                    42
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class directly depends on the concrete Order class, which makes it rigid and less flexible for future changes.",
+            "suggestion": "Create an interface for payment processing and a corresponding class that implements this interface, allowing for easier swapping or extending of payment methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface Payment { void pay(Order order, String securityCode); }\n\npublic class PaymentProcessor implements Payment {\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 665,
+        "prompt_tokens": 2396,
+        "total_tokens": 3061
+    }
+}

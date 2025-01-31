@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    23
+                ]
+            ],
+            "method_names": [
+                "toHTML"
+            ],
+            "reason": "The `toHTML` method in the `SumCalculator` class handles both the area calculation retrieval and representation responsibilities, which are distinct.",
+            "suggestion": "Separate the formatting responsibility from the `SumCalculator` to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public String toHTML() {\n        return String.format(\"<p>Sum of the areas of provided shapes: %.2f</p>\", calculator.sum());\n}"
+                    ],
+                    "suggestion_code": [
+                        "public String toHTML() {\n        Formatter formatter = new Formatter();\n        return formatter.formatAreaHTML(calculator.sum());\n}\n\nclass Formatter {\n    public String formatAreaHTML(double sum) {\n        return String.format(\"<p>Sum of the areas of provided shapes: %.2f</p>\", sum);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    3,
+                    25
+                ]
+            ],
+            "method_names": [
+                "VolumeCalculator"
+            ],
+            "reason": "The `VolumeCalculator` class violates LSP by inheriting from `AreaCalculator` but overriding the `sum` method for volume-specific logic, which breaks the contract expected from `AreaCalculator`.",
+            "suggestion": "Refactor `VolumeCalculator` to make it independent from `AreaCalculator` and adhere to a shared interface or abstract class for calculators.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    protected List<Shape> solidShapes;\n\n    public VolumeCalculator(List<Shape> solidShapes) {\n        this.solidShapes = solidShapes;\n    }\n\n    public double calculateVolume() {\n        double totalVolume = 0;\n        for (Shape solidShape : solidShapes) {\n            totalVolume += solidShape.area(); // Assuming this method exists for volumetric shapes as well\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 524,
+        "prompt_tokens": 2683,
+        "total_tokens": 3207
+    }
+}

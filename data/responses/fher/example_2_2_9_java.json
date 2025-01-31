@@ -1,0 +1,62 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    10
+                ],
+                [
+                    28,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The `AreaCalculator` class handles multiple responsibilities: it should calculate the area of shapes but also needs to manage a list of objects of different shapes (not well-typed), leading to tight coupling.",
+            "suggestion": "Introduce an interface for shapes that includes a method to calculate the area. Then, make `Circle` and `Square` implement this interface. This will allow the `AreaCalculator` to work with a list of shape interfaces, reducing complexity and coupling.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Shape shape : shapes) {\n            totalArea += shape.calculateArea();\n        }\n\n        return totalArea;\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator"
+            ],
+            "reason": "The `AreaCalculator` class is dependent on a list of `Object`s; it would be better if it depended on a more specific type (for example, a `Shape` interface) that specific shapes implement.",
+            "suggestion": "Create a `Shape` interface with a `calculateArea` method and let `Circle` and `Square` implement this interface. This way, `AreaCalculator` can directly work with a list of `Shape` objects.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 589,
+        "prompt_tokens": 2501,
+        "total_tokens": 3090
+    }
+}

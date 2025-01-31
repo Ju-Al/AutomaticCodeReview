@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    19
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing order items and their quantities/prices while also managing the order status.",
+            "suggestion": "Create separate classes for managing items and order status, thus adhering to the single responsibility principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.status = \"open\"\n        self.item_manager = ItemManager()\n\nclass ItemManager:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    31,
+                    32
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor interface does not enforce that its implementations should handle various order types which can lead to issues if a different order type needs to be processed.",
+            "suggestion": "Define a common base class or interface for Order so that all processors can rely on the same structure/order properties.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass"
+                    ],
+                    "suggestion_code": [
+                        "class OrderInterface(ABC):\n    @abstractmethod\n    def get_status(self):\n        pass\n\nclass PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: OrderInterface, security_code: str):\n        pass"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 566,
+        "prompt_tokens": 2394,
+        "total_tokens": 2960
+    }
+}

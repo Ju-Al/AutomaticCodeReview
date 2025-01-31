@@ -1,0 +1,86 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    28,
+                    50
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating areas and formatting output, which represents two distinct responsibilities.",
+            "suggestion": "Separate the area calculation and output responsibilities into different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }",
+                        "public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }\n\npublic class AreaOutput {\n    private AreaCalculator calculator;\n\n    public AreaOutput(AreaCalculator calculator) {\n        this.calculator = calculator;\n    }\n\n    public String display() {\n        return \"Sum of the areas of provided shapes: \" + calculator.sum();\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    22,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator does not adhere to the open/closed principle since it requires modification to add support for new shape types.",
+            "suggestion": "Use a shape interface with an area calculation method and individual implementations for each shape that calculates its area.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += ((Shape) shape).getArea();\n            }\n        }\n\n        return totalArea;\n    }",
+                        "public interface Shape {\n    double getArea();\n}\n\npublic class Circle implements Shape {\n    // existing code...\n    @Override\n    public double getArea() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}\n\npublic class Square implements Shape {\n    // existing code...\n    @Override\n    public double getArea() {\n        return Math.pow(length, 2);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    19,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator uses a List<Object> to store shapes, which forces it to handle types it may not operate on, violating ISP.",
+            "suggestion": "Use a List<Shape> to ensure that all objects in the list implement the Shape interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 1074,
+        "prompt_tokens": 2419,
+        "total_tokens": 3493
+    }
+}

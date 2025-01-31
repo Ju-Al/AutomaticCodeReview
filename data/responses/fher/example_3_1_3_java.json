@@ -1,0 +1,107 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    21
+                ],
+                [
+                    6,
+                    21
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is responsible for both managing the order details (items, quantities, prices) and managing the state of the order (its status).",
+            "suggestion": "Create a separate class, such as OrderStatus, to handle the status of the order. This will help in separating responsibilities and improve maintainability.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n",
+                        "    private List<String> items;\n",
+                        "    private List<Integer> quantities;\n",
+                        "    private List<Double> prices;\n",
+                        "    private String status;\n",
+                        "\n",
+                        "    public Order() {\n",
+                        "        this.items = new ArrayList<>();\n",
+                        "        this.quantities = new ArrayList<>();\n",
+                        "        this.prices = new ArrayList<>();\n",
+                        "        this.status = \"open\";\n",
+                        "    }\n",
+                        "\n",
+                        "    public void addItem(String name, int quantity, double price) {\n",
+                        "        this.items.add(name);\n",
+                        "        this.quantities.add(quantity);\n",
+                        "        this.prices.add(price);\n",
+                        "    }\n",
+                        "\n",
+                        "    public String getStatus() {\n",
+                        "        return status;\n",
+                        "    }\n",
+                        "\n",
+                        "    public void setStatus(String status) {\n",
+                        "        this.status = status;\n",
+                        "    }\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderStatus {\n",
+                        "    private String status;\n",
+                        "\n",
+                        "    public OrderStatus() {\n",
+                        "        this.status = \"open\";\n",
+                        "    }\n",
+                        "\n",
+                        "    public String getStatus() {\n",
+                        "        return status;\n",
+                        "    }\n",
+                        "\n",
+                        "    public void setStatus(String status) {\n",
+                        "        this.status = status;\n",
+                        "    }\n",
+                        "}\n",
+                        "\n",
+                        "public class Order {\n",
+                        "    private List<String> items;\n",
+                        "    private List<Integer> quantities;\n",
+                        "    private List<Double> prices;\n",
+                        "    private OrderStatus orderStatus;\n",
+                        "\n",
+                        "    public Order() {\n",
+                        "        this.items = new ArrayList<>();\n",
+                        "        this.quantities = new ArrayList<>();\n",
+                        "        this.prices = new ArrayList<>();\n",
+                        "        this.orderStatus = new OrderStatus();\n",
+                        "    }\n",
+                        "\n",
+                        "    public void addItem(String name, int quantity, double price) {\n",
+                        "        this.items.add(name);\n",
+                        "        this.quantities.add(quantity);\n",
+                        "        this.prices.add(price);\n",
+                        "    }\n",
+                        "\n",
+                        "    public String getStatus() {\n",
+                        "        return orderStatus.getStatus();\n",
+                        "    }\n",
+                        "\n",
+                        "    public void setStatus(String status) {\n",
+                        "        this.orderStatus.setStatus(status);\n",
+                        "    }\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 879,
+        "prompt_tokens": 2560,
+        "total_tokens": 3439
+    }
+}

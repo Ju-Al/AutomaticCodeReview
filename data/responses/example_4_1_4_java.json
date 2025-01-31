@@ -1,0 +1,48 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    5,
+                    17
+                ],
+                [
+                    39,
+                    47
+                ],
+                [
+                    50,
+                    58
+                ],
+                [
+                    61,
+                    66
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor interface enforces all implementing classes to provide the `auth_sms` method, even if it's not applicable to all types of payment processors (e.g., PaypalPaymentProcessor).",
+            "suggestion": "Split the PaymentProcessor interface into smaller, more specific interfaces that only define the methods relevant to their domain. Classes can then implement only the interfaces they need.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor { public abstract void pay(Order order);  public abstract void auth_sms(Order order, String code); }",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor { @Override public void pay(Order order) {System.out.println(\"Processing paypal payment...\");} @Override public void auth_sms(Order order, String securityCode) { throw new UnsupportedOperationException(); }}"
+                    ],
+                    "suggestion_code": [
+                        "public interface BasicPaymentProcessor { void pay(Order order); } public interface SMSAuthenticatable { void authSMS(Order order, String code); }",
+                        "public class PaypalPaymentProcessor implements BasicPaymentProcessor { public void pay(Order order) { System.out.println(\"Processing PayPal Payment...\"); }}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 283,
+        "prompt_tokens": 2817,
+        "total_tokens": 3100
+    }
+}

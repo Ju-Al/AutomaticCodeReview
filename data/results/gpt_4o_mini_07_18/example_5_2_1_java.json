@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_1",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "True Positive is 1 (Dependency Inversion Principle), False Positive is 1 (Single Responsibility Principle), and False Negative is 0, resulting in Precision of 0.5 and Recall of 1. F1-Score is 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify the violation of the Dependency Inversion Principle, but the actual output lacks the detail and clarity present in the expected output regarding the dependency relationship between UserService and MySQLDatabase."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the concept of using abstractions instead of concrete implementations, but the actual output lacks the specific context of the UserService class and the creation of a Database interface mentioned in the expected output."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs match exactly in the content of the field, indicating complete alignment."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The suggestion code in the actual output addresses a more generic approach with DatabaseInterface, but lacks the detailed implementation of methods found in the expected output, leading to a significant gap in clarity and relevance."
+        }
+    ]
+]

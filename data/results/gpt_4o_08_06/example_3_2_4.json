@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_4",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "TP is 1 with 'Liskov Substitution Principle'; FP is 2 with 'Open/Closed Principle' and 'Don't Repeat Yourself'; FN is 0. Precision is 0.33 and Recall is 1. F1-Score is 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_4",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs correctly identify the violation of the Liskov Substitution Principle due to the VolumeCalculator class inheriting from AreaCalculator but changing its behavior. The actual output mentions using the area method for volume, which aligns contextually with the expected explanation."
+        },
+        {
+            "example_id": "example_3_2_4",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output correctly identifies the need to separate volume and area calculations but lacks detail on creating an abstract base class and specific interfaces for 2D and 3D shapes as mentioned in the expected output."
+        },
+        {
+            "example_id": "example_3_2_4",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output 'sum' does not align thematically or contextually with the expected output ['VolumeCalculator', 'AreaCalculator', 'Shape'], indicating a complete mismatch in content and purpose."
+        },
+        {
+            "example_id": "example_3_2_4",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual and expected outputs both address VolumeCalculator refactoring but differ in class structure and interface implementation checks. Actual output checks for Volume interface while expected separates Shape2D and Shape3D, impacting thematic alignment."
+        }
+    ]
+]

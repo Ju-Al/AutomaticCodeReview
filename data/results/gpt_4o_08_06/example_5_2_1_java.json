@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_1",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "There is 1 TP (Dependency Inversion), 1 FP (Open/Closed), and 0 FN. Precision is 0.5, Recall is 1.0, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the issue of UserService's dependency on MySQLDatabase. However, the Actual Output lacks mention of the Dependency Inversion Principle violation and the high-level vs low-level class dependency context."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs suggest creating a Database interface and emphasize the importance of abstraction and loose coupling, but the actual output provides additional implementation details with MySQLDatabase."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, demonstrating complete alignment in content."
+        },
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual and expected outputs both refactor UserService to use a more abstract database handling, but the expected output suggests using an abstract class for DatabaseInterface with Optional return types, which is not present in the actual output."
+        }
+    ]
+]

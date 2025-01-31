@@ -1,65 +1,39 @@
 {
     "principle_violations": [
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    24,
-                    31
-                ]
-            ],
-            "method_names": [
-                "VolumeCalculator.sum"
-            ],
-            "reason": "The VolumeCalculator class inherits from AreaCalculator and overrides the sum method without providing a meaningful implementation. This violates OCP as the VolumeCalculator is intended to support extensions but requires changes for proper functionality.",
-            "suggestion": "Refactor VolumeCalculator to properly handle shape objects that have a volume method, rather than inheriting directly from AreaCalculator.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume\n"
-                    ],
-                    "suggestion_code": [
-                        "class VolumeCalculator:\n    def __init__(self, shapes=[]):\n        self.shapes = shapes\n\n    def calculate_volume(self):\n        total_volume = 0\n        for shape in self.shapes:\n            if hasattr(shape, 'volume'):\n                total_volume += shape.volume()\n            else:\n                raise Exception('Invalid Shape: Shape does not support volume calculation')\n        return total_volume\n"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Don't Repeat Yourself",
-            "lines": [
-                [
-                    62,
-                    63
+                    72,
+                    77
                 ],
                 [
-                    66,
-                    67
+                    79,
+                    84
                 ]
             ],
             "method_names": [
                 "JSON",
                 "HTML"
             ],
-            "reason": "The methods JSON and HTML in SumCalculator both call the calculator's sum method separately, introducing potential repetition and inconsistency.",
-            "suggestion": "Store the result of the sum calculation in a variable to avoid repeated calls to the sum method, especially if the calculation involves complex or time-consuming operations.",
+            "reason": "The SumCalculator class is responsible for both formatting and delegating shape summation logic, violating the single responsibility principle.",
+            "suggestion": "Separate the formatting logic into dedicated classes or functions specific for JSON and HTML, allowing SumCalculator to only encapsulate area/volume summation delegation.",
             "changes": [
                 {
                     "original_code": [
-                        "def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n",
-                        "def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\"\n"
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
                     ],
                     "suggestion_code": [
-                        "def JSON(self):\n        sum_result = self.calculator.sum()\n        data = {\n            'sum': sum_result\n        }\n        return json.dumps(data)\n",
-                        "def HTML(self):\n        sum_result = self.calculator.sum()\n        return f\"Sum of the areas of provided shapes: {sum_result}\"\n"
+                        "class JSONFormatter:\n    @staticmethod\n    def format(sum_value):\n        data = {'sum': sum_value}\n        return json.dumps(data)\n\nclass HTMLFormatter:\n    @staticmethod\n    def format(sum_value):\n        return f\"Sum of the areas of provided shapes: {sum_value}\"\n\nclass SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def sum(self):\n        return self.calculator.sum()\n\ncalculator_sum = SumCalculator(area_calculator).sum()\nprint(JSONFormatter.format(calculator_sum))\nprint(HTMLFormatter.format(calculator_sum))"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 585,
+        "completion_tokens": 362,
         "prompt_tokens": 2489,
-        "total_tokens": 3074
+        "total_tokens": 2851
     }
 }

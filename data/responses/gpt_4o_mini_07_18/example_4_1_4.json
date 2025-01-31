@@ -1,0 +1,145 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    16
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class manages the order items, quantities, prices, and also has a status. It mixes business logic for item handling with state management.",
+            "suggestion": "Consider separating concerns by creating an OrderItems class to manage the items, their quantities, and prices, allowing Order to focus on the order's overall state.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.quantities = []",
+                        "        self.prices = []",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.items.append(name)",
+                        "        self.quantities.append(quantity)",
+                        "        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class OrderItems:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.quantities = []",
+                        "        self.prices = []",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.items.append(name)",
+                        "        self.quantities.append(quantity)",
+                        "        self.prices.append(price)",
+                        "",
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.order_items = OrderItems()",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.order_items.add_item(name, quantity, price)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    39,
+                    39
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method in each payment processor class can be modified for additional payment types while the classes themselves need to be changed, violating the principle.",
+            "suggestion": "Introduce a Payment Strategy interface that allows new payment methods to be added without changing existing code, making the system more extensible.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order):",
+                        "    print('Processing paypal payment')",
+                        "    print(f'Verifying email: {self.security_code}')",
+                        "    order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order):",
+                        "    raise NotImplementedError('Must implement pay method in subclasses')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    16,
+                    61
+                ]
+            ],
+            "method_names": [
+                "PaymentProcessor",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor interface forces all payment processors to implement auth_sms, even if some do not require SMS authentication.",
+            "suggestion": "Separate the SMS authentication into a different interface to ensure that payment processors only implement what is relevant to them.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):",
+                        "    @abstractmethod",
+                        "    def pay(self, order):",
+                        "        ...",
+                        "",
+                        "    @abstractmethod",
+                        "    def auth_sms(self, order, code: str):",
+                        "        ...",
+                        "",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')",
+                        "",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):",
+                        "    @abstractmethod",
+                        "    def pay(self, order):",
+                        "        ...",
+                        "",
+                        "class SMSAuthenticator(ABC):",
+                        "    @abstractmethod",
+                        "    def auth_sms(self, order, code: str):",
+                        "        ...",
+                        "",
+                        "class CreditPaymentProcessor(PaymentProcessor, SMSAuthenticator):",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')",
+                        "",
+                        "class PaypalPaymentProcessor(PaymentProcessor, SMSAuthenticator):",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1035,
+        "prompt_tokens": 2552,
+        "total_tokens": 3587
+    }
+}

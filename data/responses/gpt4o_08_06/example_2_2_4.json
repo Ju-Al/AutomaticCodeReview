@@ -1,0 +1,60 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    9,
+                    15
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator needs to be modified for each new shape type. This violates the open/closed principle, as the method should be open for extension but closed for modification.",
+            "suggestion": "Introduce a common interface or base class for shapes with a method to calculate the area, allowing new shapes to be added without modifying the AreaCalculator class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        return sum(shape.area() for shape in self.shapes)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    25,
+                    33
+                ]
+            ],
+            "method_names": [
+                "JSON",
+                "HTML"
+            ],
+            "reason": "The SumCalculator class is handling both the calculation of the area sum and the formatting of the output, violating the single responsibility principle.",
+            "suggestion": "Separate the responsibilities by creating an OutputFormatter class to handle JSON and HTML formatting.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def calculate(self):\n        return self.calculator.sum()",
+                        "class OutputFormatter:\n    def __init__(self, sum_calculator: SumCalculator):\n        self.sum_calculator = sum_calculator\n\n    def JSON(self):\n        data = {'sum': self.sum_calculator.calculate()}\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.sum_calculator.calculate()}\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 631,
+        "prompt_tokens": 2345,
+        "total_tokens": 2976
+    }
+}

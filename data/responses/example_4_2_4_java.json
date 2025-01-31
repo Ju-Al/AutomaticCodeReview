@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    14,
+                    18
+                ],
+                [
+                    26,
+                    30
+                ]
+            ],
+            "method_names": [
+                "Circle.volume",
+                "Square.volume"
+            ],
+            "reason": "The `Circle` and `Square` classes throw `UnsupportedOperationException` in their `volume()` method implementations, violating the expectation that derived classes should not throw exceptions for methods defined in their interface.",
+            "suggestion": "Separate the responsibilities by introducing different interfaces for `area` and `volume` calculations to avoid forcing all implementing classes to provide both methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "@Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }",
+                        "@Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "interface TwoDimensionalShape {\n    public double area();\n}\n\ninterface ThreeDimensionalShape extends TwoDimensionalShape {\n    public double volume();\n}\n\npublic class Circle implements TwoDimensionalShape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
+                        "public class Square implements TwoDimensionalShape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 359,
+        "prompt_tokens": 2805,
+        "total_tokens": 3164
+    }
+}

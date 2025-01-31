@@ -5,14 +5,14 @@
             "lines": [
                 [
                     8,
-                    16
+                    12
                 ]
             ],
             "method_names": [
                 "sum"
             ],
-            "reason": "The sum method needs to be modified to calculate the area for new types of shapes. This violates the open/closed principle as the class is closed for modification and every time a new Shape class is added the sum function will have to be modified.",
-            "suggestion": "Introduce a common interface or abstract class for shapes that requires implementation of an area method. Each shape class can implement this method, allowing the AreaCalculator to simply call shape.area() and sum the results without needing to know the details of how areas are calculated for each shape.",
+            "reason": "The `sum` method directly checks for each specific shape type using `isinstance`. Adding a new shape would require modifying this method, violating the open/closed principle.",
+            "suggestion": "Use polymorphism by introducing a `Shape` base class with an abstract method `area`, and let each shape subclass implement the `area` method.",
             "changes": [
                 {
                     "original_code": [
@@ -23,12 +23,36 @@
                     ]
                 }
             ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    15,
+                    17
+                ]
+            ],
+            "method_names": [
+                "output"
+            ],
+            "reason": "The `output` method in `AreaCalculator` handles both the calculation of the area and its presentation, mixing computational and formatting responsibilities.",
+            "suggestion": "Separate the area calculation logic and presentation logic into distinct methods or classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def output(self):\n        return f\"Sum of the areas of provided shapes: {self.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "class AreaFormatter:\n    def format(self, area):\n        return f\"Sum of the areas of provided shapes: {area}\"\n\nareas = AreaCalculator(shapes)\nformatter = AreaFormatter()\nprint(formatter.format(areas.sum()))"
+                    ]
+                }
+            ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Modifications are recommended to enhance the code's compliance with design principles.",
     "usage": {
-        "completion_tokens": 302,
+        "completion_tokens": 466,
         "prompt_tokens": 2265,
-        "total_tokens": 2567
+        "total_tokens": 2731
     }
 }

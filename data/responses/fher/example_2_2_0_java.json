@@ -1,0 +1,156 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    22,
+                    24
+                ],
+                [
+                    8,
+                    10
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: storing shapes and computing area sums, which should be separated.",
+            "suggestion": "Create a separate class, such as 'Shape' with an 'area()' method to handle area calculations for specific shapes and keep AreaCalculator focused only on summing areas.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "public interface Shape {",
+                        "    double area();",
+                        "}",
+                        "public class Circle implements Shape {",
+                        "    // existing Circle code... ",
+                        "    public double area() { return Math.PI * Math.pow(getRadius(), 2); }",
+                        "}",
+                        "public class Square implements Shape {",
+                        "    // existing Square code...",
+                        "    public double area() { return Math.pow(getLength(), 2); }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    18,
+                    24
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator needs to be modified for new shapes, which violates the OCP.",
+            "suggestion": "By using the Shape interface, adding new shapes will not require changes to the AreaCalculator class, following OCP by allowing the addition of new functionality without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "public interface Shape {",
+                        "    double area();",
+                        "}",
+                        "public class Circle implements Shape {",
+                        "    // existing Circle code... ",
+                        "}",
+                        "public class Square implements Shape {",
+                        "    // existing Square code...",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    1,
+                    1
+                ],
+                [
+                    1,
+                    1
+                ]
+            ],
+            "method_names": [],
+            "reason": "Using a List<Object> forces the AreaCalculator to handle various shapes in a single list without defined behavior specific to those shapes.",
+            "suggestion": "Change the shape list to use the Shape interface, ensuring that AreaCalculator only works with objects implementing this interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;",
+                        "public AreaCalculator(List<Object> shapes) {",
+                        "    this.shapes = shapes;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;",
+                        "public AreaCalculator(List<Shape> shapes) {",
+                        "    this.shapes = shapes;",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 999,
+        "prompt_tokens": 2501,
+        "total_tokens": 3500
+    }
+}

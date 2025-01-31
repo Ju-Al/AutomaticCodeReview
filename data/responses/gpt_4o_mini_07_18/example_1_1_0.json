@@ -1,0 +1,97 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    38
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "total_price",
+                "pay"
+            ],
+            "reason": "The Order class handles multiple responsibilities: managing items, calculating total prices, and processing payments, which should be separated for better maintainability.",
+            "suggestion": "Create a separate class for payment processing, such as PaymentProcessor, to handle the payment logic. Keep the Order class focused on order management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "def total_price(self):",
+                        "def pay(self, payment_type: str, security_code):"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:",
+                        "    def __init__(self, order):",
+                        "        self.order = order",
+                        "    def pay(self, payment_type: str, security_code):",
+                        "        if payment_type == 'debit':",
+                        "            print('Processing debit payment type')",
+                        "            print(f'Verifying security code: {security_code}')",
+                        "            self.order.status = 'paid'",
+                        "        elif payment_type == 'credit':",
+                        "            print('Processing credit payment type')",
+                        "            print(f'Verifying security code: {security_code}')",
+                        "            self.order.status = 'paid'",
+                        "        else:",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')",
+                        "",
+                        "# Usage:",
+                        "order = Order()",
+                        "payment_processor = PaymentProcessor(order)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    38
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "total_price",
+                "pay"
+            ],
+            "reason": "The Order class requires modification to support new payment methods or changes in how items are managed, violating the open/closed principle.",
+            "suggestion": "Create a base interface/class for each type of processing logic that can be extended without altering the existing Order class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "def total_price(self):",
+                        "def pay(self, payment_type: str, security_code):"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:",
+                        "    def pay(self, payment_type: str, security_code):",
+                        "        pass # This would be implemented in subclasses.",
+                        "",
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, security_code):",
+                        "        print('Processing debit payment type')",
+                        "        print(f'Verifying security code: {security_code}')",
+                        "        self.order.status = 'paid'",
+                        "",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, security_code):",
+                        "        print('Processing credit payment type')",
+                        "        print(f'Verifying security code: {security_code}')",
+                        "        self.order.status = 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 723,
+        "prompt_tokens": 2352,
+        "total_tokens": 3075
+    }
+}

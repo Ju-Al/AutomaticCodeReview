@@ -1,0 +1,90 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    11
+                ],
+                [
+                    14,
+                    44
+                ],
+                [
+                    46,
+                    56
+                ],
+                [
+                    58,
+                    65
+                ],
+                [
+                    67,
+                    110
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: it not only calculates the area of different shapes but also handles the storage and management of the shapes themselves.",
+            "suggestion": "Separate the responsibilities of handling the list of shapes and calculating the area into different classes. Create a ShapeContainer class to manage shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {\n    private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class ShapeContainer {\n    private List<Object> shapes;\n\n    public ShapeContainer() {\n        this.shapes = new ArrayList<>();\n    }\n\n    public void addShape(Object shape) {\n        shapes.add(shape);\n    }\n\n    public List<Object> getShapes() {\n        return shapes;\n    }\n}\n\npublic class AreaCalculator { \n    private ShapeContainer shapeContainer;\n\n    public AreaCalculator(ShapeContainer shapeContainer) {\n        this.shapeContainer = shapeContainer;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapeContainer.getShapes()) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    1,
+                    11
+                ],
+                [
+                    14,
+                    44
+                ],
+                [
+                    46,
+                    56
+                ],
+                [
+                    58,
+                    65
+                ],
+                [
+                    67,
+                    110
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class\u2019s sum method needs to be modified for each new shape type, violating the Open/Closed Principle.",
+            "suggestion": "Use an interface for shapes with an area calculation method. Each shape class should implement this interface. The AreaCalculator can then work polymorphically with the shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Object shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += ((Shape) shape).calculateArea();\n        }\n    }\n    return totalArea;\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 905,
+        "prompt_tokens": 2501,
+        "total_tokens": 3406
+    }
+}

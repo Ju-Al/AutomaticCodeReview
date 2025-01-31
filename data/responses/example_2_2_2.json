@@ -1,42 +1,18 @@
 {
     "principle_violations": [
         {
-            "principle": "Single Responsibility Principle",
-            "lines": [
-                [
-                    20,
-                    36
-                ]
-            ],
-            "method_names": [
-                "sum"
-            ],
-            "reason": "The AreaCalculator class handles both maintaining a list of shapes and computing their areas, violating the SRP by having more than one responsibility.",
-            "suggestion": "Create separate classes or functions responsible for maintaining the list of shapes and computing the areas of those shapes.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
-                    ],
-                    "suggestion_code": [
-                        "class AreaCalculator:\n    def __init__(self, shapes) -> None:\n        self.shapes = shapes\n\nclass AreaSummarizer:\n    @staticmethod\n    def sum_areas(shapes):\n        areas = []\n        for shape in shapes:\n            if isinstance(shape, Square):\n                areas.append(shape.area())\n            elif isinstance(shape, Circle):\n                areas.append(shape.area())\n        return sum(areas)"
-                    ]
-                }
-            ]
-        },
-        {
             "principle": "Open/Closed Principle",
             "lines": [
                 [
                     8,
-                    16
+                    14
                 ]
             ],
             "method_names": [
                 "sum"
             ],
-            "reason": "The AreaCalculator class requires modification to add new shape types, violating the OCP as it is not open for extension without modification.",
-            "suggestion": "Implement polymorphic behavior where each shape class provides its own area calculation method, allowing AreaCalculator to use these methods without needing to know specific shapes.",
+            "reason": "The AreaCalculator class needs to be modified to support any new shape, violating the open/closed principle.",
+            "suggestion": "Introduce a common interface or base class for shapes with a method to calculate the area. This allows adding new shapes without modifying AreaCalculator.",
             "changes": [
                 {
                     "original_code": [
@@ -45,18 +21,18 @@
                         "class Circle:\n    def __init__(self, radius) -> None:\n        self.radius = radius"
                     ],
                     "suggestion_code": [
-                        "class AreaCalculator:\n    def __init__(self, shapes) -> None:\n        self.shapes = shapes\n\nclass AreaSummarizer:\n    @staticmethod\n    def sum_areas(shapes):\n        areas = []\n        for shape in shapes:\n            areas.append(shape.area())\n        return sum(areas)",
-                        "class Square:\n    def __init__(self, length) -> None:\n        self.length = length\n\n    def area(self):\n        return math.pow(self.length, 2)",
-                        "class Circle:\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * math.pow(self.radius, 2)"
+                        "class Shape:\n    def area(self):\n        raise NotImplementedError('Subclasses must implement this method.')\n\nclass AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n\n    def sum(self):\n        return sum(shape.area() for shape in self.shapes)",
+                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n\n    def area(self):\n        return math.pow(self.length, 2)",
+                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * math.pow(self.radius, 2)"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 724,
+        "completion_tokens": 477,
         "prompt_tokens": 2345,
-        "total_tokens": 3069
+        "total_tokens": 2822
     }
 }

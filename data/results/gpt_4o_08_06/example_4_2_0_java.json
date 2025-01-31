@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_0",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No true positives; actual output contains 'Single Responsibility Principle' and 'Liskov Substitution Principle', which are not in expected output 'Interface Segregation Principle'."
+        }
+    ],
+    []
+]

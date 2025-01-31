@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_4",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "True Positive: 'Interface Segregation Principle'. False Positives: 'Don't Repeat Yourself', 'Single Responsibility Principle'. False Negatives: None. Precision: 1/3, Recall: 1/1, F1-Score: 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the issue of forcing classes like Square to implement unnecessary methods, aligning with the Interface Segregation Principle. The actual output mentions both area and volume methods, while the expected focuses more on the volume method, causing a slight misalignment."
+        },
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs suggest separating interfaces for area and volume to comply with the Interface Segregation Principle, though the actual output uses 'AreaInterface' and 'VolumeInterface' terms instead of '2D' and '3D'."
+        },
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual output lists specific classes with a volume method, while expected output suggests a single interface, showing no thematic alignment."
+        },
+        {
+            "example_id": "example_4_2_4",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest splitting the Shape class into separate interfaces for area and volume, but differ in naming and structure. Actual uses AreaInterface and VolumeInterface, while Expected uses Shape2D and Shape3D."
+        }
+    ]
+]

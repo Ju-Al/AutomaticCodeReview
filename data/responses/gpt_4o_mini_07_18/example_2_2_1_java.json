@@ -1,0 +1,134 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    25,
+                    27
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both storing the list of shapes and calculating their areas. This combines multiple responsibilities into one class.",
+            "suggestion": "Separate the area calculation logic into its own class, perhaps creating a Shape interface and implementing specific area calculators for each shape type.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Object> shapes;",
+                        "    public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Object shape : shapes) {",
+                        "            if (shape instanceof Square) {",
+                        "                Square square = (Square) shape;",
+                        "                totalArea += Math.pow(square.getLength(), 2);",
+                        "            } else if (shape instanceof Circle) {",
+                        "                Circle circle = (Circle) shape;",
+                        "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "            }",
+                        "        }",
+                        "        return totalArea;",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Shape> shapes;",
+                        "    public AreaCalculator(List<Shape> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "    public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalArea += shape.area();",
+                        "        }",
+                        "        return totalArea;",
+                        "    }",
+                        "}",
+                        "",
+                        "interface Shape {",
+                        "    double area();",
+                        "}",
+                        "",
+                        "public class Circle implements Shape {",
+                        "    private double radius;",
+                        "    public Circle(double radius) {",
+                        "        this.radius = radius;",
+                        "    }",
+                        "    public double getRadius() {",
+                        "        return radius;",
+                        "    }",
+                        "    public double area() {",
+                        "        return Math.PI * Math.pow(radius, 2);",
+                        "    }",
+                        "}",
+                        "",
+                        "public class Square implements Shape {",
+                        "    private double length;",
+                        "    public Square(double length) {",
+                        "        this.length = length;",
+                        "    }",
+                        "    public double getLength() {",
+                        "        return length;",
+                        "    }",
+                        "    public double area() {",
+                        "        return Math.pow(length, 2);",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    25,
+                    27
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator",
+                "SumCalculator"
+            ],
+            "reason": "The AreaCalculator class directly depends on concrete shape implementations, restricting its flexibility and violating the principle.",
+            "suggestion": "Introduce an interface for shapes so that AreaCalculator can depend on shape abstractions instead of concrete classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Object> shapes;",
+                        "    public AreaCalculator(List<Object> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Shape> shapes;",
+                        "    public AreaCalculator(List<Shape> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 840,
+        "prompt_tokens": 2501,
+        "total_tokens": 3341
+    }
+}

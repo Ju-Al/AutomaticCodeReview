@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_0",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "True Positive: Single Responsibility Principle. False Positive: Don't Repeat Yourself. False Negative: Dependency Inversion Principle. Precision: 0.5, Recall: 0.5, F1-Score: 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the Single Responsibility Principle violation, noting multiple responsibilities of the Order class, but differ in specifics: 'storing item data and managing order status' vs 'responsible for both prices and quantities'."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separating responsibilities within the Order class, but the actual output focuses on item storage management, while the expected output emphasizes splitting responsibilities between quantities and prices."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual output 'Order' does not align with expected outputs 'totalPrices' and 'addItems'."
+        },
+        {
+            "example_id": "example_5_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest refactoring the order item management into a separate class but differ in implementation details and additional functionalities like total price calculation."
+        }
+    ]
+]

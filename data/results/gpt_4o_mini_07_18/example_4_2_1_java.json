@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_1",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no true positives, as none of the principles in the actual output match the expected output, indicating a complete mismatch."
+        }
+    ],
+    []
+]

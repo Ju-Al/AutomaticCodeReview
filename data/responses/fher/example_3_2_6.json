@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    21,
+                    22
+                ],
+                [
+                    41,
+                    45
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The 'AreaCalculator' class and 'VolumeCalculator' class are responsible for both area and volume calculations, which are separate responsibilities.",
+            "suggestion": "Create separate classes for area and volume calculations, such as 'AreaCalculator' and 'VolumeCalculator', and remove volume logic from the 'AreaCalculator'.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    ...\n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    ...\n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "class VolumeCalculator:\n    def __init__(self, shapes=[]):\n        self.shapes = shapes\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_volume += shape.area()  # This should use a volume method in real case\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    10,
+                    11
+                ],
+                [
+                    51,
+                    51
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "JSON"
+            ],
+            "reason": "The 'SumCalculator' class directly depends on 'AreaCalculator', which is a concrete class. This ties the higher-level module (SumCalculator) to a specific implementation.",
+            "suggestion": "Refactor the 'SumCalculator' to depend on an abstraction/interface instead of a concrete class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator",
+                        "    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)"
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:\n    def __init__(self, calculator: AreaCalculator) -> None:\n        self.calculator = calculator",
+                        "    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 731,
+        "prompt_tokens": 2489,
+        "total_tokens": 3220
+    }
+}

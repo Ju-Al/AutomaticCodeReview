@@ -1,0 +1,110 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    4
+                ],
+                [
+                    11,
+                    15
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The 'Order' class manages both the order details (items, quantities, prices) and the order status, which violates SRP.",
+            "suggestion": "Create a separate class for managing order statuses, such as an 'OrderStatus' class, to separate these concerns.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "class OrderStatus {",
+                        "    private String status = \"open\";",
+                        "",
+                        "    public String getStatus() {",
+                        "        return this.status;",
+                        "    }",
+                        "",
+                        "    public void setStatus(String status) {",
+                        "        this.status = status;",
+                        "    }",
+                        "}",
+                        "",
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    6,
+                    13
+                ],
+                [
+                    4,
+                    8
+                ],
+                [
+                    4,
+                    5
+                ],
+                [
+                    11,
+                    12
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The 'Order' class is not designed to accommodate changes related to different types of payments without modification, violating OCP.",
+            "suggestion": "Consider using an interface for payment methods, allowing for different payment types to be added without changing the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentMethod {",
+                        "    void pay(Order order, String securityCode);",
+                        "}",
+                        "",
+                        "public void pay(Order order, String securityCode) {",
+                        "    // processing logic",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 606,
+        "prompt_tokens": 2396,
+        "total_tokens": 3002
+    }
+}

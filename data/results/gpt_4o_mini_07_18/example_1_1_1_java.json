@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_1_1",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "Only 1 true positive identified, while there is 1 false positive and no false negatives, resulting in low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output identifies the issue of multiple responsibilities in the Order class, but lacks the detailed explanation regarding the violation of the Single Responsibility Principle found in the expected output."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs suggest separating payment processing but the actual output focuses solely on a dedicated class, while the expected output advocates for splitting the Order class into three distinct classes, indicating a broader scope."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output includes 'pay' and 'addItem', while the expected output includes 'addItem', 'totalPrice', and 'pay', showing partial thematic alignment but lacking detail and clarity on 'totalPrice'."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual suggestion code lacks the clarity and detail present in the expected suggestion code, particularly missing new classes and methods related to order management and price calculation."
+        }
+    ]
+]

@@ -1,0 +1,116 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    16
+                ],
+                [
+                    22,
+                    29
+                ],
+                [
+                    36,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator and AreaCalculator classes are handling both the calculation of areas/volumes and the validation of shapes, thus violating the Single Responsibility Principle.",
+            "suggestion": "Separate the shape validation logic into its own class or method, ensuring that calculation classes focus solely on calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}",
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += shape.area();\n        } else {\n            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n        }\n    }\n    return totalArea;\n}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        validateShape(shape);\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}\n\nprivate void validateShape(Shape shape) {\n    if (!(shape instanceof Shape)) {\n        throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n    }\n}",
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        validateShape(shape);\n        totalArea += shape.area();\n    }\n    return totalArea;\n}\n\nprivate void validateShape(Shape shape) {\n    if (!(shape instanceof Shape)) {\n        throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    22,
+                    29
+                ],
+                [
+                    36,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator's sum method needs modification whenever a new shape type is introduced, violating the Open/Closed Principle.",
+            "suggestion": "Use the Strategy pattern for area calculation by creating an interface for area computation, allowing new shapes to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        areaCalculationStrategy.calculateArea(shape);\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}\n\nprivate AreaCalculationStrategy areaCalculationStrategy;"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += shape.area();\n        } else {\n            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n        }\n    }\n    return totalArea;\n}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        areaCalculationStrategy.calculateArea(shape);\n        totalArea += shape.area();\n    }\n    return totalArea;\n}\n\nprivate AreaCalculationStrategy areaCalculationStrategy;"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    22,
+                    29
+                ],
+                [
+                    36,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "Both sum methods in VolumeCalculator and AreaCalculator have similar structures and logic, violating the DRY principle.",
+            "suggestion": "Extract the duplicate summation logic into a separate private method that can be called in both sum methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}"
+                    ],
+                    "suggestion_code": [
+                        "private double calculateTotalArea() {\n    double totalVolume = 0;\n    for (Shape shape : shapes) {\n        totalVolume += shape.area();\n    }\n    return totalVolume;\n}\n\npublic double sum() {\n    return calculateTotalArea();\n}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public double sum() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += shape.area();\n        } else {\n            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n        }\n    }\n    return totalArea;\n}"
+                    ],
+                    "suggestion_code": [
+                        "private double calculateTotalArea() {\n    double totalArea = 0;\n    for (Shape shape : shapes) {\n        totalArea += shape.area();\n    }\n    return totalArea;\n}\n\npublic double sum() {\n    return calculateTotalArea();\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1287,
+        "prompt_tokens": 2683,
+        "total_tokens": 3970
+    }
+}

@@ -1,0 +1,88 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    24
+                ],
+                [
+                    4,
+                    10
+                ],
+                [
+                    7,
+                    14
+                ],
+                [
+                    24,
+                    24
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing order details as well as having methods related to changing its status, which is a separate concern.",
+            "suggestion": "Consider refactoring the status management out of Order into a separate class, like OrderStatus, that manages order states.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void setStatus(String status) { this.status = status; }",
+                        "public String getStatus() { return status; }"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderStatus { private String status; public OrderStatus() { this.status = 'open'; } public void setStatus(String status) { this.status = status; } public String getStatus() { return status; } }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    4,
+                    24
+                ],
+                [
+                    4,
+                    10
+                ],
+                [
+                    7,
+                    14
+                ],
+                [
+                    24,
+                    24
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay"
+            ],
+            "reason": "If a new type of item or payment method needs to be added, the Order and PaymentProcessor classes would need to be modified, violating the open/closed principle.",
+            "suggestion": "Create interfaces for item management and payment processing, allowing new implementations to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) { this.items.add(name); this.quantities.add(quantity); this.prices.add(price); }",
+                        "public void pay(Order order, String securityCode) { System.out.println('Processing payment'); System.out.println('Verifying security code: ' + securityCode); order.setStatus('paid'); }"
+                    ],
+                    "suggestion_code": [
+                        "public interface ItemManagement { void addItem(String name, int quantity, double price); } public interface PaymentMethod { void pay(Order order, String securityCode); }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 519,
+        "prompt_tokens": 2396,
+        "total_tokens": 2915
+    }
+}

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The actual output has 1 TP (Single Responsibility Principle), 0 FP, and 1 FN (Dependency Inversion Principle). Precision is 1, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual Output identifies multiple classes violating the Single Responsibility Principle, whereas Expected Output only mentions the order class and focuses on prices and quantities. Both address SRP issues but differ in specifics and examples."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output suggests broader refactoring focusing on separation of concerns across multiple classes, while Expected Output focuses specifically on splitting Order class into quantities and prices."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output lists different classes or components related to order processing, while the expected output lists functions related to item handling and pricing. There is no thematic or contextual alignment between them."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual output focuses on modifying specific methods within classes, while expected output suggests a structural reorganization into new classes like OrderQuantityManager and PriceCalculator. The thematic alignment is minimal as the actual output retains existing structure without introducing new classes for separation of concerns."
+        }
+    ]
+]

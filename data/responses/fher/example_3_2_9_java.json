@@ -1,0 +1,142 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    19
+                ],
+                [
+                    26,
+                    39
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "main"
+            ],
+            "reason": "The VolumeCalculator is responsible for calculating volume but also inherits AreaCalculator, which manages area calculations. The main method also handles too many responsibilities including initializing different calculators and outputting results.",
+            "suggestion": "Separate the responsibilities of area and volume calculations into dedicated classes or methods. Additionally, handle the initiation of calculators in a dedicated method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n",
+                        "    @Override\n",
+                        "    public double sum() {\n",
+                        "        double totalVolume = 0;\n",
+                        "        for (Shape shape : shapes) {\n",
+                        "            totalVolume += shape.area();\n",
+                        "        }\n",
+                        "        return totalVolume;\n",
+                        "    }\n",
+                        "}",
+                        "public static void main(String[] args) {\n",
+                        "    List<Shape> shapes = new ArrayList<>();\n",
+                        "    shapes.add(new Circle(2));\n",
+                        "    shapes.add(new Square(5));\n",
+                        "    shapes.add(new Square(6));\n",
+                        "    AreaCalculator calculator = new AreaCalculator(shapes);\n",
+                        "    SumCalculator sumCalculator = new SumCalculator(calculator);\n",
+                        "    System.out.println(sumCalculator.toHTML());\n",
+                        "\n",
+                        "    List<Shape> solidShapes = new ArrayList<>();\n",
+                        "    solidShapes.add(new Circle(3));\n",
+                        "    VolumeCalculator volumeCalculator = new VolumeCalculator(solidShapes);\n",
+                        "\n",
+                        "    SumCalculator volumeOutputter = new SumCalculator(volumeCalculator);\n",
+                        "    System.out.println(volumeOutputter.toHTML());\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {\n",
+                        "    public double sumAreas(List<Shape> shapes) {\n",
+                        "        double totalArea = 0;\n",
+                        "        for (Shape shape : shapes) {\n",
+                        "            totalArea += shape.area();\n",
+                        "        }\n",
+                        "        return totalArea;\n",
+                        "    }\n",
+                        "}\n",
+                        "public static void main(String[] args) {\n",
+                        "    initializeAreaCalculations();\n",
+                        "    initializeVolumeCalculations();\n",
+                        "}\n",
+                        "private static void initializeAreaCalculations() {\n",
+                        "    List<Shape> shapes = new ArrayList<>();\n",
+                        "    shapes.add(new Circle(2));\n",
+                        "    shapes.add(new Square(5));\n",
+                        "    shapes.add(new Square(6));\n",
+                        "    AreaCalculator calculator = new AreaCalculator(shapes);\n",
+                        "    SumCalculator sumCalculator = new SumCalculator(calculator);\n",
+                        "    System.out.println(sumCalculator.toHTML());\n",
+                        "}\n",
+                        "private static void initializeVolumeCalculations() {\n",
+                        "    List<Shape> solidShapes = new ArrayList<>();\n",
+                        "    solidShapes.add(new Circle(3));\n",
+                        "    VolumeCalculator volumeCalculator = new VolumeCalculator(solidShapes);\n",
+                        "    SumCalculator volumeOutputter = new SumCalculator(volumeCalculator);\n",
+                        "    System.out.println(volumeOutputter.toHTML());\n",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    8,
+                    19
+                ],
+                [
+                    31,
+                    31
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "area"
+            ],
+            "reason": "The current implementation tightly couples the VolumeCalculator with the AreaCalculator. If a new shape type needs to be added, the area calculation logic must be modified, violating the open/closed principle.",
+            "suggestion": "Decouple the area and volume calculations using a common interface, allowing new types to be added without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n",
+                        "    double totalVolume = 0;\n",
+                        "    for (Shape shape : shapes) {\n",
+                        "        totalVolume += shape.area();\n",
+                        "    }\n",
+                        "    return totalVolume;\n",
+                        "}",
+                        "public interface Shape {\n",
+                        "    double area();\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n",
+                        "    public double sumVolume(List<Shape> shapes) {\n",
+                        "        double totalVolume = 0;\n",
+                        "        for (Shape shape : shapes) {\n",
+                        "            totalVolume += shape.getVolume();\n",
+                        "        }\n",
+                        "        return totalVolume;\n",
+                        "    }\n",
+                        "}\n",
+                        "public interface Shape {\n",
+                        "    double area();\n",
+                        "    double getVolume(); // New method definition for volume calculations\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 1235,
+        "prompt_tokens": 2683,
+        "total_tokens": 3918
+    }
+}

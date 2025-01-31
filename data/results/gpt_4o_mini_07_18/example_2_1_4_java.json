@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_4",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "Single Responsibility Principle is a True Positive, but there is a False Negative for Open/Closed Principle and a False Positive for Dependency Inversion Principle."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "While both outputs address the issue of responsibility in the Order class, the Actual Output focuses on payment processing and state changes, while the Expected Output highlights prices and quantities, indicating a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests creating a separate class for handling operations, while the expected output focuses on splitting the existing Order class into two. This indicates a lack of thematic alignment regarding class structure."
+        },
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output contains 'addItem', 'setStatus', and 'pay', while the expected output contains 'totalPrice' and 'addItems', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code lacks key functionality for calculating total prices and managing orders, which is present in the expected output. The suggestions do not adequately address the thematic and contextual needs for improvement."
+        }
+    ]
+]

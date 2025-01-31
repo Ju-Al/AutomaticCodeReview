@@ -1,0 +1,116 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating areas and producing output. It should only handle calculations or only handle display logic.",
+            "suggestion": "Separate the responsibilities of calculation and output into different classes or modules. For instance, create a separate OutputHandler class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def output(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]):",
+                        "        self.shapes = shapes",
+                        "",
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)",
+                        "",
+                        "class OutputHandler:",
+                        "    def __init__(self, calculator):",
+                        "        self.calculator = calculator",
+                        "",
+                        "    def output(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    8,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation for Square and Circle is repeated logic that could be abstracted into a single method.",
+            "suggestion": "Introduce a polymorphic interface for shapes that will handle area calculation accordingly, thus adhering to DRY.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if isinstance(shape, Square):",
+                        "    areas.append(math.pow(shape.length, 2))",
+                        "elif isinstance(shape, Circle):",
+                        "    areas.append(math.pi * math.pow(shape.radius, 2))"
+                    ],
+                    "suggestion_code": [
+                        "areas.append(shape.area())"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius"
+                    ],
+                    "suggestion_code": [
+                        "class Square:",
+                        "    def __init__(self, length):",
+                        "        self.length = length",
+                        "",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius):",
+                        "        self.radius = radius",
+                        "",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 783,
+        "prompt_tokens": 2265,
+        "total_tokens": 3048
+    }
+}

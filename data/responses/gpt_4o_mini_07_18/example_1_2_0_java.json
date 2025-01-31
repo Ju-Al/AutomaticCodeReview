@@ -1,0 +1,100 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    11
+                ],
+                [
+                    29,
+                    42
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class is responsible not only for calculating the area of different shapes but also for managing the output presentation of the calculated area.",
+            "suggestion": "Separate the concerns of area calculation and output handling into different classes, such as AreaCalculator for area calculations and a separate class for output formatting.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "      // Area calculation logic",
+                        "  public String output() {",
+                        "      return 'Sum of the areas of provided shapes: ' + sum();"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {",
+                        "    public double sum(List<Object> shapes) {",
+                        "        // Area calculation logic",
+                        "    }",
+                        "}",
+                        "public class AreaOutputter {",
+                        "    private AreaCalculator areaCalculator;",
+                        "    public AreaOutputter(AreaCalculator areaCalculator) {",
+                        "        this.areaCalculator = areaCalculator;",
+                        "    }",
+                        "    public String output(List<Object> shapes) {",
+                        "        return 'Sum of the areas of provided shapes: ' + areaCalculator.sum(shapes);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    15,
+                    27
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The shape area calculation logic is tightly coupled with the type checking in the sum method. Any new shape necessitates changes to this method, violating DRY.",
+            "suggestion": "Consider using interfaces with a single method for area calculation, allowing for polymorphism and preventing the need to modify the sum method when new shapes are added.",
+            "changes": [
+                {
+                    "original_code": [
+                        "for (Object shape : shapes) {",
+                        "    if (shape instanceof Square) {",
+                        "        Square square = (Square) shape;",
+                        "        totalArea += Math.pow(square.getLength(), 2);",
+                        "    } else if (shape instanceof Circle) {",
+                        "        Circle circle = (Circle) shape;",
+                        "        totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {",
+                        "    double area();",
+                        "}",
+                        "public class Circle implements Shape {",
+                        "    @Override",
+                        "    public double area() {",
+                        "        return Math.PI * Math.pow(radius, 2);",
+                        "    }",
+                        "}",
+                        "public class Square implements Shape {",
+                        "    @Override",
+                        "    public double area() {",
+                        "        return Math.pow(length, 2);",
+                        "    }",
+                        "}",
+                        "for (Shape shape : shapes) {",
+                        "    totalArea += shape.area();"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 686,
+        "prompt_tokens": 2419,
+        "total_tokens": 3105
+    }
+}

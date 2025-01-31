@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_3",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "There is 1 TP ('Open/Closed Principle'), but 2 FPs ('Single Responsibility Principle', 'Interface Segregation Principle') and no FNs, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both the actual and expected outputs address the violation of the open/closed principle, but the expected output provides more detail about specific shapes (triangles, pentagons, hexagons) that require modifications, which enhances clarity compared to the more general statement in the actual output."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests using interfaces or an abstract class for area calculation, while the expected output specifically mentions a ShapeInterface and details how it promotes compliance with the open-closed principle, lacking clarity and depth in the actual output."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The content in both actual and expected outputs is identical, showing complete alignment."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual suggestion code modifies the summation logic but lacks the detailed implementation of the Shape interface and specific area methods as in the expected output, resulting in a significant gap in detail and clarity."
+        }
+    ]
+]

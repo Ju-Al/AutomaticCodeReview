@@ -1,0 +1,128 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    25
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is responsible for storing item information and managing the order status, which mixes data handling and state management responsibilities.",
+            "suggestion": "Consider creating a separate class or structure to manage the order status and logic related to payments, allowing the Order class to focus solely on the items and their quantities.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public OrderStatus getOrderStatus() {",
+                        "    return new OrderStatus(status);",
+                        "}",
+                        "",
+                        "class OrderStatus {",
+                        "    private String status;",
+                        "",
+                        "    public OrderStatus(String status) {",
+                        "        this.status = status;",
+                        "    }",
+                        "",
+                        "    public void setStatus(String newStatus) {",
+                        "        this.status = newStatus;",
+                        "    }",
+                        "",
+                        "    public String getStatus() {",
+                        "        return status;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    22
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing logic is tightly coupled to specific implementations, meaning that any changes to payment methods require modifications in existing classes.",
+            "suggestion": "Consider using a strategy pattern or a factory pattern to allow new payment methods to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing paypal payment\");",
+                        "    System.out.println(\"Verifying email: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    PaymentProcessor processor = new PaypalPaymentProcessor();",
+                        "    processor.pay(order, securityCode);",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing credit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    PaymentProcessor processor = new CreditCardPaymentProcessor();",
+                        "    processor.pay(order, securityCode);",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing debit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "    PaymentProcessor processor = new DebitCardPaymentProcessor();",
+                        "    processor.pay(order, securityCode);",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 870,
+        "prompt_tokens": 2560,
+        "total_tokens": 3430
+    }
+}

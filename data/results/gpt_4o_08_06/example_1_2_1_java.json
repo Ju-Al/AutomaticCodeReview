@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_1",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 'Open/Closed Principle', FP is none, FN is 'Single Responsibility Principle'. Precision is 1, Recall is 0.5, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the Open/Closed Principle violation in the AreaCalculator class, noting the need for modification when adding new shapes. The actual output lacks specific examples like triangles and pentagons mentioned in the expected output."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest using polymorphism with an interface or abstract class for shapes to calculate areas. However, the expected output provides more detail about the open-closed principle and how the AreaCalculator interacts with shapes, while the actual output is more concise."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output exactly matches the expected output in the field being compared."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs refactor similar original code using polymorphism, with minor differences in method names and formatting."
+        }
+    ]
+]

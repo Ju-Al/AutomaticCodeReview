@@ -1,0 +1,64 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    28
+                ],
+                [
+                    4,
+                    14
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is solely responsible for payment processing, but it is also tightly coupled with the Order class to manage order status, which leads to a mix of responsibilities.",
+            "suggestion": "Introduce an OrderStatusManager class to handle the order status updates. This will separate order management from payment processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaymentProcessor {\n\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class PaymentProcessor {\n    public void pay(Order order, String securityCode, OrderStatusManager statusManager) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        statusManager.updateStatus(order, \"paid\");\n    }\n}",
+                        "public class OrderStatusManager {\n    public void updateStatus(Order order, String status) {\n        order.setStatus(status);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    20,
+                    23
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class directly depends on the Order class to change its state, violating the Dependency Inversion Principle.",
+            "suggestion": "Use an interface or an abstract class for payment processors which can handle different orders. This will allow for easier testing and flexibility to add new types of order processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaymentProcessor {\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface OrderProcessor {\n    void processPayment(Order order, String securityCode);\n}\n\npublic class PaymentProcessor implements OrderProcessor {\n    public void processPayment(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 778,
+        "prompt_tokens": 2396,
+        "total_tokens": 3174
+    }
+}

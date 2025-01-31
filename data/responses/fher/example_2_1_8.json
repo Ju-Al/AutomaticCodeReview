@@ -1,0 +1,42 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    10
+                ],
+                [
+                    12,
+                    22
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class manages order items and tracking status, while the PaymentProcessor class handles payment, which may lead to tight coupling and responsibilities overlap.",
+            "suggestion": "Separate the responsibility of payment processing into a dedicated Payment class and ensure the Order class only manages the order-related functionalities.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def mark_as_paid(self):\n        self.status = 'paid'",
+                        "class Payment:\n    @staticmethod\n    def process_payment(order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.mark_as_paid()"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 476,
+        "prompt_tokens": 2257,
+        "total_tokens": 2733
+    }
+}

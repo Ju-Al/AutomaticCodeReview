@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_0",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "True Positive: Interface Segregation Principle. False Positive: Liskov Substitution Principle. False Negative: Single Responsibility Principle. Precision is 0.5, Recall is 0.5, resulting in an F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the violation of the Interface Segregation Principle due to unnecessary auth_sms method implementation, but the actual output is more general, lacking specific reference to the CreditPaymentProcessor class."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating the auth_sms method into a dedicated entity to comply with the Interface Segregation Principle, but they propose different implementations: an interface vs an abstract class."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output contains repeated entries 'auth_sms', whereas the expected output lists it only once. This indicates a partial thematic alignment but lacks conciseness and precision."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual Output suggests splitting SMS auth into a separate class but lacks implementation details like verification process shown in Expected Output."
+        }
+    ]
+]

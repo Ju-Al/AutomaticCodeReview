@@ -1,0 +1,131 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    10
+                ],
+                [
+                    18,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both storing shapes and calculating their areas. This means it has multiple responsibilities which violates the SRP.",
+            "suggestion": "Separate the area calculation logic into different classes or methods for specific shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    for (Object shape : shapes) {",
+                        "        if (shape instanceof Square) {",
+                        "            Square square = (Square) shape;",
+                        "            totalArea += Math.pow(square.getLength(), 2);",
+                        "        } else if (shape instanceof Circle) {",
+                        "            Circle circle = (Circle) shape;",
+                        "            totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Object shape : shapes) {",
+                        "        totalArea += calculateArea(shape);",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "private double calculateArea(Object shape) {",
+                        "    if (shape instanceof Square) {",
+                        "        Square square = (Square) shape;",
+                        "        return Math.pow(square.getLength(), 2);",
+                        "    } else if (shape instanceof Circle) {",
+                        "        Circle circle = (Circle) shape;",
+                        "        return Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "    }",
+                        "    return 0;",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    33,
+                    41
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation logic for Circle and Square is duplicated within the sum method of AreaCalculator.",
+            "suggestion": "Encapsulate the area calculation in a separate method to avoid duplication.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if (shape instanceof Square) {",
+                        "    Square square = (Square) shape;",
+                        "    totalArea += Math.pow(square.getLength(), 2);",
+                        "} else if (shape instanceof Circle) {",
+                        "    Circle circle = (Circle) shape;",
+                        "    totalArea += Math.PI * Math.pow(circle.getRadius(), 2);"
+                    ],
+                    "suggestion_code": [
+                        "totalArea += calculateArea(shape);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    7,
+                    10
+                ],
+                [
+                    18,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator uses Object to store shapes, which does not allow for polymorphic behavior. The area calculation relies on the specific classes (Circle, Square) which violates LSP.",
+            "suggestion": "Use a common interface for shapes that provides a method to calculate their area.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;",
+                        "for (Object shape : shapes) {",
+                        "    if (shape instanceof Square) {",
+                        "        Square square = (Square) shape;",
+                        "        totalArea += Math.pow(square.getLength(), 2);",
+                        "    } else if (shape instanceof Circle) {",
+                        "        Circle circle = (Circle) shape;",
+                        "        totalArea += Math.PI * Math.pow(circle.getRadius(), 2);"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;",
+                        "for (Shape shape : shapes) {",
+                        "    totalArea += shape.calculateArea();"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 881,
+        "prompt_tokens": 2501,
+        "total_tokens": 3382
+    }
+}

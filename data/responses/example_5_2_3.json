@@ -1,9 +1,40 @@
 {
-    "principle_violations": [],
-    "overall_feedback": "No principle violations found. The existing code structure is clean and adheres to good software design principles. The responsibilities of managing users and the user data are appropriately separated between classes. Each method within the classes has a clear single responsibility, and the methods operate on well-defined parameters without unnecessary dependencies.",
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    25,
+                    55
+                ],
+                [
+                    57,
+                    73
+                ]
+            ],
+            "method_names": [
+                "MySQLDatabase",
+                "UserService"
+            ],
+            "reason": "The MySQLDatabase class is handling both data management and validation logic for user operations, thus merging responsibilities.",
+            "suggestion": "Separate the user data management (CRUD operations) and the validation logic into distinct classes. This separation will improve maintainability.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return f\"User ID: {id}, Name: {self.user_data[id]}\"\n        return \"User not found\"\n    \n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print(\"User ID already exists. Use update_user_data to modify.\")\n        else:\n            self.user_data[id] = name\n            print(\"User added successfully.\")\n    \n    def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user_data to add new user.\")\n    \n    def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")",
+                        "class UserService:\n    def __init__(self):\n        self.database = MySQLDatabase()\n    \n    def get_user(self, id: int) -> str:\n        return self.database.get_user_data(id)\n    \n    def add_user(self, id: int, data: str) -> None:\n        self.database.add_user_data(id, data)\n    \n    def update_user(self, id: int, data: str) -> None:\n        self.database.update_user_data(id, data)\n    \n    def delete_user(self, id: int) -> None:\n        self.database.delete_user_data(id)"
+                    ],
+                    "suggestion_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n\n    def get_user_data(self, id: int) -> str:\n        return self.user_data.get(id, None)\n\n    def add_or_update_user_data(self, id: int, name: str) -> None:\n        self.user_data[id] = name\n\n    def delete_user_data(self, id: int) -> None:\n        self.user_data.pop(id, None)\n\nclass UserOperation:\n    def __init__(self):\n        self.database = MySQLDatabase()\n\n    def get_user(self, id: int) -> str:\n        data = self.database.get_user_data(id)\n        return f\"User ID: {id}, Name: {data}\" if data else \"User not found\"\n\n    def add_user(self, id: int, name: str) -> str:\n        if id in self.database.user_data:\n            return \"User ID already exists. Use update_user_data to modify.\"\n        self.database.add_or_update_user_data(id, name)\n        return \"User added successfully.\"\n\n    def update_user(self, id: int, name: str) -> str:\n        if id not in self.database.user_data:\n            return \"User ID does not exist. Use add_user_data to add a new user.\"\n        self.database.add_or_update_user_data(id, name)\n        return \"User updated successfully.\"\n\n    def delete_user(self, id: int) -> str:\n        if id not in self.database.user_data:\n            return \"User ID not found.\"\n        self.database.delete_user_data(id)\n        return \"User deleted successfully.\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
     "usage": {
-        "completion_tokens": 75,
+        "completion_tokens": 968,
         "prompt_tokens": 2525,
-        "total_tokens": 2600
+        "total_tokens": 3493
     }
 }

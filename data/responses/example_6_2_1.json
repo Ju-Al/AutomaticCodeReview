@@ -5,54 +5,54 @@
             "lines": [
                 [
                     2,
-                    5
-                ],
-                [
-                    6,
-                    13
-                ],
-                [
-                    14,
-                    16
-                ],
-                [
-                    17,
-                    20
-                ],
-                [
-                    21,
-                    28
-                ],
-                [
-                    29,
-                    33
-                ],
-                [
-                    34,
-                    42
+                    49
                 ]
             ],
             "method_names": [
                 "testable_html"
             ],
-            "reason": "The method 'testable_html' is performing multiple responsibilities including checking attributes, handling suite setup and teardown, parsing paths, and managing content inclusion.",
-            "suggestion": "Refactor the method by creating smaller helper methods to handle suite setup inclusion, suite teardown inclusion, and content management. This will help isolate different responsibilities and enhance readability and maintainability.",
+            "reason": "The method 'testable_html' is responsible for multiple tasks including constructing HTML, handling setup and teardown data, and managing PageData objects.",
+            "suggestion": "Separate the responsibilities into smaller, cohesive methods or classes. Each focused on setup handling, teardown handling, and HTML creation.",
             "changes": [
                 {
                     "original_code": [
-                        "def testable_html(page_data, include_suite_setup):\n    wiki_page = page_data.get_wiki_page()\n    buffer = []\n    if page_data.has_attribute(\"Test\"):\n        if include_suite_setup:\n            suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n            if suite_setup is not None:\n                page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n                page_path_name = PathParser.render(page_path)\n                buffer.append(f'!include -setup .{page_path_name}\\n')\n        setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n        if setup is not None:\n            setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n            setup_path_name = PathParser.render(setup_path)\n            buffer.append(f'!include -setup .{setup_path_name}\\n')\n    buffer.append(page_data.get_content())\n    if page_data.has_attribute(\"Test\"):\n        teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n        if teardown is not None:\n            teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n            teardown_path_name = PathParser.render(teardown_path)\n            buffer.append(f'\\n!include -teardown .{teardown_path_name}\\n')\n        if include_suite_setup:\n            suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n            if suite_teardown is not None:\n                page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n                page_path_name = PathParser.render(page_path)\n                buffer.append(f'!include -teardown .{page_path_name}\\n')\n    page_data.set_content(''.join(buffer))\n    return page_data.get_html()\n"
+                        "class Fitnesse:\n    @staticmethod\n    def testable_html(page_data, include_suite_setup):\n        wiki_page = page_data.get_wiki_page()\n        buffer = []\n        if page_data.has_attribute(\"Test\"):\n            if include_suite_setup:\n                suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n                if suite_setup is not None:\n                    page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -setup .{page_path_name}\\n\")\n            setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n            if setup is not None:\n                setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n                setup_path_name = PathParser.render(setup_path)\n                buffer.append(f\"!include -setup .{setup_path_name}\\n\")\n        buffer.append(page_data.get_content())\n        if page_data.has_attribute(\"Test\"):\n            teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n            if teardown is not None:\n                teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n                teardown_path_name = PathParser.render(teardown_path)\n                buffer.append(f\"\\n!include -teardown .{teardown_path_name}\\n\")\n            if include_suite_setup:\n                suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n                if suite_teardown is not None:\n                    page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -teardown .{page_path_name}\\n\")\n        page_data.set_content(''.join(buffer))\n        return page_data.get_html()"
                     ],
                     "suggestion_code": [
-                        "def testable_html(page_data, include_suite_setup):\n    wiki_page = page_data.get_wiki_page()\n    buffer = []\n    append_setup(buffer, page_data, include_suite_setup, wiki_page)\n    buffer.append(page_data.get_content())\n    append_teardown(buffer, page_data, include_suite_setup, wiki_page)\n    page_data.set_content(''.join(buffer))\n    return page_data.get_html()\n\n\ndef append_setup(buffer, page_data, include_suite_setup, wiki_page):\n    if page_data.has_attribute(\"Test\"):\n        if include_suite_setup:\n            append_suite_setup(buffer, wiki_page)\n        append_setup_page(buffer, wiki_page)\n\n\ndef append_suite_setup(buffer, wiki_page):\n    suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n    if suite_setup is not None:\n        page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n        page_path_name = PathParser.render(page_path)\n        buffer.append(f'!include -setup .{page_path_name}\\n')\n\n\ndef append_setup_page(buffer, wiki_page):\n    setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n    if setup is not None:\n        setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n        setup_path_name = PathParser.render(setup_path)\n        buffer.append(f'!include -setup .{setup_path_name}\\n')\n\n\ndef append_teardown(buffer, page_data, include_suite_setup, wiki_page):\n    if page_data.has_attribute(\"Test\"):\n        append_teardown_page(buffer, wiki_page)\n        if include_suite_setup:\n            append_suite_teardown(buffer, wiki_page)\n\n\ndef append_teardown_page(buffer, wiki_page):\n    teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n    if teardown is not None:\n        teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n        teardown_path_name = PathParser.render(teardown_path)\n        buffer.append(f'\\n!include -teardown .{teardown_path_name}\\n')\n\n\ndef append_suite_teardown(buffer, wiki_page):\n    suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n    if suite_teardown is not None:\n        page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n        page_path_name = PathParser.render(page_path)\n        buffer.append(f'!include -teardown .{page_path_name}\\n')\n"
+                        "class Fitnesse:\n    @staticmethod\n    def testable_html(page_data, include_suite_setup):\n        content_builder = FitnesseHTMLBuilder()\n        content_builder.include_suite_setup = include_suite_setup\n        content_builder.process_page_data(page_data)\n        return content_builder.get_content()"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    2,
+                    49
+                ]
+            ],
+            "method_names": [
+                "testable_html"
+            ],
+            "reason": "Extending or altering the output logic requires modifying the 'testable_html' method.",
+            "suggestion": "Encapsulate the variable components into classes or strategies that can be extended without modifying the core logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Fitnesse:\n    @staticmethod\n    def testable_html(page_data, include_suite_setup):\n        wiki_page = page_data.get_wiki_page()\n        buffer = []\n        if page_data.has_attribute(\"Test\"):\n            if include_suite_setup:\n                suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n                if suite_setup is not None:\n                    page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -setup .{page_path_name}\\n\")\n            setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n            if setup is not None:\n                setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n                setup_path_name = PathParser.render(setup_path)\n                buffer.append(f\"!include -setup .{setup_path_name}\\n\")\n        buffer.append(page_data.get_content())\n        if page_data.has_attribute(\"Test\"):\n            teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n            if teardown is not None:\n                teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n                teardown_path_name = PathParser.render(teardown_path)\n                buffer.append(f\"\\n!include -teardown .{teardown_path_name}\\n\")\n            if include_suite_setup:\n                suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n                if suite_teardown is not None:\n                    page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -teardown .{page_path_name}\\n\")\n        page_data.set_content(''.join(buffer))\n        return page_data.get_html()"
+                    ],
+                    "suggestion_code": [
+                        "class PageDataHandler:\n    def __init__(self, page_data):\n        self.page_data = page_data\n\n    def process(self):\n        buffer = []\n        # Include logic for processing attributes and content\n        return ''.join(buffer)"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 1178,
+        "completion_tokens": 1193,
         "prompt_tokens": 2472,
-        "total_tokens": 3650
+        "total_tokens": 3665
     }
 }

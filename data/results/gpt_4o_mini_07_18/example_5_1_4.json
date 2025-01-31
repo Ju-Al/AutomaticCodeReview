@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_4",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in the actual output are present in the expected output, leading to perfect identification of TP with no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses the payment processing and validation responsibilities, while the expected output addresses the Single Responsibility Principle related to an order class, showing a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output suggests a change in security code verification, while the expected output recommends splitting the Order class, indicating a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output only contains 'pay', while the expected output includes 'total_prices' and 'add_items', indicating a lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output focuses on payment processing while the expected output addresses item management and price calculation; there is no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the dependency issue of DebitPaymentProcessor on SMSAuthorizer, but the actual output lacks the detail about the implications of this tight coupling and the violation of the Dependency Inversion Principle mentioned in the expected output."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests introducing an interface for the authorizer, while the expected output emphasizes depending on abstractions and creating specific authorizer implementations. The thematic alignment is weak."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output lists multiple instances of '__init__', while the expected output specifies 'SMSAuthorizer', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output includes suggestions for code modifications, while the expected output is empty, indicating a lack of alignment."
+        }
+    ]
+]

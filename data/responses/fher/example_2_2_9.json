@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    7
+                ],
+                [
+                    13,
+                    14
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "JSON"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating areas and storing the shapes, making its responsibility two-fold. Similarly, the SumCalculator class mixes responsibilities of data serialization with calculation.",
+            "suggestion": "Separate the area calculation into one class and the data presentation (JSON, HTML) into another. Consider using an interface/class for area calculation to simplify the addition of new shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def __init__(self) -> None:\n        self.shapes = []\n    \n    def add_shape(self, shape):\n        self.shapes.append(shape)\n\n    def sum(self):\n        areas = [math.pow(shape.length, 2) if isinstance(shape, Square) else math.pi * math.pow(shape.radius, 2) for shape in self.shapes]\n        return sum(areas)",
+                        "class ShapeSerializer:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def to_json(self):\n        return json.dumps({'sum': self.calculator.sum()})\n\n    def to_html(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 534,
+        "prompt_tokens": 2345,
+        "total_tokens": 2879
+    }
+}

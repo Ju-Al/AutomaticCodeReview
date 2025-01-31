@@ -1,39 +1,32 @@
 {
     "principle_violations": [
         {
-            "principle": "Interface Segregation Principle",
+            "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    5,
-                    11
+                    55,
+                    58
                 ],
                 [
-                    63,
-                    65
-                ],
-                [
-                    72,
-                    74
+                    66,
+                    68
                 ]
             ],
             "method_names": [
-                "Shape.volume",
-                "Square.volume",
-                "Circle.volume"
+                "Circle.volume",
+                "Square.volume"
             ],
-            "reason": "The Shape interface requires implementation of both area and volume methods. This forces Square and Circle classes to provide a volume method that they don't logically need.",
-            "suggestion": "Separate the Shape interface into two interfaces: an AreaInterface and a VolumeInterface to segregate these responsibilities. Shapes that do not have volume should not implement the volume interface.",
+            "reason": "The `Shape` interface enforces implementation details, such as `volume`, which are irrelevant to certain shapes (e.g., 2D shapes).",
+            "suggestion": "Split the `Shape` interface into `AreaShape` and `VolumeShape` to eliminate unnecessary methods for 2D shapes.",
             "changes": [
                 {
                     "original_code": [
-                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass\n",
-                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n\n    def area(self):\n        return self.length ** 2\n\n    def volume(self):\n        raise NotImplementedError('The volume cannot be calculated.')\n",
-                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2\n\n    def volume(self):\n        raise NotImplementedError('The volume cannot be calculated')\n"
+                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass",
+                        "class Circle(Shape):\n    def area(self):\n        return math.pi * self.radius ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
                     ],
                     "suggestion_code": [
-                        "class AreaInterface(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass VolumeInterface(ABC):\n    @abstractmethod\n    def volume(self):\n        pass\n",
-                        "class Square(AreaInterface):\n    def __init__(self, length) -> None:\n        self.length = length\n\n    def area(self):\n        return self.length ** 2\n",
-                        "class Circle(AreaInterface):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2\n"
+                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass SolidShape(Shape):\n    @abstractmethod\n    def volume(self):\n        pass",
+                        "class Circle(Shape):\n    def area(self):\n        return math.pi * self.radius ** 2"
                     ]
                 }
             ]
@@ -42,68 +35,37 @@
             "principle": "Don't Repeat Yourself",
             "lines": [
                 [
-                    93,
-                    97
+                    86,
+                    91
                 ],
                 [
-                    99,
-                    103
+                    97,
+                    104
                 ]
             ],
             "method_names": [
                 "SumCalculator.JSON",
                 "SumCalculator.HTML"
             ],
-            "reason": "The SumCalculator class duplicates the logic for outputting the sum calculation in different formats.",
-            "suggestion": "Extract the common logic for obtaining the sum into a separate method to avoid code duplication.",
+            "reason": "The methods `JSON` and `HTML` duplicate the logic for computing output based on `self.calculator.sum()`.",
+            "suggestion": "Extract the sum calculation into a shared method and utilize it in both `JSON` and `HTML`.",
             "changes": [
                 {
                     "original_code": [
-                        "def JSON(self):\n    data = {\n        'sum': self.calculator.sum()\n    }\n    return json.dumps(data)\n",
-                        "def HTML(self):\n    return f'Sum of the areas of provided shapes: {self.calculator.sum()}'\n"
+                        "def JSON(self):\n    data = {\n        'sum': self.calculator.sum(),\n    }\n    return json.dumps(data)",
+                        "def HTML(self):\n    return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
                     ],
                     "suggestion_code": [
-                        "def get_sum(self):\n    return self.calculator.sum()\n\n    def JSON(self):\n        data = {\n            'sum': self.get_sum()\n        }\n        return json.dumps(data)\n",
-                        "def HTML(self):\n    return f'Sum of the areas of provided shapes: {self.get_sum()}'\n"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Single Responsibility Principle",
-            "lines": [
-                [
-                    78,
-                    86
-                ],
-                [
-                    99,
-                    103
-                ]
-            ],
-            "method_names": [
-                "SumCalculator.JSON",
-                "SumCalculator.HTML"
-            ],
-            "reason": "The SumCalculator class is responsible for both calculating the summary and formatting it, violating single responsibility.",
-            "suggestion": "Separate the responsibility of formatting the output into a different class, such as OutputFormatter.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'\n",
-                        "def HTML(self):\n    return f'Sum of the areas of provided shapes: {self.calculator.sum()}'\n"
-                    ],
-                    "suggestion_code": [
-                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def get_sum(self):\n        return self.calculator.sum()\n\n\nclass OutputFormatter:\n    def __init__(self, calculator: SumCalculator) -> None:\n        self.calculator = calculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.get_sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.get_sum()}'\n"
+                        "def _get_sum(self):\n    return self.calculator.sum()\n\ndef JSON(self):\n    return json.dumps({'sum': self._get_sum()})\n\ndef HTML(self):\n    return f\"Sum of the areas of provided shapes: {self._get_sum()}\""
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details above.",
     "usage": {
-        "completion_tokens": 1160,
+        "completion_tokens": 503,
         "prompt_tokens": 2587,
-        "total_tokens": 3747
+        "total_tokens": 3090
     }
 }

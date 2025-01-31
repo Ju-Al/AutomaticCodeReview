@@ -1,0 +1,74 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    20,
+                    30
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is managing both the order details (items, quantities, prices) and its status. Additionally, it can be argued that 'setStatus' is altering the state of the Order without it being directly related to item management.",
+            "suggestion": "Consider separating the status management of orders into another class, such as an OrderStatusManager, to keep the responsibilities distinct.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public void setStatus(String status) {"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public class OrderStatusManager {",
+                        "    private Order order;",
+                        "    public OrderStatusManager(Order order) {",
+                        "        this.order = order;",
+                        "    }",
+                        "    public void setStatus(String status) {",
+                        "        order.setStatus(status);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ]
+            ],
+            "method_names": [
+                "addItem"
+            ],
+            "reason": "The Order class requires modifications if new item management features are to be added, violating the Open/Closed Principle.",
+            "suggestion": "Define an interface for Order management operations and create dedicated classes for different item management approaches to ensure the system can grow without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {"
+                    ],
+                    "suggestion_code": [
+                        "public interface OrderManagement {",
+                        "    void addItem(String name, int quantity, double price);",
+                        "}",
+                        "public class Order implements OrderManagement {"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 466,
+        "prompt_tokens": 2396,
+        "total_tokens": 2862
+    }
+}

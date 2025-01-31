@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_1",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "Single Responsibility Principle is TP. Don't Repeat Yourself is FN. No FP. Precision is 1, Recall is 0.5, F1-Score is 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address Single Responsibility Principle violations, noting multiple responsibilities in 'testable_html' and 'testableHtml' function, though actual output is more detailed."
+        },
+        {
+            "example_id": "example_6_2_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest breaking down a function/method into smaller parts for clarity and maintainability. The actual output suggests creating helper methods for setup, teardown, and content management, while the expected output specifies splitting into functions for setup, teardown, path processing, and string formatting. Thematic alignment is strong, but some specifics differ."
+        },
+        {
+            "example_id": "example_6_2_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_2_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual output's 'suggestion_code' is well aligned with the expected output's approach of modularizing setup and teardown logic, but lacks the use of a buffer object like StringBuffer and the specific method structure shown in the expected output."
+        }
+    ]
+]

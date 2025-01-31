@@ -1,0 +1,78 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    24
+                ],
+                [
+                    29,
+                    31
+                ],
+                [
+                    36,
+                    38
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processor classes are responsible for processing payments and also for changing the order status, which combines multiple responsibilities in one method.",
+            "suggestion": "Separate the responsibility of order status management from the payment processing logic. You can return a result from the payment processing method and handle order status updates in the calling code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n",
+                        "def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'\n"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order, security_code: str) -> bool:\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        return True\n",
+                        "def pay(self, order, security_code: str) -> bool:\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        return True\n",
+                        "def pay(self, order, security_code: str) -> bool:\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        return True\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    14,
+                    15
+                ],
+                [
+                    21,
+                    22
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The logic for processing payments and verifying security details is duplicated across multiple payment processor classes.",
+            "suggestion": "Create a common method in the PaymentProcessor class to handle the verification logic, and call it from each payment method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n",
+                        "print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n",
+                        "print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n"
+                    ],
+                    "suggestion_code": [
+                        "self.verify_security(security_code)\n        print('Processing credit card payment')\n",
+                        "self.verify_security(security_code)\n        print('Processing debit card payment')\n",
+                        "self.verify_security(security_code)\n        print('Processing paypal payment')\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 722,
+        "prompt_tokens": 2394,
+        "total_tokens": 3116
+    }
+}

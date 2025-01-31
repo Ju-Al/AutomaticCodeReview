@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_3",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No True Positives were identified as there are no common principles between actual and expected lists. Both principles in actual output are False Positives and the principle in expected output is a False Negative."
+        }
+    ],
+    []
+]

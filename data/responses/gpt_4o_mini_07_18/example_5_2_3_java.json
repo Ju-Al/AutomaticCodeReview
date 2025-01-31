@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    6
+                ],
+                [
+                    8,
+                    19
+                ]
+            ],
+            "method_names": [
+                "getUser",
+                "addUser",
+                "updateUser",
+                "deleteUser"
+            ],
+            "reason": "The UserService class is responsible for both user management and data storage, violating the Single Responsibility Principle.",
+            "suggestion": "Extract the database operations into a separate class or interface to ensure that UserService only manages users and delegates database operations to another component.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public String getUser(int id) {\n        return UserDatabase.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        UserDatabase.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        UserDatabase.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        UserDatabase.deleteUserData(id);\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    4,
+                    6
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "UserService directly depends on MySQLDatabase, which violates the Dependency Inversion Principle since high-level modules should not depend on low-level modules.",
+            "suggestion": "Introduce an interface (e.g., Database) that MySQLDatabase implements. UserService should depend on this interface instead of a specific database implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "private Database database;\n\n    public UserService(Database database) {\n        this.database = database;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 559,
+        "prompt_tokens": 2586,
+        "total_tokens": 3145
+    }
+}

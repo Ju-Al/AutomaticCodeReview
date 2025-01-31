@@ -1,9 +1,37 @@
 {
-    "principle_violations": [],
-    "overall_feedback": "0 principle violations found. The given code adheres to the single responsibility principle by separating database operations into the MySQLDatabase class and business logic into the UserService class. The code is well-structured and follows good object-oriented practices.",
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    30
+                ]
+            ],
+            "method_names": [
+                "get_user_data",
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The MySQLDatabase class handles both data management and business logic, such as printing status messages.",
+            "suggestion": "Separate the concerns by delegating business-related operations, like status messaging, to another entity or class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return f\"User ID: {id}, Name: {self.user_data[id]}\"\n        return \"User not found\"\n    \n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print(\"User ID already exists. Use update_user_data to modify.\")\n        else:\n            self.user_data[id] = name\n            print(\"User added successfully.\")\n    \n    def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user_data to add new user.\")\n    \n    def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")"
+                    ],
+                    "suggestion_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        return self.user_data.get(id, None)\n    \n    def add_user_data(self, id: int, name: str) -> bool:\n        if id in self.user_data:\n            return False\n        self.user_data[id] = name\n        return True\n    \n    def update_user_data(self, id: int, name: str) -> bool:\n        if id in self.user_data:\n            self.user_data[id] = name\n            return True\n        return False\n    \n    def delete_user_data(self, id: int) -> bool:\n        if id in self.user_data:\n            del self.user_data[id]\n            return True\n        return False\n\nclass UserService:\n    def __init__(self):\n        self.database = MySQLDatabase()\n    \n    def get_user(self, id: int) -> str:\n        data = self.database.get_user_data(id)\n        if data:\n            return f\"User ID: {id}, Name: {data}\"\n        return \"User not found\"\n    \n    def add_user(self, id: int, data: str) -> None:\n        if self.database.add_user_data(id, data):\n            print(\"User added successfully.\")\n        else:\n            print(\"User ID already exists. Use update_user_data to modify.\")\n    \n    def update_user(self, id: int, data: str) -> None:\n        if self.database.update_user_data(id, data):\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user_data to add new user.\")\n    \n    def delete_user(self, id: int) -> None:\n        if self.database.delete_user_data(id):\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
     "usage": {
-        "completion_tokens": 64,
+        "completion_tokens": 957,
         "prompt_tokens": 2525,
-        "total_tokens": 2589
+        "total_tokens": 3482
     }
 }

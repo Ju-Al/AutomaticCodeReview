@@ -1,0 +1,114 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    9
+                ],
+                [
+                    25,
+                    27
+                ],
+                [
+                    44,
+                    48
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has the responsibility of managing a list of shapes and calculating area, while also handling the validation of shapes. This violates the single responsibility principle.",
+            "suggestion": "Separate the responsibility of validating shapes into a different class that could verify shape compatibility.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    for (Shape shape : shapes) {",
+                        "        if (shape instanceof Shape) {",
+                        "            totalArea += shape.area();",
+                        "        } else {",
+                        "            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "private void validateShapes() {",
+                        "    for (Shape shape : shapes) {",
+                        "        if (shape == null) {",
+                        "            throw new RuntimeException(\"Invalid Shape: Shape cannot be null\");",
+                        "        }",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    25,
+                    27
+                ],
+                [
+                    44,
+                    48
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The implementations of the volume() method in Circle and Square throw UnsupportedOperationException. This means they cannot be used interchangeably as Shape which is expected to implement both area() and volume() method properly.",
+            "suggestion": "Consider creating a separate interface or abstract class for 3D shapes or implement volume in a way that makes sense for the shape.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Circle implements Shape {",
+                        "    @Override",
+                        "    public double volume() {",
+                        "        throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "    }",
+                        "}",
+                        "public class Square implements Shape {",
+                        "    @Override",
+                        "    public double volume() {",
+                        "        throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "interface Shape2D extends Shape {",
+                        "    @Override",
+                        "    default double volume() {",
+                        "        throw new UnsupportedOperationException(\"Volume not applicable for 2D shapes\");",
+                        "    }",
+                        "}",
+                        "public class Circle implements Shape2D {",
+                        "    // Rest of Circle class remains same",
+                        "}",
+                        "public class Square implements Shape2D {",
+                        "    // Rest of Square class remains same",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 707,
+        "prompt_tokens": 2805,
+        "total_tokens": 3512
+    }
+}

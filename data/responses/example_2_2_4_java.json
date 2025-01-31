@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    24
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "Extending the AreaCalculator class with new shape types requires modifying the sum method.",
+            "suggestion": "Use an interface or base class for shapes that includes an area method, allowing shapes to define their own area calculation logic, and the calculator only needs to call this method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {\n    private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {\n    double area();\n}\n\npublic class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    public double getRadius() {\n        return radius;\n    }\n\n    public double area() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}\n\npublic class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    public double getLength() {\n        return length;\n    }\n\n    public double area() {\n        return Math.pow(length, 2);\n    }\n}\n\npublic class AreaCalculator {\n    private List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n\n        return totalArea;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 522,
+        "prompt_tokens": 2501,
+        "total_tokens": 3023
+    }
+}

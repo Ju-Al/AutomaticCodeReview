@@ -1,0 +1,87 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    20,
+                    39
+                ],
+                [
+                    41,
+                    50
+                ],
+                [
+                    52,
+                    74
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The `generateStatement` method is responsible for calculating amounts, generating the output string, and managing volume credits, which violates the Single Responsibility Principle.",
+            "suggestion": "Split the responsibilities of calculating amounts and credits into separate methods or classes to improve maintainability and clarity.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n",
+                        "        double totalAmount = 0;\n",
+                        "        int volumeCredits = 0;\n",
+                        "        StringBuilder result = new StringBuilder('Statement for ' + invoice.getCustomer() + '\\n');\n",
+                        "        ...\n",
+                        "        result.append(String.format('Amount owed is %s\\n',\n",
+                        "                NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));",
+                        "        return result.toString();\n"
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {\n",
+                        "        double totalAmount = calculateTotalAmount(invoice, plays);\n",
+                        "        int volumeCredits = calculateVolumeCredits(invoice, plays);\n",
+                        "        return formatStatement(invoice, totalAmount, volumeCredits);\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    8,
+                    32
+                ],
+                [
+                    38,
+                    74
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The calculation of the amount and volume credits for each performance is repeated in the `generateStatement` method.",
+            "suggestion": "Create a separate method to handle the calculation of both the amount and the volume credits to eliminate duplicate code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "        if (play.getType().equals('tragedy')) {\n",
+                        "            volumeCredits += Math.max(perf.getAudience() - 30, 0);\n",
+                        "        } else if (play.getType().equals('comedy')) {\n",
+                        "            volumeCredits += Math.max(perf.getAudience() - 30, 0);\n",
+                        "            volumeCredits += Math.floor(perf.getAudience() / 5);\n",
+                        "        }"
+                    ],
+                    "suggestion_code": [
+                        "        AmountAndCredits result = calculateAmountAndCredits(perf, play);\n",
+                        "        totalAmount += result.amount;\n",
+                        "        volumeCredits += result.credits;\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 639,
+        "prompt_tokens": 3090,
+        "total_tokens": 3729
+    }
+}

@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    10
+                ],
+                [
+                    11,
+                    16
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for both storing order details and managing the order's status, while the PaymentProcessor class directly modifies the order status, leading to a tight coupling between the order and payment processes.",
+            "suggestion": "Separate the payment handling into a dedicated class that keeps the responsibility for the order's status separate from order management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str) -> str:\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'\n\norder.status = processor.pay(order, '0372846')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    11,
+                    16
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is tightly coupled with the Order class, which means any changes to the Order class structure will require modifications to the PaymentProcessor, violating the open/closed principle.",
+            "suggestion": "Implement an interface for payment processing that the PaymentProcessor can implement, which would allow for different payment strategies to be added without altering the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str) -> str:\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        return 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 723,
+        "prompt_tokens": 2257,
+        "total_tokens": 2980
+    }
+}

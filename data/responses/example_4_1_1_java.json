@@ -1,0 +1,50 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    10,
+                    13
+                ],
+                [
+                    21,
+                    23
+                ],
+                [
+                    10,
+                    13
+                ],
+                [
+                    19,
+                    21
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor abstract class enforces the implementation of auth_sms for all subclasses, even those for which this method is irrelevant.",
+            "suggestion": "Split the PaymentProcessor interface into smaller, more specific interfaces (e.g., PaymentProcessor and SMSSupport). Then, implement only the required interfaces in each subclass.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {\n    public abstract void pay(Order order);\n\n    public abstract void auth_sms(Order order, String code);\n}\n",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String securityCode) {\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n\n}",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {\n\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n\n    @Override\n    public void auth_sms(Order order, String code) {\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessor {\n    void pay(Order order);\n}\n\npublic interface SMSSupport {\n    void auth_sms(Order order, String code);\n}\n",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n    private boolean authenticated;\n    private String securityCode;\n\n    public PaypalPaymentProcessor(String securityCode) {\n        this.authenticated = false;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    private String securityCode;\n\n    public CreditCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 706,
+        "prompt_tokens": 2817,
+        "total_tokens": 3523
+    }
+}

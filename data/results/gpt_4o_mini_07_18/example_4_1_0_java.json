@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_0",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only one True Positive (Single Responsibility Principle) was identified, while two False Negatives (Interface Segregation Principle) were present, leading to low Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output discusses the PaymentProcessor subclasses and their responsibilities, while the expected output specifically mentions the order class's violation of the Single Responsibility Principle, indicating a different focus and context."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output suggests separating payment processing and SMS authentication, while the expected output discusses splitting the Order class into two classes, which are unrelated concepts."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output contains payment-related fields, while the expected output mentions pricing and item addition, showing no thematic alignment."
+        },
+        {
+            "example_id": "example_4_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests changes to payment and authentication methods, while the expected output focuses on managing order quantity and calculating totals, indicating a lack of thematic alignment."
+        }
+    ]
+]

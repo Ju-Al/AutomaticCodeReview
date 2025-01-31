@@ -1,0 +1,56 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    28,
+                    30
+                ],
+                [
+                    17,
+                    19
+                ],
+                [
+                    15,
+                    17
+                ],
+                [
+                    23,
+                    27
+                ],
+                [
+                    15,
+                    27
+                ]
+            ],
+            "method_names": [
+                "Order::addItem",
+                "PaypalPaymentProcessor::pay",
+                "CreditCardPaymentProcessor::pay",
+                "SMSAuthorizer::verify_code",
+                "DebitCardPaymentProcessor::pay"
+            ],
+            "reason": "The detected methods and classes perform multiple responsibilities, such as managing payment processing details within specific providers, authentication logic in SMSAuthorizer intertwined with overall payment flow, and direct handling of order addition within the Order class. Responsibilities should be segregated to adhere to SRP.",
+            "suggestion": "Encapsulate the responsibilities into dedicated classes or methods. E.g., extract payment authentication logic into a broader 'Authenticator' class, separate order manipulation logic into a specific service.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void verify_code(String code) {\n        System.out.println(\"Verifying code\");\n        this.authenticated = true;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        OrderItem newOrder = new OrderItem(name, quantity, price);\n      \tthis.orderItems.add(newOrder);\n    }",
+                        "public authenticate(boolean authenticated){\n      this.authenticated = authenticated;\n      return true;  }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please review the suggested modifications to address Single Responsibility mishandling.",
+    "usage": {
+        "completion_tokens": 344,
+        "prompt_tokens": 2775,
+        "total_tokens": 3119
+    }
+}

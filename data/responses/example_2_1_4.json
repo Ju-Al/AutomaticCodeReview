@@ -1,35 +1,58 @@
 {
     "principle_violations": [
         {
-            "principle": "Dependency Inversion Principle",
+            "principle": "Single Responsibility Principle",
             "lines": [
                 [
                     14,
-                    19
+                    22
                 ]
             ],
             "method_names": [
-                "pay"
+                "PaymentProcessor.pay"
             ],
-            "reason": "The PaymentProcessor class directly depends on the Order class and modifies its internal state, which could become problematic if the Order class changes.",
-            "suggestion": "Introduce an abstraction for the payment process, allowing different orders or payment methods to be integrated without changing the payment logic.",
+            "reason": "The `pay` method in the `PaymentProcessor` class handles both the payment process and order status modification, combining two responsibilities.",
+            "suggestion": "Relocate the responsibility of modifying the order status to the `Order` class by introducing a dedicated method for updating the order status. The `PaymentProcessor` class should focus solely on payment processing.",
             "changes": [
                 {
                     "original_code": [
                         "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "class OrderStatusUpdater:\n    def update_status(self, order: Order, status: str):\n        order.status = status\n\nclass PaymentProcessor:\n    def __init__(self, order_status_updater: OrderStatusUpdater):\n        self.order_status_updater = order_status_updater\n\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        self.order_status_updater.update_status(order, \"paid\")",
-                        "order = Order()\n\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\n\norder_status_updater = OrderStatusUpdater()\nprocessor = PaymentProcessor(order_status_updater)\nprocessor.pay(order, \"0372846\")\nprint(order.status)"
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def update_status(self, new_status: str) -> None:\n        self.status = new_status\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    22
+                ]
+            ],
+            "method_names": [
+                "PaymentProcessor.pay"
+            ],
+            "reason": "The `PaymentProcessor` class ties its functionality to the `Order` object, limiting future extensibility to other payment types or processes without modifying the existing code.",
+            "suggestion": "Introduce an interface or base class for payment processing so future extensions with new payment methods or systems can be added without altering the existing `PaymentProcessor` implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "from abc import ABC, abstractmethod\n\nclass PaymentProcessorInterface(ABC):\n    @abstractmethod\n    def pay(self, order: Order, security_code: str):\n        pass\n\nclass PaymentProcessor(PaymentProcessorInterface):\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 411,
+        "completion_tokens": 609,
         "prompt_tokens": 2257,
-        "total_tokens": 2668
+        "total_tokens": 2866
     }
 }

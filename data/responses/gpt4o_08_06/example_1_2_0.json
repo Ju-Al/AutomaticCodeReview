@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    8,
+                    13
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class's sum method must be modified whenever a new shape type is added, violating the open/closed principle.",
+            "suggestion": "Define a common interface or method that all shapes implement for calculating their area. Then, AreaCalculator can sum the results of calling this method, allowing new shapes to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):",
+                        "    return sum(shape.area() for shape in self.shapes)"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length"
+                    ],
+                    "suggestion_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius"
+                    ],
+                    "suggestion_code": [
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 464,
+        "prompt_tokens": 2265,
+        "total_tokens": 2729
+    }
+}

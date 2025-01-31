@@ -4,41 +4,28 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    4,
-                    13
-                ],
-                [
-                    36,
-                    38
-                ],
-                [
-                    41,
-                    43
-                ],
-                [
-                    46,
-                    48
+                    28,
+                    46
                 ]
             ],
             "method_names": [
-                "Order",
-                "pay"
+                "CreditCardPaymentProcessor.pay",
+                "DebitCardPaymentProcessor.pay",
+                "PaypalPaymentProcessor.pay"
             ],
-            "reason": "The `Order` class handles both order and payment statuses, violating the SRP. Each payment processor prints transaction details and modifies the order status directly.",
-            "suggestion": "Separate the order item handling and status update logic from the payment processing logic. Payment processors should not directly modify the order's status.",
+            "reason": "The payment processing classes handle both verifying security codes and updating the order status, which combines two responsibilities.",
+            "suggestion": "Refactor the code by delegating order status updating to the `Order` class and keep only payment verification in the respective payment processor classes.",
             "changes": [
                 {
                     "original_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
                         "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
                         "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
                         "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def set_status(self, status: str) -> None:\n        self.status = status",
-                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")",
-                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.set_status(\"paid\")"
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.update_status(\"paid\")"
                     ]
                 }
             ]
@@ -47,15 +34,17 @@
             "principle": "Open/Closed Principle",
             "lines": [
                 [
-                    36,
-                    50
+                    28,
+                    46
                 ]
             ],
             "method_names": [
-                "pay"
+                "CreditCardPaymentProcessor.pay",
+                "DebitCardPaymentProcessor.pay",
+                "PaypalPaymentProcessor.pay"
             ],
-            "reason": "Currently each payment processor directly sets the order status. This requires modification if the order status update logic changes.",
-            "suggestion": "Introduce a method in the order class to handle status updates, thereby closing it to modifications affecting each payment processor if the logic changes.",
+            "reason": "If a new payment processor is added, a method would need overriding, which isn't truly open to extension without modification.",
+            "suggestion": "To adhere to OCP, consider applying a strategy pattern where the shared functionality of updating the order status is separated from the specific payment verification.",
             "changes": [
                 {
                     "original_code": [
@@ -64,18 +53,18 @@
                         "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")",
-                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.set_status(\"paid\")",
-                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.set_status(\"paid\")"
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"  # Move this line or abstract update mechanism.",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"  # Same.",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\"  # Solidify mechanism among payment processors"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details above.",
     "usage": {
-        "completion_tokens": 1221,
+        "completion_tokens": 948,
         "prompt_tokens": 2394,
-        "total_tokens": 3615
+        "total_tokens": 3342
     }
 }

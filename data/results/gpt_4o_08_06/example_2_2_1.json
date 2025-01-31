@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_1",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected violation lists perfectly match with 'Open/Closed Principle', resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the open-closed principle in the AreaCalculator class. The actual output mentions the need to modify the sum method for new shapes, while the expected output specifies additional shapes like triangles. The thematic alignment is strong, but the actual output lacks specific examples present in the expected output."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest introducing an interface for shapes to adhere to the open-closed principle and allow AreaCalculator to handle new shapes. The actual output lacks details on defining the interface as an abstract class and the examples of concrete shapes provided in the expected output."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, showing complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs refactor the code to use polymorphism, creating a Shape class with an area method and implementing it in Circle and Square. The actual output uses NotImplementedError for the area method, which is more informative, while the expected uses pass. Both achieve thematic alignment, but minor differences in code details and formatting exist."
+        }
+    ]
+]

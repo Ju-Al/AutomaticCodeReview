@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    10
+                ],
+                [
+                    19,
+                    20
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing logic is mixed with the order status management, which makes the Order class responsible for multiple functionalities.",
+            "suggestion": "Separate the concern of Payment processing into its own class or service that handles payment status and notifications without modifying the Order class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str) -> None:\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")\n\nclass Order:\n    def update_status(self, status: str) -> None:\n        self.status = status"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    7,
+                    10
+                ],
+                [
+                    19,
+                    20
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor implementation should be flexible to support additional payment methods or logs but requires changes to the existing pay method.",
+            "suggestion": "Utilize an interface or abstract class for payment processing to allow for different types of payment strategies without modifying the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str) -> None:\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        self.update_order_status(order)\n\n    def update_order_status(self, order):\n        order.update_status(\"paid\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 536,
+        "prompt_tokens": 2257,
+        "total_tokens": 2793
+    }
+}

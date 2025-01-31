@@ -1,0 +1,89 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    10
+                ],
+                [
+                    14,
+                    19
+                ],
+                [
+                    23,
+                    48
+                ]
+            ],
+            "method_names": [
+                "getUser",
+                "addUser",
+                "updateUser",
+                "deleteUser",
+                "getUserData",
+                "addUserData",
+                "updateUserData",
+                "deleteUserData"
+            ],
+            "reason": "The UserService class has responsibilities related to user management as well as direct database operations, making it harder to maintain and test.",
+            "suggestion": "Separate the database operations into a dedicated class or interface to adhere to the Single Responsibility Principle, which will make the UserService class focused solely on user business logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public String getUser(int id) {\n        return database.getUserData(id);\n    }\n",
+                        "public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n",
+                        "public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n",
+                        "public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n",
+                        "class MySQLDatabase {\n    private Map<Integer, String> userData;\n\n    public MySQLDatabase() {\n        userData = new HashMap<>();\n        userData.put(1, \"Alice\");\n        userData.put(2, \"Bob\");\n        userData.put(3, \"Charlie\");\n    }\n",
+                        "public String getUserData(int id) {\n        if (userData.containsKey(id)) {\n            return \"User ID: \" + id + \", Name: \" + userData.get(id);\n        }\n        return \"User not found\";\n    }\n",
+                        "public void addUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUserData to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n",
+                        "public void updateUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUserData to add new user.\");\n        }\n    }\n",
+                        "public void deleteUserData(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n"
+                    ],
+                    "suggestion_code": [
+                        "public String getUser(int id) {\n        return database.getUser(id);\n    }\n",
+                        "public void addUser(int id, String data) {\n        this.database.addUser(id, data);\n    }\n",
+                        "public void updateUser(int id, String data) {\n        this.database.updateUser(id, data);\n    }\n",
+                        "public void deleteUser(int id) {\n        this.database.deleteUser(id);\n    }\n",
+                        "class UserDatabase {\n    private Map<Integer, String> userData;\n\n    public UserDatabase() {\n        userData = new HashMap<>();\n        userData.put(1, \"Alice\");\n        userData.put(2, \"Bob\");\n        userData.put(3, \"Charlie\");\n    }\n",
+                        "public String getUser(int id) {\n        return userData.getOrDefault(id, \"User not found\");\n    }\n",
+                        "public void addUser(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUser to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n",
+                        "public void updateUser(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUser to add new user.\");\n        }\n    }\n",
+                        "public void deleteUser(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    5,
+                    10
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class directly instantiates MySQLDatabase, making it dependent on a specific database implementation rather than an abstract interface.",
+            "suggestion": "Use dependency injection to pass the database dependency to the UserService class, allowing for greater flexibility and testability since you can easily switch out the implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public UserService() {\n        this.database = new MySQLDatabase();\n    }\n"
+                    ],
+                    "suggestion_code": [
+                        "public UserService(MySQLDatabase database) {\n        this.database = database;\n    }\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1281,
+        "prompt_tokens": 2586,
+        "total_tokens": 3867
+    }
+}

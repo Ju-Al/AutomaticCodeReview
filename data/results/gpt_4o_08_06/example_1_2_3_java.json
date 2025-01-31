@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 with 'Single Responsibility Principle' common in both lists, FP is 0 as no extra principles in actual list, FN is 1 with 'Open/Closed Principle' missing in actual list. Precision is 1, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the AreaCalculator class having multiple responsibilities related to calculation and output formatting, though the wording differs slightly."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest separating calculation and output logic, but Actual Output is more general without specific class names or functions."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Actual Output misses 'output' from Expected Output, partially addressing the expected content."
+        },
+        {
+            "example_id": "example_1_2_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest refactoring the code to improve design, but the actual output focuses on simplifying area calculation using polymorphism while the expected output emphasizes formatting output using a separate class."
+        }
+    ]
+]

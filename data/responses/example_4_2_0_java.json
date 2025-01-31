@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    17,
+                    21
+                ],
+                [
+                    9,
+                    13
+                ]
+            ],
+            "method_names": [
+                "volume",
+                "volume"
+            ],
+            "reason": "The `Circle` and `Square` classes implement the `Shape` interface, which enforces a `volume` method. However, these classes are expected to throw exceptions if `volume` is called, breaking the inheritance contract.",
+            "suggestion": "Refactor the `Shape` interface by splitting it into two separate interfaces, e.g., `AreaCalculable` and `VolumeCalculable`. Implement these interfaces based on the capabilities of each shape concretely.",
+            "changes": [
+                {
+                    "original_code": [
+                        "interface Shape {\n    public double area();\n\n    public double volume();\n}",
+                        "public class Circle implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
+                        "public class Square implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "interface AreaCalculable {\n    public double area();\n}",
+                        "interface VolumeCalculable {\n    public double volume();\n}",
+                        "public class Circle implements AreaCalculable {\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
+                        "public class Square implements AreaCalculable {\n    public double area() {\n        return length * length;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the suggested refactoring for improved adherence to SOLID principles.",
+    "usage": {
+        "completion_tokens": 404,
+        "prompt_tokens": 2805,
+        "total_tokens": 3209
+    }
+}

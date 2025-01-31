@@ -1,0 +1,104 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    8
+                ],
+                [
+                    27,
+                    30
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator is responsible for both calculating the area and checking the type of each shape. This violates the principle, as it combines area calculation logic with type checking.",
+            "suggestion": "Introduce an interface, Shape, with a method to calculate the area. Each shape class, Circle and Square, should implement this interface to provide a specific area calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n",
+                        "        for (Object shape : shapes) {\n",
+                        "            if (shape instanceof Square) {\n",
+                        "                Square square = (Square) shape;\n",
+                        "                totalArea += Math.pow(square.getLength(), 2);\n",
+                        "            } else if (shape instanceof Circle) {\n",
+                        "                Circle circle = (Circle) shape;\n",
+                        "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n",
+                        "            }\n",
+                        "        }\n"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n",
+                        "        for (Shape shape : shapes) {\n",
+                        "            totalArea += shape.getArea();\n",
+                        "        }\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    14,
+                    14
+                ],
+                [
+                    4,
+                    4
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator accepts a List<Object> which prevents polymorphic behavior of subclasses of a potential Shape interface. This introduces type checking that violates the Liskov Substitution Principle.",
+            "suggestion": "Change the List<Object> to List<Shape>. This way, we can use polymorphism correctly without needing type checks.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;\n",
+                        "public AreaCalculator(List<Object> shapes) {\n"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;\n",
+                        "public AreaCalculator(List<Shape> shapes) {\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "method_names": [
+                "Shape"
+            ],
+            "reason": "Currently, there is no interface for shapes, which means that the AreaCalculator is not following the Interface Segregation Principle as it cannot segregate shape behaviors.",
+            "suggestion": "Define a Shape interface that all shapes will implement, providing a method to get the area.",
+            "changes": [
+                {
+                    "original_code": [],
+                    "suggestion_code": [
+                        "public interface Shape {\n",
+                        "    double getArea();\n",
+                        "}\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 685,
+        "prompt_tokens": 2501,
+        "total_tokens": 3186
+    }
+}

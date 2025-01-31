@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    43
+                ]
+            ],
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The statement function contains multiple responsibilities: calculating the total amount, volume credits, and creating a formatted statement string.",
+            "suggestion": "Separate the responsibilities into distinct functions or classes. One function should handle the calculation of amounts and credits, another one should handle the formatting of the output.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = 0\n        if play['type'] == \"tragedy\":\n            this_amount = 40000\n            if perf['audience'] > 30:\n                this_amount += 1000 * (perf['audience'] - 30)\n        elif play['type'] == \"comedy\":\n            this_amount = 30000\n            if perf['audience'] > 20:\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\n            this_amount += 300 * perf['audience']\n        else:\n            raise ValueError(f\"Unknown type: {play['type']}\")\n\n        if play['type'] == \"tragedy\":\n            volume_credits += max(perf['audience'] - 30, 0)\n        if play['type'] == \"comedy\":\n            volume_credits += max(perf['audience'] - 30, 0)\n            volume_credits += perf['audience'] // 5\n        \n        result += f\"{play['name']}: {f\"${total_amount/ 100:,.2f}\"} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n\n        if play['type'] == \"tragedy\":\n            result += f\"Amount owed for tragedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"\n            result += f\"You earned {volume_credits} credits\\n\"\n        if play['type'] == \"comedy\":\n            result += f\"Amount owed for comedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"\n            result += f\"You earned {volume_credits} credits\\n\"\n    return result\n"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_amount(play, audience):\n    if play['type'] == \"tragedy\":\n        this_amount = 40000\n        if audience > 30:\n            this_amount += 1000 * (audience - 30)\n    elif play['type'] == \"comedy\":\n        this_amount = 30000\n        if audience > 20:\n            this_amount += 10000 + 500 * (audience - 20)\n        this_amount += 300 * audience\n    else:\n        raise ValueError(f\"Unknown type: {play['type']}\")\n    return this_amount\n\n\ndef calculate_credits(play, audience):\n    volume_credits = max(audience - 30, 0) if play['type'] in [\"tragedy\", \"comedy\"] else 0\n    if play['type'] == \"comedy\":\n        volume_credits += audience // 5\n    return volume_credits\n\n\ndef format_statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = calculate_amount(play, perf['audience'])\n        credits = calculate_credits(play, perf['audience'])\n\n        result += f\"{play['name']}: {f\"${this_amount/ 100:,.2f}\"} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n        volume_credits += credits\n\n    result += f\"Amount owed is {f\"${total_amount / 100:,.2f}\"}\\n\"\n    result += f\"You earned {volume_credits} credits\\n\"\n    return result\n\nprint(format_statement(invoice, plays))"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1099,
+        "prompt_tokens": 2658,
+        "total_tokens": 3757
+    }
+}

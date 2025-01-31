@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    21
+                ],
+                [
+                    4,
+                    24
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing items, quantities, prices, and the order status, while the PaymentProcessor class is directly modifying the order's status, violating the principle.",
+            "suggestion": "Separate the concerns of managing order details and payment processing. Consider creating an OrderStatusManager class to handle order status changes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}",
+                        "public void pay(Order order, String securityCode) {",
+                        "    System.out.println(\"Processing payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}",
+                        "public class OrderStatusManager {",
+                        "    public void pay(Order order, String securityCode) {",
+                        "        System.out.println(\"Processing payment\");",
+                        "        System.out.println(\"Verifying security code: \" + securityCode);",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 447,
+        "prompt_tokens": 2396,
+        "total_tokens": 2843
+    }
+}

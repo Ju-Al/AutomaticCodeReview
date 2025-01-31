@@ -1,0 +1,20 @@
+[
+    [
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case",
+            "metric": "Functional Equivalence",
+            "score": 0.9,
+            "reason": "Both Actual and Expected Outputs restructure the code using polymorphism to handle shape areas, addressing the same principle violations. They differ slightly in variable naming (length vs. side), but maintain equivalent functionality and logic."
+        },
+        {
+            "example_id": "example_1_2_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case",
+            "metric": "Functional Equivalence",
+            "score": 0.3,
+            "reason": "Actual output's 'output' method is equivalent to the expected output's 'output' method in functionality, but lacks the 'sum' method and JSON/HTML output capabilities present in the expected output."
+        }
+    ]
+]

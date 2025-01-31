@@ -1,0 +1,83 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    25,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating areas and generating output, which should be separated.",
+            "suggestion": "Separate the calculation of areas from the output generation into different classes or methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {\n    ...\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            totalArea += calculateArea(shape);\n        }\n\n        return totalArea;\n    }\n\n    private double calculateArea(Object shape) {\n        if (shape instanceof Square) {\n            Square square = (Square) shape;\n            return Math.pow(square.getLength(), 2);\n        } else if (shape instanceof Circle) {\n            Circle circle = (Circle) shape;\n            return Math.PI * Math.pow(circle.getRadius(), 2);\n        }\n        return 0;\n    }\n}\n\npublic class AreaOutput {\n    public String output(AreaCalculator calculator) {\n        return \"Sum of the areas of provided shapes: \" + calculator.sum();\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    20,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is not open for extension; adding new shape types requires modifying the sum method.",
+            "suggestion": "Utilize polymorphism by creating an interface for Shape that has a method for calculating the area, allowing for easy extensions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {\n    double area();\n}\n\npublic class Circle implements Shape {\n    ...\n    public double area() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}\n\npublic class Square implements Shape {\n    ...\n    public double area() {\n        return Math.pow(length, 2);\n    }\n}\n\npublic double sum() {\n    double totalArea = 0;\n    for (Object shape : shapes) {\n        if (shape instanceof Shape) {\n            totalArea += ((Shape) shape).area();\n        }\n    }\n    return totalArea;\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    25,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The use of Object instead of a specific interface (like Shape) in the AreaCalculator prevents derived class instances from being substituted without type checking.",
+            "suggestion": "Change the type of shapes in the AreaCalculator to be a List<Shape> instead of List<Object>.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1042,
+        "prompt_tokens": 2419,
+        "total_tokens": 3461
+    }
+}

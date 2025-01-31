@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    18,
+                    30
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'Order' class manages both order details and payment processing, mixing responsibilities.",
+            "suggestion": "Separate the payment processing into its own class or module, and let the 'Order' class focus solely on managing and representing orders.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n    if payment_type == \"debit\":\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    elif payment_type == \"credit\":\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    else:\n        raise Exception(f\"Unknown payment type: {payment_type}\")"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    @staticmethod\n    def pay(payment_type: str, security_code: str) -> None:\n        if payment_type == \"debit\":\n            print(\"Processing debit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n        elif payment_type == \"credit\":\n            print(\"Processing credit payment type\")\n            print(f\"Verifying security code: {security_code}\")\n        else:\n            raise Exception(f\"Unknown payment type: {payment_type}\")\n\norder = Order()\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\nPaymentProcessor.pay(\"debit\", \"0372846\")\norder.status = \"paid\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    18,
+                    30
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Any addition of new payment types would require modification of the 'pay' method, violating the open/closed principle.",
+            "suggestion": "Introduce a strategy pattern where different payment types are implemented as separate classes conforming to a common interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n    if payment_type == \"debit\":\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    elif payment_type == \"credit\":\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n        self.status = \"paid\"\n    else:\n        raise Exception(f\"Unknown payment type: {payment_type}\")"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentMethod:\n    def process_payment(self, security_code: str) -> None:\n        raise NotImplementedError()\n\nclass DebitPayment(PaymentMethod):\n    def process_payment(self, security_code: str) -> None:\n        print(\"Processing debit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n\nclass CreditPayment(PaymentMethod):\n    def process_payment(self, security_code: str) -> None:\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {security_code}\")\n\nclass Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total\n\norder = Order()\norder.add_item(\"Keyboard\", 1, 50)\norder.add_item(\"SSD\", 1, 150)\norder.add_item(\"USB cable\", 2, 5)\nprint(order.total_price())\npayment_method = DebitPayment()\npayment_method.process_payment(\"0372846\")\norder.status = \"paid\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 1044,
+        "prompt_tokens": 2352,
+        "total_tokens": 3396
+    }
+}

@@ -1,0 +1,69 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    16
+                ],
+                [
+                    19,
+                    31
+                ],
+                [
+                    41,
+                    55
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator and VolumeCalculator classes have multiple responsibilities: they calculate area and volume, but also manage the shape collection.",
+            "suggestion": "Separate the responsibility for shape collection into dedicated classes. Create separate calculators for area and volume calculations that don't overlap in responsibilities.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area\n\nclass SimpleVolumeCalculator:\n    def __init__(self, shapes=[]):\n        self.shapes = shapes\n    \n    def sum(self):\n        # Implement a formula for volume instead of area, as per actual volume calculations\n        return 0  # Placeholder for volume calculations.",
+                        "class VolumeCalculator:\n    def __init__(self, shapes):\n        self.shapes = shapes \n\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            # Assuming shapes have a method to calculate volume\n            total_volume += shape.volume()  # Ensure the Shape interface is extended for volumetric shapes.\n        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    33,
+                    55
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in VolumeCalculator is not truly closed to modification because it directly calculates volume using area. It should accommodate new types of volume calculations without modification.",
+            "suggestion": "Adopt a strategy pattern that allows for different calculation strategies for volume without altering the existing classes. Separate volume logic into a specific class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, shapes):\n        self.shapes = shapes\n\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_volume += shape.volume()  # Ensure shapes have a volume method defined.\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_volume"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 832,
+        "prompt_tokens": 2489,
+        "total_tokens": 3321
+    }
+}

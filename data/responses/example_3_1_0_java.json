@@ -1,0 +1,55 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    22
+                ],
+                [
+                    25,
+                    32
+                ],
+                [
+                    34,
+                    42
+                ],
+                [
+                    44,
+                    50
+                ]
+            ],
+            "method_names": [
+                "Order",
+                "PaypalPaymentProcessor",
+                "CreditCardPaymentProcessor",
+                "DebitCardPaymentProcessor"
+            ],
+            "reason": "The 'Order' class manages order data but also partly deals with payment status, which is payment logic's concern. Each payment processor class contains duplicated logic for setting order status.",
+            "suggestion": "Refactor the payment-related logic into a dedicated class handling payment workflow and delegate 'Order' to strictly manage order data.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n\n}",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n}",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public boolean validatePayment(String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        // logic\n        return true;\n    }\n\n}",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public boolean validatePayment(String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        // logic\n        return true;\n    }\n\n}",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public boolean validatePayment(String securityCode) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        // logic\n        return true;\n    }\n\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 868,
+        "prompt_tokens": 2560,
+        "total_tokens": 3428
+    }
+}

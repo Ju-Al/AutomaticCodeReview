@@ -1,0 +1,82 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    26,
+                    47
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'pay' method has multiple responsibilities: processing payment and verifying security code, which makes it harder to maintain and test.",
+            "suggestion": "Separate the payment processing logic into a PaymentService class that handles payment types and security code verification.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {",
+                        "    switch (paymentType.toLowerCase()) {",
+                        "        case \"debit\":",
+                        "            System.out.println(\"Processing debit payment type\");",
+                        "            System.out.println(\"Verifying security code: \" + securityCode);",
+                        "            this.status = \"paid\";",
+                        "            break;",
+                        "",
+                        "        case \"credit\":",
+                        "            System.out.println(\"Processing credit payment type\");",
+                        "            System.out.println(\"Verifying security code: \" + securityCode);",
+                        "            this.status = \"paid\";",
+                        "            break;",
+                        "",
+                        "        default:",
+                        "            throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(String paymentType, String securityCode) {",
+                        "    PaymentService paymentService = new PaymentService();",
+                        "    paymentService.processPayment(paymentType, securityCode);",
+                        "    this.status = \"paid\";",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [],
+                    "suggestion_code": [
+                        "public class PaymentService {",
+                        "    public void processPayment(String paymentType, String securityCode) {",
+                        "        switch (paymentType.toLowerCase()) {",
+                        "            case \"debit\":",
+                        "                System.out.println(\"Processing debit payment type\");",
+                        "                verifySecurityCode(securityCode);",
+                        "                break;",
+                        "",
+                        "            case \"credit\":",
+                        "                System.out.println(\"Processing credit payment type\");",
+                        "                verifySecurityCode(securityCode);",
+                        "                break;",
+                        "",
+                        "            default:",
+                        "                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);",
+                        "        }",
+                        "    }",
+                        "",
+                        "    private void verifySecurityCode(String securityCode) {",
+                        "        System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 589,
+        "prompt_tokens": 2518,
+        "total_tokens": 3107
+    }
+}

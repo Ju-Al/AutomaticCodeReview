@@ -1,0 +1,37 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    40
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The MySQLDatabase class is handling data storage and user-related logic, which should be separated. Each class should have a single responsibility.",
+            "suggestion": "Create a separate class for user management operations, which can use the MySQLDatabase class for actual data operations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n    \n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return f\"User ID: {id}, Name: {self.user_data[id]}\"\n        return \"User not found\"\n    \n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print(\"User ID already exists. Use update_user_data to modify.\")\n        else:\n            self.user_data[id] = name\n            print(\"User added successfully.\")\n    \n    def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user_data to add new user.\")\n    \n    def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")",
+                        "class UserService:\n    def __init__(self):\n        self.database = MySQLDatabase()\n    \n    def get_user(self, id: int) -> str:\n        return self.database.get_user_data(id)\n    \n    def add_user(self, id: int, data: str) -> None:\n        self.database.add_user_data(id, data)\n    \n    def update_user(self, id: int, data: str) -> None:\n        self.database.update_user_data(id, data)\n    \n    def delete_user(self, id: int) -> None:\n        self.database.delete_user_data(id)"
+                    ],
+                    "suggestion_code": [
+                        "class MySQLDatabase:\n    def __init__(self):\n        self.user_data = {\n            1: \"Alice\",\n            2: \"Bob\",\n            3: \"Charlie\"\n        }\n\n    def get_user_data(self, id: int) -> str:\n        if id in self.user_data:\n            return self.user_data[id]\n        return None\n\n    def add_user_data(self, id: int, name: str) -> None:\n        self.user_data[id] = name\n\n    def delete_user_data(self, id: int) -> None:\n        del self.user_data[id]\n\n\nclass UserManager:\n    def __init__(self, database: MySQLDatabase):\n        self.database = database\n\n    def add_user(self, id: int, name: str) -> None:\n        if self.database.get_user_data(id) is not None:\n            print(\"User ID already exists. Use update_user to modify.\")\n        else:\n            self.database.add_user_data(id, name)\n            print(\"User added successfully.\")\n\n    def update_user(self, id: int, name: str) -> None:\n        if self.database.get_user_data(id) is not None:\n            self.database.add_user_data(id, name)\n            print(\"User updated successfully.\")\n        else:\n            print(\"User ID does not exist. Use add_user to add new user.\")\n\n    def delete_user(self, id: int) -> None:\n        if self.database.get_user_data(id) is not None:\n            self.database.delete_user_data(id)\n            print(\"User deleted successfully.\")\n        else:\n            print(\"User ID not found.\")\n\n\nclass UserService:\n    def __init__(self):\n        self.database = MySQLDatabase()\n        self.user_manager = UserManager(self.database)\n\n    def get_user(self, id: int) -> str:\n        result = self.database.get_user_data(id)\n        return f\"User ID: {id}, Name: {result}\" if result else \"User not found\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1086,
+        "prompt_tokens": 2525,
+        "total_tokens": 3611
+    }
+}

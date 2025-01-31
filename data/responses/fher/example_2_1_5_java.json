@@ -1,0 +1,42 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    2
+                ],
+                [
+                    10,
+                    10
+                ],
+                [
+                    12,
+                    12
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is responsible for handling payment processing and changing the status of the order. These are two separate responsibilities.",
+            "suggestion": "Separate the responsibility of managing order statuses into the Order class, allowing the PaymentProcessor to only handle payment-related functions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n    }\n\npublic void completePayment(Order order) {\n        order.setStatus(\"paid\");\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 281,
+        "prompt_tokens": 2396,
+        "total_tokens": 2677
+    }
+}

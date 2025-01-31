@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_1_1",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "There is one True Positive ('Single Responsibility Principle'), but there is one False Positive ('Open/Closed Principle') and no False Negatives, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output identifies multiple responsibilities of the Order class but lacks the clarity and detail of the expected output, which specifically cites violations of the Single Responsibility Principle regarding both order management and payment, as well as prices and quantities."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests separating payment processing into a PaymentProcessor class, while the expected output recommends splitting the Order class into three classes, indicating some alignment in addressing the single responsibility principle but lacking detail and clarity in the broader context."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete alignment in content."
+        },
+        {
+            "example_id": "example_1_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggestion code introduces a PaymentProcessor class, which deviates from the expected structure, lacking the required methods like total_price and add_item."
+        }
+    ]
+]

@@ -1,0 +1,92 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    12,
+                    12
+                ],
+                [
+                    14,
+                    14
+                ],
+                [
+                    22,
+                    22
+                ],
+                [
+                    28,
+                    28
+                ],
+                [
+                    36,
+                    36
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor classes each have the responsibility of processing a payment and updating the order status, which combines payment logic with order management.",
+            "suggestion": "Decouple the payment processing from order status updates. Use an event or callback mechanism to handle the order status change separately.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode, Consumer<Order> onSuccess) {",
+                        "onSuccess.accept(order);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    6,
+                    6
+                ],
+                [
+                    22,
+                    22
+                ],
+                [
+                    28,
+                    28
+                ],
+                [
+                    36,
+                    36
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The current implementation of the PaymentProcessor interface requires modification of payment processor classes each time a new payment processing flow is added.",
+            "suggestion": "Introduce a strategy pattern where new payment methods can be added without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 441,
+        "prompt_tokens": 2560,
+        "total_tokens": 3001
+    }
+}

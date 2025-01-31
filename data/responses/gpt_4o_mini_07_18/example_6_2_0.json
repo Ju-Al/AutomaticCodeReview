@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    66
+                ]
+            ],
+            "method_names": [
+                "testable_html"
+            ],
+            "reason": "The method testable_html has multiple responsibilities: it composes the HTML output based on various conditions and handles setup and teardown inclusion, making it hard to maintain and extend.",
+            "suggestion": "Refactor the method into smaller methods that each handle one responsibility: one for handling suite setup, one for setup, one for content, one for teardown, and one for suite teardown.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def testable_html(page_data, include_suite_setup):\n        wiki_page = page_data.get_wiki_page()\n        buffer = []\n        if page_data.has_attribute(\"Test\"):\n            if include_suite_setup:\n                suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n                if suite_setup is not None:\n                    page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -setup .{page_path_name}\\n\")\n            setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n            if setup is not None:\n                setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n                setup_path_name = PathParser.render(setup_path)\n                buffer.append(f\"!include -setup .{setup_path_name}\\n\")\n        buffer.append(page_data.get_content())\n        if page_data.has_attribute(\"Test\"):\n            teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n            if teardown is not None:\n                teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n                teardown_path_name = PathParser.render(teardown_path)\n                buffer.append(f\"\\n!include -teardown .{teardown_path_name}\\n\")\n            if include_suite_setup:\n                suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n                if suite_teardown is not None:\n                    page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n                    page_path_name = PathParser.render(page_path)\n                    buffer.append(f\"!include -teardown .{page_path_name}\\n\")\n        page_data.set_content(''.join(buffer))\n        return page_data.get_html()"
+                    ],
+                    "suggestion_code": [
+                        "def testable_html(page_data, include_suite_setup):\n        wiki_page = page_data.get_wiki_page()\n        buffer = []\n        if page_data.has_attribute(\"Test\"):\n            handle_suite_setup(wiki_page, include_suite_setup, buffer)\n            handle_setup(wiki_page, buffer)\n        buffer.append(page_data.get_content())\n        if page_data.has_attribute(\"Test\"):\n            handle_teardown(wiki_page, buffer)\n            handle_suite_teardown(wiki_page, include_suite_setup, buffer)\n        page_data.set_content(''.join(buffer))\n        return page_data.get_html()\n    \n    def handle_suite_setup(wiki_page, include_suite_setup, buffer):\n        if include_suite_setup:\n            suite_setup = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_SETUP_NAME, wiki_page)\n            if suite_setup is not None:\n                page_path = suite_setup.get_page_crawler().get_full_path(suite_setup)\n                page_path_name = PathParser.render(page_path)\n                buffer.append(f\"!include -setup .{page_path_name}\\n\")\n\n    def handle_setup(wiki_page, buffer):\n        setup = PageCrawlerImpl.get_inherited_page(\"SetUp\", wiki_page)\n        if setup is not None:\n            setup_path = wiki_page.get_page_crawler().get_full_path(setup)\n            setup_path_name = PathParser.render(setup_path)\n            buffer.append(f\"!include -setup .{setup_path_name}\\n\")\n\n    def handle_teardown(wiki_page, buffer):\n        teardown = PageCrawlerImpl.get_inherited_page(\"TearDown\", wiki_page)\n        if teardown is not None:\n            teardown_path = wiki_page.get_page_crawler().get_full_path(teardown)\n            teardown_path_name = PathParser.render(teardown_path)\n            buffer.append(f\"\\n!include -teardown .{teardown_path_name}\\n\")\n\n    def handle_suite_teardown(wiki_page, include_suite_setup, buffer):\n        if include_suite_setup:\n            suite_teardown = PageCrawlerImpl.get_inherited_page(SuiteResponder.SUITE_TEARDOWN_NAME, wiki_page)\n            if suite_teardown is not None:\n                page_path = suite_teardown.get_page_crawler().get_full_path(suite_teardown)\n                page_path_name = PathParser.render(page_path)\n                buffer.append(f\"!include -teardown .{page_path_name}\\n\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1149,
+        "prompt_tokens": 2472,
+        "total_tokens": 3621
+    }
+}

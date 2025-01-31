@@ -1,0 +1,116 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    16,
+                    38
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The `AreaCalculator` class handles both the storage of shapes and the area calculation, violating the SRP.",
+            "suggestion": "Separate the shape storage responsibility from the area calculation by creating a dedicated class for managing shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Object> shapes;",
+                        "    public AreaCalculator(List<Object> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "    public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Object shape : shapes) {",
+                        "            if (shape instanceof Square) {",
+                        "                Square square = (Square) shape;",
+                        "                totalArea += Math.pow(square.getLength(), 2);",
+                        "            } else if (shape instanceof Circle) {",
+                        "                Circle circle = (Circle) shape;",
+                        "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "            }",
+                        "        }",
+                        "        return totalArea;",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class ShapeStorage {",
+                        "    private List<Object> shapes;",
+                        "    public ShapeStorage() {",
+                        "        this.shapes = new ArrayList<>();",
+                        "    }",
+                        "    public void addShape(Object shape) {",
+                        "        shapes.add(shape);",
+                        "    }",
+                        "    public List<Object> getShapes() {",
+                        "        return shapes;",
+                        "    }",
+                        "}",
+                        "public class AreaCalculator {",
+                        "    private ShapeStorage storage;",
+                        "    public AreaCalculator(ShapeStorage storage) {",
+                        "        this.storage = storage;",
+                        "    }",
+                        "    public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Object shape : storage.getShapes()) {",
+                        "            if (shape instanceof Square) {",
+                        "                Square square = (Square) shape;",
+                        "                totalArea += Math.pow(square.getLength(), 2);",
+                        "            } else if (shape instanceof Circle) {",
+                        "                Circle circle = (Circle) shape;",
+                        "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "            }",
+                        "        }",
+                        "        return totalArea;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    0,
+                    1
+                ],
+                [
+                    10,
+                    10
+                ]
+            ],
+            "method_names": [
+                "Main"
+            ],
+            "reason": "The `Main` class creates dependencies directly (like `AreaCalculator` and `SumCalculator`) rather than relying on abstraction which could make it easier to test and extend.",
+            "suggestion": "Use interfaces or abstract classes for `AreaCalculator` and `SumCalculator` to allow for more flexible implementations and injections.",
+            "changes": [
+                {
+                    "original_code": [
+                        "AreaCalculator calculator = new AreaCalculator(shapes);",
+                        "SumCalculator sumCalculator = new SumCalculator(calculator);"
+                    ],
+                    "suggestion_code": [
+                        "ShapeStorage storage = new ShapeStorage();",
+                        "storage.addShape(new Circle(2));",
+                        "storage.addShape(new Square(5));",
+                        "storage.addShape(new Square(6));",
+                        "AreaCalculator calculator = new AreaCalculator(storage);",
+                        "SumCalculator sumCalculator = new SumCalculator(calculator);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 832,
+        "prompt_tokens": 2501,
+        "total_tokens": 3333
+    }
+}

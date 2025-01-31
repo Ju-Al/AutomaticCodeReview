@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    22
+                ],
+                [
+                    26,
+                    31
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "JSON",
+                "HTML"
+            ],
+            "reason": "The AreaCalculator class manages both area calculations and shape storage, while the SumCalculator is responsible for formatting the output in different representations. Each class should ideally manage a single responsibility.",
+            "suggestion": "Separate the area calculation logic into its own class, such as AreaManager, and have SumCalculator focus solely on output formatting.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)\n",
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "class AreaManager:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def total_area(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)\n",
+                        "class SumCalculator:\n    def __init__(self, area_manager: AreaManager) -> None:\n        self.manager = area_manager\n\n    def JSON(self):\n        data = {\n            'sum': self.manager.total_area()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.manager.total_area()}\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    9,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class must be modified to support new shapes, violating the open/closed principle. New shapes require changes to the existing code.",
+            "suggestion": "Introduce a shape interface and separate classes for each shape type that implement a method to calculate their own area. The AreaManager then can iterate over these shapes without needing modification when new shape types are added.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "class Shape:\n    def area(self):\n        pass\n\nclass Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n\n    def area(self):\n        return math.pow(self.length, 2)\n\nclass Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * math.pow(self.radius, 2)\n\nclass AreaManager:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def total_area(self):\n        return sum(shape.area() for shape in self.shapes)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 983,
+        "prompt_tokens": 2345,
+        "total_tokens": 3328
+    }
+}

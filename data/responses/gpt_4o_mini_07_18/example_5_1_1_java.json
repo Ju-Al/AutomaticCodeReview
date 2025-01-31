@@ -1,0 +1,73 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    42,
+                    44
+                ],
+                [
+                    57,
+                    59
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay",
+                "pay"
+            ],
+            "reason": "The payment processor classes are responsible for both payment processing and status management of the order, which is a separate concern.",
+            "suggestion": "Separate the responsibility of order status management from the payment processing. Use a separate class for handling order status or events.",
+            "changes": [
+                {
+                    "original_code": [
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "OrderStatusManager.updateStatus(order, \"paid\");"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    66,
+                    68
+                ],
+                [
+                    83,
+                    85
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay"
+            ],
+            "reason": "The DebitCardPaymentProcessor class uses a specific authentication mechanism (SMSAuthorizer), which can lead to issues when substituted with another payment processor that does not use SMS authorization.",
+            "suggestion": "Make sure all payment processors either rely on a common authentication strategy or define their own without disrupting the main structure.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if (!this.authorizer.is_authentificated()){\n            throw new IllegalStateException(\"Not authentificated\");\n        }"
+                    ],
+                    "suggestion_code": [
+                        "this.authorizer.authenticate(); // Ensure every payment processor has a standard authenticate method."
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 379,
+        "prompt_tokens": 2775,
+        "total_tokens": 3154
+    }
+}

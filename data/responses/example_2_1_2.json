@@ -11,24 +11,55 @@
             "method_names": [
                 "pay"
             ],
-            "reason": "The PaymentProcessor class is handling multiple responsibilities: initiating a payment and updating the order's status.",
-            "suggestion": "Consider separating the payment processing from updating the order status. Introduce a separate method or a helper class that updates the order status once payment is successful.",
+            "reason": "The PaymentProcessor class handles both the payment processing and order status management, violating the single responsibility principle.",
+            "suggestion": "Separate the responsibility of order state management from the PaymentProcessor. This can be managed directly within the Order class or a dedicated OrderManager.",
             "changes": [
                 {
                     "original_code": [
-                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "class PaymentProcessor:\n    def process_payment(self, security_code: str) -> bool:\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        return True  # Simulate a successful payment\n\nclass OrderStatusUpdater:\n    @staticmethod\n    def update_status(order: Order, status: str) -> None:\n        order.status = status"
+                        "class PaymentProcessor:\n    def process_payment(self, security_code: str) -> str:\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        return \"paid\"",
+                        "class Order:\n    ...\n\n    def update_status(self, new_status: str) -> None:\n        self.status = new_status"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    6,
+                    12
+                ],
+                [
+                    17,
+                    21
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "add_item"
+            ],
+            "reason": "Adding new payment methods or item attributes necessitates changing the existing classes, violating the open/closed principle.",
+            "suggestion": "Introduce abstract definitions for payment methods and item configuration to facilitate extension.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\""
+                    ],
+                    "suggestion_code": [
+                        "from abc import ABC, abstractmethod\n\nclass PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: Order, security_code: str):\n        pass\n\nclass StripePaymentProcessor(PaymentProcessor):\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment with Stripe\")\n        print(f\"Verifying security code: {security_code}\")\n        order.update_status(\"paid\")"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 294,
+        "completion_tokens": 627,
         "prompt_tokens": 2257,
-        "total_tokens": 2551
+        "total_tokens": 2884
     }
 }

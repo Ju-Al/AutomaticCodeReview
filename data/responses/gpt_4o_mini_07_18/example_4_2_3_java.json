@@ -1,0 +1,92 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    17,
+                    19
+                ],
+                [
+                    28,
+                    30
+                ],
+                [
+                    39,
+                    41
+                ]
+            ],
+            "method_names": [
+                "volume",
+                "volume",
+                "volume"
+            ],
+            "reason": "The Circle and Square classes implement volume calculation, but they do not represent shapes that have a volume. This is incorrect and violates SRP.",
+            "suggestion": "Remove the volume method from Circle and Square classes and implement only for applicable shapes (e.g., 3D shapes like Dice).",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double volume() {",
+                        "    throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "}",
+                        "",
+                        "public double volume() {",
+                        "    throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "// Remove the volume method from Circle and Square classes",
+                        "// so they do not implement a non-applicable method."
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    17,
+                    19
+                ],
+                [
+                    28,
+                    30
+                ],
+                [
+                    39,
+                    41
+                ]
+            ],
+            "method_names": [
+                "volume",
+                "volume",
+                "volume"
+            ],
+            "reason": "The implementation of volume in Circle and Square classes throws UnsupportedOperationException. This means that substituting Circle or Square in a context expecting a Shape would break the expected behavior (interface contract).",
+            "suggestion": "Do not implement the volume method at all in Circle and Square classes since they are 2D shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double volume() {",
+                        "    throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "}",
+                        "",
+                        "public double volume() {",
+                        "    throw new UnsupportedOperationException(\"The volume cannot be calculated\");",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "// Remove the volume method from Circle and Square classes",
+                        "// to uphold the Liskov Substitution Principle."
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 490,
+        "prompt_tokens": 2805,
+        "total_tokens": 3295
+    }
+}

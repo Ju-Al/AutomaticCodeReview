@@ -1,0 +1,59 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating the area and producing output. Each class or method should only have one responsibility.",
+            "suggestion": "Separate the area calculation logic from the presentation logic by creating a dedicated method or class for formatting output.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def output(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def format_output(self, area_sum):",
+                        "    return f'Sum of the areas of provided shapes: {area_sum}'",
+                        "",
+                        "def output(self):",
+                        "    area_sum = self.sum()",
+                        "    return self.format_output(area_sum)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 405,
+        "prompt_tokens": 2265,
+        "total_tokens": 2670
+    }
+}

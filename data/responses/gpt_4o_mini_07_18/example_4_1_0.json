@@ -1,0 +1,105 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    65,
+                    66
+                ],
+                [
+                    22,
+                    30
+                ],
+                [
+                    54,
+                    62
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms",
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor classes contain methods that relate to both payment processing and SMS authentication, merging responsibilities.",
+            "suggestion": "Create separate classes for handling payment processing and SMS authentication to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "def auth_sms(self, order, code: str):",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "def auth_sms(self, order, code: str):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order, security_code: str):",
+                        "def auth_sms(self, order, code: str):"
+                    ],
+                    "suggestion_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "class SmsAuthenticator:",
+                        "def __init__(self, processor):",
+                        "def auth_sms(self, order, code: str):",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "class SmsAuthenticator:",
+                        "def __init__(self, processor):",
+                        "def auth_sms(self, order, code: str):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order, security_code: str):",
+                        "class SmsAuthenticator:",
+                        "def __init__(self, processor):",
+                        "def auth_sms(self, order, code: str):"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    54,
+                    62
+                ],
+                [
+                    22,
+                    30
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The current payment processor classes are not easily extensible without modifying the existing code, especially for adding new payment methods.",
+            "suggestion": "Use a factory pattern to create payment processors, allowing for addition of new payment types without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "def pay(self, order, security_code: str):"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessorFactory:",
+                        "def create_processor(type, security_code:str):",
+                        "if type == 'debit': return DebitPaymentProcessor(security_code)",
+                        "if type == 'credit': return CreditPaymentProcessor(security_code)",
+                        "if type == 'paypal': return PaypalPaymentProcessor(security_code)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 685,
+        "prompt_tokens": 2552,
+        "total_tokens": 3237
+    }
+}

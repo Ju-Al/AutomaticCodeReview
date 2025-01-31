@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 ('Liskov Substitution Principle'), FP is 1 ('Single Responsibility Principle'), FN is 0. Precision is 0.5 and Recall is 1, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the Liskov Substitution Principle due to VolumeCalculator altering the behavior of AreaCalculator. The actual output adds a suggestion for creating a VolumeComputer class, which is an additional detail not present in the expected output."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests separating volume calculations, which aligns with the expected output's theme of separation of concerns. However, it lacks the detail of creating an abstract base class and specific interfaces for 2D and 3D shapes mentioned in the expected output."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual output 'sum' does not align with expected output themes 'VolumeCalculator', 'AreaCalculator', 'Shape'."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output does not implement interface checks or parent class structure as in Expected Output. It uses specific SolidShape class while Expected suggests abstract Shape2D and Shape3D with validation."
+        }
+    ]
+]

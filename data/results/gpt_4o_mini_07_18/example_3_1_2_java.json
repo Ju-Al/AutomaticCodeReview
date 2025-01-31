@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_2",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "Only one true positive, 'Single Responsibility Principle', was identified, leading to low precision and recall due to two false negatives."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output discusses data management and status modification, while the expected output specifically mentions price and quantity responsibilities, indicating a partial but unclear alignment with the principle."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses separating payment logic from the Order class, while the expected output suggests splitting the Order class into two for quantities and prices, indicating a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output includes 'addItem' and 'pay', while the expected output includes 'totalPrices' and 'addItems', showing minimal thematic alignment and lack of clarity in addressing the same issues."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion does not align with the expected output's suggestion, as it lacks the 'OrderQuantityManager' and 'PriceCalculator' classes, which are crucial for managing orders and calculating totals."
+        }
+    ]
+]

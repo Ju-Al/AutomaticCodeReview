@@ -10,7 +10,6 @@ public class Statement {
         double totalAmount = 0;
         int volumeCredits = 0;
         StringBuilder result = new StringBuilder("Statement for " + invoice.getCustomer() + "\n");
-        NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);
 
         for (Performance perf : invoice.getPerformances()) {
             Play play = plays.get(perf.getPlayID());
@@ -40,18 +39,38 @@ public class Statement {
                     throw new IllegalArgumentException("Unknown type: " + play.getType());
             }
 
-            volumeCredits += Math.max(perf.getAudience() - 30, 0);
-
-            if ("comedy".equals(play.getType())) {
-                volumeCredits += Math.floor(perf.getAudience() / 5);
+            switch (play.getType()) {
+                case "tragedy":
+                    volumeCredits += Math.max(perf.getAudience() - 30, 0);
+                    break;
+                case "comedy":
+                    volumeCredits += Math.max(perf.getAudience() - 30, 0);
+                    volumeCredits += Math.floor(perf.getAudience() / 5);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown type: " + play.getType());
             }
 
             result.append(String.format(" %s: %s (%d seats)\n",
-                    play.getName(), currencyFormat.format(thisAmount / 100), perf.getAudience()));
+                    play.getName(), NumberFormat.getCurrencyInstance(Locale.US).format(thisAmount / 100),
+                    perf.getAudience()));
             totalAmount += thisAmount;
-        }
 
-        result.append(String.format("Amount owed is %s\n", currencyFormat.format(totalAmount / 100)));
+            switch (play.getType()) {
+                case "tragedy":
+                    result.append(String.format("Amount owed for tris %s\n",
+                            NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));
+                    result.append(String.format("You earned %d credits\n", volumeCredits));
+                case "comedy":
+                    volumeCredits += Math.max(perf.getAudience() - 30, 0);
+                    volumeCredits += Math.floor(perf.getAudience() / 5);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown type: " + play.getType());
+            }
+        }
+        result.append(String.format("Amount owed is %s\n",
+                NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));
         result.append(String.format("You earned %d credits\n", volumeCredits));
         return result.toString();
     }

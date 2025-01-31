@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    61
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The `testableHtml` method is handling multiple concerns: fetching inherited pages, constructing HTML-like content, and formatting it. This leads to a violation of single responsibility as these concerns could and should be decoupled.",
+            "suggestion": "Refactor the code to delegate inherited page fetching and HTML content construction to separate methods or classes, ensuring modular design.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String testableHtml(\n      PageData pageData,\n      boolean includeSuiteSetup\n      ) throws Exception {\n          WikiPage wikiPage = pageData.getWikiPage();\n          StringBuffer buffer = new StringBuffer ();\n          if(pageData.hasAttribute (\"Test\")){\n              if (includeSuiteSetup) {\n                  WikiPage suiteSetup =\n                    PageCrawlerImpl.getInheritedPage (\n                        SuiteResponder.SUITE_SETUP _NAME, wikiPage\n                        );\n                  if (suitesetup != null) {\n                      WikiPagePath pagePath =\n                      suiteSetup.getPageCrawler().getFullPath(suiteSetup);\n                      String pagePathName = PathParser.render(pagePath);\n                      buffer.append(\"! include -setup .\")\n                            .append (pagePathName)\n                            .append(\"\\n\");\n                  }\n              }\n              WikiPage setup =\n                PageCrawlerImpl.getInheritedPage(\"SetUp\", wikiPage);\n              if (setup != null) {\n                  WikiPagePath setupPath =\n                    wikiPage.getPageCrawler().getFullPath(setup);\n                  String setupPathName = PathParser.render(setupPath);\n                  buffer.append(\"! include -setup .\")\n                        .append (setupPathName)\n                        .append(\"\\n\");\n              }\n          }\n          buffer.append(pageData.getContent());\n          if(pageData.hasAttribute(\"Test\")){\n              WikiPage teardown =\n                PageCrawlerImpl.getInheritedPage(\"TearDown\", wikiPage);\n              if (teardown != null) {\n                  WikiPagePath tearDownPath =\n                    wikiPage.getPageCrawler().getFullPath(teardown);\n                  String tearDownPathName = PathParser.render(tearDownPath);\n                  buffer.append(\"\\n\")\n                        .append (\"!include -teardown .\")\n                        .append(tearDownPathName)\n                        .append(\"\\n\");\n              }\n              if (includeSuiteSetup) {\n                  WikiPage suiteTeardown =\n                    PageCrawlerImpl.getInheritedPage(\n                        SuiteResponder.SUITE_TEARDOWN_NAME,\n                        wikiPage\n                    );\n                  if (suiteTeardown != null) {\n                      WikiPagePath pagePath =\n                        suiteTeardown.getPageCrawler().getFullPath(suiteTeardown);\n                      String pagePathName = PathParser.render(pagePath);\n                      buffer.append (\"!include -teardown .\")\n                            .append(pagePathName)\n                            .append(\"\\n\");\n                  }\n              }\n          }\n          pageData.setContent(buffer.toString());\n          return pageData.getHTML();\n      }"
+                    ],
+                    "suggestion_code": [
+                        "public static String testableHtml(PageData pageData, boolean includeSuiteSetup) throws Exception {\n    StringBuffer buffer = generateTestableContent(pageData, includeSuiteSetup);\n    pageData.setContent(buffer.toString());\n    return pageData.getHTML();\n}\n\nprivate static StringBuffer generateTestableContent(PageData pageData, boolean includeSuiteSetup) throws Exception {\n    StringBuffer buffer = new StringBuffer();\n    fetchSetupPages(pageData, buffer, includeSuiteSetup);\n    buffer.append(pageData.getContent());\n    fetchTeardownPages(pageData, buffer, includeSuiteSetup);\n    return buffer;\n}\n\nprivate static void fetchSetupPages(PageData pageData, StringBuffer buffer, boolean includeSuiteSetup) throws Exception {\n    if (pageData.hasAttribute(\"Test\") && includeSuiteSetup) {\n        WikiPage suiteSetup = PageCrawlerImpl.getInheritedPage(SuiteResponder.SUITE_SETUP_NAME, pageData.getWikiPage());\n        if (suiteSetup != null) {\n            appendIncludeStatement(suiteSetup, buffer, \"setup\");\n        }\n    }\n    WikiPage setup = PageCrawlerImpl.getInheritedPage(\"SetUp\", pageData.getWikiPage());\n    if (setup != null) {\n        appendIncludeStatement(setup, buffer, \"setup\");\n    }\n}\n\nprivate static void fetchTeardownPages(PageData pageData, StringBuffer buffer, boolean includeSuiteSetup) throws Exception {\n    if (pageData.hasAttribute(\"Test\")) {\n        WikiPage teardown = PageCrawlerImpl.getInheritedPage(\"TearDown\", pageData.getWikiPage());\n        if (teardown != null) {\n            appendIncludeStatement(teardown, buffer, \"teardown\");\n        }\n        if (includeSuiteSetup) {\n            WikiPage suiteTeardown = PageCrawlerImpl.getInheritedPage(SuiteResponder.SUITE_TEARDOWN_NAME, pageData.getWikiPage());\n            if (suiteTeardown != null) {\n                appendIncludeStatement(suiteTeardown, buffer, \"teardown\");\n            }\n        }\n    }\n}\n\nprivate static void appendIncludeStatement(WikiPage page, StringBuffer buffer, String type) throws Exception {\n    WikiPagePath pagePath = page.getPageCrawler().getFullPath(page);\n    String pagePathName = PathParser.render(pagePath);\n    buffer.append(\"!include -\").append(type).append(\" .\").append(pagePathName).append(\"\\n\");\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1286,
+        "prompt_tokens": 2612,
+        "total_tokens": 3898
+    }
+}

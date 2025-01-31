@@ -1,0 +1,89 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    54
+                ]
+            ],
+            "method_names": [
+                "testable_html"
+            ],
+            "reason": "The 'testable_html' method has multiple responsibilities, including setup, teardown, and rendering HTML, which makes it difficult to maintain and test.",
+            "suggestion": "Split the responsibilities into multiple methods or classes. For example, create separate methods for handling setup, teardown, and HTML generation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def testable_html(page_data, include_suite_setup):",
+                        "    wiki_page = page_data.get_wiki_page()",
+                        "    buffer = []",
+                        "    if page_data.has_attribute('Test'): ...",
+                        "    page_data.set_content(''.join(buffer))",
+                        "    return page_data.get_html()"
+                    ],
+                    "suggestion_code": [
+                        "def testable_html(page_data, include_suite_setup):",
+                        "    wiki_page = page_data.get_wiki_page()",
+                        "    buffer = []",
+                        "    setup_content(buffer, wiki_page, include_suite_setup, page_data)",
+                        "    buffer.append(page_data.get_content())",
+                        "    teardown_content(buffer, wiki_page, include_suite_setup, page_data)",
+                        "    page_data.set_content(''.join(buffer))",
+                        "    return page_data.get_html()",
+                        "",
+                        "def setup_content(buffer, wiki_page, include_suite_setup, page_data):",
+                        "    if page_data.has_attribute('Test'):",
+                        "        if include_suite_setup: ...",
+                        "        setup = PageCrawlerImpl.get_inherited_page('SetUp', wiki_page) ...",
+                        "",
+                        "def teardown_content(buffer, wiki_page, include_suite_setup, page_data):",
+                        "    if page_data.has_attribute('Test'):",
+                        "        teardown = PageCrawlerImpl.get_inherited_page('TearDown', wiki_page) ...",
+                        "        if include_suite_setup: ..."
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    4,
+                    54
+                ],
+                [
+                    6,
+                    38
+                ]
+            ],
+            "method_names": [
+                "testable_html"
+            ],
+            "reason": "The logic for retrieving page setup and teardown is duplicated, leading to code redundancy.",
+            "suggestion": "Extract the repetitive code into a helper method that handles the retrieving and formatting of the setup and teardown paths.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    if include_suite_setup: ...",
+                        "    setup = PageCrawlerImpl.get_inherited_page('SetUp', wiki_page) ...",
+                        "    teardown = PageCrawlerImpl.get_inherited_page('TearDown', wiki_page) ..."
+                    ],
+                    "suggestion_code": [
+                        "    def add_includes(buffer, page_data, wiki_page, include_suite_setup):",
+                        "        if include_suite_setup: ...",
+                        "        setup = PageCrawlerImpl.get_inherited_page('SetUp', wiki_page) ...",
+                        "        teardown = PageCrawlerImpl.get_inherited_page('TearDown', wiki_page) ..."
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 697,
+        "prompt_tokens": 2472,
+        "total_tokens": 3169
+    }
+}

@@ -4,31 +4,63 @@
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    14,
-                    18
+                    12,
+                    15
+                ],
+                [
+                    18,
+                    21
                 ]
             ],
             "method_names": [
                 "pay"
             ],
-            "reason": "The PaymentProcessor class is handling both payment processing and security code verification responsibilities.",
-            "suggestion": "Separate the verification of the security code into a distinct method or class to ensure each class or method has only one responsibility.",
+            "reason": "The 'PaymentProcessor' class handles both payment processing and directly modifies the order status, conflating multiple responsibilities.",
+            "suggestion": "Decouple the order status update logic from the 'PaymentProcessor' class. Introduce a separate 'OrderStatusManager' or pass responsibility back to the 'Order' class for better encapsulation.",
             "changes": [
                 {
                     "original_code": [
-                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
                     ],
                     "suggestion_code": [
-                        "def pay(self, order: Order, security_code: str):\n        if self.verify_security_code(security_code):\n            print(\"Processing payment\")\n            order.status = \"paid\"\n\n    def verify_security_code(self, security_code: str) -> bool:\n        print(f\"Verifying security code: {security_code}\")\n        # Assume verification logic\n        return True"
+                        "class PaymentProcessor:\n    def pay(self, security_code: str) -> None:\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n\nclass Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def set_status_paid(self):\n        self.status = \"paid\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    12,
+                    15
+                ],
+                [
+                    18,
+                    21
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'PaymentProcessor' class does not easily extend to support different payment mechanisms without modification.",
+            "suggestion": "Introduce an interface or abstract class for payment processors so new payment methods can be added without modifying the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing credit card payment...\")\n        print(f\"Security code for card: {security_code}\")\n        super().pay(order, security_code)\n"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details above.",
     "usage": {
-        "completion_tokens": 285,
+        "completion_tokens": 589,
         "prompt_tokens": 2257,
-        "total_tokens": 2542
+        "total_tokens": 2846
     }
 }

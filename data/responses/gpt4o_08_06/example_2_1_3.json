@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    18
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is handling both payment processing and security code verification responsibilities.",
+            "suggestion": "Separate the verification of the security code into a distinct method or class to ensure each class or method has only one responsibility.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order, security_code: str):\n        if self.verify_security_code(security_code):\n            print(\"Processing payment\")\n            order.status = \"paid\"\n\n    def verify_security_code(self, security_code: str) -> bool:\n        print(f\"Verifying security code: {security_code}\")\n        # Assume verification logic\n        return True"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 285,
+        "prompt_tokens": 2257,
+        "total_tokens": 2542
+    }
+}

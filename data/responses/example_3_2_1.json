@@ -1,61 +1,54 @@
 {
     "principle_violations": [
         {
-            "principle": "Liskov Substitution Principle",
-            "lines": [
-                [
-                    18,
-                    24
-                ],
-                [
-                    45,
-                    51
-                ],
-                [
-                    55,
-                    61
-                ]
-            ],
-            "method_names": [
-                "sum"
-            ],
-            "reason": "The VolumeCalculator class inherits from AreaCalculator but overrides the sum method for calculating volumes, which leads to confusion as it breaks the substitutability of base class AreaCalculator with derived class VolumeCalculator.",
-            "suggestion": "Create a separate interface or base class for VolumeCalculator so that it doesn't inherit from AreaCalculator, or rename the functionality to better reflect its purpose, such as volume_sum if it is specific for volumes.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume",
-                        "solid_shapes = [Circle(3), Square(4)]\nvolume_calculator = VolumeCalculator(solid_shapes)\nvolume_outputter = SumCalculator(volume_calculator)\n\nprint(volume_outputter.to_json())\nprint(volume_outputter.to_html())"
-                    ],
-                    "suggestion_code": [
-                        "class VolumeCalculator:\n    def __init__(self, shapes=[]):\n        self.shapes = shapes\n\n    def volume_sum(self):\n        total_volume = 0\n        # Assuming the shape has a volume method, otherwise this section needs a different handling\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume",
-                        "solid_shapes = [Circle(3), Square(4)]\nvolume_calculator = VolumeCalculator(solid_shapes)\nvolume_outputter = SumCalculator(volume_calculator)\n\nprint(volume_outputter.to_json())\nprint(volume_outputter.to_html())"
-                    ]
-                }
-            ]
-        },
-        {
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    45,
-                    61
+                    52,
+                    56
+                ],
+                [
+                    57,
+                    58
                 ]
             ],
             "method_names": [
-                "to_json",
-                "to_html"
+                "JSON",
+                "HTML"
             ],
-            "reason": "The main responsibility of the SumCalculator class is to output the sum of calculations in different formats, but it calls area and volume calculations.",
-            "suggestion": "Consider separating the responsibilities of calculating areas or volumes from that of formatting such as JSON and HTML output. Potentially refactor SumCalculator to take the output from calculators and format it separately.",
+            "reason": "The methods `JSON` and `HTML` in `SumCalculator` violate SRP because they handle both data serialization and presentation, mixing responsibilities.",
+            "suggestion": "Separate data serialization and presentation into dedicated classes or methods, allowing `SumCalculator` to focus solely on sum calculations.",
             "changes": [
                 {
                     "original_code": [
                         "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
                     ],
                     "suggestion_code": [
-                        "class SumOutputter:\n    def __init__(self, sum):\n        self.sum = sum\n\n    def to_json(self):\n        data = {\n            'sum': self.sum\n        }\n        return json.dumps(data)\n\n    def to_html(self):\n        return f\"Sum of the areas: {self.sum}\"",
-                        "shapes = [Circle(2), Square(5), Square(6)]\n# Area Calculation\narea_calculator = AreaCalculator(shapes)\narea_outputter = SumOutputter(area_calculator.sum())\n\nprint(area_outputter.to_json())\nprint(area_outputter.to_html())"
+                        "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def calculate_sum(self):\n        return self.calculator.sum()\n\nclass OutputHandler:\n    def to_json(self, value):\n        return json.dumps({'sum': value})\n\n    def to_html(self, value):\n        return f\"Sum of the areas of provided shapes: {value}\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    42,
+                    48
+                ]
+            ],
+            "method_names": [
+                "VolumeCalculator.sum"
+            ],
+            "reason": "The `VolumeCalculator` class modifies the method `sum` from `AreaCalculator` but does not enhance it, potentially breaking OCP.",
+            "suggestion": "Redefine `VolumeCalculator` to extend functionality rather than overwrite. Alternatively, rename `sum` to better represent its intent.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, shapes):\n        self.shapes = shapes\n\n    def calculate_total_area_and_volume(self):\n        # Redefined version for both area and volume aspects.\n        total_values = sum([shape.area() for shape in self.shapes])\n        return total_values"
                     ]
                 }
             ]
@@ -63,8 +56,8 @@
     ],
     "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 814,
+        "completion_tokens": 525,
         "prompt_tokens": 2489,
-        "total_tokens": 3303
+        "total_tokens": 3014
     }
 }

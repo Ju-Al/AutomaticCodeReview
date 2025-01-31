@@ -1,0 +1,97 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    11
+                ],
+                [
+                    17,
+                    20
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator.sum",
+                "VolumeCalculator.sum"
+            ],
+            "reason": "The AreaCalculator and VolumeCalculator classes are responsible for both traversing a list of shapes and calculating the corresponding areas or volumes.",
+            "suggestion": "Separate the summation logic into a dedicated class or utility and delegate the calculation responsibility.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        if (shape instanceof Shape) {",
+                        "            totalArea += shape.area();",
+                        "        } else {",
+                        "            throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");",
+                        "        }",
+                        "    }",
+                        "    return totalArea;",
+                        "}",
+                        "public double sum() {",
+                        "    double totalVolume = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalVolume += shape.area();",
+                        "    }",
+                        "    return totalVolume;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class CalculationUtility {",
+                        "    public static double computeSum(List<Shape> shapes) {",
+                        "        double total = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            total += shape.area();",
+                        "        }",
+                        "        return total;",
+                        "    }",
+                        "}",
+                        "public double sum() {",
+                        "    return CalculationUtility.computeSum(shapes);",
+                        "}",
+                        "public double sum() {",
+                        "    return CalculationUtility.computeSum(shapes);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    7,
+                    13
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator.sum"
+            ],
+            "reason": "The sum method of AreaCalculator has a built-in type check via instanceof, violating the Open/Closed Principle by requiring modification when new shapes are introduced.",
+            "suggestion": "Refactor the solution to use polymorphism to handle new shape types instead of relying on type checks at runtime.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if (shape instanceof Shape) {",
+                        "    totalArea += shape.area();",
+                        "} else {",
+                        "    throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");"
+                    ],
+                    "suggestion_code": [
+                        "totalArea += shape.area();"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 471,
+        "prompt_tokens": 2683,
+        "total_tokens": 3154
+    }
+}

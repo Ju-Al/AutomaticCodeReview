@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_4",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "There is 1 TP ('Single Responsibility Principle'), 1 FP ('Open/Closed Principle'), and 1 FN ('Dependency Inversion Principle'). Precision is 0.5, Recall is 0.5, leading to an F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output mentions multiple responsibilities in 'Order', similar to Expected Output, but lacks detail on prices and quantities."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual suggests separating order management and payment processing, while Expected focuses on splitting order into quantities and prices. Both suggest separation but differ in focus and details."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual output lists methods related to order and payment processing, while expected output focuses on method names related to item addition and price calculation, showing minimal thematic alignment."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output focuses on restructuring the Order class and payment processors, while the expected output targets total price calculation and item management. Both suggest improvements in class structure but differ significantly in their implementation approach and focus."
+        }
+    ]
+]

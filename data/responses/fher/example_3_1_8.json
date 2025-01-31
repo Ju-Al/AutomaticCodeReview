@@ -1,0 +1,103 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    17
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class is responsible for maintaining order data and processing the order's status, which violates the single responsibility principle.",
+            "suggestion": "Separate the order management functionality from payment processing, potentially by creating a new class for handling payment status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.quantities = []",
+                        "        self.prices = []",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.items.append(name)",
+                        "        self.quantities.append(quantity)",
+                        "        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.quantities = []",
+                        "        self.prices = []",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.items.append(name)",
+                        "        self.quantities.append(quantity)",
+                        "        self.prices.append(price)",
+                        "",
+                        "    def set_status(self, status: str) -> None:",
+                        "        self.status = status"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    17
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class needs to be modified to accommodate new functionalities related to order items or statuses, violating the open/closed principle.",
+            "suggestion": "Implement a more flexible structure for order processing that can be extended with additional functionalities (like discount calculations, etc.), without altering the Order class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.quantities = []",
+                        "        self.prices = []",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:",
+                        "        self.items.append(name)",
+                        "        self.quantities.append(quantity)",
+                        "        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class OrderItem:",
+                        "    def __init__(self, name: str, quantity: int, price: float):",
+                        "        self.name = name",
+                        "        self.quantity = quantity",
+                        "        self.price = price",
+                        "",
+                        "class Order:",
+                        "    def __init__(self):",
+                        "        self.items = []",
+                        "        self.status = 'open'",
+                        "",
+                        "    def add_item(self, item: OrderItem) -> None:",
+                        "        self.items.append(item)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 711,
+        "prompt_tokens": 2394,
+        "total_tokens": 3105
+    }
+}

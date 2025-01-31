@@ -1,0 +1,69 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    78,
+                    80
+                ],
+                [
+                    87,
+                    95
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay"
+            ],
+            "reason": "The `pay` methods in both `DebitPaymentProcessor` and `CreditPaymentProcessor` classes have too many responsibilities, such as processing payment and handling authentication checks.",
+            "suggestion": "Separate the payment execution logic from the authentication validation. Create a dedicated method for handling authentication.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order):\n        self._authenticate()\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n    def _authenticate(self):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')",
+                        "def pay(self, order: Order):\n        print('Processing credit payment type')\n        if not self._authenticate():\n            raise Exception('Authentication required')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\n    def _authenticate(self):\n        return True  # Implement authentication logic here"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    78,
+                    80
+                ],
+                [
+                    95,
+                    95
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `pay` method in `PaypalPaymentProcessor` accepts an unnecessary `security_code` parameter that is not actually utilized in the processing logic of the payment.",
+            "suggestion": "Remove the unused `security_code` parameter from the `pay` method in `PaypalPaymentProcessor`.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 657,
+        "prompt_tokens": 2544,
+        "total_tokens": 3201
+    }
+}

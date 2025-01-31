@@ -1,0 +1,90 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    7
+                ],
+                [
+                    18,
+                    19
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class handles multiple responsibilities, such as processing payments and modifying the order status.",
+            "suggestion": "Separate the payment processing and order status management into different classes or methods. The PaymentProcessor should focus solely on payment processing.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        // Skip changing the order status here\n    }\n\npublic void setOrderStatusPaid(Order order) {\n        order.setStatus(\"paid\");\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    5
+                ],
+                [
+                    10,
+                    10
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor class is not designed to accommodate new payment methods or types of orders without modification, violating the open/closed principle.",
+            "suggestion": "Create an interface for payment processing, and implement different payment methods as separate classes that extend this interface. This allows for new payment methods to be added without modifying the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentMethod {\n    void pay(Order order, String securityCode);\n}\n\npublic class CreditCardPayment implements PaymentMethod {\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    2,
+                    4
+                ]
+            ],
+            "method_names": [
+                "main"
+            ],
+            "reason": "The Main class is tightly coupled to the concrete classes Order and PaymentProcessor. It should depend on abstractions instead.",
+            "suggestion": "Use dependency injection to allow the Main class to work with an abstraction rather than directly with concrete implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "Order order = new Order();\n\n        PaymentProcessor processor = new PaymentProcessor();\n        processor.pay(order, \"0372846\");"
+                    ],
+                    "suggestion_code": [
+                        "PaymentMethod processor = new CreditCardPayment();\n        processor.pay(order, \"0372846\");"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 736,
+        "prompt_tokens": 2396,
+        "total_tokens": 3132
+    }
+}

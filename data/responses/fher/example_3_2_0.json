@@ -1,0 +1,202 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    13,
+                    23
+                ],
+                [
+                    32,
+                    46
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The 'AreaCalculator' class is responsible for both calculating area and managing the collection of shapes. Additionally, 'VolumeCalculator' incorrectly inherits and reuses the 'sum' method from 'AreaCalculator', which is not its intended role.",
+            "suggestion": "Create separate classes that only handle specific calculation responsibilities, such as an 'AreaCalculator' and a 'ShapeManager'. Make sure volume calculations have a dedicated method to avoid confusion.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_area(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes):",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_volume(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    13,
+                    23
+                ],
+                [
+                    32,
+                    46
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "Both 'AreaCalculator' and 'VolumeCalculator' need to modify existing code to accommodate changes or new features related to area or volume calculations.",
+            "suggestion": "Utilize composition by creating separate classes for area and volume calculations that can be extended without changing the original structure. This allows new types of shapes or calculations without altering existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_area(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes):",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_volume(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    58,
+                    65
+                ],
+                [
+                    70,
+                    77
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator",
+                "VolumeCalculator"
+            ],
+            "reason": "The higher-level modules (AreaCalculator and VolumeCalculator) depend directly on the low-level module (Shape). Instead, they should depend on abstractions (interfaces) representing those shapes.",
+            "suggestion": "Use interface types to reduce coupling between calculator classes and concrete shape implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes: List[Shape]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_area(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            total_area += shape.area()",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes: List[Shape]) -> None:",
+                        "        self.shapes = shapes",
+                        "    def calculate_total_volume(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.volume()  # Assuming a method for volume exists",
+                        "        return total_volume"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1489,
+        "prompt_tokens": 2489,
+        "total_tokens": 3978
+    }
+}

@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    8
+                ],
+                [
+                    20,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "JSON"
+            ],
+            "reason": "The AreaCalculator class is responsible for calculating area, while the SumCalculator class is responsible for formatting output. This violates the SRP as both methods have multiple responsibilities.",
+            "suggestion": "Separate output formatting from area calculation. Create dedicated formatter classes or methods for output.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "def JSON(self, total_sum):\n        data = {\n            'sum': total_sum\n        }\n        return json.dumps(data)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    6,
+                    8
+                ],
+                [
+                    20,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "HTML"
+            ],
+            "reason": "The sum calculation logic is repeated in the JSON and HTML methods when calling 'self.calculator.sum()'. This violates the DRY principle.",
+            "suggestion": "Store the result of the sum calculation in a variable to avoid repetitive calls.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)",
+                        "def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "def JSON(self):\n        total_sum = self.calculator.sum()\n        data = {\n            'sum': total_sum\n        }\n        return json.dumps(data)",
+                        "def HTML(self):\n        total_sum = self.calculator.sum()\n        return f\"Sum of the areas of provided shapes: {total_sum}\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 632,
+        "prompt_tokens": 2345,
+        "total_tokens": 2977
+    }
+}

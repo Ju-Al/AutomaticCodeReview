@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_2",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "Single Responsibility Principle is a true positive, but Open/Closed Principle is a false negative, leading to a lack of complete recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output describes the functionality of the Order class, but does not clearly address the violation of the Single Responsibility Principle as explicitly stated in the expected output."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs suggest refactoring the Order class, but the actual output focuses on segregating item and order status management, while the expected output emphasizes separating order quantities and prices, indicating a lack of complete alignment."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output mentions 'addItem' and 'setStatus', while the expected output includes 'totalPrice' and 'addItems', showing minimal alignment in content."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests changing the item structure to a separate Item class, while the expected output introduces an OrderQuantityManager and PriceCalculator, indicating a different approach to handling orders and their quantities."
+        }
+    ]
+]

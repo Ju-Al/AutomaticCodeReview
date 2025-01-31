@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_5_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_1",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives since Actual Output is empty. Dependency Inversion Principle is a False Negative. Precision, Recall, and F1-Score are all undefined due to division by zero."
+        }
+    ],
+    []
+]

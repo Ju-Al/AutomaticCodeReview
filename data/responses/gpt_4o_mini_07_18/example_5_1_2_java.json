@@ -1,0 +1,85 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    31,
+                    38
+                ],
+                [
+                    40,
+                    41
+                ],
+                [
+                    59,
+                    66
+                ],
+                [
+                    68,
+                    69
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "addItem"
+            ],
+            "reason": "The DebitCardPaymentProcessor class mixes responsibilities of payment processing and authorization checks. Similarly, the Order class has responsibilities beyond just holding order data.",
+            "suggestion": "Separate payment processing and authorization responsibilities into different classes or use a separate service for handling payments and authorizations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private SMSAuthorizer authorizer;\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode, SMSAuthorizer authorizer) {\n        this.authorizer = authorizer;\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        if (!this.authorizer.is_authentificated()) {\n            throw new IllegalStateException(\"Not authentificated\");\n        }\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private String securityCode;\n\n    public DebitCardPaymentProcessor(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit card payment\");\n        System.out.println(\"Verifying security code: \" + this.securityCode);\n        order.setStatus(\"paid\");\n    }\n}",
+                        "public void addItem(String name, int quantity, double price) {\n        // Consider validating parameters here\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    8,
+                    9
+                ],
+                [
+                    24,
+                    25
+                ],
+                [
+                    39,
+                    40
+                ]
+            ],
+            "method_names": [
+                "verify_code",
+                "pay",
+                "pay"
+            ],
+            "reason": "The DebitCardPaymentProcessor is tightly coupled with the SMSAuthorizer, which means higher-level modules depend on lower-level modules.",
+            "suggestion": "Use an abstraction for the authorizer so that the payment processors depend on this abstraction instead of a concrete implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private SMSAuthorizer authorizer;\n    ...\n}",
+                        "public void verify_code(String code) { \n        System.out.println(\"Verifying code\");\n        this.authenticated = true;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {\n    private Authorizer authorizer;\n    ...\n}",
+                        "public interface Authorizer {\n    void verify(String code);\n    boolean isAuthenticated();\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 775,
+        "prompt_tokens": 2775,
+        "total_tokens": 3550
+    }
+}

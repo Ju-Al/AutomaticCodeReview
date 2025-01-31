@@ -1,0 +1,69 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    19,
+                    26
+                ],
+                [
+                    28,
+                    43
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `Order` class is responsible for managing orders and processing payments, which are distinct concerns.",
+            "suggestion": "Extract the payment processing logic into a separate `PaymentProcessor` class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {\n        switch (paymentType.toLowerCase()) {\n            case \"debit\":\n                System.out.println(\"Processing debit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n            case \"credit\":\n                System.out.println(\"Processing credit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n            default:\n                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n        }\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class PaymentProcessor {\n    public void processPayment(String paymentType, String securityCode, Order order) {\n        switch (paymentType.toLowerCase()) {\n            case \"debit\":\n                System.out.println(\"Processing debit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                order.setStatus(\"paid\");\n                break;\n            case \"credit\":\n                System.out.println(\"Processing credit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                order.setStatus(\"paid\");\n                break;\n            default:\n                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n        }\n    }\n}",
+                        "order.pay(\"debit\", \"0372846\");",
+                        "PaymentProcessor paymentProcessor = new PaymentProcessor();\npaymentProcessor.processPayment(\"debit\", \"0372846\", order);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    19,
+                    26
+                ],
+                [
+                    28,
+                    43
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Adding new payment types requires modifying the `pay` method, which violates the principle.",
+            "suggestion": "Use a strategy pattern to define different payment methods while maintaining the `Order` class unchanged.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {\n        switch (paymentType.toLowerCase()) {\n            case \"debit\":\n                System.out.println(\"Processing debit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n            case \"credit\":\n                System.out.println(\"Processing credit payment type\");\n                System.out.println(\"Verifying security code: \" + securityCode);\n                this.status = \"paid\";\n                break;\n            default:\n                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n        }\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentStrategy {\n    void pay(Order order);\n}\n\npublic class DebitPayment implements PaymentStrategy {\n    private String securityCode;\n\n    public DebitPayment(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing debit payment type\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}\n\npublic class CreditPayment implements PaymentStrategy {\n    private String securityCode;\n\n    public CreditPayment(String securityCode) {\n        this.securityCode = securityCode;\n    }\n\n    @Override\n    public void pay(Order order) {\n        System.out.println(\"Processing credit payment type\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}\n",
+                        "PaymentStrategy payment = new DebitPayment(\"0372846\");\npayment.pay(order);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 916,
+        "prompt_tokens": 2518,
+        "total_tokens": 3434
+    }
+}

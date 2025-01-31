@@ -1,57 +1,55 @@
 {
     "principle_violations": [
         {
-            "principle": "Liskov Substitution Principle",
-            "lines": [
-                [
-                    54,
-                    56
-                ],
-                [
-                    62,
-                    64
-                ]
-            ],
-            "method_names": [
-                "volume"
-            ],
-            "reason": "The Square and Circle classes are not correctly substitutable for the Shape class, as they raise NotImplementedError for the volume method.",
-            "suggestion": "Ensure that all subclasses of Shape provide a valid implementation for both area and volume methods or separate the volume responsibility.",
-            "changes": [
-                {
-                    "original_code": [
-                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
-                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
-                    ],
-                    "suggestion_code": [
-                        "# Implement a default behavior for non-volumetric shapes\n    def volume(self):\n        return 0",
-                        "# Implement a default behavior for non-volumetric shapes\n    def volume(self):\n        return 0"
-                    ]
-                }
-            ]
-        },
-        {
             "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    72,
-                    98
+                    98,
+                    115
                 ]
             ],
             "method_names": [
-                "SumCalculator",
                 "JSON",
                 "HTML"
             ],
-            "reason": "The SumCalculator class has multiple responsibilities: calculating the sum and formatting the output in JSON and HTML.",
-            "suggestion": "Separate the responsibility of formatting outputs into a dedicated class, such as OutputFormatter.",
+            "reason": "The `SumCalculator` class has multiple responsibilities: formatting data in JSON and HTML, whereas its purpose should be to encapsulate the calculator and manage calculation results.",
+            "suggestion": "Split the output formatting responsibilities into dedicated classes, following the SRP principles, and ensure flexibility for additional formats in the future.",
             "changes": [
                 {
                     "original_code": [
                         "class SumCalculator:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
                     ],
                     "suggestion_code": [
-                        "class SumCalculator:\n    def __init__(self, calculator: AreaCalculator) -> None:\n        self.calculator = calculator\n\n    def calculate(self):\n        return self.calculator.sum()\n\nclass OutputFormatter:\n    def JSON(self, sum_value):\n        data = {\n            'sum': sum_value\n        }\n        return json.dumps(data)\n\n    def HTML(self, sum_value):\n        return f\"Sum of the areas of provided shapes: {sum_value}\"\n\narea_outputter = SumCalculator(area_calculator)\nformatter = OutputFormatter()\n\nprint(formatter.JSON(area_outputter.calculate()))\nprint(formatter.HTML(area_outputter.calculate()))\n\nvolume_outputter = SumCalculator(volume_calculator)\n\nprint(formatter.JSON(volume_outputter.calculate()))\nprint(formatter.HTML(volume_outputter.calculate()))"
+                        "class CalculationResultOutputter:\n    def __init__(self, calculation_result):\n        self.result = calculation_result\n\n    def to_json(self):\n        return json.dumps({'sum': self.result})\n\n    def to_html(self):\n        return f\"Sum of the calculation result: {self.result}\""
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    70,
+                    75
+                ],
+                [
+                    118,
+                    122
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "to_html"
+            ],
+            "reason": "Adding a new shape or a new output format would require modifying the core calculation or output classes, violating the principle.",
+            "suggestion": "Introduce abstract classes or interfaces for handling summation and output generation, so new cases can extend these implementations without editing existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class SummationCalculator(ABC):\n    @abstractmethod\n    def compute(self, shapes: list):\n        pass\n\nclass VolumeSummationCalculator(SummationCalculator):\n    def compute(self, shapes: list):\n        return sum(shape.volume() for shape in shapes if isinstance(shape, Shape))"
                     ]
                 }
             ]
@@ -59,8 +57,8 @@
     ],
     "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 646,
+        "completion_tokens": 493,
         "prompt_tokens": 2587,
-        "total_tokens": 3233
+        "total_tokens": 3080
     }
 }

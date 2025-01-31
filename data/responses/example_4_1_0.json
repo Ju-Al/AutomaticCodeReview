@@ -4,74 +4,33 @@
             "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    11,
+                    13,
                     15
-                ],
-                [
-                    31,
-                    33
-                ],
-                [
-                    45,
-                    47
                 ]
             ],
             "method_names": [
-                "auth_sms",
-                "auth_sms",
                 "auth_sms"
             ],
-            "reason": "The PaymentProcessor interface forces all payment processor implementations to have an auth_sms method, even if they do not require SMS authentication, violating the Interface Segregation Principle.",
-            "suggestion": "Separate the auth_sms method into its own interface, such as 'SMSAuth', and have the implementations that require it inherit from this new interface.",
+            "reason": "The `PaymentProcessor` interface enforces all subclasses to implement the `auth_sms` method, but not all payment processors may require SMS authentication, leading to unnecessary implementation in subclasses.",
+            "suggestion": "Refactor the interface to segregate concerns. Define separate interfaces for payment processing and authentication, and only implement those that are needed by each subclass.",
             "changes": [
                 {
                     "original_code": [
                         "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...\n\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
-                        "def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")",
-                        "def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")"
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\"\n\n    def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")"
                     ],
                     "suggestion_code": [
-                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...\n\n\nclass SMSAuth(ABC):\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
-                        "# Removed auth_sms from CreditPaymentProcessor\n",
-                        "# Removed auth_sms from PaypalPaymentProcessor\n"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Liskov Substitution Principle",
-            "lines": [
-                [
-                    45,
-                    47
-                ],
-                [
-                    52,
-                    54
-                ]
-            ],
-            "method_names": [
-                "auth_sms"
-            ],
-            "reason": "The auth_sms method in some payment processors, namely Credit and Paypal, just raises a 'Not implemented' exception which violates the Liskov Substitution Principle as these classes should work seamlessly when substituted.",
-            "suggestion": "If auth_sms is not applicable, these implementations should not inherit from an interface that demands this non-implemented behavior. Reconsider the inheritance or properly implement it.",
-            "changes": [
-                {
-                    "original_code": [
-                        "def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")",
-                        "def pay(self, order, security_code: str):"
-                    ],
-                    "suggestion_code": [
-                        "# Removed auth_sms from CreditPaymentProcessor and PaypalPaymentProcessor - these may need different handling if inheriting the SMSAuth."
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order):\n        ...\n\nclass SmsAuthProcessor(ABC):\n    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ...",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order):\n        print(\"Processing credit payment type\")\n        print(f\"Verifying security code: {self.security_code}\")\n        order.status = \"paid\""
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 602,
+        "completion_tokens": 417,
         "prompt_tokens": 2552,
-        "total_tokens": 3154
+        "total_tokens": 2969
     }
 }

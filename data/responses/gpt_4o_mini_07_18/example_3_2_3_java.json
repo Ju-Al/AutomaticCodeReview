@@ -1,0 +1,74 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    18,
+                    20
+                ],
+                [
+                    25,
+                    27
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating the area and validating each shape during the sum calculation.",
+            "suggestion": "Separate the shape validation logic into another class or method to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "for (Shape shape : shapes) {",
+                        "if (shape instanceof Shape) {"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "for (Shape shape : shapes) {",
+                        "validateShape(shape);"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    18,
+                    20
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator needs to be modified to change how shapes are validated or how new shapes are handled.",
+            "suggestion": "Use a strategy pattern for shape validation to allow for new shapes without modifying the existing AreaCalculator class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "if (shape instanceof Shape) {",
+                        "throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "shapeValidator.validate(shape);",
+                        "throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 393,
+        "prompt_tokens": 2683,
+        "total_tokens": 3076
+    }
+}

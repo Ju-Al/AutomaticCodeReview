@@ -1,0 +1,36 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    64,
+                    72
+                ]
+            ],
+            "method_names": [
+                "PaypalPaymentProcessor.pay"
+            ],
+            "reason": "The `PaypalPaymentProcessor` pay method does not adhere to the `PaymentProcessor` interface properly due to the added `security_code` parameter.",
+            "suggestion": "Modify the method signature to match that of the abstract base class `PaymentProcessor`. Remove the redundant `security_code` parameter.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order, security_code: str):",
+                        "print(f\"Verifying email: {self.security_code}\")"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order):",
+                        "print(f\"Verifying email: {self.security_code}\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 217,
+        "prompt_tokens": 2544,
+        "total_tokens": 2761
+    }
+}

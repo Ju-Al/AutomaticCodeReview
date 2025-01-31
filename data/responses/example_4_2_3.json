@@ -1,69 +1,65 @@
 {
     "principle_violations": [
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Liskov Substitution Principle",
             "lines": [
                 [
-                    44,
-                    46
+                    39,
+                    43
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The volume method on the Square and Circle classes raise a NotImplementedError. Subclasses of Shape should provide a meaningful implementation for all of its abstract methods.",
+            "suggestion": "Consider rethinking the design to avoid requiring subclasses to implement methods that are not applicable.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                    ],
+                    "suggestion_code": [
+                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2",
+                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    13,
+                    16
                 ],
                 [
-                    51,
-                    53
+                    20,
+                    22
                 ]
             ],
             "method_names": [
                 "area",
                 "volume"
             ],
-            "reason": "The Square and Circle classes need to be modified whenever the Shape class gets a new method, violating the open/closed principle.",
-            "suggestion": "Separate the volume calculation functionality from shapes that do not naturally have a volume. Create more specific interfaces or classes for 2D and 3D shapes.",
+            "reason": "The Shape interface is too broad for shapes like Square and Circle that do not have a meaningful volume calculation.",
+            "suggestion": "Introduce separate interfaces for area-calculable and volume-calculable shapes.",
             "changes": [
                 {
                     "original_code": [
-                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
-                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass"
                     ],
                     "suggestion_code": [
-                        "# Omit 'volume' implementation from 2D shapes\n",
-                        "# Omit 'volume' implementation from 2D shapes\n"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Single Responsibility Principle",
-            "lines": [
-                [
-                    68,
-                    78
-                ]
-            ],
-            "method_names": [
-                "SumCalculator"
-            ],
-            "reason": "The SumCalculator class has multiple responsibilities: it performs a calculation and formats output in different formats.",
-            "suggestion": "Separate the formatting responsibilities from the calculation to adhere to the single responsibility principle.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class SumCalculator:",
-                        "def JSON(self):",
-                        "def HTML(self):"
-                    ],
-                    "suggestion_code": [
-                        "class ResultFormatter:",
-                        "def json_format(sum):",
-                        "def html_format(sum):"
+                        "class AreaCalculable(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass VolumeCalculable(ABC):\n    @abstractmethod\n    def volume(self):\n        pass"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details above.",
     "usage": {
-        "completion_tokens": 388,
+        "completion_tokens": 509,
         "prompt_tokens": 2587,
-        "total_tokens": 2975
+        "total_tokens": 3096
     }
 }

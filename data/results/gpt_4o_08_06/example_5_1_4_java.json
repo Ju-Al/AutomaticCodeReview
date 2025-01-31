@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_4",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP: 'Single Responsibility Principle', 'Dependency Inversion Principle'; FP: 'Open/Closed Principle'; FN: None. Precision and Recall are both 0.67, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs discuss the Dependency Inversion Principle violation with similar context, mentioning the dependency on SMSAuthorizer. Actual output lacks detail on different validation methods and high-level vs low-level class relationship."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest decoupling dependencies by using an abstraction for authorization. The Actual Output suggests an interface while the Expected Output suggests an abstract class, which are conceptually similar but differ in implementation details."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'DebitCardPaymentProcessor' does not align with the expected output 'SMSAuthorizer', indicating no thematic or contextual agreement."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Actual Output changes 'SMSAuthorizer' to 'Authorizer', aligning with Expected Output's abstraction. However, it lacks the implementation details and additional classes like 'NotARobotAuthorizer' present in the Expected Output."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output mentions SRP violation with authentication logic in payment processors, whereas Expected Output focuses on order class handling prices and quantities. Both discuss SRP but address different issues."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests refactoring for separation of concerns, similar to the expected output. However, the actual focuses on payment processing while the expected focuses on order management, leading to misalignment in context and details."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output contains different entities ('Order', 'PaypalPaymentProcessor', etc.) compared to the expected output, which involves functions ('totalPrices', 'addItems'). There is no thematic or contextual alignment between the two outputs."
+        },
+        {
+            "example_id": "example_5_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual and expected outputs are unrelated; the actual involves payment processing classes while the expected involves order management and price calculation."
+        }
+    ]
+]

@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_2",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives include 'Single Responsibility Principle' and 'Don't Repeat Yourself', with no False Positives or False Negatives."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output mentions multiple responsibilities but lacks the specific critique that it violates the Single Responsibility Principle, which is highlighted in the expected output."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest breaking down the 'testableHtml' functionality into smaller methods, but the actual output lacks the specific mention of path processing and string formatting found in the expected output."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, both containing the same content 'testableHtml'."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "While both outputs address the same functionality of processing HTML content, the actual output lacks key details, such as the handling of suite setup and teardown paths, which are explicitly outlined in the expected output."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review reason for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Reason-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address the issue of repetition, but the actual output lacks specificity about the DRY principle and the number of repetitions mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review suggestion for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests creating a method to avoid redundancy, but lacks detail on specific functions and classes recommended in the expected output, showing a lack of alignment in clarity and relevance."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review method names for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both the actual and expected outputs contain identical content in the specified field, indicating complete alignment."
+        },
+        {
+            "example_id": "example_6_2_2",
+            "test_case": "Review code segments for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Changes-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests appending setup and teardown pages, while the expected output includes more detailed logic for handling these pages, including suite setup and teardown conditions, leading to low thematic alignment."
+        }
+    ]
+]

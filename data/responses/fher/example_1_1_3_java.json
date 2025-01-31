@@ -1,0 +1,104 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    20
+                ],
+                [
+                    26,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'pay' method handles both payment processing logic and status updates, which creates a violation of SRP as it combines two responsibilities.",
+            "suggestion": "Separate payment processing into another class, such as PaymentProcessor, which will handle the payment logic and leave the Order class responsible only for managing items and their respective statuses.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {\n",
+                        "        switch (paymentType.toLowerCase()) {\n",
+                        "            case \"debit\":\n",
+                        "                System.out.println(\"Processing debit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                this.status = \"paid\";\n",
+                        "                break;\n\n",
+                        "            case \"credit\":\n",
+                        "                System.out.println(\"Processing credit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                this.status = \"paid\";\n",
+                        "                break;\n\n",
+                        "            default:\n",
+                        "                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n",
+                        "        }\n"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(String paymentType, String securityCode) {\n",
+                        "        PaymentProcessor processor = new PaymentProcessor();\n",
+                        "        this.status = processor.processPayment(paymentType, securityCode);\n",
+                        "    }\n",
+                        "public class PaymentProcessor {\n",
+                        "    public String processPayment(String paymentType, String securityCode) {\n",
+                        "        switch (paymentType.toLowerCase()) {\n",
+                        "            case \"debit\":\n",
+                        "                System.out.println(\"Processing debit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                return \"paid\";\n\n",
+                        "            case \"credit\":\n",
+                        "                System.out.println(\"Processing credit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                return \"paid\";\n\n",
+                        "            default:\n",
+                        "                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n",
+                        "        }\n",
+                        "    }\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    14,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'pay' method contains repeated logic for processing different payment types, specifically the verification and state update. This violates the DRY principle.",
+            "suggestion": "Extract the common logic into a separate method to avoid repetition within the 'pay' method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "System.out.println(\"Processing debit payment type\");\n",
+                        "System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "this.status = \"paid\";\n",
+                        "System.out.println(\"Processing credit payment type\");\n",
+                        "System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "this.status = \"paid\";\n"
+                    ],
+                    "suggestion_code": [
+                        "processPaymentType(\"debit\", securityCode);\n",
+                        "processPaymentType(\"credit\", securityCode);\n",
+                        "private void processPaymentType(String paymentType, String securityCode) {\n",
+                        "    System.out.println(\"Processing \" + paymentType + \" payment type\");\n",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "    this.status = \"paid\";\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 974,
+        "prompt_tokens": 2518,
+        "total_tokens": 3492
+    }
+}
