@@ -1,0 +1,140 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    19,
+                    47
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class requires modification to accommodate new shape types, such as Triangle or Rectangles. This violates the principle that classes should be open for extension but closed for modification.",
+            "suggestion": "Use polymorphism by creating a Shape interface with a method for calculating the area. Each shape class (Circle, Square) would then implement this interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "        for (Object shape : shapes) {",
+                        "            if (shape instanceof Square) {",
+                        "                Square square = (Square) shape;",
+                        "                totalArea += Math.pow(square.getLength(), 2);",
+                        "            } else if (shape instanceof Circle) {",
+                        "                Circle circle = (Circle) shape;",
+                        "                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "            }",
+                        "        }",
+                        "        return totalArea;",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {",
+                        "    double area();",
+                        "}",
+                        "public class Circle implements Shape {",
+                        "    public double area() {",
+                        "        return Math.PI * Math.pow(radius, 2);",
+                        "    }",
+                        "}",
+                        "public class Square implements Shape {",
+                        "    public double area() {",
+                        "        return Math.pow(length, 2);",
+                        "    }",
+                        "}",
+                        "public double sum() {",
+                        "        for (Shape shape : shapes) {",
+                        "            totalArea += shape.area();",
+                        "        }",
+                        "        return totalArea;",
+                        "    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    1,
+                    1
+                ],
+                [
+                    6,
+                    6
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator",
+                "SumCalculator"
+            ],
+            "reason": "The AreaCalculator class is directly dependent on concrete shape classes (Circle and Square). Instead, it should depend on abstractions (Shape interface).",
+            "suggestion": "Instead of using List<Object>, use List<Shape> and have AreaCalculator depend on the Shape interface instead of the concrete classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;",
+                        "public AreaCalculator(List<Object> shapes) {"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;",
+                        "public AreaCalculator(List<Shape> shapes) {"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    15,
+                    15
+                ],
+                [
+                    20,
+                    20
+                ],
+                [
+                    25,
+                    25
+                ]
+            ],
+            "method_names": [
+                "toJSON",
+                "toHTML"
+            ],
+            "reason": "The SumCalculator class serves multiple responsibilities, including area calculation and formatting the output for JSON and HTML. These should be separated into different classes.",
+            "suggestion": "Create separate formatter classes for JSON and HTML representations of the output, ensuring that SumCalculator only handles the computation of the area sum.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public String toJSON() {",
+                        "        return String.format(\"{\\\"sum\\\": %.2f}\", calculator.sum());",
+                        "    }",
+                        "public String toHTML() {",
+                        "        return \"<p>Sum of the areas of provided shapes: \" + calculator.sum() + \"</p>\";",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public class JSONFormatter {",
+                        "    public String format(double sum) {",
+                        "        return String.format(\"{\\\"sum\\\": %.2f}\", sum);",
+                        "    }",
+                        "}",
+                        "public class HTMLFormatter {",
+                        "    public String format(double sum) {",
+                        "        return \"<p>Sum of the areas of provided shapes: \" + sum + \"</p>\";",
+                        "    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 929,
+        "prompt_tokens": 2501,
+        "total_tokens": 3430
+    }
+}

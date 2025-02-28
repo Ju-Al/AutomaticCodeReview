@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_0",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only the 'Liskov Substitution Principle' is a true positive, while there are two false positives ('Single Responsibility Principle' and 'Dependency Inversion Principle') and no false negatives."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs discuss the Liskov Substitution Principle violation, but the actual output focuses on the area method's usage while the expected output emphasizes the subclass behavior, resulting in some thematic misalignment."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests using a distinct interface for area and volume calculations, while the expected output specifically details an abstract base class and separate classes/interfaces, leading to a moderate alignment but lacking clarity and detail in the actual output."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output only includes 'sum', while the expected output lists 'VolumeCalculator', 'AreaCalculator', and 'Shape', indicating a complete lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_3_2_0",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion only addresses volume calculations, while the expected output includes checks for both area and volume, and suggests handling shape validation."
+        }
+    ]
+]

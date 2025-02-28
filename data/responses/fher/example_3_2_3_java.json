@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    13
+                ],
+                [
+                    27,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator class is inheriting from AreaCalculator but implements a sum method that calculates volume, thus mixing area and volume calculations within one class.",
+            "suggestion": "Separate the volume calculation logic into a dedicated class, possibly named VolumeCalculator, and avoid extending AreaCalculator when the context of the operation diverges.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}",
+                        "public class AreaCalculator {\n    protected List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        System.out.println(shapes);\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            } else {\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n            }\n        }\n        return totalArea;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    private List<Shape> shapes;\n\n    public VolumeCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Sphere) { // Assuming Sphere class is implemented\n                totalVolume += ((Sphere)shape).volume();\n            }\n        }\n        return totalVolume;\n    }\n}",
+                        "public class AreaCalculator {\n    protected List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        System.out.println(shapes);\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n        return totalArea;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    13
+                ],
+                [
+                    27,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator is directly modifying the behavior of the AreaCalculator and expects the shapes to have a common method for area calculation instead of having a specific interface for volume.",
+            "suggestion": "Introduce specific interfaces for different types of shapes (e.g., area, volume) and ensure that the VolumeCalculator can handle those shapes without needing to change its code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }\n}",
+                        "public class AreaCalculator {\n    protected List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        System.out.println(shapes);\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            } else {\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n            }\n        }\n        return totalArea;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {\n    private List<SolidShape> shapes;\n\n    public VolumeCalculator(List<SolidShape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalVolume = 0;\n        for (SolidShape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}",
+                        "public interface SolidShape extends Shape {\n    double volume();\n}\n\npublic class AreaCalculator {\n    protected List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        System.out.println(shapes);\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n        return totalArea;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1165,
+        "prompt_tokens": 2683,
+        "total_tokens": 3848
+    }
+}

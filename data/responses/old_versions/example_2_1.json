@@ -1,0 +1,34 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    3,
+                    8
+                ],
+                [
+                    12,
+                    17
+                ]
+            ],
+            "method_names": [
+                "Order",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing cart items as well as maintaining order status within the order. Similarly, the PaymentProcessor class both processes the payment and manages the order status, directly changing the order status within its method.",
+            "suggestion": "Each class should adhere to a single responsibility. Separate the management of order items and order status into distinct classes. Additionally, isolate the responsibility of the PaymentProcessor class to only handle payment processing logic.",
+            "code": [
+                "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"",
+                "    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print(\"Processing payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 286,
+        "prompt_tokens": 1660,
+        "total_tokens": 1946
+    }
+}

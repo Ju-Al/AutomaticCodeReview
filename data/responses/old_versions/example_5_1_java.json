@@ -1,0 +1,33 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    38,
+                    41
+                ],
+                [
+                    97,
+                    100
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay"
+            ],
+            "reason": "The pay method in DebitCardPaymentProcessor requires specific authorizer validation, adding unauthorized state concerns that should belong to Order or PaymentProcessor, not to specific processors to ensure Liskov Substitution Principle.",
+            "suggestion": "Consider revising the design to perform authentication outside of the specific processor's pay methods or ensure all payment processors have a unified way to handle such checks without additional knowledge-specific to certain processors.",
+            "code": [
+                "    @Override\n    public void pay(Order order) {\n        if (!this.authorizer.is_authentificated()) {\n            throw new IllegalStateException(\"Not authentificated\");",
+                "    @Override\n    public void pay(Order order) {\n        if (!this.authorizer.is_authentificated()) {\n            throw new IllegalStateException(\"Not authentificated\");"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 458,
+        "prompt_tokens": 2180,
+        "total_tokens": 2638
+    }
+}

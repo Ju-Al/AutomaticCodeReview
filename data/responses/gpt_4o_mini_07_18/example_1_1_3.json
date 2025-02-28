@@ -1,0 +1,130 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    42
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "total_price",
+                "pay"
+            ],
+            "reason": "The Order class handles multiple responsibilities: managing order items, calculating total price, and processing payments.",
+            "suggestion": "Separate the payment processing into another class, such as a PaymentProcessor, and keep the Order class focused on managing items and calculating totals.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:\n",
+                        "        self.items.append(name)\n",
+                        "        self.quantities.append(quantity)\n",
+                        "        self.prices.append(price)\n",
+                        "\n",
+                        "    def total_price(self):\n",
+                        "        total = 0\n",
+                        "        for quantity, price in zip(self.quantities, self.prices):\n",
+                        "            total += quantity * price\n",
+                        "        return total\n",
+                        "\n",
+                        "    def pay(self, payment_type: str, security_code):\n",
+                        "        if payment_type == 'debit':\n",
+                        "            print('Processing debit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            self.status = 'paid'\n",
+                        "        elif payment_type == 'credit':\n",
+                        "            print('Processing credit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            self.status = 'paid'\n",
+                        "        else:\n",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n",
+                        "    def __init__(self):\n",
+                        "        self.items = []\n",
+                        "        self.quantities = []\n",
+                        "        self.prices = []\n",
+                        "        self.status = 'open'\n",
+                        "\n",
+                        "    def add_item(self, name: str, quantity: int, price: float) -> None:\n",
+                        "        self.items.append(name)\n",
+                        "        self.quantities.append(quantity)\n",
+                        "        self.prices.append(price)\n",
+                        "\n",
+                        "    def total_price(self):\n",
+                        "        total = sum(quantity * price for quantity, price in zip(self.quantities, self.prices))\n",
+                        "        return total\n",
+                        "\n",
+                        "class PaymentProcessor:\n",
+                        "    @staticmethod\n",
+                        "    def pay(order: Order, payment_type: str, security_code):\n",
+                        "        if payment_type == 'debit':\n",
+                        "            print('Processing debit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            order.status = 'paid'\n",
+                        "        elif payment_type == 'credit':\n",
+                        "            print('Processing credit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            order.status = 'paid'\n",
+                        "        else:\n",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    30,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing code for 'debit' and 'credit' types is duplicated.",
+            "suggestion": "Refactor the payment logic to remove duplication by combining the shared logic into a single method or function.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    def pay(self, payment_type: str, security_code):\n",
+                        "        if payment_type == 'debit':\n",
+                        "            print('Processing debit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            self.status = 'paid'\n",
+                        "        elif payment_type == 'credit':\n",
+                        "            print('Processing credit payment type')\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            self.status = 'paid'\n",
+                        "        else:\n",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "    def pay(self, payment_type: str, security_code):\n",
+                        "        self.process_payment(payment_type, security_code)\n",
+                        "\n",
+                        "    def process_payment(self, payment_type: str, security_code):\n",
+                        "        valid_types = {'debit': 'Processing debit payment type', 'credit': 'Processing credit payment type'}\n",
+                        "        if payment_type in valid_types:\n",
+                        "            print(valid_types[payment_type])\n",
+                        "            print(f'Verifying security code: {security_code}')\n",
+                        "            self.status = 'paid'\n",
+                        "        else:\n",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1207,
+        "prompt_tokens": 2352,
+        "total_tokens": 3559
+    }
+}

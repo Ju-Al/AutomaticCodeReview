@@ -1,0 +1,104 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ],
+                [
+                    15,
+                    19
+                ],
+                [
+                    22,
+                    26
+                ],
+                [
+                    29,
+                    33
+                ],
+                [
+                    36,
+                    40
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing order items and their details, as well as handling payment status updates.",
+            "suggestion": "Separate the payment processing functionality into a distinct class which handles payments only, while the Order class should focus on order management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        self.process_payment(order, security_code, 'credit card')\n\n    def process_payment(self, order, security_code: str, method: str):\n        print(f'Processing {method} payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        self.process_payment(order, security_code, 'debit card')\n\n    def process_payment(self, order, security_code: str, method: str):\n        print(f'Processing {method} payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        self.process_payment(order, security_code, 'paypal')\n\n    def process_payment(self, order, security_code: str, method: str):\n        print(f'Processing {method} payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ],
+                [
+                    15,
+                    19
+                ],
+                [
+                    22,
+                    26
+                ],
+                [
+                    29,
+                    33
+                ],
+                [
+                    36,
+                    40
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The payment processor classes need to be modified for any new types of payment processing, violating the open/closed principle.",
+            "suggestion": "Use a design pattern such as Strategy or Factory to create payment processors, allowing the addition of new payment methods without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"\n",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = \"open\"\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\nclass PaymentFactory:\n    @staticmethod\n    def get_processor(payment_type: str) -> PaymentProcessor:\n        if payment_type == 'credit_card':\n            return CreditCardPaymentProcessor()\n        elif payment_type == 'debit_card':\n            return DebitCardPaymentProcessor()\n        elif payment_type == 'paypal':\n            return PaypalPaymentProcessor()\n        raise ValueError('Unknown payment type')\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing credit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing debit card payment\")\n        print(f\"Verifying security code: {security_code}\")\n        order.status = \"paid\"",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print(\"Processing paypal payment\")\n        print(f\"Verifying email: {security_code}\")\n        order.status = \"paid\""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1682,
+        "prompt_tokens": 2394,
+        "total_tokens": 4076
+    }
+}

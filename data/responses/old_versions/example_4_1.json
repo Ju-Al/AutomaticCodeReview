@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    16,
+                    19
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor interface requires all implementations to implement auth_sms, even if certain implementations, like CreditPaymentProcessor, do not need or cannot provide this functionality.",
+            "suggestion": "Refactor the PaymentProcessor interface to separate authentication responsibilities from payment processing responsibilities. Create a separate interface for SMS authentication and let the DebitPaymentProcessor implement it, but not the CreditPaymentProcessor.",
+            "code": [
+                "    @abstractmethod\n    def auth_sms(self, order, code: str):\n        ..."
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    55,
+                    57
+                ]
+            ],
+            "method_names": [
+                "auth_sms"
+            ],
+            "reason": "The implementation of the method auth_sms in the CreditPaymentProcessor class raises an exception, which may lead to unexpected behaviors if a client expects auth_sms to work among all payment processors.",
+            "suggestion": "Adapt the system to either handle or remove the auth_sms method from classes that do not support it, and ensure appropriate checks or interface segregation to prevent misuse.",
+            "code": [
+                "    def auth_sms(self, order, code: str):\n        raise Exception(\"Not implemented\")"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 269,
+        "prompt_tokens": 1867,
+        "total_tokens": 2136
+    }
+}

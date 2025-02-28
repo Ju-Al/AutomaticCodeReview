@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_4",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "There is 1 True Positive ('Dependency Inversion Principle'), but also 1 False Positive ('Single Responsibility Principle') and no False Negatives. This leads to a Precision of 0.5 and Recall of 1, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify the violation of the dependency inversion principle, but the actual output lacks detail about the relationship between the UserService and MySQLDatabase compared to the expected output."
+        },
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs emphasize the need for UserService to depend on abstractions instead of concrete implementations, but the actual output lacks the detail about creating a Database interface as specified in the expected output."
+        },
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly, both containing the same content: ['UserService']."
+        },
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output lacks detail and clarity in the original code compared to the expected output, which includes a complete class structure and methods. The suggestion code also fails to align with the expected abstraction of the database interface."
+        }
+    ]
+]

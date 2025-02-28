@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    9
+                ],
+                [
+                    20,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator and AreaCalculator classes have multiple responsibilities: they calculate sums of areas and volumes while being dependent on specific shapes.",
+            "suggestion": "Consider separating the concerns of calculating areas and volumes into distinct calculators that do not inherit from one another, allowing them to focus only on their specific types of calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }",
+                        "public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            } else {\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n            }\n        }\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double calculateVolume() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof VolumeShape) {\n                totalVolume += ((VolumeShape) shape).volume();\n            }\n        }\n        return totalVolume;\n    }",
+                        "public double calculateArea() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n        return totalArea;\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    7,
+                    9
+                ],
+                [
+                    20,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum methods in both calculators are tightly coupled to the shape implementations and need to be modified if new shapes or volume calculations are added, violating the open/closed principle.",
+            "suggestion": "Introduce interfaces or abstract classes for Shape and VolumeShape, ensuring that new shapes can be added without requiring changes to the existing calculator code logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.area();\n        }\n        return totalVolume;\n    }",
+                        "public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            } else {\n                throw new RuntimeException(\"Invalid Shape: Shape does not implement Shape interface\");\n            }\n        }\n        return totalArea;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            // assuming VolumeShape interface allows for calculating volume\n            if (shape instanceof VolumeShape) {\n                totalVolume += ((VolumeShape)shape).volume();\n            }\n        }\n        return totalVolume;\n    }",
+                        "public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n        return totalArea;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 819,
+        "prompt_tokens": 2683,
+        "total_tokens": 3502
+    }
+}

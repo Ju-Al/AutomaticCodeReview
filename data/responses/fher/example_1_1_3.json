@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    5
+                ],
+                [
+                    15,
+                    22
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing the order as well as handling payment processing, which can be seen as separate responsibilities.",
+            "suggestion": "Separate the payment handling into another class, such as PaymentProcessor, to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):",
+                        "if payment_type == 'debit':",
+                        "    print('Processing debit payment type')",
+                        "    print(f'Verifying security code: {security_code}')",
+                        "    self.status = 'paid'",
+                        "elif payment_type == 'credit':",
+                        "    print('Processing credit payment type')",
+                        "    print(f'Verifying security code: {security_code}')",
+                        "    self.status = 'paid'",
+                        "else:",
+                        "    raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:",
+                        "    def __init__(self, order):",
+                        "        self.order = order",
+                        "",
+                        "    def pay(self, payment_type: str, security_code):",
+                        "        if payment_type == 'debit':",
+                        "            print('Processing debit payment type')",
+                        "            print(f'Verifying security code: {security_code}')",
+                        "            self.order.status = 'paid'",
+                        "        elif payment_type == 'credit':",
+                        "            print('Processing credit payment type')",
+                        "            print(f'Verifying security code: {security_code}')",
+                        "            self.order.status = 'paid'",
+                        "        else:",
+                        "            raise Exception(f'Unknown payment type: {payment_type}')",
+                        "",
+                        "payment_processor = PaymentProcessor(order)",
+                        "payment_processor.pay('debit', '0372846')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 472,
+        "prompt_tokens": 2352,
+        "total_tokens": 2824
+    }
+}

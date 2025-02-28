@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    31
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The MySQLDatabase class handles data management (CRUD operations) but also includes user feedback messages, which are responsibilities that should be separated.",
+            "suggestion": "Refactor the user feedback mechanism from these methods to a separate service or logger class, which can handle all user interactions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print('User ID already exists. Use update_user_data to modify.')\n        else:\n            self.user_data[id] = name\n            print('User added successfully.')\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print('User updated successfully.')\n        else:\n            print('User ID does not exist. Use add_user_data to add new user.')\n",
+                        "def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print('User deleted successfully.')\n        else:\n            print('User ID not found.')\n"
+                    ],
+                    "suggestion_code": [
+                        "def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            raise ValueError('User ID already exists.')\n        else:\n            self.user_data[id] = name\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n        else:\n            raise ValueError('User ID does not exist.')\n",
+                        "def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n        else:\n            raise ValueError('User ID not found.')\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    1,
+                    31
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The feedback messages in `add_user_data`, `update_user_data`, and `delete_user_data` have similar patterns, which leads to repetition.",
+            "suggestion": "Create a separate method to handle the printing of messages, which can standardize how messages are shown to the user, thereby reducing redundancy.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            print('User ID already exists. Use update_user_data to modify.')\n        else:\n            self.user_data[id] = name\n            print('User added successfully.')\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            print('User updated successfully.')\n        else:\n            print('User ID does not exist. Use add_user_data to add new user.')\n",
+                        "def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            print('User deleted successfully.')\n        else:\n            print('User ID not found.')\n"
+                    ],
+                    "suggestion_code": [
+                        "def print_message(self, message: str) -> None:\n        print(message)\n\n    def add_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.print_message('User ID already exists.')\n        else:\n            self.user_data[id] = name\n            self.print_message('User added successfully.')\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n        if id in self.user_data:\n            self.user_data[id] = name\n            self.print_message('User updated successfully.')\n        else:\n            self.print_message('User ID does not exist.')\n",
+                        "def delete_user_data(self, id: int) -> None:\n        if id in self.user_data:\n            del self.user_data[id]\n            self.print_message('User deleted successfully.')\n        else:\n            self.print_message('User ID not found.')\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1074,
+        "prompt_tokens": 2525,
+        "total_tokens": 3599
+    }
+}

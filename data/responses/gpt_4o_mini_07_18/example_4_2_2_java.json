@@ -1,0 +1,137 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    13,
+                    21
+                ],
+                [
+                    34,
+                    46
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The 'VolumeCalculator' class is responsible for calculating volumes of shapes while also inheriting area calculation functionality, overflow into a separate responsibility.",
+            "suggestion": "Separate the volume calculation from area calculations by creating a distinct VolumeCalculator class without inheriting from AreaCalculator.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator extends AreaCalculator {",
+                        "    @Override",
+                        "    public double sum() {",
+                        "        double totalVolume = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalVolume += shape.volume();",
+                        "        }",
+                        "        return totalVolume;",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class VolumeCalculator {",
+                        "    private List<Shape> shapes;",
+                        "    public VolumeCalculator(List<Shape> shapes) {",
+                        "        this.shapes = shapes;",
+                        "    }",
+                        "    public double sum() {",
+                        "        double totalVolume = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalVolume += shape.volume();",
+                        "        }",
+                        "        return totalVolume;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    34,
+                    57
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The 'Circle' and 'Square' classes throw an exception when calling 'volume()', but the calculator expects that all shapes should have a valid volume calculation.",
+            "suggestion": "Consider using either a marker interface for shapes that support volume or check for volume capability before calling it.",
+            "changes": [
+                {
+                    "original_code": [
+                        "double totalVolume = 0;",
+                        "for (Shape shape : shapes) {",
+                        "    totalVolume += shape.volume();",
+                        "}",
+                        "return totalVolume;"
+                    ],
+                    "suggestion_code": [
+                        "double totalVolume = 0;",
+                        "for (Shape shape : shapes) {",
+                        "    if (shape instanceof VolumeShape) {",
+                        "        totalVolume += shape.volume();",
+                        "    }",
+                        "}",
+                        "return totalVolume;"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    34,
+                    46
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The 'VolumeCalculator' class needs to be modified when new types of shapes are added without an interface segregation for volume.",
+            "suggestion": "Introduce an interface, 'VolumeShape', that declares the volume method. This way, 'VolumeCalculator' can operate on VolumeShapes without changing its logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class VolumeCalculator {",
+                        "    @Override",
+                        "    public double sum() {",
+                        "        double totalVolume = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalVolume += shape.volume();",
+                        "        }",
+                        "        return totalVolume;",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "interface VolumeShape extends Shape {",
+                        "    double volume();",
+                        "}",
+                        "public class VolumeCalculator {",
+                        "    public double sum() {",
+                        "        double totalVolume = 0;",
+                        "        for (VolumeShape shape : shapes) {",
+                        "            totalVolume += shape.volume();",
+                        "        }",
+                        "        return totalVolume;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 851,
+        "prompt_tokens": 2805,
+        "total_tokens": 3656
+    }
+}

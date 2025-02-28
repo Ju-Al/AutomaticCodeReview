@@ -1,0 +1,52 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    3,
+                    6
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class tightly couples with the MySQLDatabase class, resulting in a violation of the Dependency Inversion Principle.",
+            "suggestion": "Introduce an abstraction (interface) for database operations that UserService depends on. MySQLDatabase can then implement this interface, providing flexibility to switch database implementations without modifying UserService.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class UserService {\n    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class UserService {\n    private Database database;\n\n    public UserService(Database database) {\n        this.database = database;\n    }"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class MySQLDatabase {\n    private Map<Integer, String> userData;",
+                        "public class UserService {"
+                    ],
+                    "suggestion_code": [
+                        "interface Database {\n    String getUserData(int id);\n    void addUserData(int id, String name);\n    void updateUserData(int id, String name);\n    void deleteUserData(int id);\n}",
+                        "class MySQLDatabase implements Database {"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Main {\n    public static void main(String[] args) {\n        UserService userService = new UserService();"
+                    ],
+                    "suggestion_code": [
+                        "public class Main {\n    public static void main(String[] args) {\n        Database database = new MySQLDatabase();\n        UserService userService = new UserService(database);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 439,
+        "prompt_tokens": 2586,
+        "total_tokens": 3025
+    }
+}

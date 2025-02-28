@@ -1,0 +1,49 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    41
+                ],
+                [
+                    7,
+                    41
+                ],
+                [
+                    45,
+                    45
+                ],
+                [
+                    49,
+                    51
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class manages items, quantities, prices, and their statuses, which combines multiple responsibilities.",
+            "suggestion": "Refactor the Order class to segregate item management and order status management. Consider creating separate classes for handling items and an order status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {\n    private List<String> items;\n    private List<Integer> quantities;\n    private List<Double> prices;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n} ",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {\n    private List<Item> items;\n    private String status;\n\n    public Order() {\n        this.items = new ArrayList<>();\n        this.status = \"open\";\n    }\n\n    public void addItem(Item item) {\n        this.items.add(item);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }\n}\n\npublic class Item {\n    private String name;\n    private int quantity;\n    private double price;\n\n    public Item(String name, int quantity, double price) {\n        this.name = name;\n        this.quantity = quantity;\n        this.price = price;\n    }\n}\n",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 630,
+        "prompt_tokens": 2396,
+        "total_tokens": 3026
+    }
+}

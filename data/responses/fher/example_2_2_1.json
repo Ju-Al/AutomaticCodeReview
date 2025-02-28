@@ -1,0 +1,67 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    17
+                ],
+                [
+                    32,
+                    34
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "JSON",
+                "HTML"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating areas and managing the collection of shapes. Additionally, SumCalculator manages both JSON and HTML output functions.",
+            "suggestion": "Separate the responsibilities of area calculation and output formatting. Consider creating a separate OutputFormatter class to handle JSON and HTML conversions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)",
+                        "def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        return sum(math.pow(shape.length, 2) if isinstance(shape, Square) else math.pi * math.pow(shape.radius, 2) for shape in self.shapes)",
+                        "class OutputFormatter:\n    def __init__(self, area_sum):\n        self.area_sum = area_sum\n\n    def to_json(self):\n        return json.dumps({'sum': self.area_sum})\n\n    def to_html(self):\n        return f'Sum of the areas of provided shapes: {self.area_sum}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    17
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class needs modification to add support for new shapes, violating the open/closed principle.",
+            "suggestion": "Utilize a strategy pattern where shapes can provide their area computation, allowing the AreaCalculator to remain closed for modification.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        return sum(shape.area() for shape in self.shapes)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 634,
+        "prompt_tokens": 2345,
+        "total_tokens": 2979
+    }
+}

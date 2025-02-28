@@ -1,0 +1,129 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    9
+                ],
+                [
+                    8,
+                    9
+                ],
+                [
+                    5,
+                    6
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both storing the shapes and calculating their sum, which combines multiple responsibilities.",
+            "suggestion": "Separate the storage of shapes from the area calculation logic. Consider creating a ShapeRepository class for managing shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {",
+                        "    private List<Object> shapes;",
+                        "    public double sum() {"
+                    ],
+                    "suggestion_code": [
+                        "public class ShapeRepository {",
+                        "    private List<Object> shapes = new ArrayList<>();",
+                        "    public void addShape(Object shape) { shapes.add(shape); }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    12,
+                    16
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method is tightly coupled with the specific shape classes (Square and Circle). Adding a new shape type would require modifying this method.",
+            "suggestion": "Utilize polymorphism by having each shape implement an interface for calculating its area. This allows for new shapes to be added without changing the AreaCalculator.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "        for (Object shape : shapes) {",
+                        "            if (shape instanceof Square) {",
+                        "                Square square = (Square) shape;"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "        double totalArea = 0;",
+                        "        for (Shape shape : shapes) {",
+                        "            totalArea += shape.calculateArea();"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    3,
+                    4
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator"
+            ],
+            "reason": "AreaCalculator depends on Object, which forces it to handle unrelated shape types. It should depend on a more specific Shape interface.",
+            "suggestion": "Create a Shape interface with a method for calculating the area and have Circle and Square implement this interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    17,
+                    23
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation logic for Circle and Square are repeated and not extensible for new shapes.",
+            "suggestion": "Delegate area calculation to each shape, adhering to the open/closed principle and reducing code duplication.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if (shape instanceof Square) {",
+                        "    Square square = (Square) shape;",
+                        "    totalArea += Math.pow(square.getLength(), 2);",
+                        "} else if (shape instanceof Circle) {",
+                        "    Circle circle = (Circle) shape;",
+                        "    totalArea += Math.PI * Math.pow(circle.getRadius(), 2);"
+                    ],
+                    "suggestion_code": [
+                        "totalArea += shape.calculateArea();"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "4 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 765,
+        "prompt_tokens": 2501,
+        "total_tokens": 3266
+    }
+}

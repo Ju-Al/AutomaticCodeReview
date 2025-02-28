@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_4",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "Only one true positive was identified, 'Single Responsibility Principle', while 'Liskov Substitution Principle' was a false negative."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses multiple responsibilities of the Order class, while the expected output specifically cites a violation of the Single Responsibility Principle related to prices and quantities, showing a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests separating order management responsibilities, while the expected output focuses on splitting the Order class into distinct classes for quantities and prices, showing a lack of alignment in addressing the same issue."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output mentions 'addItem' and 'setStatus', while the expected output includes 'totalPrices' and 'addItems', showing minimal thematic alignment."
+        },
+        {
+            "example_id": "example_3_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code introduces a new OrderStatus class, while the expected output suggests a more complex structure with OrderQuantityManager and PriceCalculator, indicating a lack of thematic alignment."
+        }
+    ]
+]

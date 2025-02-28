@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    30,
+                    33
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for summing areas, while the VolumeCalculator class is intended to sum volumes. Both classes are confused about their responsibilities, as VolumeCalculator is not using volume calculation but merely re-using area calculation.",
+            "suggestion": "Create a separate VolumeCalculator class with its own method for volume calculation and avoid re-using area calculation in VolumeCalculator.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, volumes):\n        self.shapes = volumes\n\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()  # Here you would implement volume calculation correctly"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    8,
+                    11
+                ],
+                [
+                    40,
+                    43
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "Both AreaCalculator and VolumeCalculator are implementing similar `sum` methods. The logic in VolumeCalculator should refer to a method that calculates volume instead.",
+            "suggestion": "Refactor code to ensure that calculation logic for shapes is encapsulated within the shape classes themselves, perhaps allowing them to explicitly define area and volume methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()",
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        return sum(shape.area() for shape in self.shapes) if all(isinstance(shape, Shape) for shape in self.shapes) else 0",
+                        "def sum(self):\n        return sum(shape.volume() for shape in self.shapes) if all(isinstance(shape, Shape) for shape in self.shapes) else 0"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 585,
+        "prompt_tokens": 2489,
+        "total_tokens": 3074
+    }
+}

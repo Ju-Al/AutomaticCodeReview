@@ -1,0 +1,38 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    25,
+                    27
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The implementation for `volume()` in `Circle` and `Square` throws an exception, which violates substitutability, as consumers of `Shape` expect all shapes to support this method without error.",
+            "suggestion": "Refactor the design to separate `Shape` into multiple interfaces representing planar and solid shapes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public interface Shape {\n    double area();\n    double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {\n    double area();\n}",
+                        "public interface SolidShape extends Shape {\n    double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 324,
+        "prompt_tokens": 2659,
+        "total_tokens": 2983
+    },
+    "time": 7.076436996459961
+}

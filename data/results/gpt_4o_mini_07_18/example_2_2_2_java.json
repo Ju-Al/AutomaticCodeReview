@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_2",
+            "metric": "F1-Score",
+            "score": 0.2,
+            "reason": "Only one true positive ('Open/Closed Principle') was identified, but three false positives were present, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "While both outputs address the issue of modifying existing code for new shapes, the actual output lacks detail about the principle violation and does not mention the open-closed principle explicitly, affecting clarity and relevance."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "While both outputs address the use of polymorphism for area calculation, the actual output lacks the detail of defining an abstract class (ShapeInterface) and does not explicitly mention the independent implementation of area calculation methods for each shape."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both the actual and expected outputs contain identical content in the designated field, demonstrating complete alignment."
+        },
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion does not adequately address the area calculations for both Square and Circle as required in the expected output, showing a lack of clarity and detail."
+        }
+    ]
+]

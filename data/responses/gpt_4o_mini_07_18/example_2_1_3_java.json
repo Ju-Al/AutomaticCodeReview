@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    13,
+                    18
+                ],
+                [
+                    29,
+                    32
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay"
+            ],
+            "reason": "The Order class handles both order management (adding items and maintaining status) and the PaymentProcessor class processes payments. Each class should have a distinct responsibility.",
+            "suggestion": "Consider introducing a separate class for managing the payment process, keeping order management and payment logic separate.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        if (quantity <= 0) throw new IllegalArgumentException(\"Quantity must be greater than zero\");\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public class PaymentProcessor {\n    public void pay(Order order, String securityCode) {\n        if (securityCode == null || securityCode.isEmpty()) throw new IllegalArgumentException(\"Security code must not be null or empty\");\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    4,
+                    8
+                ]
+            ],
+            "method_names": [
+                "Order constructor"
+            ],
+            "reason": "The initialization of items, quantities, and prices lists are repetitive. This can be simplified.",
+            "suggestion": "Use a single initialization method or a factory method to create instances of these lists to improve maintainability.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public Order() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n        this.status = \"open\";\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public Order() {\n        initializeLists();\n        this.status = \"open\";\n    }\n    private void initializeLists() {\n        this.items = new ArrayList<>();\n        this.quantities = new ArrayList<>();\n        this.prices = new ArrayList<>();\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 652,
+        "prompt_tokens": 2396,
+        "total_tokens": 3048
+    }
+}

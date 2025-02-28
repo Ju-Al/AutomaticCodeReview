@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_3",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "The Actual Output has 1 True Positive ('Open/Closed Principle') and 1 False Positive ('Single Responsibility Principle'), resulting in a Precision of 0.5. The Recall is 1.0 due to 0 False Negatives, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the violation of the open/closed principle, but the actual output lacks specific examples of shapes and does not elaborate on the implications of modification as clearly as the expected output."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "The actual output suggests using a shape interface for area calculation, but lacks the detail about the abstraction and implementation of specific shapes, which the expected output clearly outlines."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both the actual and expected outputs perfectly match in content, showing complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests a method to calculate area for shapes, while the expected output focuses on summing areas of shapes. The core functionality differs, and the structure of the code in both outputs does not align well."
+        }
+    ]
+]

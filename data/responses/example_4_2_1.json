@@ -1,0 +1,39 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    51,
+                    53
+                ],
+                [
+                    60,
+                    62
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The Square and Circle classes violate the Liskov Substitution Principle because they implement an unfeasible method 'volume' by raising a NotImplementedError, which cannot be easily substituted in client code expecting all Shape derivatives to properly implement 'volume.'",
+            "suggestion": "Refactor the Shape class to better differentiate between 2D and 3D shapes, using separate 2D and 3D shape interfaces. Alternatively, introduce an optional capability pattern for volume computation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def volume(self):\n    raise NotImplementedError(\"The volume cannot be calculated.\")"
+                    ],
+                    "suggestion_code": [
+                        "class TwoDimensionalShape(Shape):\n    def area(self):\n        pass\n\nclass ThreeDimensionalShape(Shape):\n    def volume(self):\n        pass"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please review the proposed suggestions for improvement.",
+    "usage": {
+        "completion_tokens": 224,
+        "prompt_tokens": 2448,
+        "total_tokens": 2672
+    },
+    "time": 7.9520392417907715
+}

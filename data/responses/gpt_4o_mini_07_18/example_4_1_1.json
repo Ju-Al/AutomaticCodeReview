@@ -1,0 +1,84 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    38,
+                    39
+                ],
+                [
+                    47,
+                    48
+                ],
+                [
+                    54,
+                    55
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor implementations handle both payment processing and authentication logic, violating SRP.",
+            "suggestion": "Separate the authentication responsibilities into a different class, such as `Authenticator`.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order):\n        if not self.authenticated:\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "def auth_sms(self, order, code: str):\n        print('Authenticating via SMS')\n        self.authenticated = True",
+                        "def pay(self, order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Authenticator:\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n        self.authenticated = False\n\n    def auth_sms(self, order, code: str):\n        print('Authenticating via SMS')\n        self.authenticated = True",
+                        "def pay(self, order):\n        if not self.authenticator.authenticated:\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.authenticator.security_code}')\n        order.status = 'paid'",
+                        "def pay(self, order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    38,
+                    39
+                ],
+                [
+                    47,
+                    48
+                ],
+                [
+                    54,
+                    55
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The payment processing logic is tightly coupled with the implementations. Any change in the payment method would require modifications in existing code, violating OCP.",
+            "suggestion": "Use a strategy or factory pattern to allow adding new payment methods without modifying the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order):\n        if not self.authenticated:\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "def auth_sms(self, order, code: str):\n        print('Authenticating via SMS')\n        self.authenticated = True",
+                        "def pay(self, order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessorFactory:\n    @staticmethod\n    def create_processor(payment_type: str, security_code: str):\n        if payment_type == 'debit':\n            return DebitPaymentProcessor(security_code)\n        elif payment_type == 'credit':\n            return CreditPaymentProcessor(security_code)\n        elif payment_type == 'paypal':\n            return PaypalPaymentProcessor(security_code)\n        raise Exception('Unknown payment type')",
+                        "def pay(self, order):\n        processor = PaymentProcessorFactory.create_processor('debit', self.security_code)\n        processor.pay(order)",
+                        "def pay(self, order):\n        processor = PaymentProcessorFactory.create_processor('credit', self.security_code)\n        processor.pay(order)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 894,
+        "prompt_tokens": 2552,
+        "total_tokens": 3446
+    }
+}

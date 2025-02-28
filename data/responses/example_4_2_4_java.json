@@ -1,0 +1,43 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    18,
+                    22
+                ],
+                [
+                    15,
+                    19
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "Certain implementations of the 'Shape' interface, such as 'Circle' and 'Square', throw an UnsupportedOperationException for the 'volume' method, which violates the expectation that derived classes should seamlessly substitute the base class without altering the program's behavior.",
+            "suggestion": "Consider separating the concepts of '2D shapes' and '3D shapes' into distinct interfaces, such as 'AreaCalculable' and 'VolumeCalculable', to avoid forcing irrelevant implementations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public interface Shape {\n    public double area();\n\n    public double volume();\n}",
+                        "public class Circle implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
+                        "public class Square implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface AreaCalculable {\n    public double area();\n}\n\npublic interface VolumeCalculable extends AreaCalculable {\n    public double volume();\n}",
+                        "public class Circle implements AreaCalculable {\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
+                        "public class Square implements AreaCalculable {\n    @Override\n    public double area() {\n        return length * length;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 363,
+        "prompt_tokens": 2659,
+        "total_tokens": 3022
+    },
+    "time": 9.505082845687866
+}

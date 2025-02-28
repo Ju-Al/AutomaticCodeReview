@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles match exactly between actual and expected outputs, resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle with order management and payment handling. The actual output misses the mention of handling both prices and quantities."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separation of concerns, focusing on decomposing the Order class. Actual output emphasizes separating payment processing, aligning partially with the expected suggestion for a PaymentProcessor class, but lacks details on handling order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output only includes 'pay', missing 'add_item' and 'total_price' which are also present in expected output."
+        },
+        {
+            "example_id": "example_1_1-4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "The actual output introduces a PaymentProcessor class and modifies the method signature to include an order parameter, aligning partially with expected changes, but lacks the Order class and overall restructuring present in the expected output."
+        }
+    ]
+]

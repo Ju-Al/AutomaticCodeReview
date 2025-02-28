@@ -1,0 +1,79 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    18,
+                    20
+                ],
+                [
+                    24,
+                    26
+                ],
+                [
+                    31,
+                    33
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: storing shapes and calculating areas. It should only focus on area calculations.",
+            "suggestion": "Separate the responsibility of managing the shapes into a separate class called ShapeManager.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {\n    private List<Object> shapes;\n\n    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n}",
+                        "public class Main {\n  public static void main(String[] args) {\n    List<Object> shapes = new ArrayList<>();\n    shapes.add(new Circle(2));\n    shapes.add(new Square(5));\n    shapes.add(new Square(6));\n\n    AreaCalculator calculator = new AreaCalculator(shapes);\n    SumCalculator sumCalculator = new SumCalculator(calculator);\n    System.out.println(sumCalculator.toHTML());\n  }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {\n    public double sum(List<Object> shapes) {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n}",
+                        "public class ShapeManager {\n    private List<Object> shapes = new ArrayList<>();\n\n    public void addShape(Object shape) {\n        shapes.add(shape);\n    }\n\n    public List<Object> getShapes() {\n        return shapes;\n    }\n}\n\npublic class Main {\n  public static void main(String[] args) {\n    ShapeManager shapeManager = new ShapeManager();\n    shapeManager.addShape(new Circle(2));\n    shapeManager.addShape(new Square(5));\n    shapeManager.addShape(new Square(6));\n\n    AreaCalculator calculator = new AreaCalculator();\n    SumCalculator sumCalculator = new SumCalculator(calculator);\n    System.out.println(sumCalculator.toHTML(shapeManager.getShapes()));\n  }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    15,
+                    20
+                ],
+                [
+                    32,
+                    32
+                ]
+            ],
+            "method_names": [
+                "toHTML",
+                "toJSON"
+            ],
+            "reason": "The SumCalculator is handling multiple types of output formats (HTML and JSON) which may require different implementations in the future. It should implement separate calculators for each output format instead.",
+            "suggestion": "Create separate classes for each output format, such as HTMLSumCalculator and JSONSumCalculator, which extend from a common interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class SumCalculator {\n    private AreaCalculator calculator;\n\n    public SumCalculator(AreaCalculator calculator) {\n        this.calculator = calculator;\n    }\n\n    public String toJSON() {\n        return String.format(\"{\\\"sum\\\": %.2f}\", calculator.sum());\n    }\n\n    public String toHTML() {\n        return \"<p>Sum of the areas of provided shapes: \" + calculator.sum() + \"</p>\";\n    }\n}",
+                        "public class Main {\n  public static void main(String[] args) {\n    List<Object> shapes = new ArrayList<>();\n    shapes.add(new Circle(2));\n    shapes.add(new Square(5));\n    shapes.add(new Square(6));\n\n    AreaCalculator calculator = new AreaCalculator(shapes);\n    SumCalculator sumCalculator = new SumCalculator(calculator);\n    System.out.println(sumCalculator.toHTML());\n  }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface SumCalculator {\n    String calculateSum();\n}\n\npublic class HTMLSumCalculator implements SumCalculator {\n    private AreaCalculator calculator;\n\n    public HTMLSumCalculator(AreaCalculator calculator) {\n        this.calculator = calculator;\n    }\n\n    @Override\n    public String calculateSum() {\n        return \"<p>Sum of the areas of provided shapes: \" + calculator.sum() + \"</p>\";\n    }\n}\n\npublic class JSONSumCalculator implements SumCalculator {\n    private AreaCalculator calculator;\n\n    public JSONSumCalculator(AreaCalculator calculator) {\n        this.calculator = calculator;\n    }\n\n    @Override\n    public String calculateSum() {\n        return String.format(\"{\\\"sum\\\": %.2f}\", calculator.sum());\n    }\n}",
+                        "public class Main {\n  public static void main(String[] args) {\n    List<Object> shapes = new ArrayList<>();\n    shapes.add(new Circle(2));\n    shapes.add(new Square(5));\n    shapes.add(new Square(6));\n\n    AreaCalculator calculator = new AreaCalculator();\n    HTMLSumCalculator htmlCalculator = new HTMLSumCalculator(calculator);\n    System.out.println(htmlCalculator.calculateSum());\n  }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1356,
+        "prompt_tokens": 2501,
+        "total_tokens": 3857
+    }
+}

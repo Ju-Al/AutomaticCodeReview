@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    11
+                ],
+                [
+                    13,
+                    44
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for holding order data as well as managing order state, while the PaymentProcessor classes are responsible for payment processing. The management of the order state should be separated from payment processing.",
+            "suggestion": "Separate order management and payment processing into distinct classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    ... # Same as before, minus status management\n\nclass OrderStatusManager:\n    @staticmethod\n    def set_status(order: Order, status: str):\n        order.status = status",
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        OrderStatusManager.set_status(order, 'paid')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    36,
+                    43
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "To add new payment processing types, the existing classes have to be modified directly, which violates the open/closed principle.",
+            "suggestion": "Use a factory method to instantiate payment processors, allowing for new payment methods to be added without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    ...\nclass DebitCardPaymentProcessor(PaymentProcessor):\n    ...\nclass PaypalPaymentProcessor(PaymentProcessor):\n    ..."
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessorFactory:\n    @staticmethod\n    def create_processor(processor_type: str) -> PaymentProcessor:\n        if processor_type == 'credit_card':\n            return CreditCardPaymentProcessor()\n        elif processor_type == 'debit_card':\n            return DebitCardPaymentProcessor()\n        elif processor_type == 'paypal':\n            return PaypalPaymentProcessor()\n        else:\n            raise ValueError('Unknown processor type')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 638,
+        "prompt_tokens": 2394,
+        "total_tokens": 3032
+    }
+}

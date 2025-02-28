@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match perfectly with TP as 'Single Responsibility Principle', and no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output addresses the dual responsibility of managing order items and processing payments, aligning with the expected output's mention of principle violation. However, it lacks the additional detail about responsibility for prices and quantities, reducing the alignment."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating the payment processing into a different class (PaymentProcessor), but the actual output only mentions using it alongside Order, while the expected output specifies splitting Order into additional classes for order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output is missing 'add_item' and 'total_price' from Expected Output, but includes 'pay' which aligns with Expected Output."
+        },
+        {
+            "example_id": "example_1_1-3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual and expected outputs both suggest separating payment processing into a different class. The actual output includes detailed implementation using a static method, while the expected suggests a non-static method. Both align well thematically, but differ in implementation details."
+        }
+    ]
+]

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "True Positive: Single Responsibility Principle. False Negative: Liskov Substitution Principle. Precision: 1.0, Recall: 0.5, F1-Score: 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle but focus on different aspects; actual output mentions data management and state, while expected output focuses on prices and quantities."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual suggests separating responsibilities generally, whereas Expected specifies splitting the Order class into quantity and price classes, showing partial thematic alignment but lacks specificity."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output 'Order' does not align thematically or contextually with the expected 'total_prices' and 'add_items'."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual Output suggests separating item details into a separate class and restructuring add_item, aligning with Expected Output's use of item classes but lacks detail on calculating total price."
+        }
+    ]
+]

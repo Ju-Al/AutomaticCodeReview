@@ -1,0 +1,100 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    10
+                ],
+                [
+                    20,
+                    20
+                ],
+                [
+                    34,
+                    34
+                ],
+                [
+                    47,
+                    47
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for both managing order details (items, quantities, prices) and handling its status. Additionally, PaymentProcessor implementations each contain their own payment processing logic, which could lead to difficulties in modification or testing.",
+            "suggestion": "Separate the payment processing functionality from the Order class responsibilities and encapsulate payment processing logic within its respective classes. Consider creating a separate class responsible for managing order details and another for processing payments.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public void setStatus(String status) {",
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(OrderItem item) {",
+                        "public String getStatus() { return this.status; }",
+                        "public void processPayment(Order order, String securityCode) {",
+                        "public void processPayment(Order order, String securityCode) {"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    10
+                ],
+                [
+                    20,
+                    20
+                ],
+                [
+                    34,
+                    34
+                ],
+                [
+                    47,
+                    47
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "pay",
+                "pay"
+            ],
+            "reason": "The current structure requires modification of the Order class whenever new payment methods are introduced. This violates the open/closed principle since the Order class is not closed for modification.",
+            "suggestion": "Create a handling interface for different payment methods that can be added without modifying existing classes. Use the Factory pattern to instantiate specific payment processors based on the payment type.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public void setStatus(String status) {",
+                        "public void pay(Order order, String securityCode) {",
+                        "public void pay(Order order, String securityCode) {"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(OrderItem item) {",
+                        "public void setStatus(String status) {",
+                        "public void processPayment(String paymentType, Order order, String securityCode) {",
+                        "public void processPayment(Order order, String securityCode) {"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 603,
+        "prompt_tokens": 2560,
+        "total_tokens": 3163
+    }
+}

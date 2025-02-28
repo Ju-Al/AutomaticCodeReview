@@ -1,0 +1,60 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    19
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is responsible for both managing order items and their attributes, as well as changing the order status. This violates the single responsibility principle.",
+            "suggestion": "Consider separating the order management logic from the status management into different classes, such as a class dedicated to order management and another for order status.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public String getStatus() {\n        return status;\n    }\n\n    public void setStatus(String status) {\n        this.status = status;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }\n\n    public OrderStatus getStatus() {\n        return this.statusManager.getStatus(); // Assuming a separate status management\n    }\n\n    public void changeStatus(OrderStatus status) {\n        this.statusManager.changeStatus(status);\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    3,
+                    40
+                ]
+            ],
+            "method_names": [
+                "",
+                "pay"
+            ],
+            "reason": "The payment processing methods are not designed to be opened for extension without modifying existing code. Each payment method is implemented directly in their respective classes and requires modification for new payment types.",
+            "suggestion": "Utilize the Strategy Pattern to allow for the addition of new payment methods without changing existing code. Create an abstract class or interface to define a standard structure for payment classes, allowing new processors to be added easily.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing paypal payment\");\n        System.out.println(\"Verifying email: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}\n\npublic class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing credit card payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\"); // General message\n        System.out.println(\"Verifying email: \" + securityCode);\n        order.changeStatus(new OrderStatus(\"PAID\"));\n    }\n}\n\npublic class CreditCardPaymentProcessor implements PaymentProcessor {\n\n    @Override\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\"); // General message\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.changeStatus(new OrderStatus(\"PAID\"));\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 789,
+        "prompt_tokens": 2560,
+        "total_tokens": 3349
+    }
+}

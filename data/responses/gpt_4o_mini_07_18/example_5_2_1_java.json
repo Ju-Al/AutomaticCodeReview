@@ -1,0 +1,111 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    8
+                ]
+            ],
+            "method_names": [
+                "getUser",
+                "addUser",
+                "updateUser",
+                "deleteUser"
+            ],
+            "reason": "The UserService class has multiple responsibilities: handling user operations and managing the database connection.",
+            "suggestion": "Separate database operations from user service logic by creating a separate class for database interactions, such as DatabaseService.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class UserService {",
+                        "    private MySQLDatabase database;",
+                        "",
+                        "    public UserService() {",
+                        "        this.database = new MySQLDatabase();",
+                        "    }",
+                        "",
+                        "    public String getUser(int id) {",
+                        "        return database.getUserData(id);",
+                        "    }",
+                        "",
+                        "    public void addUser(int id, String data) {",
+                        "        this.database.addUserData(id, data);",
+                        "    }",
+                        "",
+                        "    public void updateUser(int id, String data) {",
+                        "        this.database.updateUserData(id, data);",
+                        "    }",
+                        "",
+                        "    public void deleteUser(int id) {",
+                        "        this.database.deleteUserData(id);",
+                        "    }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class UserService {",
+                        "    private DatabaseService databaseService;",
+                        "",
+                        "    public UserService(DatabaseService databaseService) {",
+                        "        this.databaseService = databaseService;",
+                        "    }",
+                        "",
+                        "    public String getUser(int id) {",
+                        "        return databaseService.getUserData(id);",
+                        "    }",
+                        "",
+                        "    public void addUser(int id, String data) {",
+                        "        this.databaseService.addUserData(id, data);",
+                        "    }",
+                        "",
+                        "    public void updateUser(int id, String data) {",
+                        "        this.databaseService.updateUserData(id, data);",
+                        "    }",
+                        "",
+                        "    public void deleteUser(int id) {",
+                        "        this.databaseService.deleteUserData(id);",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    5,
+                    8
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class depends on the MySQLDatabase implementation directly, which violates the DIP.",
+            "suggestion": "Use dependency injection to pass an abstraction (like an interface for database operations) instead of a concrete implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private MySQLDatabase database;",
+                        "public UserService() {",
+                        "    this.database = new MySQLDatabase();",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "private DatabaseInterface database;",
+                        "public UserService(DatabaseInterface database) {",
+                        "    this.database = database;",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 686,
+        "prompt_tokens": 2586,
+        "total_tokens": 3272
+    }
+}

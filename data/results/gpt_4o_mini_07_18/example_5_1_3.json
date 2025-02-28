@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_3",
+            "metric": "F1-Score",
+            "score": 0.2,
+            "reason": "True Positives: 1 (Single Responsibility Principle), False Positives: 1 (Open/Closed Principle), False Negatives: 1 (Dependency Inversion Principle), leading to low Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output mentions multiple responsibilities but does not directly address the violation of the Single Responsibility Principle as clearly as the expected output does."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output suggests separating item management and order management into different classes, while the expected output suggests splitting the Order class into two separate classes, which are thematically aligned in terms of class separation but differ in specifics."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output only includes 'add_item', while the expected output includes both 'total_prices' and 'add_items', indicating a significant lack of alignment in content."
+        },
+        {
+            "example_id": "example_5_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests a restructuring of the Order class to use an ItemManager, while the expected output introduces new classes for managing items and calculating totals. There is a lack of thematic alignment regarding the handling of order quantities and price calculations."
+        }
+    ]
+]

@@ -1,0 +1,37 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    2,
+                    10
+                ]
+            ],
+            "method_names": [
+                "Circle.volume",
+                "Square.volume"
+            ],
+            "reason": "The Circle and Square classes are required to implement a 'volume' method they cannot logically provide a valid implementation for. This forces them to introduce exceptions or misleading behavior.",
+            "suggestion": "Refactor the Shape interface into two separate interfaces: 'AreaCalculable' for shapes where area can be calculated, and 'VolumeCalculable' for shapes where volume can be calculated. Update the relevant classes and logic accordingly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
+                        "public interface Shape {\n    public double area();\n\n    public double volume();\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface AreaCalculable {\n    public double area();\n}\n\npublic interface VolumeCalculable {\n    public double volume();\n}\n\npublic class Circle implements AreaCalculable {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 354,
+        "prompt_tokens": 2659,
+        "total_tokens": 3013
+    },
+    "time": 5.492560148239136
+}

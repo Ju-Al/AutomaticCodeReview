@@ -1,0 +1,97 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    14
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating areas and summing them, which combines two distinct responsibilities.",
+            "suggestion": "Separate the responsibility of calculating the area of shapes into individual methods or classes, to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_area(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        areas.append(self.calculate_shape_area(shape))",
+                        "    return sum(areas)",
+                        "",
+                        "def calculate_shape_area(self, shape):",
+                        "    if isinstance(shape, Square):",
+                        "        return math.pow(shape.length, 2)",
+                        "    elif isinstance(shape, Circle):",
+                        "        return math.pi * math.pow(shape.radius, 2)",
+                        "    return 0"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    5,
+                    14
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class requires modification for new shape types, violating the open/closed principle.",
+            "suggestion": "Implement a shape interface or abstract class that defines a method for calculating the area, which each shape class (Square, Circle) should implement.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "class Shape:",
+                        "    def area(self):",
+                        "        raise NotImplementedError",
+                        "",
+                        "class Square(Shape):",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle(Shape):",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)",
+                        "",
+                        "def sum(self):",
+                        "    areas = [shape.area() for shape in self.shapes if isinstance(shape, Shape)]",
+                        "    return sum(areas)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 664,
+        "prompt_tokens": 2345,
+        "total_tokens": 3009
+    }
+}

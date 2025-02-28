@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_1",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only one True Positive was identified ('Liskov Substitution Principle'), but there was one False Positive ('Single Responsibility Principle') and no False Negatives, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_1",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs discuss LSP violations, but the actual output focuses on method assumptions while the expected output emphasizes behavior consistency between classes."
+        },
+        {
+            "example_id": "example_3_2_1",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests introducing a VolumeCalculable interface, while the expected output recommends creating an abstract class and separate classes for calculations, indicating a significant difference in approach and detail."
+        },
+        {
+            "example_id": "example_3_2_1",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output only includes 'sum', while the expected output lists multiple items including 'VolumeCalculator', 'AreaCalculator', and 'Shape', indicating no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_3_2_1",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code lacks the necessary structure and checks for shape types compared to the expected output, which clearly differentiates between 2D and 3D shapes and implements the appropriate interfaces."
+        }
+    ]
+]

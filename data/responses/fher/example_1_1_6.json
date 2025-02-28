@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    12,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method combines payment processing logic with order state management, violating the Single Responsibility Principle.",
+            "suggestion": "Separate payment processing into a dedicated PaymentProcessor class to handle various payment methods, keeping the Order class focused on order management.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    @staticmethod\n    def process_payment(order, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')\n\norder = Order()\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\nprint(order.total_price())\nPaymentProcessor.process_payment(order, 'debit', '0372846')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    12,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method requires modifications to add new payment types, violating the Open/Closed Principle.",
+            "suggestion": "Implement a strategy pattern for payment methods, allowing new payment types to be added without modifying the existing Order class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor:\n    def __init__(self, payment_method):\n        self.payment_method = payment_method\n\n    def process_payment(self, order, security_code):\n        self.payment_method.process(order, security_code)\n\nclass DebitPayment:\n    def process(self, order, security_code):\n        print('Processing debit payment type')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\nclass CreditPayment:\n    def process(self, order, security_code):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\norder = Order()\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\nprint(order.total_price())\npayment_processor = PaymentProcessor(DebitPayment())\npayment_processor.process_payment(order, '0372846')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 938,
+        "prompt_tokens": 2352,
+        "total_tokens": 3290
+    }
+}

@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_5_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.7,
+            "reason": "There is 1 FP as 'Single Responsibility Principle' is not in the expected list. FP rate is 1/(1+1) = 0.5."
+        },
+        {
+            "example_id": "example_5_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "No principles overlap between actual and expected lists. FN is 1, TP is 0, resulting in a 100% false negative rate."
+        },
+        {
+            "example_id": "example_5_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No True Positives; 'Single Responsibility Principle' is an FP, and 'Dependency Inversion Principle' is an FN."
+        }
+    ],
+    []
+]

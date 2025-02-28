@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    11
+                ],
+                [
+                    14,
+                    23
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class manages both the order items and the order status, while the PaymentProcessor handles payment processing, which are two distinct responsibilities.",
+            "suggestion": "Consider separating the item management and order status responsibilities into different classes, such as OrderItemManager and OrderStatus.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class OrderItemManager:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass OrderStatus:\n    def __init__(self):\n        self.status = 'open'\n\n    def pay(self):\n        self.status = 'paid'",
+                        "class PaymentProcessor:\n    def pay(self, order_status: OrderStatus, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order_status.pay()"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    2,
+                    11
+                ],
+                [
+                    14,
+                    23
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order and PaymentProcessor classes need to be modified for any new order or payment processing functionalities, violating the open/closed principle.",
+            "suggestion": "Introduce interfaces or base classes for order and payment processing, allowing new functionalities to be added through subclasses without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass OrderInterface:\n    def add_item(self, name, quantity, price):\n        raise NotImplementedError",
+                        "class PaymentProcessorInterface:\n    def pay(self, order, security_code):\n        raise NotImplementedError"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 905,
+        "prompt_tokens": 2257,
+        "total_tokens": 3162
+    }
+}

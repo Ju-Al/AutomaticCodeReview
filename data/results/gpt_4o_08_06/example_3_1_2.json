@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_2",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "Single Responsibility Principle is TP; Open/Closed Principle is FP; Liskov Substitution Principle is FN. Precision is 0.5, Recall is 0.5, leading to F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle by highlighting multiple responsibilities of the Order class, such as managing order details and status. However, the actual output provides more detail by mentioning the handling of item additions."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Both outputs suggest splitting the Order class but focus on different aspects: status management vs. quantities and prices."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Order' does not align with the expected output fields 'total_prices' and 'add_items'. They address completely different topics with no thematic or contextual overlap."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output focuses on status management with a separate OrderStatus class, while the expected output emphasizes refactoring for item management and price calculation. Both suggest restructuring but focus on different aspects of the code."
+        }
+    ]
+]

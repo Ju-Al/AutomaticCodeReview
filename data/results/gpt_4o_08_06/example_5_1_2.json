@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_2",
+            "metric": "F1-Score",
+            "score": 0.7,
+            "reason": "True Positives are 'Single Responsibility Principle' and 'Dependency Inversion Principle'. False Positive is 'Interface Segregation Principle'. No False Negatives. Precision is 2/3 and Recall is 1. F1-Score is 0.8."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs correctly identify the tight coupling issue between DebitPaymentProcessor and SMSAuthorizer. However, the actual output lacks the detailed explanation regarding the Dependency Inversion Principle violation found in the expected output."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest using abstraction for authorizers in payment processing and mention interchangeable use, but the actual output lacks specific examples like SMSAuthorizer and NotARobotAuthorizer."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'pay' does not align contextually or thematically with the expected output 'SMSAuthorizer'."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output contains code suggestions while expected output is empty, indicating a mismatch in thematic content and relevance."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, but the actual output mentions 'order data management and payment status' while the expected mentions 'prices and quantities'."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output suggests separating order management from payment handling, while expected output suggests splitting the Order class into order quantities and prices. Both suggest separation but focus on different aspects."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output 'add_item' partially aligns with expected output 'add_items', but misses 'total_prices'."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output focuses on separating status from Order class, while Expected Output involves restructuring with a new class and static method for calculation. Both address code refactoring but diverge significantly in implementation details."
+        }
+    ]
+]

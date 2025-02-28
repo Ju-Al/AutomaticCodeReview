@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_0",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "The Single Responsibility Principle is a True Positive, but the Open/Closed Principle is a False Negative, affecting Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Both outputs address the violation of the Single Responsibility Principle but focus on different classes and responsibilities."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output suggests separation of order status update logic, while Expected Output suggests splitting the Order class into two classes for order quantities and prices. Both involve restructuring but address different aspects."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output 'pay' does not align with the expected output fields 'total_price', 'add_items', indicating a lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_2_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output addresses a different method and functionality compared to the expected output, showing no thematic or contextual alignment."
+        }
+    ]
+]

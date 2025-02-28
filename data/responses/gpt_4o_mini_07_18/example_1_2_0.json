@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    8
+                ],
+                [
+                    12,
+                    12
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating area and formatting output.",
+            "suggestion": "Separate the area calculation and output generation into different classes or methods to adhere to the single responsibility principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "def output(self):"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_area(self):",
+                        "def format_output(self):"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    8,
+                    8
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method needs to be modified to add support for new shapes, violating the open/closed principle.",
+            "suggestion": "Use polymorphism by implementing a method in each shape class for area calculation, allowing for extensibility without modifying the AreaCalculator class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):\n        return sum(shape.area() for shape in self.shapes)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 321,
+        "prompt_tokens": 2265,
+        "total_tokens": 2586
+    }
+}

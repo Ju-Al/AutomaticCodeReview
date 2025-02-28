@@ -1,0 +1,71 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    5,
+                    16
+                ],
+                [
+                    3,
+                    15
+                ],
+                [
+                    3,
+                    14
+                ]
+            ],
+            "method_names": [
+                "volume"
+            ],
+            "reason": "The Circle and Square classes implement the Shape interface, which requires a volume method. However, these shapes inherently do not support volume calculations, leading to an incorrect implementation that returns 0.",
+            "suggestion": "Separate the volume-related functionality into a different interface, such as SolidShape, to be implemented only by 3D shapes like Dice.",
+            "code": [
+                "public class VolumeCalculator extends AreaCalculator { ... }",
+                "public class Circle implements Shape { ... }",
+                "public class Square implements Shape { ... }"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    3,
+                    14
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator class directly extends the AreaCalculator, modifying its sum method for volume calculations. This violates the open/closed principle as the base AreaCalculator class needs modification for new functionality.",
+            "suggestion": "Extract common functionalities into an interface or abstract class and allow different calculator types (AreaCalculator and VolumeCalculator) to implement them without direct inheritance.",
+            "code": [
+                "public class VolumeCalculator extends AreaCalculator { ... }"
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    16
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator's sum method currently checks if a shape is an instance of Shape, which adds extra responsibility and makes the method handle type validation rather than focusing solely on area calculation.",
+            "suggestion": "Assume all shapes in the list implement the Shape interface correctly or add shape validation during the list population process.",
+            "code": [
+                "public double sum() { ... }"
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 441,
+        "prompt_tokens": 2192,
+        "total_tokens": 2633
+    }
+}

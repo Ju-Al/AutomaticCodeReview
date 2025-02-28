@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_2_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_4",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "No True Positives as there are no common principles between actual and expected outputs. There is one False Positive: 'Dependency Inversion Principle', and two False Negatives: 'Open/Closed Principle' and 'Single Responsibility Principle', leading to undefined Precision and Recall."
+        }
+    ],
+    []
+]

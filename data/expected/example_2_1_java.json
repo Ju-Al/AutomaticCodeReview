@@ -1,0 +1,47 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Open/Closed Principle",
+            "method_names": [
+                "PaymentProcessor"
+            ],
+            "reason": "The current PaymentProcessor class violates the open-closed principle, as the existing source code of the class would have to be modified for each new payment method (such as PayPal, credit card or bank transfer).",
+            "suggestion": "In order to comply with the open-closed principle, the PaymentProcessor class should be implemented as an abstract base class. A separate class is then created for each specific payment method, which inherits from this abstract class (e.g. CreditCardPaymentProcessor, PayPalPaymentProcessor). ",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class PaymentProcessor {\r\n\r\n    public void pay(Order order, String securityCode) {\r\n        System.out.println(\"Processing payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n}\r\n"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessor {\r\n    public void pay(Order order, String securityCode);\r\n}\r\n\r\n",
+                        "public class CreditCardPaymentProcessor implements PaymentProcessor {\r\n\r\n    @Override\r\n    public void pay(Order order, String securityCode) {\r\n        System.out.println(\"Processing credit card payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n}\r\n",
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {\r\n\r\n    @Override\r\n    public void pay(Order order, String securityCode) {\r\n        System.out.println(\"Processing debit card payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n\r\n}\r\n\r\n",
+                        "public class PaypalPaymentProcessor implements PaymentProcessor {\r\n\r\n    @Override\r\n    public void pay(Order order, String securityCode) {\r\n        System.out.println(\"Processing paypal payment\");\r\n        System.out.println(\"Verifying security code: \" + securityCode);\r\n        order.setStatus(\"paid\");\r\n    }\r\n\r\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "method_names": [
+                "totalPrice",
+                "addItems"
+            ],
+            "reason": "This code violates the Single Responsibility Principle because the order class is responsible for both prices and quantities.",
+            "suggestion": "Split the Order class into two separate classes: one for the order quantities and one for the prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\r\n        this.items.add(name);\r\n        this.quantities.add(quantity);\r\n        this.prices.add(price);\r\n    }\r\n\r\n",
+                        "public double totalPrice() {\r\n        double total = 0;\r\n        for (int i = 0; i < this.quantities.size(); i++) {\r\n            total += this.quantities.get(i) * this.prices.get(i);\r\n        }\r\n        return total;\r\n    }\r\n\r\n"
+                    ],
+                    "suggestion_code": [
+                        "class OrderQuantityManager {\r\n    private List<Order> items;\r\n    private String status;\r\n\r\n    public OrderQuantityManager() {\r\n        this.items = new ArrayList<>();\r\n        this.status = \"open\";\r\n    }\r\n\r\n    public void addItem(String name, int quantity, float price) {\r\n        Order item = new Order(name, quantity, price);\r\n        this.items.add(item);\r\n    }\r\n\r\n    public List<Order> getItems() {\r\n        return items;\r\n    }\r\n\r\n    public String getStatus() {\r\n        return status;\r\n    }\r\n\r\n    public void setStatus(String status) {\r\n        this.status = status;\r\n    }\r\n}\r\n\r\n",
+                        "class PriceCalculator {\r\n    public static float calculateTotal(OrderQuantityManager orderManager) {\r\n        float total = 0;\r\n        for (Order item : orderManager.getItems()) {\r\n            total += item.getQuantity() * item.getPrice();\r\n        }\r\n        return total;\r\n    }\r\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violation found. Please see the details below."
+}

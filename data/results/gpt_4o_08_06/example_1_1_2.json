@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The Single Responsibility Principle is correctly identified (TP), but the Open/Closed Principle is a false positive (FP). There are no false negatives, resulting in a precision of 0.5, recall of 1.0, and an F1-Score of approximately 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle related to order management and payment, but the expected output includes additional details about prices and quantities that the actual output lacks."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating responsibilities, but the actual output only addresses payment processing, missing the expected suggestion to split order quantities and prices."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Actual output only includes 'pay', missing 'add_item' and 'total_price' which are present in expected output."
+        },
+        {
+            "example_id": "example_1_1-2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Actual output suggests adding a PaymentProcessor and using an order object, aligning with expected output. However, it lacks the Order class implementation and total_price() method, resulting in partial thematic alignment."
+        }
+    ]
+]

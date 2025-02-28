@@ -1,0 +1,105 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    41,
+                    56
+                ],
+                [
+                    21,
+                    35
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for both calculating the area of shapes and holding a collection of shapes. This creates a dependency between the two functionalities.",
+            "suggestion": "Create a separate class for managing the collection of shapes, and have AreaCalculator focus solely on area calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class AreaCalculator {\n    protected List<Shape> shapes;\n\n    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            if (shape instanceof Shape) {\n                totalArea += shape.area();\n            }\n        }\n        return totalArea;\n    }\n}",
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class AreaCalculator {\n    public double sum(List<Shape> shapes) {\n        double totalArea = 0;\n        for (Shape shape : shapes) {\n            totalArea += shape.area();\n        }\n        return totalArea;\n    }\n}",
+                        "public class VolumeCalculator {\n    private List<Shape> shapes;\n\n    public VolumeCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    49,
+                    51
+                ],
+                [
+                    28,
+                    30
+                ],
+                [
+                    21,
+                    23
+                ]
+            ],
+            "method_names": [
+                "volume",
+                "area",
+                "area"
+            ],
+            "reason": "The Circle and Square classes throw UnsupportedOperationExceptions when volume is called, which contradicts the expectation that all Shapes can be used interchangeably without raising exceptions.",
+            "suggestion": "Redesign the Shape interface to separate 2D shapes (with area) from 3D shapes (with volume). Use inheritance or different interfaces to clarify intentions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public interface Shape {\n    public double area();\n    public double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
+                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                    ],
+                    "suggestion_code": [
+                        "public interface Shape {\n    public double area();\n}",
+                        "public interface VolumetricShape extends Shape {\n    public double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
+                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n}",
+                        "public class Dice implements VolumetricShape {\n    private double length;\n\n    public Dice(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return 6 * Math.pow(length, 2);\n    }\n\n    @Override\n    public double volume() {\n        return Math.pow(length, 3);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    21,
+                    23
+                ]
+            ],
+            "method_names": [
+                "main"
+            ],
+            "reason": "The Main class depends directly on specific implementations of shapes and calculators, which violates the dependency inversion principle.",
+            "suggestion": "Use abstractions/interfaces to minimize the dependency on specific classes and allow for easier changes in the future.",
+            "changes": [
+                {
+                    "original_code": [
+                        "List<Shape> shapes = new ArrayList<>();\n    shapes.add(new Circle(2));\n    shapes.add(new Square(5));\n    shapes.add(new Square(6));\n    shapes.add(new Dice(2));\n\n    AreaCalculator calculator = new AreaCalculator(shapes);\n    SumCalculator sumCalculator = new SumCalculator(calculator);"
+                    ],
+                    "suggestion_code": [
+                        "List<Shape> shapes = Arrays.asList(new Circle(2), new Square(5), new Square(6), new Dice(2));\n    AreaCalculator calculator = new AreaCalculator();\n    SumCalculator sumCalculator = new SumCalculator(calculator);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1348,
+        "prompt_tokens": 2805,
+        "total_tokens": 4153
+    }
+}

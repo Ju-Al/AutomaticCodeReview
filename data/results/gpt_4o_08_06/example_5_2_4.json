@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_5_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_4",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no true positives as the actual output is empty, while the expected output contains 'Dependency Inversion Principle'. This results in zero precision, recall, and F1-Score."
+        }
+    ],
+    []
+]

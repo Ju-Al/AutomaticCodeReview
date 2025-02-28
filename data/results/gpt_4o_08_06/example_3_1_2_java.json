@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_2",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "TP is 1 (Single Responsibility Principle). FP is 1 (Open/Closed Principle). FN is 1 (Liskov Substitution Principle). Precision is 0.5, Recall is 0.5, resulting in F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs mention a violation of the Single Responsibility Principle related to the Order class, but they identify different responsibilities."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "The actual output suggests creating a separate class for order status, while the expected output suggests splitting the Order class into two for quantities and prices. Both involve class separation but focus on different aspects."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Order' does not align with the expected output fields 'totalPrices' and 'addItems', lacking thematic and contextual relevance."
+        },
+        {
+            "example_id": "example_3_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual Output separates status handling into a new class, which aligns with Expected Output's idea of modularizing responsibilities. However, Actual Output lacks the price calculation functionality and uses different class structures, indicating partial thematic alignment but lacking in detail and completeness."
+        }
+    ]
+]

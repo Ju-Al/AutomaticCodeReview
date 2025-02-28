@@ -1,0 +1,71 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    5,
+                    8
+                ],
+                [
+                    17,
+                    30
+                ]
+            ],
+            "method_names": [
+                "getUser",
+                "addUser",
+                "updateUser",
+                "deleteUser",
+                "getUserData",
+                "addUserData",
+                "updateUserData",
+                "deleteUserData"
+            ],
+            "reason": "The UserService class is responsible for both user management and directly interacting with the database. Each class or method should have a single responsibility.",
+            "suggestion": "Separate the database interactions into a different class. UserService should focus solely on user-related operations, while a DataService or Repository class can handle the database interactions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public String getUser(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        this.database.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        this.database.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        this.database.deleteUserData(id);\n    }\n",
+                        "public String getUserData(int id) {\n        if (userData.containsKey(id)) {\n            return \"User ID: \" + id + \", Name: \" + userData.get(id);\n        }\n        return \"User not found\";\n    }\n\n    public void addUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            System.out.println(\"User ID already exists. Use updateUserData to modify.\");\n        } else {\n            userData.put(id, name);\n            System.out.println(\"User added successfully.\");\n        }\n    }\n\n    public void updateUserData(int id, String name) {\n        if (userData.containsKey(id)) {\n            userData.put(id, name);\n            System.out.println(\"User updated successfully.\");\n        } else {\n            System.out.println(\"User ID does not exist. Use addUserData to add new user.\");\n        }\n    }\n\n    public void deleteUserData(int id) {\n        if (userData.remove(id) != null) {\n            System.out.println(\"User deleted successfully.\");\n        } else {\n            System.out.println(\"User ID not found.\");\n        }\n    }\n"
+                    ],
+                    "suggestion_code": [
+                        "public class UserService {\n    private UserRepository userRepository;\n\n    public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    public String getUser(int id) {\n        return userRepository.getUserData(id);\n    }\n\n    public void addUser(int id, String data) {\n        userRepository.addUserData(id, data);\n    }\n\n    public void updateUser(int id, String data) {\n        userRepository.updateUserData(id, data);\n    }\n\n    public void deleteUser(int id) {\n        userRepository.deleteUserData(id);\n    }\n}",
+                        "class UserRepository {\n    private MySQLDatabase database;\n\n    public UserRepository() {\n        this.database = new MySQLDatabase();\n    }\n\n    // Same methods as before\n    public String getUserData(int id) {\n        return database.getUserData(id);\n    }\n\n    public void addUserData(int id, String name) {\n        database.addUserData(id, name);\n    }\n\n    public void updateUserData(int id, String name) {\n        database.updateUserData(id, name);\n    }\n\n    public void deleteUserData(int id) {\n        database.deleteUserData(id);\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    5,
+                    8
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class directly instantiates the MySQLDatabase, creating a tight coupling and violating the dependency inversion principle.",
+            "suggestion": "UserService should depend on an abstraction (interface) for database operations rather than a concrete implementation of MySQLDatabase.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public UserService() {\n        this.database = new MySQLDatabase();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1040,
+        "prompt_tokens": 2586,
+        "total_tokens": 3626
+    }
+}

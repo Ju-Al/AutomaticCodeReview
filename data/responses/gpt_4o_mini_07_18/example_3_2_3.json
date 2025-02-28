@@ -1,0 +1,101 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    41,
+                    57
+                ],
+                [
+                    59,
+                    65
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is responsible for area calculations, while the VolumeCalculator class is also doing area calculations without a separate volume method, violating the SRP.",
+            "suggestion": "Separate the volume calculation logic into its own method in the VolumeCalculator class, and ensure it utilizes volume-specific shapes rather than reusing area calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = sum(shape.volume() for shape in self.shapes if isinstance(shape, Shape))\n        return total_volume\n    \n    def add_shape(self, shape):\n        if isinstance(shape, Shape):\n            self.shapes.append(shape)\n        else:\n            raise Exception('Invalid Shape: Shape does not implement Shape interface')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    38,
+                    46
+                ],
+                [
+                    59,
+                    65
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "Both AreaCalculator and VolumeCalculator classes require modification to add the calculation of new shape types or new calculation methods, violating the OCP.",
+            "suggestion": "Implement a more flexible design that allows extending shape types and their corresponding calculations without modifying existing calculator classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def sum(self):\n        total_area = sum(shape.area() for shape in self.shapes if isinstance(shape, Shape))\n        return total_area\n    \n    def add_shape(self, shape):\n        if isinstance(shape, Shape):\n            self.shapes.append(shape)\n        else:\n            raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = # Implement volume calculation logic here\n        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    38,
+                    46
+                ],
+                [
+                    59,
+                    65
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The sum method in both AreaCalculator and VolumeCalculator contains duplicated logic for checking shapes and their areas.",
+            "suggestion": "Refactor the code to create a separate method for calculating the total area or volume, thus adhering to the DRY principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception('Invalid Shape: Shape does not implement Shape interface')\n        return total_area",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def sum(self):\n        return sum(self.calculate_area(shape) for shape in self.shapes)\n\n    def calculate_area(self, shape):\n        if isinstance(shape, Shape):\n            return shape.area()\n        else:\n            raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        return sum(self.calculate_area(shape) for shape in self.shapes)\n    \n    # Additional volume-specific methods can be added here."
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1049,
+        "prompt_tokens": 2489,
+        "total_tokens": 3538
+    }
+}

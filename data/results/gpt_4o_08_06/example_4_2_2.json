@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_4_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_2",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no true positives as the actual output and expected output lists do not overlap. Both principles from the actual output are false positives and the expected principle is a false negative, leading to undefined precision, recall, and F1-Score."
+        }
+    ],
+    []
+]

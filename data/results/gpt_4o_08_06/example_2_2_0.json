@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_0",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP: ['Open/Closed Principle'], FP: ['Single Responsibility Principle'], FN: []. Precision: 0.5, Recall: 1.0, F1-Score: 0.667."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_0",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the open/closed principle violation but the actual output mentions specific shape types which slightly narrows the scope compared to the expected output."
+        },
+        {
+            "example_id": "example_2_2_0",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs suggest introducing a common interface or base class for shapes with a method to calculate the area, aligning well thematically and contextually. The actual output is slightly less detailed by not explicitly naming 'ShapeInterface' or explaining specific shapes like Circle, Rectangle, and Triangle."
+        },
+        {
+            "example_id": "example_2_2_0",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing ['sum'], indicating complete alignment."
+        },
+        {
+            "example_id": "example_2_2_0",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual suggestion code matches the expected code in the sum function, both using shape.area(). However, the expected output includes additional class definitions for Shape, Circle, and Square, which are not present in the actual output."
+        }
+    ]
+]

@@ -1,0 +1,68 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    33
+                ],
+                [
+                    38,
+                    55
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "Both AreaCalculator and VolumeCalculator classes have multiple responsibilities: calculating areas and managing the list of shapes. VolumeCalculator also violates the SRP by not being responsible for volume calculations, since it is trying to reuse the area calculation logic.",
+            "suggestion": "Create a separate VolumeCalculator class that accepts solid shapes and defines a volume calculation method. Ensure AreaCalculator only handles area calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class VolumeCalculator(AreaCalculator):\n    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.area()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class VolumeCalculator:\n    def __init__(self, solid_shapes):\n        self.shapes = solid_shapes\n\n    def sum(self):\n        total_volume = 0\n        # Assume a placeholder volume calculation logic here\n        for shape in self.shapes:\n            total_volume += shape.area()  # Replace with actual volume calculation\n        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    5,
+                    5
+                ],
+                [
+                    8,
+                    8
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "__init__"
+            ],
+            "reason": "The AreaCalculator class takes a list of shapes directly, which ties it to a concrete implementation. This becomes problematic when trying to extend functionality with new types of calculations or shapes.",
+            "suggestion": "Use an abstraction, such as an interface or a base class, to represent the shapes. Inject dependencies through constructor parameters to follow the Dependency Inversion Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def __init__(self, shape_provider) -> None:\n        self.shape_provider = shape_provider\n        self.shapes = self.shape_provider.get_shapes()"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 527,
+        "prompt_tokens": 2489,
+        "total_tokens": 3016
+    }
+}

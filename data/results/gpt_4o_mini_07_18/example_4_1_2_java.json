@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_2",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only one true positive ('Single Responsibility Principle') was identified, with a false positive ('Liskov Substitution Principle') and a false negative ('Interface Segregation Principle')."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address violations of design principles, but the actual output discusses payment processing and authentication, while the expected output focuses on the order class's dual responsibilities, showing a lack of direct thematic alignment."
+        },
+        {
+            "example_id": "example_4_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output suggests separating payment processing and authentication, while the expected output focuses on splitting the Order class into classes for quantities and prices, indicating a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_4_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output contains actions like 'addItem', 'pay', and 'auth_sms', while the expected output focuses on 'totalPrices' and 'addItems', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_4_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output lacks significant structural and functional updates compared to the expected output, which introduces new classes and methods for managing orders and calculating totals, while the actual output mainly retains the original methods."
+        }
+    ]
+]

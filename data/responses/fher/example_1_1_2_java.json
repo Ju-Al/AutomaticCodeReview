@@ -1,0 +1,68 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    56
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "totalPrice",
+                "pay"
+            ],
+            "reason": "The Order class handles multiple responsibilities: managing order items, calculating total prices, and processing payments, which can complicate maintenance and testing.",
+            "suggestion": "Separate payment processing into its own class, such as PaymentProcessor, to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public double totalPrice() {",
+                        "public void pay(String paymentType, String securityCode) {"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "public double totalPrice() {",
+                        "public void pay(String paymentType, String securityCode) {"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    38,
+                    56
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method requires modification if new payment types are added, violating the open/closed principle.",
+            "suggestion": "Implement a strategy pattern for payment processing, where each payment type has its own class implementing a common interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {",
+                        "switch (paymentType.toLowerCase()) {",
+                        "case \"debit\":",
+                        "case \"credit\":"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(PaymentMethod paymentMethod, String securityCode) {",
+                        "paymentMethod.processPayment(securityCode);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 421,
+        "prompt_tokens": 2518,
+        "total_tokens": 2939
+    }
+}

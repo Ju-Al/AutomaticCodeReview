@@ -1,0 +1,73 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    32
+                ],
+                [
+                    6,
+                    34
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class manages both the order details (items, quantities, prices) and the order status. Additionally, the PaymentProcessor class directly modifies the order status.",
+            "suggestion": "Create a separate class to manage order status updates, and keep the Order class focused solely on order details.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public void setStatus(String status) {\n        this.status = status;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {\n        this.items.add(name);\n        this.quantities.add(quantity);\n        this.prices.add(price);\n    }",
+                        "public class OrderStatusManager {\n    private Order order;\n\n    public OrderStatusManager(Order order) {\n        this.order = order;\n    }\n\n    public void setStatus(String status) {\n        this.order.setStatus(status);\n    }\n\n    public String getStatus() {\n        return this.order.getStatus();\n    }\n}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    10,
+                    10
+                ],
+                [
+                    13,
+                    35
+                ],
+                [
+                    5,
+                    35
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor directly depends on the concrete implementation of the Order class. If the Order class is modified, the PaymentProcessor will also need to be modified.",
+            "suggestion": "Define an interface for payment processing that abstracts the details of how payments are processed. This allows for different implementations without changing the existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessorInterface {\n    void pay(Order order, String securityCode);\n}\n\npublic class PaymentProcessor implements PaymentProcessorInterface {\n    public void pay(Order order, String securityCode) {\n        System.out.println(\"Processing payment\");\n        System.out.println(\"Verifying security code: \" + securityCode);\n        order.setStatus(\"paid\");\n    }"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 635,
+        "prompt_tokens": 2396,
+        "total_tokens": 3031
+    }
+}

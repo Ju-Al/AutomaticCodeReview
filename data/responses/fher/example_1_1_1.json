@@ -1,0 +1,45 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    10
+                ],
+                [
+                    12,
+                    14
+                ],
+                [
+                    16,
+                    22
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class handles multiple responsibilities: managing order details (items, quantities, prices) and processing different payment types.",
+            "suggestion": "Separate payment processing into a dedicated PaymentProcessor class to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor:\n    def process_payment(self, payment_type: str, security_code, order):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            order.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 502,
+        "prompt_tokens": 2352,
+        "total_tokens": 2854
+    }
+}

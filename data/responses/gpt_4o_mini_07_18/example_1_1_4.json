@@ -1,0 +1,40 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    10,
+                    22
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "total_price",
+                "pay"
+            ],
+            "reason": "The Order class has multiple responsibilities: managing items, calculating the total price, and processing payments.",
+            "suggestion": "Consider separating the payment processing into a separate class, such as PaymentProcessor, to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                        "def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            self.status = 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')"
+                    ],
+                    "suggestion_code": [
+                        "def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "def total_price(self):\n        total = 0\n        for quantity, price in zip(self.quantities, self.prices):\n            total += quantity * price\n        return total",
+                        "class PaymentProcessor:\n    def pay(self, payment_type: str, security_code):\n        if payment_type == 'debit':\n            print('Processing debit payment type')\n            print(f'Verifying security code: {security_code}')\n            return 'paid'\n        elif payment_type == 'credit':\n            print('Processing credit payment type')\n            print(f'Verifying security code: {security_code}')\n            return 'paid'\n        else:\n            raise Exception(f'Unknown payment type: {payment_type}')\n\npayment_processor = PaymentProcessor()\nself.status = payment_processor.pay('debit', '0372846')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 2352,
+        "total_tokens": 2952
+    }
+}

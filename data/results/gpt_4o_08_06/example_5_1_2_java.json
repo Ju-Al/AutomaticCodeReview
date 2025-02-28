@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_1_2",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "TP: 'Single Responsibility Principle', FP: 'Open/Closed Principle', 'Don't Repeat Yourself', FN: 'Dependency Inversion Principle'. Precision is 0.33, Recall is 0.5, resulting in a low F1-Score."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle and discuss order management and status management as separate responsibilities, but the actual output expands on the expected output by mentioning items and order status management, adding more detail than necessary."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest separating responsibilities, but the actual focuses on order status management while the expected is about splitting quantities and prices."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Order' does not align thematically or contextually with the expected output fields 'totalPrices' and 'addItems'. They address completely different issues."
+        },
+        {
+            "example_id": "example_5_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_5_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output lacks the separation of responsibilities seen in Expected Output, such as the OrderQuantityManager and PriceCalculator classes."
+        }
+    ]
+]

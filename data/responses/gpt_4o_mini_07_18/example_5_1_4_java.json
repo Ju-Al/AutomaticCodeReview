@@ -1,0 +1,110 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    47,
+                    62
+                ],
+                [
+                    91,
+                    103
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `pay` methods in `CreditCardPaymentProcessor` and `DebitCardPaymentProcessor` classes are responsible for both payment processing logic and order status management, which can lead to code that is harder to maintain and extend.",
+            "suggestion": "Separate the responsibilities of payment processing and order status management into different classes or methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order) {\n",
+                        "    System.out.println(\"Processing debit card payment\");\n",
+                        "    System.out.println(\"Verifying security code: \" + this.securityCode);\n",
+                        "    order.setStatus(\"paid\");\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order) {\n",
+                        "    processPayment(order);\n",
+                        "    updateOrderStatus(order);\n",
+                        "}\n",
+                        "\n",
+                        "private void processPayment(Order order) {\n",
+                        "    System.out.println(\"Processing debit card payment\");\n",
+                        "    System.out.println(\"Verifying security code: \" + this.securityCode);\n",
+                        "}\n",
+                        "\n",
+                        "private void updateOrderStatus(Order order) {\n",
+                        "    order.setStatus(\"paid\");\n",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    11,
+                    11
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The interface `PaymentProcessor` might be forcing payment processors to implement methods they do not need, especially if in the future there are specific payment methods that require additional functionalities.",
+            "suggestion": "Create smaller, more specific interfaces for various types of payment methods to avoid forcing classes to implement irrelevant methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract void pay(Order order);"
+                    ],
+                    "suggestion_code": [
+                        "// Introduce interfaces for specific payment types, e.g., CardPaymentProcessor, PaypalPaymentProcessor, etc.\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    47,
+                    82
+                ],
+                [
+                    84,
+                    115
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "Both `CreditCardPaymentProcessor` and `DebitCardPaymentProcessor` classes contain repetitive logic when processing payment. This violates the DRY principle.",
+            "suggestion": "Create a common base class or utility methods that extract the shared payment processing logic.",
+            "changes": [
+                {
+                    "original_code": [
+                        "System.out.println(\"Processing debit card payment\");\n",
+                        "System.out.println(\"Verifying security code: \" + this.securityCode);"
+                    ],
+                    "suggestion_code": [
+                        "protected void processPayment(String type) {\n",
+                        "    System.out.println(\"Processing \" + type + \" payment\");\n",
+                        "    System.out.println(\"Verifying security code: \" + this.securityCode);\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 750,
+        "prompt_tokens": 2775,
+        "total_tokens": 3525
+    }
+}

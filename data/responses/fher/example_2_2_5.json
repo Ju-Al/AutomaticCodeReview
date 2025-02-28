@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    28
+                ],
+                [
+                    11,
+                    12
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "HTML"
+            ],
+            "reason": "The AreaCalculator is responsible for both calculating areas and maintaining a list of shapes. The SumCalculator not only formats the output but also calculates the area sum again, duplicating behavior.",
+            "suggestion": "Separate the shape storage and area calculation from the output formatting. Create dedicated classes/methods to handle these different responsibilities.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:\n    def __init__(self, shapes=[]) -> None:\n        self.shapes = shapes\n    \n    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:\n    def __init__(self) -> None:\n        self.shapes = []\n    \n    def add_shape(self, shape):\n        self.shapes.append(shape)\n    \n    def calculate_area_sum(self):\n        return sum(shape.area() for shape in self.shapes)",
+                        "def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.calculate_area_sum()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    9,
+                    18
+                ],
+                [
+                    11,
+                    12
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "HTML"
+            ],
+            "reason": "The sum of areas is calculated twice\u2014once in AreaCalculator.sum() and again in SumCalculator.HTML(). This leads to redundancy.",
+            "suggestion": "Avoid recalculating areas by storing the result of the area calculation in a single place.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas) ",
+                        "def HTML(self):\n        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_area_sum(self):\n        return sum(shape.area() for shape in self.shapes)",
+                        "def HTML(self):\n        areas_sum = self.calculator.calculate_area_sum()\n        return f'Sum of the areas of provided shapes: {areas_sum}'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 697,
+        "prompt_tokens": 2345,
+        "total_tokens": 3042
+    }
+}

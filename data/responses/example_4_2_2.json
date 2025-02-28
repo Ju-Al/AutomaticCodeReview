@@ -1,0 +1,36 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    82,
+                    91
+                ]
+            ],
+            "method_names": [
+                "to_json",
+                "to_html"
+            ],
+            "reason": "Methods in the SumOutputter class handle both data formatting (responsibility of converting to JSON/HTML) and fetching the sum from the area calculator.",
+            "suggestion": "Separate the data processing and formatting logic into distinct classes or modules.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumOutputter:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def to_json(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def to_html(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                    ],
+                    "suggestion_code": [
+                        "class JsonOutputGenerator:\n    def generate(self, data):\n        return json.dumps(data)\n\nclass HtmlOutputGenerator:\n    def generate(self, data):\n        return f\"Sum of the areas of provided shapes: {data['sum']}\"\n\nclass SumOutputter:\n    def __init__(self, areaCalculator: AreaCalculator) -> None:\n        self.calculator = areaCalculator\n\n    def format_json(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return JsonOutputGenerator().generate(data)\n\n    def format_html(self):\n        return HtmlOutputGenerator().generate({'sum': self.calculator.sum()})"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 356,
+        "prompt_tokens": 2448,
+        "total_tokens": 2804
+    },
+    "time": 5.1369757652282715
+}

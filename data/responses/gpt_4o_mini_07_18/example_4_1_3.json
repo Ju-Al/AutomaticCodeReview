@@ -1,0 +1,165 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    18,
+                    34
+                ],
+                [
+                    36,
+                    64
+                ],
+                [
+                    66,
+                    94
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The payment processor classes are handling both payment processing and authentication, violating the principle of single responsibility.",
+            "suggestion": "Separate the payment processing and authentication responsibilities into different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, order):",
+                        "        if not self.authenticated:",
+                        "            raise Exception('Not authenticated')",
+                        "        print('Processing debit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "    def auth_sms(self, order, code: str):",
+                        "        print('Authenticating via SMS')",
+                        "        self.authenticated = True",
+                        "",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, order):",
+                        "        print('Processing credit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')",
+                        "",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, order, security_code: str):",
+                        "        print('Processing paypal payment')",
+                        "        print(f'Verifying email: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "    def auth_sms(self, order, code: str):",
+                        "        raise Exception('Not implemented')"
+                    ],
+                    "suggestion_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):",
+                        "        self.security_code = security_code",
+                        "        self.authenticator = SMSAuthenticator()",
+                        "",
+                        "    def pay(self, order):",
+                        "        if not self.authenticator.is_authenticated():",
+                        "            raise Exception('Not authenticated')",
+                        "        print('Processing debit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "class SMSAuthenticator:",
+                        "    def __init__(self):",
+                        "        self.authenticated = False",
+                        "",
+                        "    def auth_sms(self, code: str):",
+                        "        print('Authenticating via SMS')",
+                        "        self.authenticated = True",
+                        "",
+                        "    def is_authenticated(self):",
+                        "        return self.authenticated",
+                        "",
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):",
+                        "        self.security_code = security_code",
+                        "        self.authenticator = SMSAuthenticator()",
+                        "",
+                        "    def pay(self, order):",
+                        "        print('Processing credit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):",
+                        "        self.security_code = security_code",
+                        "        self.authenticator = SMSAuthenticator()",
+                        "",
+                        "    def pay(self, order):",
+                        "        print('Processing paypal payment')",
+                        "        print(f'Verifying email: {self.security_code}')",
+                        "        order.status = 'paid'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    36,
+                    64
+                ],
+                [
+                    66,
+                    94
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processing implementation for each payment type requires changes to add new payment types, violating the open/closed principle.",
+            "suggestion": "Utilize a strategy pattern or delegation to support new payment processors without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    def pay(self, order):",
+                        "        if not self.authenticated:",
+                        "            raise Exception('Not authenticated')",
+                        "        print('Processing debit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "    def pay(self, order):",
+                        "        print('Processing credit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        order.status = 'paid'",
+                        "",
+                        "    def pay(self, order):",
+                        "        print('Processing paypal payment')",
+                        "        print(f'Verifying email: {self.security_code}')",
+                        "        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentHandler:",
+                        "    def __init__(self, processor: PaymentProcessor):",
+                        "        self.processor = processor",
+                        "",
+                        "    def handle_payment(self, order):",
+                        "        self.processor.pay(order)",
+                        "",
+                        "processor = PaymentHandler(DebitPaymentProcessor('0372846'))",
+                        "processor.handle_payment(order)",
+                        "order = Order()",
+                        "order.add_item('Keyboard', 1, 50)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 1217,
+        "prompt_tokens": 2552,
+        "total_tokens": 3769
+    }
+}

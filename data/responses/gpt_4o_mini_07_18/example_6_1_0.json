@@ -1,0 +1,107 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    39
+                ]
+            ],
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The statement function is responsible for calculating amounts, accumulating credits, formatting the result, and handling errors. This amounts to multiple responsibilities.",
+            "suggestion": "Split the functionality into multiple methods or classes, such as a class for calculating amounts and another for formatting the statement.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def statement(invoice, plays):",
+                        "    total_amount = 0",
+                        "    volume_credits = 0",
+                        "    result = f\"Statement for {invoice['customer']}\\n\"",
+                        "    for perf in invoice['performances']: ",
+                        "        play = plays[perf['playID']]",
+                        "        if play is None:",
+                        "            raise ValueError(f\"Unknown play: {perf['playID']}\")",
+                        "        this_amount = 0",
+                        "        if play['type'] == \"tragedy\":",
+                        "            this_amount = 40000",
+                        "            if perf['audience'] > 30:",
+                        "                this_amount += 1000 * (perf['audience'] - 30)",
+                        "        elif play['type'] == \"comedy\":",
+                        "            this_amount = 30000",
+                        "            if perf['audience'] > 20:",
+                        "                this_amount += 10000 + 500 * (perf['audience'] - 20)",
+                        "            this_amount += 300 * perf['audience']",
+                        "        else:",
+                        "            raise ValueError(f\"Unknown type: {play['type']}\")",
+                        "        if play['type'] == \"tragedy\":",
+                        "            volume_credits += max(perf['audience'] - 30, 0)",
+                        "        if play['type'] == \"comedy\":",
+                        "            volume_credits += max(perf['audience'] - 30, 0)",
+                        "            volume_credits += perf['audience'] // 5",
+                        "        result += f\"{play['name']}: {f\"${total_amount/ 100:,.2f}\"} ({perf['audience']} seats)\\n\"",
+                        "        total_amount += this_amount",
+                        "        if play['type'] == \"tragedy\":",
+                        "            result += f\"Amount owed for tragedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"",
+                        "            result += f\"You earned {volume_credits} credits\\n\"",
+                        "        if play['type'] == \"comedy\":",
+                        "            result += f\"Amount owed for comedy is {f\"${total_amount/ 100:,.2f}\"}\\n\"",
+                        "            result += f\"You earned {volume_credits} credits\\n\"",
+                        "    return result"
+                    ],
+                    "suggestion_code": [
+                        "class PlayCalculator:",
+                        "    def __init__(self, plays):",
+                        "        self.plays = plays",
+                        "    def calculate_amount(self, perf):",
+                        "        play = self.plays[perf['playID']]",
+                        "        if play is None:",
+                        "            raise ValueError(f\"Unknown play: {perf['playID']}\")",
+                        "        if play['type'] == \"tragedy\":",
+                        "            amount = 40000",
+                        "            if perf['audience'] > 30:",
+                        "                amount += 1000 * (perf['audience'] - 30)",
+                        "        elif play['type'] == \"comedy\":",
+                        "            amount = 30000",
+                        "            if perf['audience'] > 20:",
+                        "                amount += 10000 + 500 * (perf['audience'] - 20)",
+                        "            amount += 300 * perf['audience']",
+                        "        else:",
+                        "            raise ValueError(f\"Unknown type: {play['type']}\")",
+                        "        return amount",
+                        "    def calculate_credits(self, perf):",
+                        "        play = self.plays[perf['playID']]",
+                        "        credits = 0",
+                        "        if play['type'] == \"tragedy\":",
+                        "            credits += max(perf['audience'] - 30, 0)",
+                        "        if play['type'] == \"comedy\":",
+                        "            credits += max(perf['audience'] - 30, 0)",
+                        "            credits += perf['audience'] // 5",
+                        "        return credits",
+                        "def statement(invoice, plays):",
+                        "    calculator = PlayCalculator(plays)",
+                        "    total_amount = 0",
+                        "    volume_credits = 0",
+                        "    result = f\"Statement for {invoice['customer']}\\n\"",
+                        "    for perf in invoice['performances']:",
+                        "        this_amount = calculator.calculate_amount(perf)",
+                        "        volume_credits += calculator.calculate_credits(perf)",
+                        "        total_amount += this_amount",
+                        "        result += f\"{plays[perf['playID']]['name']}: {f\"${total_amount / 100:,.2f}\"} ({perf['audience']} seats)\\n\"",
+                        "    result += f\"Amount owed: {f\"${total_amount / 100:,.2f}\"}\\n\"",
+                        "    result += f\"You earned {volume_credits} credits\\n\"",
+                        "    return result"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1246,
+        "prompt_tokens": 2658,
+        "total_tokens": 3904
+    }
+}

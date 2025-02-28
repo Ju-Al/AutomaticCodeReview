@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_0",
+            "metric": "F1-Score",
+            "score": 0.3,
+            "reason": "Only 'Single Responsibility Principle' is a true positive, while 'Don't Repeat Yourself' is a false positive and 'Liskov Substitution Principle' is a false negative."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the violation of the Single Responsibility Principle, but the actual output includes additional details about managing order status, which is not mentioned in the expected output, affecting clarity and focus."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating classes for order management, but the actual output proposes creating an OrderDetails class focusing on items, quantities, and prices, while the expected output specifically calls for splitting the Order class into two distinct classes for quantities and prices."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output contains 'addItem' and 'setStatus', while the expected output includes 'totalPrices' and 'addItems', showing minimal thematic alignment."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion does not address key functionalities like total price calculation and managing order quantities, which are present in the expected output."
+        }
+    ]
+]

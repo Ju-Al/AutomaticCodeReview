@@ -1,0 +1,96 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    60,
+                    60
+                ],
+                [
+                    70,
+                    70
+                ],
+                [
+                    79,
+                    79
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay",
+                "pay"
+            ],
+            "reason": "The `pay` method in the `PaypalPaymentProcessor` class has an additional parameter `security_code`, which should be part of the class's state and does not conform to the other payment processor implementations.",
+            "suggestion": "Refactor the `PaypalPaymentProcessor` class to remove the `security_code` parameter from the `pay` method and instead initialize it through the constructor. Ensure consistency with other payment processors.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def pay(self, order, security_code: str):",
+                        "        print('Processing paypal payment')"
+                    ],
+                    "suggestion_code": [
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):",
+                        "        self.security_code = security_code"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    41,
+                    41
+                ],
+                [
+                    53,
+                    53
+                ],
+                [
+                    72,
+                    72
+                ],
+                [
+                    81,
+                    81
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay",
+                "pay",
+                "pay"
+            ],
+            "reason": "The `pay` methods in the payment processors contain repeated code for handling the security code verification and payment processing messages.",
+            "suggestion": "Create a common method within the `PaymentProcessor` class to handle common logging or verification tasks to avoid duplicating code in each payment processor.",
+            "changes": [
+                {
+                    "original_code": [
+                        "        print('Processing debit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        print('Processing credit payment type')",
+                        "        print(f'Verifying security code: {self.security_code}')",
+                        "        print('Processing paypal payment')",
+                        "        print(f'Verifying email: {self.security_code}')"
+                    ],
+                    "suggestion_code": [
+                        "        self._process_payment('debit', self.security_code, order)",
+                        "    def _process_payment(self, payment_type, security_code, order):",
+                        "        print(f'Processing {payment_type} payment type')",
+                        "        print(f'Verifying security code: {security_code}')",
+                        "        order.status = 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 580,
+        "prompt_tokens": 2544,
+        "total_tokens": 3124
+    }
+}

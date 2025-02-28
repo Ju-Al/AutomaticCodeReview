@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    12
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class is responsible for managing items, quantities, prices, and also the order's state, which leads to multiple responsibilities within one class.",
+            "suggestion": "Separate the responsibility of item management and order management into different classes, such as ItemManager and OrderManager.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class ItemManager:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass Order:\n    def __init__(self, item_manager: ItemManager):\n        self.item_manager = item_manager\n        self.status = 'open'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    41,
+                    47
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processors are not extensible. If we want to add a new payment method, we would need to modify existing classes rather than extending them.",
+            "suggestion": "Refactor the payment processors to implement a strategy pattern, allowing new payment methods to be added without modifying the existing ones.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, authorizer: SMSAuthorizer):\n        self.security_code = security_code\n        self.authorizer = authorizer\n\n    def pay(self, order):\n        if not self.authorizer.is_authenticated():\n            raise Exception('Not authenticated')\n        print('Processing debit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\nclass CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'\n\nclass PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessorFactory:\n    @staticmethod\n    def create_processor(payment_type: str, security_code: str, authorizer: SMSAuthorizer = None) -> PaymentProcessor:\n        if payment_type == 'debit':\n            return DebitPaymentProcessor(security_code, authorizer)\n        elif payment_type == 'credit':\n            return CreditPaymentProcessor(security_code)\n        elif payment_type == 'paypal':\n            return PaypalPaymentProcessor(security_code)\n        else:\n            raise ValueError('Unsupported payment type')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 881,
+        "prompt_tokens": 2544,
+        "total_tokens": 3425
+    }
+}

@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "True Positive: Interface Segregation Principle; False Negative: Single Responsibility Principle; No False Positives. Precision is 1.0, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_3",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify that the issue is with enforcing the auth_sms method on classes that do not need it. The actual output discusses unsupported operation exceptions, while the expected output specifically mentions the Interface Segregation Principle violation."
+        },
+        {
+            "example_id": "example_4_1_3",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest breaking down the PaymentProcessor for better compliance with the Interface Segregation Principle, but the actual output is less specific about implementing an abstract class or method like auth_sms."
+        },
+        {
+            "example_id": "example_4_1_3",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match exactly, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_4_1_3",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output separates payment processing and SMS authentication into interfaces, aligning with expected modularity. However, the expected output uses a separate class for SMS authorization, which is not reflected in the actual output. Both separate concerns but through different structures."
+        }
+    ]
+]

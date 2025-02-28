@@ -1,0 +1,27 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    3,
+                    9
+                ]
+            ],
+            "method_names": [
+                "UserService"
+            ],
+            "reason": "The UserService class is tightly coupled to the MySQLDatabase class, which is a concrete implementation, making it hard to change the database layer without modifying the UserService class itself.",
+            "suggestion": "Introduce an interface for the database operations, and have MySQLDatabase implement this interface. UserService should depend on this interface instead of the concrete implementation, allowing for easier substitution of different database implementations.",
+            "code": [
+                "    private MySQLDatabase database;\n\n    public UserService() {\n        this.database = new MySQLDatabase();\n    }"
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 160,
+        "prompt_tokens": 1989,
+        "total_tokens": 2149
+    }
+}

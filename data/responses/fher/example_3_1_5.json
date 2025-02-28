@@ -1,0 +1,48 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    43,
+                    44
+                ],
+                [
+                    48,
+                    49
+                ],
+                [
+                    54,
+                    55
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "pay",
+                "pay"
+            ],
+            "reason": "Each payment processor class handles both the payment processing and the order status update, violating the SRP.",
+            "suggestion": "Separate payment processing logic from order status management by creating a dedicated method in the Order class to handle status updates.",
+            "changes": [
+                {
+                    "original_code": [
+                        "        order.status = 'paid'",
+                        "        order.status = 'paid'",
+                        "        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "        self.update_order_status(order)",
+                        "        self.update_order_status(order)",
+                        "        self.update_order_status(order)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 215,
+        "prompt_tokens": 2394,
+        "total_tokens": 2609
+    }
+}

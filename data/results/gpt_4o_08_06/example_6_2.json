@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_6_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.9,
+            "reason": "Actual output has no false positives as 'Single Responsibility Principle' is in the expected list. False Positive Rate is 0 since FP is 0."
+        },
+        {
+            "example_id": "example_6_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "There is 1 FN ('Don't Repeat Yourself') and 1 TP ('Single Responsibility Principle'), resulting in a False Negative Rate of 0.5."
+        },
+        {
+            "example_id": "example_6_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "True Positive is 'Single Responsibility Principle', False Negative is \"Don't Repeat Yourself\", and False Positives are none. Precision is 1 and Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the Single Responsibility Principle violation in the testable_html method, but the actual output lacks direct mention of the function being too long."
+        },
+        {
+            "example_id": "example_6_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest splitting responsibilities into separate functions, but Actual Output focuses more on setup/teardown, while Expected Output includes path processing and string formatting."
+        },
+        {
+            "example_id": "example_6_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual output matches the expected output very closely, with the only difference being the presence of the @staticmethod decorator, which does not affect the core functionality or logic of the method."
+        }
+    ]
+]

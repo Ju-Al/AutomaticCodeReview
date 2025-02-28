@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_3",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "TP is 'Single Responsibility Principle'; FP is 'Open/Closed Principle'; FN is 'Liskov Substitution Principle'. Precision is 0.5, Recall is 0.5, F1-Score is 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, but they highlight different responsibilities: 'order details and status' vs. 'prices and quantities'."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output suggests separating status management, while Expected Output suggests splitting order class into quantities and prices, addressing different structural concerns."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Order' does not align with the expected output fields 'totalPrices' and 'addItems'. There is no thematic or contextual similarity."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs suggest separation of concerns but differ in implementation. Actual suggests splitting 'Order' and 'OrderStatus' while Expected splits into 'OrderQuantityManager' and 'PriceCalculator'. Actual lacks total price calculation, present in Expected."
+        }
+    ]
+]

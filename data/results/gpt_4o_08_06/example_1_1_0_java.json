@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "True Positives are identical with no False Positives or False Negatives, resulting in perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a Single Responsibility Principle violation related to order management and payment responsibilities, but the expected output also mentions issues with managing prices and quantities, which is missing in the actual output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separating concerns to adhere to the single responsibility principle, specifically mentioning a PaymentProcessor class. However, the actual output does not address splitting order quantities and prices into separate classes as the expected output does."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output only includes 'pay', while the expected output includes 'addItem', 'totalPrice', and 'pay', indicating partial thematic alignment but lacking detail and completeness."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output adds an Order class and modifies payment processing, while expected output uses an interface and divides responsibilities. Both focus on order management but differ significantly in structure and implementation details."
+        }
+    ]
+]

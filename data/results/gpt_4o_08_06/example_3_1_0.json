@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_0",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "True Positive: Single Responsibility Principle. False Positive: Open/Closed Principle. False Negative: Liskov Substitution Principle. Precision: 0.5, Recall: 0.5, F1-Score: 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle in the Order class, but the actual output is less specific about the responsibilities involved compared to the expected output."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest separation of Order class responsibilities but differ in focus; actual output suggests item management, while expected output focuses on separating quantities and prices."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output only contains 'add_item', missing 'total_prices' and has a typo in 'add_items'."
+        },
+        {
+            "example_id": "example_3_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs refactor the code to manage items, but the actual output introduces a separate class for items while the expected output uses a different class structure for managing quantities and price calculations."
+        }
+    ]
+]

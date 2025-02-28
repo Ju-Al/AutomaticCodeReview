@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_1",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The True Positive is 'Open/Closed Principle'. The False Positive is 'Single Responsibility Principle'. There are no False Negatives. Precision is 0.5, Recall is 1.0, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify a violation of the Open/Closed Principle due to the need for modification when adding new shapes. The actual output lacks specific examples of shapes provided in the expected output."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs emphasize using an interface or abstract class for shapes to comply with the open-closed principle. They discuss implementing a common method for area calculation and integrating new shapes without modifying existing code. The actual output captures the essence but lacks specific examples like Circle or Rectangle."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output in both content and context for the field being compared."
+        },
+        {
+            "example_id": "example_2_2_1",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs refactor the code to use a Shape interface for polymorphism and provide implementations for Circle and Square. Actual output uses a loop for area calculation, while expected uses a stream, which is a minor difference in approach."
+        }
+    ]
+]

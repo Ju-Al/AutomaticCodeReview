@@ -1,0 +1,70 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    38,
+                    39
+                ],
+                [
+                    46,
+                    57
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaypalPaymentProcessor class has multiple responsibilities: it processes payment and manages the verification of the security code, which might not be handled correctly when changing or extending payment methods.",
+            "suggestion": "Separate the verification logic into a dedicated verification class or method to ensure that the PaypalPaymentProcessor's responsibility is restricted to processing payments only.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'",
+                        "    def pay(self, order: Order):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str, verifier: EmailVerifier):\n        self.security_code = security_code\n        self.verifier = verifier\n\n    def pay(self, order: Order):\n        if not self.verifier.verify(self.security_code):\n            raise Exception('Verification failed')\n        print('Processing paypal payment')\n        order.status = 'paid'",
+                        "class EmailVerifier:\n    def verify(self, code: str) -> bool:\n        # Implement the verification logic here\n        return True"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    46,
+                    57
+                ],
+                [
+                    66,
+                    72
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay methods in CreditPaymentProcessor and PaypalPaymentProcessor classes both contain similar logic regarding verifying the security code, violating the DRY principle.",
+            "suggestion": "Extract the common verification logic into a separate method within a base class or utility function to avoid repetition.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        print('Processing credit payment type')\n        print(f'Verifying security code: {self.security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {self.security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: Order):\n        pass\n\n    def verify_code(self, security_code: str):\n        # Common verification logic here\n        pass",
+                        "class CreditPaymentProcessor(PaymentProcessor):\n    def __init__(self, security_code: str):\n        self.security_code = security_code\n\n    def pay(self, order: Order):\n        self.verify_code(self.security_code)\n        print('Processing credit payment type')\n        order.status = 'paid'"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 833,
+        "prompt_tokens": 2544,
+        "total_tokens": 3377
+    }
+}

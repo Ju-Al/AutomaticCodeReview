@@ -1,0 +1,136 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    18
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator is responsible for calculating areas and also contains type checks for different shapes, which should ideally be handled in their respective classes.",
+            "suggestion": "Move the responsibility of area calculation into the shape classes themselves by adding a method for area calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):",
+                        "        areas = [shape.area() for shape in self.shapes]",
+                        "        return sum(areas)"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius"
+                    ],
+                    "suggestion_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius",
+                        "",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    10,
+                    12
+                ],
+                [
+                    14,
+                    16
+                ],
+                [
+                    8,
+                    18
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class requires modification for new shape types since the area calculation logic is tightly coupled with specific shape checks in the sum method.",
+            "suggestion": "Add an area method in each shape class, allowing the AreaCalculator's sum method to be extended without modification by simply implementing a new shape class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "def sum(self):",
+                        "        areas = [shape.area() for shape in self.shapes]",
+                        "        return sum(areas)"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius"
+                    ],
+                    "suggestion_code": [
+                        "class Square:",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle:",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius",
+                        "",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 878,
+        "prompt_tokens": 2345,
+        "total_tokens": 3223
+    }
+}

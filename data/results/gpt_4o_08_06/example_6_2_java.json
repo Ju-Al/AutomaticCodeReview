@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "No false positives; 'Single Responsibility Principle' is in both actual and expected lists."
+        },
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "One false negative: 'Don't Repeat Yourself' is missing from the actual output. One true positive: 'Single Responsibility Principle' is present in both lists. False Negative Rate is 1/2."
+        },
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "There is 1 True Positive ('Single Responsibility Principle'), 0 False Positives, and 1 False Negative ('Don't Repeat Yourself'). Precision is 1.0, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2_java",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the Single Responsibility Principle violation, focusing on 'testableHtml' having multiple responsibilities. The actual output mentions handling setups, teardowns, and HTML generation, aligning with the expected output's mention of the function being too long with too many responsibilities."
+        },
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating concerns but differ in specifics; actual output focuses on setups/teardowns and HTML generation, while expected output emphasizes splitting functions for setup, teardown, path processing, and formatting."
+        },
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2_java",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, showing complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_2_java",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual and expected outputs are thematically aligned, addressing the same issues of including setup and teardown pages. However, the actual output lacks details such as 'WikiPagePath' and 'PathParser.render' present in the expected output, which affects clarity and completeness."
+        }
+    ]
+]

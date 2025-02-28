@@ -1,0 +1,107 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    3
+                ],
+                [
+                    7,
+                    9
+                ],
+                [
+                    14,
+                    16
+                ],
+                [
+                    19,
+                    21
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is responsible for both managing the list of items and their quantities, as well as maintaining the order's status. This violates the Single Responsibility Principle.",
+            "suggestion": "Consider creating a separate class to handle order status changes and potentially processing order properties (like items and quantities). This separation will allow the Order class to focus solely on managing the items.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class Order {",
+                        "private List<String> items;",
+                        "private List<Integer> quantities;",
+                        "private List<Double> prices;",
+                        "private String status;",
+                        "",
+                        "public void addItem(String name, int quantity, double price) {",
+                        "this.items.add(name);",
+                        "this.quantities.add(quantity);",
+                        "this.prices.add(price);",
+                        "}",
+                        "",
+                        "public String getStatus() {",
+                        "return status;",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class Order {",
+                        "private List<String> items;",
+                        "private List<Integer> quantities;",
+                        "private List<Double> prices;",
+                        "",
+                        "public void addItem(String name, int quantity, double price) {",
+                        "this.items.add(name);",
+                        "this.quantities.add(quantity);",
+                        "this.prices.add(price);",
+                        "}",
+                        "",
+                        "public List<String> getItems() {",
+                        "return items;",
+                        "}",
+                        "",
+                        "public List<Integer> getQuantities() {",
+                        "return quantities;",
+                        "}",
+                        "",
+                        "public List<Double> getPrices() {",
+                        "return prices;",
+                        "}",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public void setStatus(String status) {",
+                        "this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderStatus {",
+                        "private String status = \"open\";",
+                        "",
+                        "public String getStatus() {",
+                        "return status;",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "this.status = status;",
+                        "}",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 570,
+        "prompt_tokens": 2396,
+        "total_tokens": 2966
+    }
+}

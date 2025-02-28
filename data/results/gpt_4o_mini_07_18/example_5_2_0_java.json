@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_0",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "The actual output includes a False Positive ('Single Responsibility Principle') and lacks a True Positive, resulting in low Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs discuss the dependency of UserService on MySQLDatabase, but the actual output lacks clarity on the principle violation and does not explicitly mention the Dependency Inversion Principle."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest creating a Database interface for abstraction, but the actual output lacks clarity in emphasizing the dependency on abstractions like the expected output does."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output, displaying complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output only suggests changing the type of the database variable, while the expected output includes a complete redesign of the database interaction methods, lacking alignment in detail and relevance."
+        }
+    ]
+]

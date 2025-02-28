@@ -1,0 +1,101 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    12,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: it handles the area calculation logic and the formatting of the output. These should be separated.",
+            "suggestion": "Introduce a separate class responsible solely for output formatting, allowing AreaCalculator to focus on area calculations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):",
+                        "    areas = []",
+                        "    for shape in self.shapes:",
+                        "        if isinstance(shape, Square):",
+                        "            areas.append(math.pow(shape.length, 2))",
+                        "        elif isinstance(shape, Circle):",
+                        "            areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "    return sum(areas)",
+                        "",
+                        "def output(self):",
+                        "    return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def __init__(self, shapes=[]) -> None:",
+                        "        self.shapes = shapes",
+                        "",
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)",
+                        "",
+                        "class AreaOutputter:",
+                        "    def __init__(self, calculator):",
+                        "        self.calculator = calculator",
+                        "",
+                        "    def output(self):",
+                        "        return f'Sum of the areas of provided shapes: {self.calculator.sum()}'"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "method_names": [],
+            "reason": "The AreaCalculator class directly depends on specific implementations of shapes (Square and Circle), which couples the area calculation logic to these implementations.",
+            "suggestion": "Introduce an abstract class or interface for shapes, and ensure that the AreaCalculator depends on this abstraction instead.",
+            "changes": [
+                {
+                    "original_code": [],
+                    "suggestion_code": [
+                        "from abc import ABC, abstractmethod",
+                        "",
+                        "class Shape(ABC):",
+                        "    @abstractmethod",
+                        "    def area(self): pass",
+                        "",
+                        "class Square(Shape):",
+                        "    def __init__(self, length) -> None:",
+                        "        self.length = length",
+                        "",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle(Shape):",
+                        "    def __init__(self, radius) -> None:",
+                        "        self.radius = radius",
+                        "",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 701,
+        "prompt_tokens": 2265,
+        "total_tokens": 2966
+    }
+}

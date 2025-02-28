@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_4",
+            "metric": "F1-Score",
+            "score": 0.333,
+            "reason": "The true positive is 'Interface Segregation Principle'. The false positive is 'Liskov Substitution Principle'. The false negative is 'Single Responsibility Principle'. Precision is 0.5, recall is 0.5, leading to an F1-score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the improper requirement to implement the auth_sms method and mention the same principle violation. However, the actual output does not specifically name the 'CreditPaymentProcessor' class."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the Interface Segregation Principle by suggesting breaking down interfaces/classes to handle specific responsibilities. However, the actual output suggests creating interfaces, while the expected output suggests using an abstract class. This results in partial thematic alignment but a difference in implementation approach."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output aligns with the expected in terms of class structure and method implementation, but lacks the introduction of the SMSAuthorizer class for better separation of concerns. The actual output integrates SMS authentication within DebitPaymentProcessor, which partially matches the expected suggestion but does not encapsulate it in a separate class."
+        }
+    ]
+]

@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_3_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.8,
+            "reason": "There are no false positives since 'Single Responsibility Principle' is in both actual and expected lists. Therefore, FP is 0 resulting in a low False Positive Rate."
+        },
+        {
+            "example_id": "example_3_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "The actual output misses 'Liskov Substitution Principle' which is in the expected output, resulting in 1 FN and 1 TP."
+        },
+        {
+            "example_id": "example_3_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "The actual output matches one expected principle (Single Responsibility Principle), but misses another (Liskov Substitution Principle), resulting in a precision of 1 and a recall of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, but the actual output focuses on tracking status and items, while the expected output mentions prices and quantities."
+        },
+        {
+            "example_id": "example_3_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Both outputs suggest separation for better adherence to principles, but differ in specifics: actual suggests separating order status, expected suggests separating quantities and prices."
+        },
+        {
+            "example_id": "example_3_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "Actual output 'Order' does not align with expected output fields 'total_prices' and 'add_items', indicating a lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_3_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output includes only the 'add_item' method, whereas the expected output contains both 'add_item' and 'total_price'. The method 'add_item' aligns in terms of detail and relevance, but the absence of 'total_price' in the actual output indicates incomplete alignment with the expected content."
+        }
+    ]
+]

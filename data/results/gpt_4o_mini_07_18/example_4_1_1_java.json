@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_1_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_1",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "TP is 1 ('Single Responsibility Principle'), FP is 1 ('Open/Closed Principle'), and FN is 1 ('Interface Segregation Principle'). Precision and Recall are both low, indicating a moderate level of alignment with the expected output."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output references the PaymentProcessor class violating the SRP, while the expected output discusses an order class, resulting in a lack of thematic alignment between the two."
+        },
+        {
+            "example_id": "example_4_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests separating payment processes and SMS authentication, while the expected output recommends splitting the Order class into two classes, indicating a lack of thematic alignment."
+        },
+        {
+            "example_id": "example_4_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output fields 'setStatus' and 'auth_sms' do not align thematically or contextually with the expected output fields 'totalPrices' and 'addItems'."
+        },
+        {
+            "example_id": "example_4_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output discusses payment processing and SMS authentication, while the expected output focuses on order management and price calculation, showing no thematic alignment."
+        }
+    ]
+]

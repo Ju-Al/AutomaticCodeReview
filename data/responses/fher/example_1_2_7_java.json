@@ -1,0 +1,67 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    22,
+                    33
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating the area of shapes and formatting output, which violates SRP.",
+            "suggestion": "Separate area calculation and output formatting into different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    public double sum() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String output() {\n        return \"Sum of the areas of provided shapes: \" + sum();\n    }"
+                    ],
+                    "suggestion_code": [
+                        "    public double calculateTotalArea() {\n        double totalArea = 0;\n\n        for (Object shape : shapes) {\n            if (shape instanceof Square) {\n                Square square = (Square) shape;\n                totalArea += Math.pow(square.getLength(), 2);\n            } else if (shape instanceof Circle) {\n                Circle circle = (Circle) shape;\n                totalArea += Math.PI * Math.pow(circle.getRadius(), 2);\n            }\n        }\n\n        return totalArea;\n    }\n\n    public String formatOutput() {\n        return \"Sum of the areas of provided shapes: \" + calculateTotalArea();\n    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    5,
+                    5
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator"
+            ],
+            "reason": "The AreaCalculator class depends on concrete classes (Square, Circle) rather than abstractions, violating DIP.",
+            "suggestion": "Use an interface or a common superclass for the shape classes to allow AreaCalculator to depend on abstractions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    public AreaCalculator(List<Object> shapes) {\n        this.shapes = shapes;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "    public AreaCalculator(List<Shape> shapes) {\n        this.shapes = shapes;\n    }"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "    private List<Object> shapes;"
+                    ],
+                    "suggestion_code": [
+                        "    private List<Shape> shapes;"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 633,
+        "prompt_tokens": 2419,
+        "total_tokens": 3052
+    }
+}

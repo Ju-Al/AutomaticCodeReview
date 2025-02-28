@@ -1,0 +1,131 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    16
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus",
+                "getStatus"
+            ],
+            "reason": "The Order class is responsible for managing both the order details and its state, which can lead to complexity if more functionality is added later.",
+            "suggestion": "Separate the order management into a separate class, such as OrderManager, to handle operations related to order processing and maintain the order's state separately.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public String getStatus() {",
+                        "    return status;",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    OrderDetails details = new OrderDetails();",
+                        "    details.addItem(name, quantity, price);",
+                        "}",
+                        "",
+                        "public String getStatus(OrderDetails details) {",
+                        "    return details.getStatus();",
+                        "}",
+                        "",
+                        "public void setStatus(OrderDetails details, String status) {",
+                        "    details.setStatus(status);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    33,
+                    37
+                ],
+                [
+                    51,
+                    55
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor class is not extensible. Adding new payment methods requires modifying the existing class instead of extending its functionality.",
+            "suggestion": "Implement a strategy pattern that allows for dynamic payment methods without modifying existing code. Create an interface for payment methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order) {",
+                        "    System.out.println(\"Processing debit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}",
+                        "",
+                        "public void auth_sms(Order order, String code) {",
+                        "    System.out.println(\"Authenticating via SMS\");",
+                        "    this.authenticated = true;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order) {",
+                        "    PaymentStrategy strategy = new PaymentStrategy();",
+                        "    strategy.pay(order, this);",
+                        "}",
+                        "",
+                        "public void auth_sms(Order order, String code) {",
+                        "    PaymentStrategy strategy = new PaymentStrategy();",
+                        "    strategy.auth(order, this);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    49,
+                    51
+                ]
+            ],
+            "method_names": [
+                "main"
+            ],
+            "reason": "The Main class directly instantiates the concrete PaymentProcessor implementations, creating tight coupling between high-level and low-level modules.",
+            "suggestion": "Use dependency injection to provide payment processor instances, allowing for easier testing and flexibility.",
+            "changes": [
+                {
+                    "original_code": [
+                        "PaymentProcessor processor = new CreditCardPaymentProcessor(\"0372846\");",
+                        "PaymentProcessor paypalProcessor = new DebitCardPaymentProcessor(\"123456\");"
+                    ],
+                    "suggestion_code": [
+                        "PaymentProcessor processor = PaymentProcessorFactory.create(\"credit\", \"0372846\");",
+                        "PaymentProcessor paypalProcessor = PaymentProcessorFactory.create(\"debit\", \"123456\");"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 849,
+        "prompt_tokens": 2817,
+        "total_tokens": 3666
+    }
+}

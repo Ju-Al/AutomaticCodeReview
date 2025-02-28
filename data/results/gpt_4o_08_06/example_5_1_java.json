@@ -1,0 +1,26 @@
+[
+    [
+        {
+            "example_id": "example_5_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There is 1 FP as 'Liskov Substitution Principle' is not in the expected list, and 1 TN since 'Dependency Inversion Principle' is expected but not in the actual output, leading to a 1/2 False Positive Rate."
+        },
+        {
+            "example_id": "example_5_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.0,
+            "reason": "The actual output contains 'Liskov Substitution Principle', while the expected output is 'Dependency Inversion Principle', resulting in a complete mismatch with 1 false negative and 0 true positives."
+        },
+        {
+            "example_id": "example_5_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives as the actual and expected lists have no common principles. One False Positive is identified as 'Liskov Substitution Principle', and one False Negative is 'Dependency Inversion Principle'. With zero True Positives, both Precision and Recall are zero, leading to an F1-Score of zero."
+        }
+    ],
+    []
+]

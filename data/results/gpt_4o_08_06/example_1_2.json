@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_1_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "There are no false positives as 'Open/Closed Principle' is present in both the actual and expected violation lists."
+        },
+        {
+            "example_id": "example_1_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "The actual output missed 'Single Responsibility Principle', which is a false negative, while correctly identifying 'Open/Closed Principle' as a true positive."
+        },
+        {
+            "example_id": "example_1_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "One TP: 'Open/Closed Principle'. One FN: 'Single Responsibility Principle'. No FP. Precision and Recall are both 0.5, resulting in an F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the Open/Closed Principle violation in the AreaCalculator class and the need for modification when adding new shapes. The actual output is slightly less specific about shape examples."
+        },
+        {
+            "example_id": "example_1_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest implementing an interface to calculate area for shapes, aligning with the open-closed principle. However, the Expected Output provides more detail about abstract classes and integration with the AreaCalculator, while the Actual Output focuses on introducing the interface and implementation."
+        },
+        {
+            "example_id": "example_1_2",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the single element 'sum'."
+        },
+        {
+            "example_id": "example_1_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual and expected outputs are nearly identical, differing only by leading whitespace in the actual output, which does not affect functionality."
+        }
+    ]
+]

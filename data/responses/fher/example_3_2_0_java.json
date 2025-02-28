@@ -1,0 +1,86 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    10
+                ],
+                [
+                    25,
+                    27
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The VolumeCalculator and AreaCalculator classes both handle summation logic for their respective shapes, thus combining multiple responsibilities.",
+            "suggestion": "Consider creating separate classes for handling area calculation and volume calculation, each with its own summation methods.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalVolume = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalVolume += shape.area();",
+                        "    }",
+                        "    return totalVolume;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double areaSum() {",
+                        "    double totalArea = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalArea += shape.area();",
+                        "    }",
+                        "    return totalArea;",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    25,
+                    27
+                ],
+                [
+                    33,
+                    38
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The addition of new shapes affecting volume or area calculations necessitates modification of VolumeCalculator and AreaCalculator, which violates the Open/Closed Principle.",
+            "suggestion": "Use a strategy pattern, or composition to allow for flexible area and volume calculations without modifying the existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "    double totalVolume = 0;",
+                        "    for (Shape shape : shapes) {",
+                        "        totalVolume += shape.area();",
+                        "    }",
+                        "    return totalVolume;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double calculateVolume() {",
+                        "    // Implement volume calculation logic here using specific strategies or methods",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 469,
+        "prompt_tokens": 2683,
+        "total_tokens": 3152
+    }
+}

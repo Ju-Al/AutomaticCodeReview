@@ -1,0 +1,69 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    14
+                ],
+                [
+                    18,
+                    27
+                ]
+            ],
+            "method_names": [
+                "Order",
+                "pay"
+            ],
+            "reason": "The Order class manages item details, while also handling the payment processing status, which violates SRP. Each class should have a single responsibility only.",
+            "suggestion": "Separate payment processing into a different class/method and manage order details independently.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def change_status(self, status: str):\n        self.status = status",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: Order, security_code: str):\n        order.change_status('paid')  # Moved to the Order class"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    18,
+                    27
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processors modify the order's status directly, which requires changes for new payment methods and violates OCP. Adding new payment methods requires changes in the existing processor classes.",
+            "suggestion": "Introduce a method in the Order class for setting payment state and modify the processor to call this method, allowing easier extension for new payment types.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.change_status('paid')",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.change_status('paid')",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.change_status('paid')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 926,
+        "prompt_tokens": 2394,
+        "total_tokens": 3320
+    }
+}

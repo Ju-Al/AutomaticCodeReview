@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_1_0",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "True Positives: 1 (Single Responsibility Principle); False Positives: 1 (Open/Closed Principle); False Negatives: 0. Precision is 0.5 and Recall is 1.0, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address the violation of the Single Responsibility Principle, but the actual output lacks clarity and specific details about price and quantity responsibilities mentioned in the expected output."
+        },
+        {
+            "example_id": "example_1_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating the payment logic from the Order class, but the actual output provides a less detailed solution by only mentioning payment processing, while the expected output clearly breaks it down into three distinct classes."
+        },
+        {
+            "example_id": "example_1_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete alignment in content and clarity."
+        },
+        {
+            "example_id": "example_1_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual suggestion_code contains a PaymentProcessor class, but it diverges significantly from the expected suggestion_code which outlines an Order class, leading to a lack of thematic alignment."
+        }
+    ]
+]

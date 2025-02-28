@@ -1,0 +1,42 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    7
+                ],
+                [
+                    10,
+                    12
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for both order management (items, quantities, prices) and its state (status). Also, the PaymentProcessor class has a method that modifies the order state.",
+            "suggestion": "Separate the order handling and payment processing into dedicated classes. The Order class should focus solely on managing order details and the PaymentProcessor should manage payment transactions.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\n    def set_status(self, status: str) -> None:\n        self.status = status",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.set_status('paid')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 449,
+        "prompt_tokens": 2257,
+        "total_tokens": 2706
+    }
+}

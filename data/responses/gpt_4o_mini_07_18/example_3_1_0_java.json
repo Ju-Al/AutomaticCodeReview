@@ -1,0 +1,124 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    7,
+                    15
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "setStatus"
+            ],
+            "reason": "The Order class is managing both order details (items, quantities, prices) and the order status. This violates SRP since it handles multiple responsibilities.",
+            "suggestion": "Consider creating separate classes to handle order details and order status management. For instance, you could have an OrderDetails class that focuses on the items, quantities, and prices.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "    this.items.add(name);",
+                        "    this.quantities.add(quantity);",
+                        "    this.prices.add(price);",
+                        "}",
+                        "",
+                        "public void setStatus(String status) {",
+                        "    this.status = status;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class OrderDetails {",
+                        "    private List<String> items = new ArrayList<>();",
+                        "    private List<Integer> quantities = new ArrayList<>();",
+                        "    private List<Double> prices = new ArrayList<>();",
+                        "",
+                        "    public void addItem(String name, int quantity, double price) {",
+                        "        this.items.add(name);",
+                        "        this.quantities.add(quantity);",
+                        "        this.prices.add(price);",
+                        "    }",
+                        "}",
+                        "",
+                        "public class Order {",
+                        "    private String status = 'open';",
+                        "    private OrderDetails orderDetails;",
+                        "    ",
+                        "    public Order() {",
+                        "        this.orderDetails = new OrderDetails();",
+                        "    }",
+                        "    ",
+                        "    public void addItem(String name, int quantity, double price) {",
+                        "        this.orderDetails.addItem(name, quantity, price);",
+                        "    }",
+                        "    ",
+                        "    public void setStatus(String status) {",
+                        "        this.status = status;",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    34,
+                    37
+                ],
+                [
+                    44,
+                    47
+                ],
+                [
+                    54,
+                    57
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay methods in the different payment processor classes contain repeated code for processing payments and verifying security codes, which can be abstracted.",
+            "suggestion": "Create an abstract base class or a utility method for common payment processing logic that each payment processor can call.",
+            "changes": [
+                {
+                    "original_code": [
+                        "System.out.println(\"Processing paypal payment\");",
+                        "System.out.println(\"Verifying email: \" + securityCode);",
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "processPayment(\"paypal\", securityCode);"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "System.out.println(\"Processing credit card payment\");",
+                        "System.out.println(\"Verifying security code: \" + securityCode);",
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "processPayment(\"credit card\", securityCode);"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "System.out.println(\"Processing debit card payment\");",
+                        "System.out.println(\"Verifying security code: \" + securityCode);",
+                        "order.setStatus(\"paid\");"
+                    ],
+                    "suggestion_code": [
+                        "processPayment(\"debit card\", securityCode);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 811,
+        "prompt_tokens": 2560,
+        "total_tokens": 3371
+    }
+}

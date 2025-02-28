@@ -1,0 +1,134 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    9
+                ],
+                [
+                    33,
+                    34
+                ],
+                [
+                    52,
+                    53
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms",
+                "pay"
+            ],
+            "reason": "The PaymentProcessor subclasses handle multiple responsibilities: processing payment and SMS authentication. Each class should have a single responsibility.",
+            "suggestion": "Separate the responsibilities of payment processing and SMS authentication into different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order) {",
+                        "    System.out.println(\"Processing debit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}",
+                        "public void auth_sms(Order order, String code) {",
+                        "    System.out.println(\"Authenticating via SMS\");",
+                        "    this.authenticated = true;",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order) {",
+                        "    System.out.println(\"Processing debit card payment\");",
+                        "    System.out.println(\"Verifying security code: \" + securityCode);",
+                        "    order.setStatus(\"paid\");",
+                        "}",
+                        "public class SmsAuthenticator {",
+                        "    public void auth(Order order) {",
+                        "        System.out.println(\"Authenticating via SMS\");",
+                        "        // Logic to confirm authentication here",
+                        "    }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    26,
+                    28
+                ],
+                [
+                    16,
+                    18
+                ],
+                [
+                    35,
+                    37
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The Main class directly depends on the concrete PaymentProcessor implementations instead of an abstraction. This violates the dependency inversion principle.",
+            "suggestion": "Use an interface or an abstract class for payment processing in the Main class to reduce coupling.",
+            "changes": [
+                {
+                    "original_code": [
+                        "PaymentProcessor processor = new CreditCardPaymentProcessor(\"0372846\");",
+                        "PaymentProcessor paypalProcessor = new DebitCardPaymentProcessor(\"123456\");",
+                        "processor.pay(order);"
+                    ],
+                    "suggestion_code": [
+                        "PaymentProcessor processor = createPaymentProcessor();",
+                        "processor.pay(order);",
+                        "private static PaymentProcessor createPaymentProcessor() {",
+                        "    return new CreditCardPaymentProcessor(\"0372846\");",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    54,
+                    54
+                ],
+                [
+                    35,
+                    37
+                ],
+                [
+                    6,
+                    9
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "If a new type of payment processor is needed, modifications will have to be made to the Main class, violating the open/closed principle.",
+            "suggestion": "Implement a factory pattern for creating payment processors to allow for easier extension without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "PaymentProcessor processor = new CreditCardPaymentProcessor(\"0372846\");",
+                        "PaymentProcessor paypalProcessor = new DebitCardPaymentProcessor(\"123456\");"
+                    ],
+                    "suggestion_code": [
+                        "PaymentProcessor processor = PaymentProcessorFactory.create(\"credit_card\", \"0372846\");",
+                        "PaymentProcessor paypalProcessor = PaymentProcessorFactory.create(\"paypal\", \"123456\");"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 782,
+        "prompt_tokens": 2817,
+        "total_tokens": 3599
+    }
+}

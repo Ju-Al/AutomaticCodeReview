@@ -1,0 +1,38 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    41
+                ],
+                [
+                    43,
+                    48
+                ]
+            ],
+            "method_names": [
+                "statement"
+            ],
+            "reason": "The statement function has multiple responsibilities: calculating amounts and volume credits based on play types and generating a formatted statement.",
+            "suggestion": "Separate the calculation of amounts and volume credits from the statement generation logic. Create specific functions for each responsibility to improve readability and maintainability.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    def format_currency(amount):\n        return f\"${amount:,.2f}\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = 0\n        if play['type'] == \"tragedy\":\n            this_amount = 40000\n            if perf['audience'] > 30:\n                this_amount += 1000 * (perf['audience'] - 30)\n        elif play['type'] == \"comedy\":\n            this_amount = 30000\n            if perf['audience'] > 20:\n                this_amount += 10000 + 500 * (perf['audience'] - 20)\n            this_amount += 300 * perf['audience']\n        else:\n            raise ValueError(f\"Unknown type: {play['type']}\")\n\n        volume_credits += max(perf['audience'] - 30, 0)\n\n        if play['type'] == \"comedy\":\n            volume_credits += perf['audience'] // 5\n\n        result += f\" {play['name']}: {format_currency(this_amount / 100)} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n\n    result += f\"Amount owed is {format_currency(total_amount / 100)}\\n\"\n    result += f\"You earned {volume_credits} credits\\n\"\n    return result"
+                    ],
+                    "suggestion_code": [
+                        "def calculate_amount(perf, play):\n    if play['type'] == \"tragedy\":\n        this_amount = 40000\n        if perf['audience'] > 30:\n            this_amount += 1000 * (perf['audience'] - 30)\n    elif play['type'] == \"comedy\":\n        this_amount = 30000\n        if perf['audience'] > 20:\n            this_amount += 10000 + 500 * (perf['audience'] - 20)\n        this_amount += 300 * perf['audience']\n    else:\n        raise ValueError(f\"Unknown type: {play['type']}\")\n    return this_amount\n\n\ndef calculate_volume_credits(perf, play):\n    volume_credits = max(perf['audience'] - 30, 0)\n    if play['type'] == \"comedy\":\n        volume_credits += perf['audience'] // 5\n    return volume_credits\n\n\ndef statement(invoice, plays):\n    total_amount = 0\n    volume_credits = 0\n    result = f\"Statement for {invoice['customer']}\\n\"\n\n    def format_currency(amount):\n        return f\"${amount:,.2f}\"\n\n    for perf in invoice['performances']:\n        play = plays[perf['playID']]\n        if play is None:\n            raise ValueError(f\"Unknown play: {perf['playID']}\")\n\n        this_amount = calculate_amount(perf, play)\n        volume_credits += calculate_volume_credits(perf, play)\n\n        result += f\" {play['name']}: {format_currency(this_amount / 100)} ({perf['audience']} seats)\\n\"\n        total_amount += this_amount\n\n    result += f\"Amount owed is {format_currency(total_amount / 100)}\\n\"\n    result += f\"You earned {volume_credits} credits\\n\"\n    return result"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 961,
+        "prompt_tokens": 2568,
+        "total_tokens": 3529
+    }
+}

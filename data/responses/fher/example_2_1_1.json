@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    2,
+                    10
+                ],
+                [
+                    12,
+                    18
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is not only managing the order data (items, quantities, prices) but is also responsible for modifying the order status. Similarly, the PaymentProcessor class should only focus on processing payments and not modify the order's state directly.",
+            "suggestion": "Extract the status management from the Order class, and create a separate class to manage the Order state transitions. The PaymentProcessor can utilize this to change the status instead of doing it directly.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.state_manager = OrderStateManager()\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n",
+                        "class OrderStateManager:\n    def __init__(self, status='open'):\n        self.status = status\n\n    def transition_to_paid(self):\n        self.status = 'paid'\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.state_manager.transition_to_paid()\n"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    12,
+                    18
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The Pay method in the PaymentProcessor class has a direct dependency on the Order class. This ties the PaymentProcessor to a specific implementation of order management.",
+            "suggestion": "Create an interface or abstract class for order management, which can be implemented by different types of order classes. This way, PaymentProcessor would depend on the abstraction rather than a concrete implementation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n"
+                    ],
+                    "suggestion_code": [
+                        "from abc import ABC, abstractmethod\n\nclass IOrder(ABC):\n    @abstractmethod\n    def transition_to_paid(self):\n        pass\n\nclass PaymentProcessor:\n    def pay(self, order: IOrder, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.transition_to_paid()\n"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 827,
+        "prompt_tokens": 2257,
+        "total_tokens": 3084
+    }
+}

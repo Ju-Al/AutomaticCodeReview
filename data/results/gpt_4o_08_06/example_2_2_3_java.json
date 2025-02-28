@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "True Positive: Open/Closed Principle. False Positive: Liskov Substitution Principle. False Negative: None. Precision: 0.5, Recall: 1, F1: 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the open/closed principle due to modification needs in AreaCalculator for new shapes, with slight differences in examples of shapes mentioned."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest introducing a Shape interface for polymorphic area calculation, ensuring compliance with the open-closed principle. However, the actual output lacks details about defining the interface as abstract and integrating new shapes without modifying existing code."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the same element 'sum'."
+        },
+        {
+            "example_id": "example_2_2_3",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual output aligns well with the expected output by introducing an interface for Shape and implementing it in Circle and Square classes, enhancing polymorphism. Both outputs replace instanceof checks with a method call to getArea/area, improving code clarity and adherence to the Open/Closed principle. Minor differences exist in method naming and implementation details like using streams."
+        }
+    ]
+]

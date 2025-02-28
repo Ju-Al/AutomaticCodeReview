@@ -1,0 +1,185 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    45
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The generateStatement method in the Statement class handles multiple responsibilities: calculating amounts, generating formatted output, and handling logic for volume credits, making it difficult to maintain and extend.",
+            "suggestion": "Break down the generateStatement method into smaller methods that handle specific tasks, such as calculating amounts, calculating volume credits, and generating the output string.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "        double totalAmount = 0;",
+                        "        int volumeCredits = 0;",
+                        "        StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");",
+                        "        for (Performance perf : invoice.getPerformances()) {",
+                        "            Play play = plays.get(perf.getPlayID());",
+                        "            double thisAmount = 0;",
+                        "            if (play == null) {",
+                        "                throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());",
+                        "            }",
+                        "            switch (play.getType()) {",
+                        "                case \"tragedy\":",
+                        "                    thisAmount = 40000;",
+                        "                    if (perf.getAudience() > 30) {",
+                        "                        thisAmount += 1000 * (perf.getAudience() - 30);",
+                        "                    }",
+                        "                    break;",
+                        "                case \"comedy\":",
+                        "                    thisAmount = 30000;",
+                        "                    if (perf.getAudience() > 20) {",
+                        "                        thisAmount += 10000 + 500 * (perf.getAudience() - 20);",
+                        "                    }",
+                        "                    thisAmount += 300 * perf.getAudience();",
+                        "                    break;",
+                        "                default:",
+                        "                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "            }",
+                        "            switch (play.getType()) {",
+                        "                case \"tragedy\":",
+                        "                    volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "                    break;",
+                        "                case \"comedy\":",
+                        "                    volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "                    volumeCredits += Math.floor(perf.getAudience() / 5);",
+                        "                    break;",
+                        "                default:",
+                        "                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "            }",
+                        "            result.append(String.format(\" %s: %s (%d seats)\\n\",",
+                        "                    play.getName(), NumberFormat.getCurrencyInstance(Locale.US).format(thisAmount / 100),",
+                        "                    perf.getAudience()));",
+                        "            totalAmount += thisAmount;",
+                        "            switch (play.getType()) {",
+                        "                case \"tragedy\":",
+                        "                    result.append(String.format(\"Amount owed for tris %s\\n\",",
+                        "                            NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));",
+                        "                    result.append(String.format(\"You earned %d credits\\n\", volumeCredits));",
+                        "                case \"comedy\":",
+                        "                    volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "                    volumeCredits += Math.floor(perf.getAudience() / 5);",
+                        "                    break;",
+                        "                default:",
+                        "                    throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "            }",
+                        "        }",
+                        "        result.append(String.format(\"Amount owed is %s\\n\",",
+                        "                NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));",
+                        "        result.append(String.format(\"You earned %d credits\\n\", volumeCredits));",
+                        "        return result.toString();",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public static String generateStatement(Invoice invoice, Map<String, Play> plays) {",
+                        "        double totalAmount = 0;",
+                        "        int volumeCredits = 0;",
+                        "        StringBuilder result = new StringBuilder(\"Statement for \" + invoice.getCustomer() + \"\\n\");",
+                        "        for (Performance perf : invoice.getPerformances()) {",
+                        "            Play play = plays.get(perf.getPlayID());",
+                        "            if (play == null) {",
+                        "                throw new IllegalArgumentException(\"Unknown play: \" + perf.getPlayID());",
+                        "            }",
+                        "            double thisAmount = calculateAmount(perf, play);",
+                        "            volumeCredits += calculateVolumeCredits(perf, play);",
+                        "            result.append(formatStatementLine(play, thisAmount, perf.getAudience()));",
+                        "            totalAmount += thisAmount;",
+                        "        }",
+                        "        result.append(String.format(\"Amount owed is %s\\n\",",
+                        "                NumberFormat.getCurrencyInstance(Locale.US).format(totalAmount / 100)));",
+                        "        result.append(String.format(\"You earned %d credits\\n\", volumeCredits));",
+                        "        return result.toString();",
+                        "    }",
+                        "",
+                        "    private static double calculateAmount(Performance perf, Play play) {",
+                        "        double thisAmount = 0;",
+                        "        switch (play.getType()) {",
+                        "            case \"tragedy\":",
+                        "                thisAmount = 40000;",
+                        "                if (perf.getAudience() > 30) {",
+                        "                    thisAmount += 1000 * (perf.getAudience() - 30);",
+                        "                }",
+                        "                break;",
+                        "            case \"comedy\":",
+                        "                thisAmount = 30000;",
+                        "                if (perf.getAudience() > 20) {",
+                        "                    thisAmount += 10000 + 500 * (perf.getAudience() - 20);",
+                        "                }",
+                        "                thisAmount += 300 * perf.getAudience();",
+                        "                break;",
+                        "            default:",
+                        "                throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "        }",
+                        "        return thisAmount;",
+                        "    }",
+                        "",
+                        "    private static int calculateVolumeCredits(Performance perf, Play play) {",
+                        "        int volumeCredits = 0;",
+                        "        switch (play.getType()) {",
+                        "            case \"tragedy\":",
+                        "                volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "                break;",
+                        "            case \"comedy\":",
+                        "                volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "                volumeCredits += Math.floor(perf.getAudience() / 5);",
+                        "                break;",
+                        "            default:",
+                        "                throw new IllegalArgumentException(\"Unknown type: \" + play.getType());",
+                        "        }",
+                        "        return volumeCredits;",
+                        "    }",
+                        "",
+                        "    private static String formatStatementLine(Play play, double thisAmount, int audience) {",
+                        "        return String.format(\" %s: %s (%d seats)\\n\",",
+                        "                play.getName(), NumberFormat.getCurrencyInstance(Locale.US).format(thisAmount / 100),",
+                        "                audience);",
+                        "    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    29,
+                    29
+                ],
+                [
+                    41,
+                    41
+                ]
+            ],
+            "method_names": [
+                "generateStatement"
+            ],
+            "reason": "The code repeats logic for calculating volume credits in multiple places, specifically for tragedy and comedy plays.",
+            "suggestion": "Consolidate the volume credits calculation logic into a single method that can be reused.",
+            "changes": [
+                {
+                    "original_code": [
+                        "volumeCredits += Math.max(perf.getAudience() - 30, 0);",
+                        "volumeCredits += Math.floor(perf.getAudience() / 5);"
+                    ],
+                    "suggestion_code": [
+                        "volumeCredits += calculateVolumeCredits(perf, play);",
+                        "volumeCredits += calculateVolumeCredits(perf, play);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1841,
+        "prompt_tokens": 3090,
+        "total_tokens": 4931
+    }
+}

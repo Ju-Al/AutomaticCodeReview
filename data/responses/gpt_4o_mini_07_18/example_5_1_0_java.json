@@ -1,0 +1,107 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    35,
+                    49
+                ],
+                [
+                    51,
+                    66
+                ],
+                [
+                    68,
+                    84
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The payment processor classes (DebitCardPaymentProcessor, CreditCardPaymentProcessor, PaypalPaymentProcessor) handle multiple responsibilities, including payment processing and security verification.",
+            "suggestion": "Separate the responsibility of payment processing and security verification into individual classes or services to adhere to the SRP.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        if (!this.authorizer.is_authentificated()) {",
+                        "            throw new IllegalStateException(\"Not authentificated\");",
+                        "        }",
+                        "        System.out.println(\"Processing debit card payment\");",
+                        "        System.out.println(\"Verifying security code: \" + this.securityCode);",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        System.out.println(\"Processing paypal payment\");",
+                        "        System.out.println(\"Verifying email: \" + this.securityCode);",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        System.out.println(\"Processing debit card payment\");",
+                        "        System.out.println(\"Verifying security code: \" + this.securityCode);",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        if (!this.authorizer.is_authenticated()) {",
+                        "            throw new IllegalStateException(\"Not authenticated\");",
+                        "        }",
+                        "        processPayment(order);",
+                        "    }",
+                        "",
+                        "    private void processPayment(Order order) {",
+                        "        System.out.println(\"Processing debit card payment\");",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        "",
+                        "public class PaypalPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        processPayment(order);",
+                        "    }",
+                        "",
+                        "    private void processPayment(Order order) {",
+                        "        System.out.println(\"Processing PayPal payment\");",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        "",
+                        "public class CreditCardPaymentProcessor extends PaymentProcessor {",
+                        "    @Override",
+                        "    public void pay(Order order) {",
+                        "        processPayment(order);",
+                        "    }",
+                        "",
+                        "    private void processPayment(Order order) {",
+                        "        System.out.println(\"Processing credit card payment\");",
+                        "        order.setStatus(\"paid\");",
+                        "    }",
+                        "}",
+                        ""
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 754,
+        "prompt_tokens": 2775,
+        "total_tokens": 3529
+    }
+}

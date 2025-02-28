@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_1_0",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "The actual output correctly identifies 'Single Responsibility Principle' as a True Positive, but misses 'Don't Repeat Yourself' and 'Open/Closed Principle' as False Negatives, and has no False Positives. Precision is 1.0, Recall is 0.33, and F1-Score is 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual output and expected output both identify violations of the Single Responsibility Principle and highlight issues like calculating amounts, credits, and formatting/output. However, the actual output omits explicit mention of 'currency' and 'volume_credits', which are present in the expected output."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest splitting responsibilities into distinct functions, aligning thematically. However, the actual output omits a specific mention of a currency formatting function, which is present in the expected output."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the word 'statement', demonstrating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output introduces modular functions for calculating amounts and credits, which aligns with the expected output's aim for decomposition, but lacks the use of abstraction classes (e.g., `TragedyPerformance`, `ComedyPerformance`) and proper formatting helpers like `format_currency`. The actual output also retains redundant logic in the main loop, unlike the expected output's cleaner class-based structure."
+        }
+    ]
+]

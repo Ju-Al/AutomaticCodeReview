@@ -1,0 +1,13 @@
+[
+    [
+        {
+            "example_id": "example_2_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_2",
+            "metric": "F1-Score",
+            "score": 0.0,
+            "reason": "There are no True Positives as 'Single Responsibility Principle' and 'Don't Repeat Yourself' are not in the expected output, leading to no precision or recall."
+        }
+    ],
+    []
+]

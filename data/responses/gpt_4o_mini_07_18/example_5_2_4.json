@@ -1,0 +1,113 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    27
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "The MySQLDatabase class combines both database operations (add, update, delete) and feedback/output messages, which creates multiple responsibilities.",
+            "suggestion": "Separate data management logic from user feedback logic. Consider introducing a separate class for output handling or using exceptions to report errors.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def add_user_data(self, id: int, name: str) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "print(\"User ID already exists. Use update_user_data to modify.\")\n",
+                        "] else:\n",
+                        "self.user_data[id] = name\n",
+                        "print(\"User added successfully.\")\n",
+                        "\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "self.user_data[id] = name\n",
+                        "print(\"User updated successfully.\")\n",
+                        "else:\n",
+                        "print(\"User ID does not exist. Use add_user_data to add new user.\")\n",
+                        "\n",
+                        "def delete_user_data(self, id: int) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "del self.user_data[id]\n",
+                        "print(\"User deleted successfully.\")\n",
+                        "else:\n",
+                        "print(\"User ID not found.\")"
+                    ],
+                    "suggestion_code": [
+                        "def add_user_data(self, id: int, name: str) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "raise ValueError(\"User ID already exists. Use update_user_data to modify.\")\n",
+                        "] else:\n",
+                        "self.user_data[id] = name\n",
+                        "return \"User added successfully.\"\n",
+                        "\n",
+                        "def update_user_data(self, id: int, name: str) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "self.user_data[id] = name\n",
+                        "return \"User updated successfully.\"\n",
+                        "else:\n",
+                        "raise ValueError(\"User ID does not exist. Use add_user_data to add new user.\")\n",
+                        "\n",
+                        "def delete_user_data(self, id: int) -> None:\n",
+                        "if id in self.user_data:\n",
+                        "del self.user_data[id]\n",
+                        "return \"User deleted successfully.\"\n",
+                        "else:\n",
+                        "raise ValueError(\"User ID not found.\")"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    1,
+                    27
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data"
+            ],
+            "reason": "Feedback messages are repeated across the methods, which violates the DRY principle.",
+            "suggestion": "Create a private method that handles the printing or logging of messages based on responses received from the CRUD operations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "print(\"User ID already exists. Use update_user_data to modify.\")\n",
+                        "print(\"User added successfully.\")\n",
+                        "print(\"User updated successfully.\")\n",
+                        "print(\"User ID does not exist. Use add_user_data to add new user.\")\n",
+                        "print(\"User deleted successfully.\")\n",
+                        "print(\"User ID not found.\")"
+                    ],
+                    "suggestion_code": [
+                        "def _log(self, message: str) -> None:\n",
+                        "print(message)\n",
+                        "\n",
+                        "self._log(\"User ID already exists. Use update_user_data to modify.\")\n",
+                        "self._log(\"User added successfully.\")\n",
+                        "self._log(\"User updated successfully.\")\n",
+                        "self._log(\"User ID does not exist. Use add_user_data to add new user.\")\n",
+                        "self._log(\"User deleted successfully.\")\n",
+                        "self._log(\"User ID not found.\")"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 984,
+        "prompt_tokens": 2525,
+        "total_tokens": 3509
+    }
+}

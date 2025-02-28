@@ -1,0 +1,66 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    18,
+                    34
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The 'pay' method has multiple responsibilities: it processes payment and changes the order status, which makes it harder to manage and test.",
+            "suggestion": "Separate the payment processing logic into a PaymentProcessor class that handles different payment types and status updates for the order.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(String paymentType, String securityCode) {\n",
+                        "        switch (paymentType.toLowerCase()) {\n",
+                        "            case \"debit\":\n",
+                        "                System.out.println(\"Processing debit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                this.status = \"paid\";\n",
+                        "                break;\n",
+                        "\n",
+                        "            case \"credit\":\n",
+                        "                System.out.println(\"Processing credit payment type\");\n",
+                        "                System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "                this.status = \"paid\";\n",
+                        "                break;\n",
+                        "\n",
+                        "            default:\n",
+                        "                throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n",
+                        "        }\n",
+                        "    }"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(PaymentProcessor paymentProcessor, String securityCode) {\n",
+                        "        this.status = paymentProcessor.processPayment(this, securityCode);\n",
+                        "    }",
+                        "class PaymentProcessor {\n",
+                        "    public String processPayment(Order order, String securityCode) {\n",
+                        "        if (paymentType.equalsIgnoreCase(\"debit\")) {\n",
+                        "            System.out.println(\"Processing debit payment type\");\n",
+                        "        } else if (paymentType.equalsIgnoreCase(\"credit\")) {\n",
+                        "            System.out.println(\"Processing credit payment type\");\n",
+                        "        } else {\n",
+                        "            throw new IllegalArgumentException(\"Unknown payment type: \" + paymentType);\n",
+                        "        }\n",
+                        "        System.out.println(\"Verifying security code: \" + securityCode);\n",
+                        "        return \"paid\";\n",
+                        "    }\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 562,
+        "prompt_tokens": 2518,
+        "total_tokens": 3080
+    }
+}

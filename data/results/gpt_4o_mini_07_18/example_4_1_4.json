@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_1_4",
+            "metric": "F1-Score",
+            "score": 0.8,
+            "reason": "True Positives are 2 ('Single Responsibility Principle' and 'Interface Segregation Principle'), False Positives are 1 ('Open/Closed Principle'), and False Negatives are 0. This results in a good Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output mentions the Order class managing various aspects but does not clearly identify the violation of the Single Responsibility Principle as explicitly stated in the expected output."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separation of concerns in class design, but the Actual Output proposes an OrderItems class while the Expected Output suggests two classes for quantities and prices, indicating partial alignment in intent but differing in specificity."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output only includes 'add_item', while the expected output includes both 'total_prices' and 'add_items', indicating a significant lack of alignment in content."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code lacks the complexity of the expected output, which includes a dedicated class for managing items and calculating totals, while the actual output only modifies the existing Order class."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs address the issue of the PaymentProcessor interface enforcing unnecessary method implementation, but the actual output lacks clarity on the principle violation and does not explicitly mention the Interface Segregation Principle as in the expected output."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests separating SMS authentication for relevance to payment processors, while the expected output specifies creating an abstract class for compliance with the Interface Segregation Principle, indicating a different level of technical detail and clarity."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output includes an extra element 'PaymentProcessor' which is not present in the expected output, indicating partial misalignment."
+        },
+        {
+            "example_id": "example_4_1_4",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output lacks the additional detail in the expected output, such as the implementation of the SMSAuthenticator and the need for authentication in DebitPaymentProcessor, which are critical to the context."
+        }
+    ]
+]

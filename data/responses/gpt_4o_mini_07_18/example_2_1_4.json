@@ -1,0 +1,41 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    9
+                ],
+                [
+                    12,
+                    19
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing order details, while the PaymentProcessor handles payment processing. Ideally, payment responsibilities should not be mixed with order management.",
+            "suggestion": "Separate payment processing and order management into distinct classes to adhere to the single responsibility principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "suggested_code\u201d: [\u201cclass Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass PaymentProcessor:\n    def pay(self, order: Order, security_code: str):\n        print('Processing payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\norder = Order()\n\norder.add_item('Keyboard', 1, 50)\norder.add_item('SSD', 1, 150)\norder.add_item('USB cable', 2, 5)\n\nprocessor = PaymentProcessor()\nprocessor.pay(order, '0372846')\nprint(order.status)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 686,
+        "prompt_tokens": 2257,
+        "total_tokens": 2943
+    }
+}

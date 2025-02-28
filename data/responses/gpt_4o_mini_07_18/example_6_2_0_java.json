@@ -1,0 +1,218 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    6,
+                    64
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The 'testableHtml' method is doing too many things: it manages inclusion of various setups and teardowns, and appends content, violating the Single Responsibility Principle.",
+            "suggestion": "Split the 'testableHtml' method into multiple methods: one for handling setup includes, another for teardown includes, and a third for generating the final HTML.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String testableHtml(\n",
+                        "    PageData pageData,\n",
+                        "    boolean includeSuiteSetup\n",
+                        ") throws Exception {\n",
+                        "    WikiPage wikiPage = pageData.getWikiPage();\n",
+                        "    StringBuffer buffer = new StringBuffer ();\n",
+                        "    if(pageData.hasAttribute (\"Test\")) {\n",
+                        "        if (includeSuiteSetup) {\n",
+                        "            WikiPage suiteSetup =\n",
+                        "                PageCrawlerImpl.getInheritedPage (\n",
+                        "                    SuiteResponder.SUITE_SETUP _NAME, wikiPage\n",
+                        "                );\n",
+                        "            if (suitesetup != null) {\n",
+                        "                WikiPagePath pagePath =\n",
+                        "                    suiteSetup.getPageCrawler().getFullPath(suiteSetup);\n",
+                        "                String pagePathName = PathParser.render(pagePath);\n",
+                        "                buffer.append(\"! include -setup .\")\n",
+                        "                      .append (pagePathName)\n",
+                        "                      .append(\"\\n\");\n",
+                        "            }\n",
+                        "        }\n",
+                        "        WikiPage setup =\n",
+                        "            PageCrawlerImpl.getInheritedPage(\"SetUp\", wikiPage);\n",
+                        "        if (setup != null) {\n",
+                        "            WikiPagePath setupPath =\n",
+                        "                wikiPage.getPageCrawler().getFullPath(setup);\n",
+                        "            String setupPathName = PathParser.render(setupPath);\n",
+                        "            buffer.append(\"! include -setup .\")\n",
+                        "                  .append (setupPathName)\n",
+                        "                  .append(\"\\n\");\n",
+                        "        }\n",
+                        "    }\n",
+                        "    buffer.append(pageData.getContent());\n",
+                        "    if(pageData.hasAttribute(\"Test\")) {\n",
+                        "        WikiPage teardown =\n",
+                        "            PageCrawlerImpl.getInheritedPage(\"TearDown\", wikiPage);\n",
+                        "        if (teardown != null) {\n",
+                        "            WikiPagePath tearDownPath =\n",
+                        "                wikiPage.getPageCrawler().getFullPath(teardown);\n",
+                        "            String tearDownPathName = PathParser.render(tearDownPath);\n",
+                        "            buffer.append(\"\\n\")\n",
+                        "                  .append (\"!include -teardown .\")\n",
+                        "                  .append(tearDownPathName)\n",
+                        "                  .append(\"\\n\");\n",
+                        "        }\n",
+                        "        if (includeSuiteSetup) {\n",
+                        "            WikiPage suiteTeardown =\n",
+                        "                PageCrawlerImpl.getInheritedPage(\n",
+                        "                    SuiteResponder.SUITE_TEARDOWN_NAME,\n",
+                        "                    wikiPage\n",
+                        "                );\n",
+                        "            if (suiteTeardown != null) {\n",
+                        "                WikiPagePath pagePath =\n",
+                        "                    suiteTeardown.getPageCrawler().getFullPath(suiteTeardown);\n",
+                        "                String pagePathName = PathParser.render(pagePath);\n",
+                        "                buffer.append (\"!include -teardown .\")\n",
+                        "                      .append(pagePathName)\n",
+                        "                      .append(\"\\n\");\n",
+                        "            }\n",
+                        "        }\n",
+                        "    }\n",
+                        "    pageData.setContent(buffer.toString());\n",
+                        "    return pageData.getHTML();\n",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public static String testableHtml(\n",
+                        "    PageData pageData,\n",
+                        "    boolean includeSuiteSetup\n",
+                        ") throws Exception {\n",
+                        "    StringBuffer buffer = new StringBuffer ();\n",
+                        "    if (pageData.hasAttribute (\"Test\")) {\n",
+                        "        appendSetupIncludes(pageData, includeSuiteSetup, buffer);\n",
+                        "    }\n",
+                        "    buffer.append(pageData.getContent());\n",
+                        "    if (pageData.hasAttribute(\"Test\")) {\n",
+                        "        appendTeardownIncludes(pageData, includeSuiteSetup, buffer);\n",
+                        "    }\n",
+                        "    pageData.setContent(buffer.toString());\n",
+                        "    return pageData.getHTML();\n",
+                        "}\n",
+                        "\n",
+                        "private static void appendSetupIncludes(PageData pageData, boolean includeSuiteSetup, StringBuffer buffer) throws Exception {\n",
+                        "    WikiPage wikiPage = pageData.getWikiPage();\n",
+                        "    if (includeSuiteSetup) {\n",
+                        "        WikiPage suiteSetup =\n",
+                        "            PageCrawlerImpl.getInheritedPage (\n",
+                        "                SuiteResponder.SUITE_SETUP_NAME, wikiPage\n",
+                        "            );\n",
+                        "        if (suiteSetup != null) {\n",
+                        "            WikiPagePath pagePath =\n",
+                        "                suiteSetup.getPageCrawler().getFullPath(suiteSetup);\n",
+                        "            String pagePathName = PathParser.render(pagePath);\n",
+                        "            buffer.append(\"! include -setup .\")\n",
+                        "                  .append (pagePathName)\n",
+                        "                  .append(\"\\n\");\n",
+                        "        }\n",
+                        "    }\n",
+                        "    WikiPage setup =\n",
+                        "        PageCrawlerImpl.getInheritedPage(\"SetUp\", wikiPage);\n",
+                        "    if (setup != null) {\n",
+                        "        WikiPagePath setupPath =\n",
+                        "            wikiPage.getPageCrawler().getFullPath(setup);\n",
+                        "        String setupPathName = PathParser.render(setupPath);\n",
+                        "        buffer.append(\"! include -setup .\")\n",
+                        "              .append (setupPathName)\n",
+                        "              .append(\"\\n\");\n",
+                        "    }\n",
+                        "}\n",
+                        "\n",
+                        "private static void appendTeardownIncludes(PageData pageData, boolean includeSuiteSetup, StringBuffer buffer) throws Exception {\n",
+                        "    WikiPage wikiPage = pageData.getWikiPage();\n",
+                        "    WikiPage teardown =\n",
+                        "        PageCrawlerImpl.getInheritedPage(\"TearDown\", wikiPage);\n",
+                        "    if (teardown != null) {\n",
+                        "        WikiPagePath tearDownPath =\n",
+                        "            wikiPage.getPageCrawler().getFullPath(teardown);\n",
+                        "        String tearDownPathName = PathParser.render(tearDownPath);\n",
+                        "        buffer.append(\"\\n\")\n",
+                        "              .append (\"!include -teardown .\")\n",
+                        "              .append(tearDownPathName)\n",
+                        "              .append(\"\\n\");\n",
+                        "    }\n",
+                        "    if (includeSuiteSetup) {\n",
+                        "        WikiPage suiteTeardown =\n",
+                        "            PageCrawlerImpl.getInheritedPage(\n",
+                        "                SuiteResponder.SUITE_TEARDOWN_NAME,\n",
+                        "                wikiPage\n",
+                        "            );\n",
+                        "        if (suiteTeardown != null) {\n",
+                        "            WikiPagePath pagePath =\n",
+                        "                suiteTeardown.getPageCrawler().getFullPath(suiteTeardown);\n",
+                        "            String pagePathName = PathParser.render(pagePath);\n",
+                        "            buffer.append (\"!include -teardown .\")\n",
+                        "                  .append(pagePathName)\n",
+                        "                  .append(\"\\n\");\n",
+                        "        }\n",
+                        "    }\n",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    41,
+                    42
+                ],
+                [
+                    49,
+                    50
+                ],
+                [
+                    63,
+                    64
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The logic for including setup and teardown pages is repeated with slight variations, violating the DRY principle.",
+            "suggestion": "Extract the common logic for including pages into a helper method that can handle both setups and teardowns.",
+            "changes": [
+                {
+                    "original_code": [
+                        "buffer.append(\"! include -setup .\")\n",
+                        "      .append (setupPathName)\n",
+                        "      .append(\"\\n\");\n",
+                        "buffer.append(\"\\n\")\n",
+                        "      .append (\"!include -teardown .\")\n",
+                        "      .append(tearDownPathName)\n",
+                        "      .append(\"\\n\");\n",
+                        "buffer.append (\"!include -teardown .\")\n",
+                        "      .append(pagePathName)\n",
+                        "      .append(\"\\n\");"
+                    ],
+                    "suggestion_code": [
+                        "appendInclude(buffer, setupPathName, \"setup\");\n",
+                        "appendInclude(buffer, tearDownPathName, \"teardown\");\n",
+                        "appendInclude(buffer, pagePathName, \"teardown\");\n",
+                        "\n",
+                        "private static void appendInclude(StringBuffer buffer, String pageName, String type) {\n",
+                        "    buffer.append(\"!include -\" + type + \" .\")\n",
+                        "          .append (pageName)\n",
+                        "          .append(\"\\n\");\n",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 2252,
+        "prompt_tokens": 2612,
+        "total_tokens": 4864
+    }
+}

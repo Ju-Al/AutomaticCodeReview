@@ -1,0 +1,197 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    1,
+                    47
+                ]
+            ],
+            "method_names": [
+                "add_user_data",
+                "update_user_data",
+                "delete_user_data",
+                "get_user_data"
+            ],
+            "reason": "The MySQLDatabase class handles both user data storage and the logic for adding, updating, retrieving, and deleting user data, violating SRP.",
+            "suggestion": "Separate the database operation logic into a different class or use a dedicated service class to handle user-related operations.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class MySQLDatabase:",
+                        "    def __init__(self):",
+                        "        self.user_data = {",
+                        "            1: 'Alice',",
+                        "            2: 'Bob',",
+                        "            3: 'Charlie'",
+                        "        }",
+                        "",
+                        "    def get_user_data(self, id: int) -> str:",
+                        "        if id in self.user_data:",
+                        "            return f'User ID: {id}, Name: {self.user_data[id]}'",
+                        "        return 'User not found'",
+                        "",
+                        "    def add_user_data(self, id: int, name: str) -> None:",
+                        "        if id in self.user_data:",
+                        "            print('User ID already exists. Use update_user_data to modify.')",
+                        "        else:",
+                        "            self.user_data[id] = name",
+                        "            print('User added successfully.')",
+                        "",
+                        "    def update_user_data(self, id: int, name: str) -> None:",
+                        "        if id in self.user_data:",
+                        "            self.user_data[id] = name",
+                        "            print('User updated successfully.')",
+                        "        else:",
+                        "            print('User ID does not exist. Use add_user_data to add new user.')",
+                        "",
+                        "    def delete_user_data(self, id: int) -> None:",
+                        "        if id in self.user_data:",
+                        "            del self.user_data[id]",
+                        "            print('User deleted successfully.')",
+                        "        else:",
+                        "            print('User ID not found.')",
+                        "",
+                        "class UserService:",
+                        "    def __init__(self):",
+                        "        self.database = MySQLDatabase()",
+                        "",
+                        "    def get_user(self, id: int) -> str:",
+                        "        return self.database.get_user_data(id)",
+                        "",
+                        "    def add_user(self, id: int, data: str) -> None:",
+                        "        self.database.add_user_data(id, data)",
+                        "",
+                        "    def update_user(self, id: int, data: str) -> None:",
+                        "        self.database.update_user_data(id, data)",
+                        "",
+                        "    def delete_user(self, id: int) -> None:",
+                        "        self.database.delete_user_data(id)"
+                    ],
+                    "suggestion_code": [
+                        "class UserDatabase:",
+                        "    def __init__(self):",
+                        "        self.user_data = {",
+                        "            1: 'Alice',",
+                        "            2: 'Bob',",
+                        "            3: 'Charlie'",
+                        "        }",
+                        "",
+                        "    def get_user_data(self, id: int) -> str:",
+                        "        if id in self.user_data:",
+                        "            return f'User ID: {id}, Name: {self.user_data[id]}'",
+                        "        return 'User not found'",
+                        "",
+                        "    def add_user_data(self, id: int, name: str) -> None:",
+                        "        if id in self.user_data:",
+                        "            raise ValueError('User ID already exists.')",
+                        "        self.user_data[id] = name",
+                        "",
+                        "    def update_user_data(self, id: int, name: str) -> None:",
+                        "        if id not in self.user_data:",
+                        "            raise ValueError('User ID does not exist.')",
+                        "        self.user_data[id] = name",
+                        "",
+                        "    def delete_user_data(self, id: int) -> None:",
+                        "        if id not in self.user_data:",
+                        "            raise ValueError('User ID not found.')",
+                        "        del self.user_data[id]",
+                        "",
+                        "class UserService:",
+                        "    def __init__(self):",
+                        "        self.database = UserDatabase()",
+                        "",
+                        "    def get_user(self, id: int) -> str:",
+                        "        return self.database.get_user_data(id)",
+                        "",
+                        "    def add_user(self, id: int, data: str) -> None:",
+                        "        try:",
+                        "            self.database.add_user_data(id, data)",
+                        "            print('User added successfully.')",
+                        "        except ValueError as e:",
+                        "            print(e)",
+                        "",
+                        "    def update_user(self, id: int, data: str) -> None:",
+                        "        try:",
+                        "            self.database.update_user_data(id, data)",
+                        "            print('User updated successfully.')",
+                        "        except ValueError as e:",
+                        "            print(e)",
+                        "",
+                        "    def delete_user(self, id: int) -> None:",
+                        "        try:",
+                        "            self.database.delete_user_data(id)",
+                        "            print('User deleted successfully.')",
+                        "        except ValueError as e:",
+                        "            print(e)"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    32,
+                    36
+                ],
+                [
+                    39,
+                    42
+                ],
+                [
+                    45,
+                    48
+                ]
+            ],
+            "method_names": [
+                "add_user",
+                "update_user",
+                "delete_user"
+            ],
+            "reason": "Repeated string messages for user operations are found in multiple methods inside UserService, leading to code duplication.",
+            "suggestion": "Extract common response handling for user operations into a separate private method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    def add_user(self, id: int, data: str) -> None:",
+                        "        self.database.add_user_data(id, data)",
+                        "",
+                        "    def update_user(self, id: int, data: str) -> None:",
+                        "        self.database.update_user_data(id, data)",
+                        "",
+                        "    def delete_user(self, id: int) -> None:",
+                        "        self.database.delete_user_data(id)"
+                    ],
+                    "suggestion_code": [
+                        "    def add_user(self, id: int, data: str) -> None:",
+                        "        self._handle_user_operation(self.database.add_user_data, id, data, 'added')",
+                        "",
+                        "    def update_user(self, id: int, data: str) -> None:",
+                        "        self._handle_user_operation(self.database.update_user_data, id, data, 'updated')",
+                        "",
+                        "    def delete_user(self, id: int) -> None:",
+                        "        self._handle_user_operation(self.database.delete_user_data, id, None, 'deleted')",
+                        "",
+                        "    def _handle_user_operation(self, operation, id: int, data: str, action: str):",
+                        "        try:",
+                        "            if action == 'deleted':",
+                        "                operation(id)",
+                        "            else:",
+                        "                operation(id, data)",
+                        "            print(f'User {action} successfully.')",
+                        "        except ValueError as e:",
+                        "            print(e)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1605,
+        "prompt_tokens": 2525,
+        "total_tokens": 4130
+    }
+}

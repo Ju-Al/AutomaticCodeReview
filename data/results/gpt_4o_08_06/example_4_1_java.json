@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There is 1 false positive: 'Single Responsibility Principle'. The expected list only includes 1 principle ('Interface Segregation Principle') that is not a violation, leading to a false positive rate of 1/2."
+        },
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.8,
+            "reason": "The actual output contains the expected 'Interface Segregation Principle' indicating 1 TP and no false negatives."
+        },
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 ('Interface Segregation Principle'), FP is 1 ('Single Responsibility Principle'), FN is 0. Precision is 0.5, Recall is 1, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1_java",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs discuss the implementation of auth_sms in payment processors, but the actual output lacks mention of the Interface Segregation Principle and specific class impact."
+        },
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest splitting the PaymentProcessor interface for compliance with the Interface Segregation Principle. However, the Actual Output focuses on creating smaller interfaces, while the Expected Output suggests using abstract classes. Both address interface segregation but differ in implementation approach."
+        },
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1_java",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Actual output includes 'PaymentProcessor.pay' which is not in the expected output. However, 'auth_sms' is present in both, indicating partial thematic alignment."
+        },
+        {
+            "example_id": "example_4_1_java",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1_java",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output defines an abstract method, while the expected output provides an implementation with an exception. There's a thematic misalignment in the method's purpose and implementation detail."
+        }
+    ]
+]

@@ -1,0 +1,84 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    9,
+                    75
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The 'testableHtml' method handles multiple responsibilities including setting up test dependencies, appending content, and managing teardown processes.",
+            "suggestion": "Refactor 'testableHtml' into several methods, each handling only one aspect of the processing: one for setup, another for teardown, and a main method for assembling the HTML.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public static String testableHtml(PageData pageData, boolean includeSuiteSetup) throws Exception {",
+                        "if(pageData.hasAttribute(\"Test\")){",
+                        "if (includeSuiteSetup) {",
+                        "WikiPage suiteSetup = PageCrawlerImpl.getInheritedPage(SuiteResponder.SUITE_SETUP_NAME, wikiPage);",
+                        "if (suitesetup != null) {",
+                        "WikiPage setup = PageCrawlerImpl.getInheritedPage(\"SetUp\", wikiPage);",
+                        "if (setup != null) {",
+                        "WikiPage teardown = PageCrawlerImpl.getInheritedPage(\"TearDown\", wikiPage);",
+                        "if (teardown != null) {",
+                        "if (includeSuiteSetup) {",
+                        "WikiPage suiteTeardown = PageCrawlerImpl.getInheritedPage(SuiteResponder.SUITE_TEARDOWN_NAME, wikiPage);"
+                    ],
+                    "suggestion_code": [
+                        "public static String testableHtml(PageData pageData, boolean includeSuiteSetup) throws Exception {",
+                        "return processHtmlContent(pageData, includeSuiteSetup);",
+                        "private static String processHtmlContent(PageData pageData, boolean includeSuiteSetup) throws Exception {",
+                        "StringBuffer buffer = new StringBuffer();",
+                        "appendSuiteSetup(buffer, wikiPage, includeSuiteSetup);",
+                        "appendSetup(buffer, wikiPage);",
+                        "buffer.append(pageData.getContent());",
+                        "appendTearDown(buffer, wikiPage, includeSuiteSetup);",
+                        "pageData.setContent(buffer.toString());"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    16,
+                    30
+                ],
+                [
+                    40,
+                    54
+                ]
+            ],
+            "method_names": [
+                "testableHtml"
+            ],
+            "reason": "The code segments for appending setup and teardown are similar, indicating a logical repetition.",
+            "suggestion": "Create a method for appending a page based on the given context to avoid redundant code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "WikiPage setup = PageCrawlerImpl.getInheritedPage(\"SetUp\", wikiPage);",
+                        "if (setup != null) {",
+                        "WikiPage tearDown = PageCrawlerImpl.getInheritedPage(\"TearDown\", wikiPage);",
+                        "if (tearDown != null) {"
+                    ],
+                    "suggestion_code": [
+                        "appendPageIfExists(buffer, \"SetUp\", wikiPage);",
+                        "appendPageIfExists(buffer, \"TearDown\", wikiPage);"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 690,
+        "prompt_tokens": 2612,
+        "total_tokens": 3302
+    }
+}

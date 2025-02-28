@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_1",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "There is 1 TP ('Single Responsibility Principle'), 0 FP, and 1 FN ('Liskov Substitution Principle'). Precision is 1 and Recall is 0.5, leading to an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs identify a violation of SRP due to multiple responsibilities in the Order class, but they specify different responsibilities: payment status vs. prices and quantities."
+        },
+        {
+            "example_id": "example_3_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual suggests separation of payment handling, while expected suggests splitting order details; both hint at class separation but focus on different aspects."
+        },
+        {
+            "example_id": "example_3_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual output is empty while expected output contains specific fields 'totalPrices', 'addItems', indicating no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_3_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output misses the separation of concerns evident in the expected output's use of OrderQuantityManager and PriceCalculator for managing items and calculating totals."
+        }
+    ]
+]

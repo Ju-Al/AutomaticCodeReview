@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_4",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly with no false positives or false negatives."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the same issue of modifying the AreaCalculator class for new shapes, aligning thematically with the open-closed principle violation. However, the actual output lacks specific examples like triangles, pentagons, and hexagons."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs discuss using polymorphism to avoid modifying AreaCalculator for new shapes. However, the expected output provides more detail by mentioning ShapeInterface and concrete implementations, which is missing in the actual output."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly with identical content in the compared field."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual output aligns well with the expected output by defining a Shape interface and implementing area methods in Circle and Square. However, the expected output combines all suggestions into a single array entry, whereas the actual output splits them across multiple entries, and the sum method implementation in the expected output uses a stream."
+        }
+    ]
+]

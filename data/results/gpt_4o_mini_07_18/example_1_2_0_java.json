@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_0",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "The True Positive is 'Single Responsibility Principle', but there's one False Negative ('Open/Closed Principle') and one False Positive ('Don't Repeat Yourself')."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs describe the AreaCalculator's responsibilities, but the actual output emphasizes managing output presentation, while the expected output focuses on summarizing areas, leading to a partial thematic misalignment."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating area calculation from output handling, but the actual output lacks specificity in naming the new classes compared to the expected output's clear naming conventions."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, demonstrating complete alignment in both content and format."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests a different structure and method for handling area calculations compared to the expected output, which uses specific shape classes and detailed area calculations."
+        }
+    ]
+]

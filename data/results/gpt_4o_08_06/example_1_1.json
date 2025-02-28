@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "The actual output has 1 false positive: 'Open/Closed Principle'. The expected output lists 3 TNs: 'Open/Closed Principle', 'Liskov Substitution Principle', 'Interface Segregation Principle'. The false positive rate is 1/4."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "There are no false negatives since 'Single Responsibility Principle' is in both lists, but 'Open/Closed Principle' is an additional item not expected."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "There is 1 TP ('Single Responsibility Principle'), 1 FP ('Open/Closed Principle'), and 0 FN. Precision is 0.5, Recall is 1.0, resulting in an F1-Score of approximately 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output identifies multiple responsibilities but lacks detail on prices and quantities as in the expected output."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest creating a PaymentProcessor class for handling payments, aligning thematically, but the actual output doesn't address splitting order quantities and prices into separate classes."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output is missing 'add_item' and 'total_price', but includes '__init__'. 'pay' is correctly present in both outputs."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output includes the 'pay' method, aligning with the expected output, but lacks 'total_price' and 'add_item' methods, missing crucial functionality details."
+        }
+    ]
+]

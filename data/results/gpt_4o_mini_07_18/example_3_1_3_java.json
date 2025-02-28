@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_1_3",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "One True Positive (Single Responsibility Principle) is identified, but there is one False Positive (Open/Closed Principle) and one False Negative (Liskov Substitution Principle), affecting the precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "Both outputs address the principle violation but focus on different aspects; the actual output discusses managing order details and payment logic, while the expected output cites responsibility for prices and quantities."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests extracting payment logic to follow SRP, while the expected output recommends splitting the Order class into two, indicating a different approach to addressing principle violations."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output contains actions ('addItem', 'setStatus', 'pay') that do not align thematically with the expected output ('totalPrices', 'addItems'), showing minimal relevance."
+        },
+        {
+            "example_id": "example_3_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_3_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code only partially addresses the expected functionality by including an addItem method, but lacks other critical methods like totalPrice and proper class structure, leading to significant thematic misalignment."
+        }
+    ]
+]

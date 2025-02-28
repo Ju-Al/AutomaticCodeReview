@@ -1,0 +1,88 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    20,
+                    21
+                ],
+                [
+                    29,
+                    30
+                ],
+                [
+                    39,
+                    40
+                ],
+                [
+                    49,
+                    50
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "setStatus"
+            ],
+            "reason": "The `Order` class has multiple responsibilities: it manages the order's items, quantities, prices, and statuses, while also being modified by payment processor classes.",
+            "suggestion": "The payment methods should be handled by separate classes or services instead of being directly manipulated within the `Order` class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void setStatus(String status) {",
+                        "this.status = status;",
+                        "}",
+                        "order.setStatus('paid');",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void markAsPaid() {",
+                        "this.status = 'paid';",
+                        "}",
+                        "paymentProcessor.processPayment(order);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    29,
+                    41
+                ],
+                [
+                    49,
+                    51
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The `pay` method in the `PaymentProcessor` implementations needs to be modified each time a new payment method is added, which violates the open/closed principle.",
+            "suggestion": "Introduce a base PaymentProcessor interface and derive specific payment processors from it. Each payment method can then be implemented as a separate class, allowing extension without modifying existing code.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order, String securityCode) {",
+                        "System.out.println('Processing payment');",
+                        "order.setStatus('paid');",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order, String securityCode); // Interface method without implementation",
+                        "order.markAsPaid(); // Delegating to Order to mark it as paid",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 464,
+        "prompt_tokens": 2560,
+        "total_tokens": 3024
+    }
+}

@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_4_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There is 1 false positive: 'Liskov Substitution Principle'. The only expected violation is 'Interface Segregation Principle'."
+        },
+        {
+            "example_id": "example_4_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.9,
+            "reason": "The actual output contains all expected principles with no false negatives. Extra principles in actual output do not affect false negative rate."
+        },
+        {
+            "example_id": "example_4_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP is 1 for 'Interface Segregation Principle'. FP is 1 for 'Liskov Substitution Principle'. FN is 0. Precision is 0.5, Recall is 1, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_1",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_1",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the issue with CreditPaymentProcessor being forced to implement auth_sms, aligning with the Interface Segregation Principle violation. The actual output lacks explicit mention of the principle but describes the problem contextually."
+        },
+        {
+            "example_id": "example_4_1",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating authentication from payment processing. Actual suggests an interface while Expected suggests an abstract class. Both agree on separating Debit and Credit processors but differ in implementation specifics."
+        },
+        {
+            "example_id": "example_4_1",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_1",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs are identical, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_4_1",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_1",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual and expected outputs are nearly identical except for minor differences in whitespace and line endings."
+        }
+    ]
+]

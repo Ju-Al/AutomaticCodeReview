@@ -1,0 +1,65 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    19
+                ],
+                [
+                    21,
+                    24
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "output"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: calculating the area of different shapes and handling output formatting.",
+            "suggestion": "Separate the responsibility of calculating areas from the responsibility of outputting results. Introduce a new class for handling output if necessary.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "def output(self):\n        return f'Sum of the areas of provided shapes: {self.sum()}'"
+                    ],
+                    "suggestion_code": [
+                        "def sum_areas(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)",
+                        "class AreaOutput:\n    @staticmethod\n    def print_area(total_area):\n        print(f'Sum of the areas of provided shapes: {total_area}')\n\nareas = AreaCalculator(shapes)\nAreaOutput.print_area(areas.sum_areas())"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Don't Repeat Yourself",
+            "lines": [
+                [
+                    11,
+                    19
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The area calculation logic for different shapes uses similar constructs that could be refactored into a separate method or function.",
+            "suggestion": "Refactor the area calculation logic into a separate method to avoid repetition.",
+            "changes": [
+                {
+                    "original_code": [
+                        "if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))"
+                    ],
+                    "suggestion_code": [
+                        "areas.append(self.calculate_area(shape))"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 557,
+        "prompt_tokens": 2265,
+        "total_tokens": 2822
+    }
+}

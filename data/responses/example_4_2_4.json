@@ -1,0 +1,72 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    48,
+                    50
+                ],
+                [
+                    60,
+                    62
+                ]
+            ],
+            "method_names": [
+                "Square.volume",
+                "Circle.volume"
+            ],
+            "reason": "The `Square` and `Circle` classes implement the abstract `Shape` class but do not correctly fulfill its `volume` method, instead raising a NotImplementedError.",
+            "suggestion": "Consider segregating the `Shape` abstraction into more specific interfaces or abstract base classes so that implementing classes are not forced to override methods they do not support.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Square(Shape):\n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "class Circle(Shape):\n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                    ],
+                    "suggestion_code": [
+                        "class AreaOnlyShape(ABC):\n    @abstractmethod\n    def area(self):\n        pass",
+                        "class Square(AreaOnlyShape):\n    def volume(self):\n        pass"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    14,
+                    16
+                ],
+                [
+                    23,
+                    25
+                ]
+            ],
+            "method_names": [
+                "AreaCalculator.sum",
+                "VolumeCalculator.sum"
+            ],
+            "reason": "The `sum` methods in AreaCalculator and VolumeCalculator handle both area and volume calculations interchangeably, requiring validation that forces separation.",
+            "suggestion": "Separate these calculators further or use a more tailored approach for each calculation as the `Shape` objects vary in their implementation of area or volume.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class SolidShapeVolumeCalculator:\n      def ...",
+                        "        pass"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 391,
+        "prompt_tokens": 2448,
+        "total_tokens": 2839
+    },
+    "time": 9.140743017196655
+}

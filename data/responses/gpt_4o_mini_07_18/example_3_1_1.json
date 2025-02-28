@@ -1,0 +1,77 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    4,
+                    14
+                ],
+                [
+                    15,
+                    24
+                ]
+            ],
+            "method_names": [
+                "add_item",
+                "pay"
+            ],
+            "reason": "The Order class is responsible for managing the items and their quantities, as well as the order status. However, it should not handle payment processing logic, which leads to lack of single responsibility. Additionally, each PaymentProcessor should be focused solely on payment processing and related tasks.",
+            "suggestion": "Separate the responsibilities by creating a dedicated OrderStatusManager class that can handle the status of orders independently, and modify PaymentProcessor classes accordingly to ensure they focus solely on payment-related tasks.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status_manager = OrderStatusManager()\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)",
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status_manager.update_status('paid')"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    15,
+                    24
+                ],
+                [
+                    26,
+                    34
+                ],
+                [
+                    36,
+                    44
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor classes (CreditCard, DebitCard, Paypal) are tightly coupled with the Order class's structure. Any changes in the way orders are handled would require changing the payment processing classes too, violating the open/closed principle.",
+            "suggestion": "Introduce an abstraction layer for Order status updates and create a bridge for payment processing, allowing new payment methods to be added without altering existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status_manager.update_status('paid')",
+                        "class DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status_manager.update_status('paid')",
+                        "class PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status_manager.update_status('paid')"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 1092,
+        "prompt_tokens": 2394,
+        "total_tokens": 3486
+    }
+}

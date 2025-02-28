@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_1",
+            "metric": "F1-Score",
+            "score": 0.2,
+            "reason": "Only one True Positive was identified ('Single Responsibility Principle'), while there were two False Negatives ('Open/Closed Principle') and no False Positives, leading to low precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle, but the actual output focuses on area calculation while the expected output emphasizes summarizing areas and outputting data, reflecting different aspects."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest separating responsibilities into different classes, but the actual output lacks specific class names and does not clearly delineate the roles as in the expected output."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output contains only 'output', while the expected output includes both 'sum' and 'output', indicating a lack of thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_1_2_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output's suggestion code does not align well with the expected output's suggestion code, lacking detail and clarity on how to format the output, while both outputs address the same thematic issue."
+        }
+    ]
+]

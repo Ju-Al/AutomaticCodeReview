@@ -1,0 +1,83 @@
+[
+    [
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 1.0,
+            "reason": "There are no false positives; both lists contain the same principles, hence FP is 0, resulting in a False Positive Rate of 0."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 1.0,
+            "reason": "All principles in the expected list are present in the actual list, resulting in zero false negatives."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs contain the same principles: 'Single Responsibility Principle' and 'Open/Closed Principle', resulting in perfect precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs mention the Single Responsibility Principle and reference the Order class handling multiple responsibilities involving prices and quantities, but the actual output includes additional details about managing items and order status not specifically mentioned in the expected output."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest splitting the Order class but differ in specifics: Actual suggests `Product` and `OrderStatus` classes for items, quantities, prices, and status, while Expected focuses on splitting quantities and prices without mentioning status."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Order' does not align thematically or contextually with the expected output fields 'totalPrice' and 'addItems'."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output includes the method 'addItem' which matches with the expected output, but it lacks the 'totalPrice' method which is present in the expected output."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review reason for Open/Closed Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses the Order class and item details, while the expected output focuses on the PaymentProcessor class and payment methods. Both address open-closed principle violations, but the contexts and specifics differ significantly."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output suggests creating an Item class, while the expected output focuses on creating payment processor classes, indicating a mismatch in thematic focus and context."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review method names for Open/Closed Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "Actual Output 'addItem' and Expected Output 'PaymentProcessor' do not align thematically or contextually."
+        },
+        {
+            "example_id": "example_2_1_java",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_1_java",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output defines a method for adding items to lists, while the expected output involves processing a payment, showing no thematic or contextual alignment."
+        }
+    ]
+]

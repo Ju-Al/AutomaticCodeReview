@@ -1,0 +1,119 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    16,
+                    19
+                ],
+                [
+                    21,
+                    25
+                ],
+                [
+                    30,
+                    35
+                ],
+                [
+                    44,
+                    47
+                ],
+                [
+                    52,
+                    56
+                ],
+                [
+                    65,
+                    69
+                ],
+                [
+                    74,
+                    78
+                ],
+                [
+                    83,
+                    119
+                ]
+            ],
+            "method_names": [
+                "addItem",
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The classes are managing multiple responsibilities related to payment processing and authentication, which should be separated.",
+            "suggestion": "Separate the payment processing and authentication logic into dedicated classes that only handle one of these responsibilities.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "this.items.add(name);",
+                        "this.quantities.add(quantity);",
+                        "this.prices.add(price);",
+                        "public void pay(Order order) {",
+                        "System.out.println(\"Processing debit card payment\");",
+                        "System.out.println(\"Verifying security code: \" + this.securityCode);",
+                        "order.setStatus(\"paid\");",
+                        "public void auth_sms(Order order, String securityCode) {",
+                        "throw new UnsupportedOperationException(\"Not implemented\");"
+                    ],
+                    "suggestion_code": [
+                        "public void addItem(String name, int quantity, double price) {",
+                        "this.items.add(name);",
+                        "this.quantities.add(quantity);",
+                        "this.prices.add(price);",
+                        "public class PaymentOrder {",
+                        "private PaymentProcessor processor;",
+                        "this.processor.pay(order);",
+                        "}",
+                        "public void authenticate(Order order, String code) {",
+                        "if (processor instanceof DebitCardPaymentProcessor) {",
+                        "((DebitCardPaymentProcessor) processor).auth_sms(order, code);",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    35,
+                    36
+                ],
+                [
+                    56,
+                    57
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "The `PaypalPaymentProcessor` and `CreditCardPaymentProcessor` implementations use security checks in ways that are inconsistent with the base class `PaymentProcessor`, particularly the unsupported operation in the `auth_sms` method.",
+            "suggestion": "Ensure all subclasses of `PaymentProcessor` properly implement all methods defined in the parent class or refactor the base class to separate out payment methods that require SMS authentication.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public void pay(Order order) {",
+                        "System.out.println(\"Processing paypal payment\");",
+                        "public void auth_sms(Order order, String securityCode) {",
+                        "throw new UnsupportedOperationException(\"Not implemented\");"
+                    ],
+                    "suggestion_code": [
+                        "public void pay(Order order) {",
+                        "System.out.println(\"Processing paypal payment\");",
+                        "public void auth_sms(Order order, String code) {",
+                        "this.authenticated = true;"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "usage": {
+        "completion_tokens": 677,
+        "prompt_tokens": 2817,
+        "total_tokens": 3494
+    }
+}

@@ -1,0 +1,41 @@
+[
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "Actual and expected outputs are identical with a perfect match of 'Single Responsibility Principle'."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle concerning the 'Order' class handling multiple duties. However, the actual output focuses on payment processing and status updating, while the expected output also mentions order management and handling prices and quantities."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating concerns by using a 'PaymentProcessor' class. However, the actual output focuses only on payment processing and security, while the expected output suggests further separation into three classes for different responsibilities."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output only includes 'pay' while expected output includes 'addItem', 'totalPrice', and 'pay', indicating partial thematic alignment but missing key components."
+        },
+        {
+            "example_id": "example_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output focuses on refactoring the 'pay' method to use a 'PaymentProcessor' class, while the expected output includes a broader refactoring involving 'OrderQuantityManager' and 'PriceCalculator'. Both address restructuring but diverge significantly in scope and detail."
+        }
+    ]
+]

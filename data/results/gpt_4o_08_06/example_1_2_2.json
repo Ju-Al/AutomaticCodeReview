@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_2_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_2",
+            "metric": "F1-Score",
+            "score": 0.5,
+            "reason": "There is 1 True Positive (Open/Closed Principle), 0 False Positives, and 1 False Negative (Single Responsibility Principle), leading to a Precision of 1 and a Recall of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_2",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs address the violation of the open-closed principle due to the need for code modification for new shapes. However, the actual output is less specific about new shape examples and does not explicitly mention the principle name."
+        },
+        {
+            "example_id": "example_1_2_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest introducing an interface or base class to adhere to the open-closed principle, focusing on shape implementation and area calculation. However, the Actual Output lacks mention of specific shapes like Circle or Rectangle and the Expected Output provides more detail on how the interface works with AreaCalculator."
+        },
+        {
+            "example_id": "example_1_2_2",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the same single element 'sum'."
+        },
+        {
+            "example_id": "example_1_2_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output simplifies the code by using a get_area method similar to the expected output's area method, but it lacks the full class definitions present in the expected output."
+        }
+    ]
+]

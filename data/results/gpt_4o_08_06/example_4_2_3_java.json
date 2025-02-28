@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_3",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "The actual output has 1 TP which is 'Interface Segregation Principle', 2 FP which are 'Liskov Substitution Principle' and 'Single Responsibility Principle', and 0 FN. Precision is 1/3, Recall is 1/1, resulting in an F1-Score of 0.5."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the issue of forcing 2D shapes like squares to implement a volume method, highlighting the violation of the Interface Segregation Principle. The actual output lacks mention of the principle name but aligns thematically with the expected output."
+        },
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest separate interfaces for 2D and 3D shapes, aligning with the Interface Segregation Principle; however, the actual output lacks specific mention of area and volume methods."
+        },
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'Shape' does not align with the expected output 'volume', lacking thematic and contextual similarity."
+        },
+        {
+            "example_id": "example_4_2_3",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual output separates 2D and 3D interfaces but retains 'interface', while expected uses 'abstract class'. Both suggest separating area and volume concerns but differ in implementation details."
+        }
+    ]
+]

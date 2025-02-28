@@ -1,0 +1,91 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    56,
+                    56
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The pay method in the PaypalPaymentProcessor class handles the payment processing as well as validating the security code, leading to multiple responsibilities.",
+            "suggestion": "Separate the logic for security code verification into a different method, or include an authorizer as done in the DebitPaymentProcessor class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "def pay(self, order, security_code: str):",
+                        "        print(\"Processing paypal payment\")",
+                        "        print(f\"Verifying email: {self.security_code}\")"
+                    ],
+                    "suggestion_code": [
+                        "def pay(self, order: Order):",
+                        "        if not self.verify_security_code():",
+                        "            raise Exception('Invalid security code')",
+                        "        print(\"Processing paypal payment\")"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    30,
+                    30
+                ],
+                [
+                    40,
+                    40
+                ],
+                [
+                    52,
+                    52
+                ]
+            ],
+            "method_names": [
+                "__init__",
+                "__init__",
+                "__init__"
+            ],
+            "reason": "The DebitPaymentProcessor directly depends on the SMSAuthorizer in its initialization, leading to tight coupling instead of depending on abstractions.",
+            "suggestion": "Introduce an interface for the authorizer and inject it into the payment processors to decouple the classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str, authorizer: SMSAuthorizer):",
+                        "        self.authorizer = authorizer"
+                    ],
+                    "suggestion_code": [
+                        "class DebitPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str, authorizer: AuthorizerInterface):",
+                        "        self.authorizer = authorizer"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str):"
+                    ],
+                    "suggestion_code": [
+                        "class CreditPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str, authorizer: AuthorizerInterface):",
+                        "class PaypalPaymentProcessor(PaymentProcessor):",
+                        "    def __init__(self, security_code: str, authorizer: AuthorizerInterface):"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 2544,
+        "total_tokens": 3144
+    }
+}

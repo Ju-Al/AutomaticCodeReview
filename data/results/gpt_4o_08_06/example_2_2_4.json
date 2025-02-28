@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_2_4",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "There is 1 true positive: 'Open/Closed Principle', 1 false positive: 'Single Responsibility Principle', and 0 false negatives. Precision is 0.5, Recall is 1.0, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the open/closed principle in AreaCalculator; however, the actual output lacks specific examples like triangles or pentagons mentioned in the expected output."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs suggest introducing a common interface or base class for shapes to adhere to the open-closed principle. The actual output lacks specifics about concrete shapes and the method name but aligns thematically with the expected output's explanation."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the same content 'sum', indicating complete agreement."
+        },
+        {
+            "example_id": "example_2_2_4",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output simplifies the method by calling shape.area(), aligning with the expected suggestion to use polymorphism. However, the expected output includes class definitions for Circle and Square with an area method, which the actual output omits."
+        }
+    ]
+]

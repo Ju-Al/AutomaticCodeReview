@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_2_0",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, resulting in perfect TP with no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review reason for Open/Closed Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs identify a violation of the open/closed principle, but the actual output lacks the specificity about additional shapes and does not mention the AreaCalculator class."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review suggestion for Open/Closed Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests using polymorphism for area calculation, while the expected output emphasizes implementing a ShapeInterface for extensibility. Both address extensibility, but the actual output lacks the clarity and detail of the expected output's interface approach."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review method names for Open/Closed Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly in content, indicating complete alignment."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review code segments for Open/Closed Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code lacks the detailed shape area calculations present in the expected output, leading to a significant mismatch in clarity and relevance."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs address the responsibilities of the AreaCalculator class, but the actual output lacks clarity on summarizing areas, which is emphasized in the expected output."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the need for separation of responsibilities, but the actual output is less specific about naming conventions compared to the expected output."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs are identical, showing complete alignment in content."
+        },
+        {
+            "example_id": "example_1_2_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests different function names and lacks clarity and detail compared to the expected output, which includes full implementations and context."
+        }
+    ]
+]

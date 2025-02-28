@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_2_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.5,
+            "reason": "There is 1 false positive: 'Single Responsibility Principle'. Total non-violations in expected list is 0. False Positive Rate is 1.0."
+        },
+        {
+            "example_id": "example_2_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.8,
+            "reason": "There are no false negatives as all expected principles are present in the actual list. The actual list has one extra principle."
+        },
+        {
+            "example_id": "example_2_2",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.7,
+            "reason": "TP is 1 ('Open/Closed Principle'), FP is 1 ('Single Responsibility Principle'), FN is 0, leading to Precision 0.5, Recall 1.0, and F1-Score 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_2",
+            "test_case": "Review reason for Open/Closed Principle in example_2_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs address the violation of the open/closed principle in AreaCalculator due to the need for modification when adding new shapes. The actual output mentions 'shape type' while the expected specifies 'triangles, pentagons, hexagons,' but both convey the same issue."
+        },
+        {
+            "example_id": "example_2_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_2",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs address the open-closed principle and suggest implementing an area method in shape classes. However, the expected output provides more detail by suggesting a ShapeInterface for better modularity, which is not mentioned in the actual output."
+        },
+        {
+            "example_id": "example_2_2",
+            "test_case": "Review method names for Open/Closed Principle in example_2_2",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly in terms of content."
+        },
+        {
+            "example_id": "example_2_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_2",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "The actual and expected outputs are almost identical; the only difference is extra spaces in the actual output, which do not affect the functionality or thematic alignment."
+        }
+    ]
+]

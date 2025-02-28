@@ -1,0 +1,44 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    19
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method is determining the area logic for specific shapes which should be the responsibility of each shape class, not the AreaCalculator class.",
+            "suggestion": "Move area calculation logic to their respective shape classes (Circle and Square) by implementing a method like area().",
+            "code": [
+                "    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    11,
+                    19
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator needs modification every time a new shape type is introduced. This violates the open/closed principle as it is not open for extension but rather requires changes.",
+            "suggestion": "Define an area method on each shape class so that the AreaCalculator can simply iterate over shapes and call shape.area(), making it open to new shapes without modification.",
+            "code": [
+                "    def sum(self):\n        areas = []\n        for shape in self.shapes:\n            if isinstance(shape, Square):\n                areas.append(math.pow(shape.length, 2))\n            elif isinstance(shape, Circle):\n                areas.append(math.pi * math.pow(shape.radius, 2))\n        return sum(areas)"
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 352,
+        "prompt_tokens": 1748,
+        "total_tokens": 2100
+    }
+}

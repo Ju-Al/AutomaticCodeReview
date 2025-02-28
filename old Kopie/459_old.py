@@ -1,9 +1,0 @@
-def transpose(input_lines):
-    zipped = map(list,
-                 [line.ljust(len(max(lines, key=len)))
-                  for line in lines])
-    return "\n".join("".join(line) for line in zip(*zipped)).strip()
-
-
-if __name__ == '__main__':
-    transpose()

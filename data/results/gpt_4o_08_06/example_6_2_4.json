@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_2_4",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in the actual list match the expected list with no extra or missing items."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review reason for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Reason-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs discuss repetition issues, but the actual output lacks specific mention of DRY principle and the exact number of repetitions."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review suggestion for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs suggest modularizing repetitive logic, but the actual output lacks the detail of specific classes like SetupTeardownBuilder, PathRenderer, and HTMLFormatter mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review method names for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review code segments for Don't Repeat Yourself in example_6_2",
+            "test_case_category": "Changes-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Actual output's 'suggestion_code' simplifies the inclusion logic with a helper function but misses some details like checking 'Test' attribute. The thematic intent aligns, but the execution lacks some expected conditions and checks found in the expected output."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify multiple responsibilities as a violation of the Single Responsibility Principle, but actual output provides more specific details on the responsibilities."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest splitting responsibilities into separate functions or methods to adhere to the Single Responsibility Principle. However, the expected output specifies functions like path processing and string formatting, which are not explicitly mentioned in the actual output."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output perfectly in terms of content."
+        },
+        {
+            "example_id": "example_6_2_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_2",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output effectively refactors the setup and teardown logic into separate functions similar to the expected output, improving modularity. However, the expected output uses a different programming language (Java) and structure, which the actual output does not address, causing a partial mismatch in thematic alignment."
+        }
+    ]
+]

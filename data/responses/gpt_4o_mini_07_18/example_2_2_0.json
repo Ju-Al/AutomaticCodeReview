@@ -1,0 +1,50 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    12,
+                    22
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The sum method in AreaCalculator is handling the responsibility of calculating areas for different shapes instead of delegating this responsibility to the shape classes themselves.",
+            "suggestion": "Each shape class should implement its own area calculation method. The AreaCalculator should be responsible for aggregating these areas.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    def sum(self):",
+                        "        areas = []",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Square):",
+                        "                areas.append(math.pow(shape.length, 2))",
+                        "            elif isinstance(shape, Circle):",
+                        "                areas.append(math.pi * math.pow(shape.radius, 2))",
+                        "        return sum(areas)"
+                    ],
+                    "suggestion_code": [
+                        "    def sum(self):",
+                        "        return sum(shape.area() for shape in self.shapes)",
+                        "",
+                        "class Square:",
+                        "    def area(self):",
+                        "        return math.pow(self.length, 2)",
+                        "",
+                        "class Circle:",
+                        "    def area(self):",
+                        "        return math.pi * math.pow(self.radius, 2)"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "1 principle violation found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 316,
+        "prompt_tokens": 2345,
+        "total_tokens": 2661
+    }
+}

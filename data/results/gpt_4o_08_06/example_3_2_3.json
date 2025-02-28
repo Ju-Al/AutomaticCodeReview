@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_3_2_3",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP: 1 (Liskov Substitution Principle), FP: 1 (Single Responsibility Principle), FN: 0. Precision: 1/2, Recall: 1/1."
+        }
+    ],
+    [
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review reason for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Reason-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs correctly identify the violation of the Liskov Substitution Principle due to VolumeCalculator not adhering to AreaCalculator's contract. The actual output has slightly more detail in explaining the method change, but both texts are thematically aligned."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review suggestion for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Suggestion-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "Actual suggests method or composition while Expected outlines abstract class and interface structure, addressing the same issue but with differing levels of detail and approach."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review method names for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Method-Name-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'sum' does not align thematically or contextually with any items in the expected output list of 'VolumeCalculator', 'AreaCalculator', 'Shape'."
+        },
+        {
+            "example_id": "example_3_2_3",
+            "test_case": "Review code segments for Liskov Substitution Principle in example_3_2",
+            "test_case_category": "Changes-Test-Case-Liskov Substitution Principle",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output addresses the same issue of refactoring VolumeCalculator, but it lacks the abstraction and error handling present in the expected output."
+        }
+    ]
+]

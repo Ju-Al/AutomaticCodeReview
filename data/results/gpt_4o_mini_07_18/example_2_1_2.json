@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_2_1_2",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles in the actual output match the expected output, resulting in perfect TP and no FP or FN."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review reason for Open/Closed Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses changes to the Order class, while the expected output focuses on the PaymentProcessor class, indicating a lack of thematic alignment regarding the principle violation."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review suggestion for Open/Closed Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs discuss extending functionalities and payment processing, but the actual output lacks the specific structure and clarity of the expected output regarding class implementation and inheritance."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review method names for Open/Closed Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output 'add_item' does not align with the expected output 'PaymentProcessor', indicating a complete mismatch in content."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review code segments for Open/Closed Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output discusses an 'Order' class and its methods, while the expected output focuses on a 'PaymentProcessor' class and payment methods, showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output discusses class responsibilities, but it does not directly address the violation of the Single Responsibility Principle as clearly as the expected output does."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output suggests separating concerns into distinct classes, while the expected output focuses specifically on splitting the Order class into two classes for quantities and prices, indicating a lack of direct thematic alignment."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output mentions '__init__', 'add_item', and 'pay', while the expected output refers to 'total_price' and 'add_items', showing no thematic or contextual alignment."
+        },
+        {
+            "example_id": "example_2_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output's suggestion code lacks the detailed functionality of managing order quantities and calculating total prices, which are present in the expected output."
+        }
+    ]
+]

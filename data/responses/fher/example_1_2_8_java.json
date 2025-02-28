@@ -1,0 +1,104 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    8,
+                    10
+                ],
+                [
+                    14,
+                    14
+                ]
+            ],
+            "method_names": [
+                "output",
+                "sum"
+            ],
+            "reason": "The AreaCalculator class has multiple responsibilities: it calculates areas and formats output.",
+            "suggestion": "Separate the area calculation logic and output logic into different classes to adhere to the Single Responsibility Principle.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "public String output() {"
+                    ],
+                    "suggestion_code": [
+                        "public double calculateTotalArea() {",
+                        "public class OutputManager {",
+                        "    public static String formatOutput(double area) {",
+                        "        return \"Sum of the areas of provided shapes: \" + area;",
+                        "    }"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    4,
+                    30
+                ]
+            ],
+            "method_names": [
+                "sum"
+            ],
+            "reason": "The AreaCalculator class is not open for extension without modification, as adding new shapes requires changes to the sum method.",
+            "suggestion": "Create a Shape interface with a method to calculate area, and implement this interface in Circle and Square classes to allow extension without modifying the AreaCalculator class.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double sum() {",
+                        "for (Object shape : shapes) {",
+                        "if (shape instanceof Square) {",
+                        "Square square = (Square) shape;",
+                        "totalArea += Math.pow(square.getLength(), 2);",
+                        "} else if (shape instanceof Circle) {",
+                        "Circle circle = (Circle) shape;",
+                        "totalArea += Math.PI * Math.pow(circle.getRadius(), 2);",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public double sum() {",
+                        "for (Shape shape : shapes) {",
+                        "totalArea += shape.calculateArea();"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Interface Segregation Principle",
+            "lines": [
+                [
+                    34,
+                    37
+                ]
+            ],
+            "method_names": [],
+            "reason": "The AreaCalculator class is forced to depend on a List<Object>, which leads to type checking and casting.",
+            "suggestion": "Use a List of a defined interface Shape instead of Object, allowing for proper abstraction without unnecessary type checks.",
+            "changes": [
+                {
+                    "original_code": [
+                        "private List<Object> shapes;",
+                        "public AreaCalculator(List<Object> shapes) {",
+                        "this.shapes = shapes;"
+                    ],
+                    "suggestion_code": [
+                        "private List<Shape> shapes;",
+                        "public AreaCalculator(List<Shape> shapes) {",
+                        "this.shapes = shapes;"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 634,
+        "prompt_tokens": 2419,
+        "total_tokens": 3053
+    }
+}

@@ -1,0 +1,23 @@
+[
+    {
+        "example_id": "example_4_2",
+        "test_case": "Detect false positives in the principle violations between the actual and expected outputs.",
+        "metric": "Correctness",
+        "score": 0.0,
+        "reason": "The actual output lists 'Single Responsibility Principle' and 'Liskov Substitution Principle', which do not align with the expected 'Interface Segregation Principle'. There is no thematic or contextual alignment."
+    },
+    {
+        "example_id": "example_4_2",
+        "test_case": "Detect false positives in the principle violations between the actual and expected outputs.",
+        "metric": "False Positive Detection",
+        "score": 0.0,
+        "reason": "Actual Output includes 'Single Responsibility Principle' and 'Liskov Substitution Principle', which are not in the Expected Output. All principles in Actual Output are false positives."
+    },
+    {
+        "example_id": "example_4_2",
+        "test_case": "Review principle presence in example_4_2",
+        "metric": "Correctness",
+        "score": 0.0,
+        "reason": "Actual output principles differ entirely from the expected principle."
+    }
+]

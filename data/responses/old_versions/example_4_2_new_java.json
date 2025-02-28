@@ -1,0 +1,88 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Liskov Substitution Principle",
+            "lines": [
+                [
+                    58,
+                    64
+                ],
+                [
+                    90,
+                    96
+                ]
+            ],
+            "method_names": [
+                "Circle.volume",
+                "Square.volume"
+            ],
+            "reason": "The Circle and Square classes implement a volume() method returning 0, which is not meaningful. These shapes are primarily 2D and should not provide a volume method.",
+            "suggestion": "Refactor the Shape interface to separate 2D and 3D shapes. Introduce a new interface, such as SolidShape, for 3D shapes that require a volume calculation.",
+            "changes": [
+                {
+                    "original_code": [
+                        "    public double volume() {\n        return 0;\n    }"
+                    ],
+                    "suggestion_code": [
+                        "package example4.shapes;\n\ninterface Shape {\n    public double area();\n}\n\ninterface SolidShape extends Shape {\n    public double volume();\n}\n"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        return 0;\n    }\n\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n    @Override\n    public double volume() {\n        return 0;\n    }\n\n}"
+                    ],
+                    "suggestion_code": [
+                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class Dice implements Shape {",
+                        "public class Dice implements Shape {"
+                    ],
+                    "suggestion_code": [
+                        "public class Dice implements SolidShape {"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    101,
+                    115
+                ]
+            ],
+            "method_names": [
+                "SumCalculator"
+            ],
+            "reason": "The SumCalculator class currently handles formatting and calculation logic, potentially combining concerns of calculation and presentation.",
+            "suggestion": "Separate the SumCalculator functionalities to focus solely on calculations and introduce a new class to handle the presentation of results (e.g., toJSON, toHTML).",
+            "changes": [
+                {
+                    "original_code": [
+                        "    public String toJSON() {\n        /*\n         * JSONObject data = new JSONObject();\n         * data.put(\"sum\", calculator.sum());\n         * return data.toString();\n         */\n        return \"\";\n    }\n\n    public String toHTML() {\n        return String.format(\"<p>Sum of the areas of provided shapes: %.2f</p>\", calculator.sum());\n    }"
+                    ],
+                    "suggestion_code": [
+                        "public class SumOutputter {\n    private AreaCalculator calculator;\n\n    public SumOutputter(AreaCalculator calculator) {\n        this.calculator = calculator;\n    }\n\n    public String toHTML() {\n        return String.format(\"<p>Sum of the areas of provided shapes: %.2f</p>\", calculator.sum());\n    }\n\n    public String toJSON() {\n        /*\n         * JSONObject data = new JSONObject();\n         * data.put(\"sum\", calculator.sum());\n         * return data.toString();\n         */\n        return \"\";\n    }\n}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 976,
+        "prompt_tokens": 2789,
+        "total_tokens": 3765
+    }
+}

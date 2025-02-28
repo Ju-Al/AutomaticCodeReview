@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_5_2_0",
+            "metric": "F1-Score",
+            "score": 1.0,
+            "reason": "All principles match between Actual Output and Expected Output, yielding perfect Precision and Recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review reason for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Reason-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs identify the violation of the Dependency Inversion Principle due to UserService's dependency on MySQLDatabase. They describe the same issue of high-level module dependency on low-level modules with similar detail and clarity."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review suggestion for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Suggestion-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest using an abstraction for database operations with UserService depending on it. Actual Output specifies MySQLDatabase implementation, matching the expected emphasis on abstraction, but lacks explicit mention of high-level dependency on abstractions."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review method names for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Method-Name-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output perfectly matches the expected output, both containing the same content ['UserService']."
+        },
+        {
+            "example_id": "example_5_2_0",
+            "test_case": "Review code segments for Dependency Inversion Principle in example_5_2",
+            "test_case_category": "Changes-Test-Case-Dependency Inversion Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output suggests using an interface for `Database`, aligning with the expected output's use of an abstract class for `DatabaseInterface`. Both focus on abstraction, but the expected output contains an additional detail of using `Optional<String>` for `getUserData` method which is missing in the actual output."
+        }
+    ]
+]

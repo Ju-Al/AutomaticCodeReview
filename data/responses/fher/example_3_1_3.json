@@ -1,0 +1,58 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    14,
+                    34
+                ]
+            ],
+            "method_names": [
+                "add_item"
+            ],
+            "reason": "The Order class is responsible for both handling item management and maintaining the order status, which violates the Single Responsibility Principle.",
+            "suggestion": "Separate the responsibilities of managing order items and managing order status into different classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n        self.status = 'open'\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)"
+                    ],
+                    "suggestion_code": [
+                        "class Order:\n    def __init__(self):\n        self.items = []\n        self.quantities = []\n        self.prices = []\n\n    def add_item(self, name: str, quantity: int, price: float) -> None:\n        self.items.append(name)\n        self.quantities.append(quantity)\n        self.prices.append(price)\n\nclass OrderStatus:\n    def __init__(self):\n        self.status = 'open'\n\n    def mark_as_paid(self):\n        self.status = 'paid'\n\norder_status = OrderStatus()"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    36,
+                    40
+                ]
+            ],
+            "method_names": [
+                "pay"
+            ],
+            "reason": "The PaymentProcessor classes depend directly on the concrete Order class, violating the Dependency Inversion Principle.",
+            "suggestion": "Introduce an interface/abstract class for Order that PaymentProcessor implementations will depend on, allowing for more flexibility and decoupling.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order, security_code: str):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\nclass DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.status = 'paid'\n\nclass PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.status = 'paid'"
+                    ],
+                    "suggestion_code": [
+                        "class OrderInterface(ABC):\n    @abstractmethod\n    def mark_as_paid(self):\n        pass\n\nclass PaymentProcessor(ABC):\n    @abstractmethod\n    def pay(self, order: OrderInterface, security_code: str):\n        pass\n\nclass CreditCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order: OrderInterface, security_code: str):\n        print('Processing credit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.mark_as_paid()\n\nclass DebitCardPaymentProcessor(PaymentProcessor):\n    def pay(self, order: OrderInterface, security_code: str):\n        print('Processing debit card payment')\n        print(f'Verifying security code: {security_code}')\n        order.mark_as_paid()\n\nclass PaypalPaymentProcessor(PaymentProcessor):\n    def pay(self, order: OrderInterface, security_code: str):\n        print('Processing paypal payment')\n        print(f'Verifying email: {security_code}')\n        order.mark_as_paid()"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 932,
+        "prompt_tokens": 2394,
+        "total_tokens": 3326
+    }
+}

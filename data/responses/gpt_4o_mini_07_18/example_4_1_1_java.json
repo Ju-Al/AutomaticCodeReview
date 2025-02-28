@@ -1,0 +1,124 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    11
+                ],
+                [
+                    29,
+                    29
+                ],
+                [
+                    47,
+                    47
+                ]
+            ],
+            "method_names": [
+                "setStatus",
+                "auth_sms",
+                "auth_sms"
+            ],
+            "reason": "The PaymentProcessor class has both payment processing and SMS authentication responsibilities, violating the SRP.",
+            "suggestion": "Separate the payment processes and SMS authentication into distinctly focused classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {",
+                        "   public abstract void pay(Order order);",
+                        "   public abstract void auth_sms(Order order, String code);",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public interface PaymentProcessor {",
+                        "   void pay(Order order);",
+                        "}",
+                        "public interface SmsAuthenticator {",
+                        "   void auth_sms(Order order, String code);",
+                        "}"
+                    ]
+                },
+                {
+                    "original_code": [
+                        "public class DebitCardPaymentProcessor extends PaymentProcessor {",
+                        "   @Override",
+                        "   public void auth_sms(Order order, String code) {",
+                        "       System.out.println(\"Authenticating via SMS\");",
+                        "       this.authenticated = true;",
+                        "   }",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "public class DebitCardPaymentProcessor implements PaymentProcessor {",
+                        "   @Override",
+                        "   public void pay(Order order) {",
+                        "       // Payment logic",
+                        "   }",
+                        "}",
+                        "public class SmsPaymentAuthenticator implements SmsAuthenticator {",
+                        "   @Override",
+                        "   public void auth_sms(Order order, String code) {",
+                        "       System.out.println(\"Authenticating via SMS\");",
+                        "       this.authenticated = true;",
+                        "   }",
+                        "}"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    29,
+                    29
+                ],
+                [
+                    47,
+                    47
+                ]
+            ],
+            "method_names": [
+                "pay",
+                "auth_sms"
+            ],
+            "reason": "Adding a new payment method requires modifying the PaymentProcessor class directly, violating the open/closed principle.",
+            "suggestion": "Use the strategy pattern to allow for new payment methods without modifying existing classes.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public abstract class PaymentProcessor {",
+                        "   public abstract void pay(Order order);",
+                        "   public abstract void auth_sms(Order order, String code);",
+                        "}"
+                    ],
+                    "suggestion_code": [
+                        "import java.util.List;",
+                        "public interface PaymentProcessor {",
+                        "   void pay(Order order);",
+                        "}",
+                        "public class PaymentService {",
+                        "   private List<PaymentProcessor> processors;",
+                        "   public void addProcessor(PaymentProcessor processor) {",
+                        "       processors.add(processor);",
+                        "   }",
+                        "   public void processPayments(Order order) {",
+                        "       for (PaymentProcessor processor : processors) {",
+                        "           processor.pay(order);",
+                        "       }",
+                        "   }",
+                        "}"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 704,
+        "prompt_tokens": 2817,
+        "total_tokens": 3521
+    }
+}

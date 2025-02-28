@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_4_2_1",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "True Positive is 'Interface Segregation Principle'. False Positives are 'Liskov Substitution Principle' and 'Open/Closed Principle'. Precision is 1/3, Recall is 1/1, leading to a low F1-Score."
+        }
+    ],
+    [
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Review reason for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Reason-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs highlight the issue of requiring a volume method for shapes that don't need it, aligning with the Interface Segregation Principle. The actual output also mentions an additional coupling issue not present in the expected output."
+        },
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Review suggestion for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Suggestion-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs suggest separating interfaces for area and volume calculation, aligning with the Interface Segregation Principle, but the actual output lacks detail on implementing separate interfaces for 2D and 3D shapes."
+        },
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Review method names for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Method-Name-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.0,
+            "reason": "The actual output lists 'Shape' and 'SumCalculator', which do not align thematically or contextually with the expected output of 'volume'."
+        },
+        {
+            "example_id": "example_4_2_1",
+            "test_case": "Review code segments for Interface Segregation Principle in example_4_2",
+            "test_case_category": "Changes-Test-Case-Interface Segregation Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output separates area and volume methods into interfaces, while Expected Output uses abstract classes for 2D and 3D shapes. Both suggest separating concerns but use different approaches and structures."
+        }
+    ]
+]

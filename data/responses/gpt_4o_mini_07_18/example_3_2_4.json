@@ -1,0 +1,143 @@
+{
+    "principle_violations": [
+        {
+            "principle": "Single Responsibility Principle",
+            "lines": [
+                [
+                    11,
+                    26
+                ],
+                [
+                    41,
+                    45
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The AreaCalculator and VolumeCalculator classes both handle area calculation, but VolumeCalculator should handle volume, which could involve different logic.",
+            "suggestion": "Create a separate VolumeCalculator class that correctly calculates volume based on the shapes provided. Ensure shapes implement area and volume methods if needed.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()",
+                        "        return total_volume"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def sum(self):",
+                        "        total_area = 0",
+                        "        for shape in self.shapes:",
+                        "            if isinstance(shape, Shape):",
+                        "                total_area += shape.area()",
+                        "            else:",
+                        "                raise Exception('Invalid Shape: Shape does not implement Shape interface')",
+                        "        return total_area",
+                        "",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes) -> None:",
+                        "        self.shapes = shapes",
+                        "",
+                        "    def sum(self):",
+                        "        total_volume = 0",
+                        "        for shape in self.shapes:",
+                        "            total_volume += shape.area()  # Assuming a similar approach, or implement volume if needed",
+                        "        return total_volume"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Open/Closed Principle",
+            "lines": [
+                [
+                    30,
+                    30
+                ],
+                [
+                    48,
+                    48
+                ]
+            ],
+            "method_names": [
+                "sum",
+                "sum"
+            ],
+            "reason": "The VolumeCalculator relies on the shape's area method to calculate volume, which may not be appropriate since area and volume are different concepts, hence it violates OCP.",
+            "suggestion": "If you are going to implement different types of calculations based on the shapes, consider using strategy patterns or ensure that the shape classes define both area and volume as needed.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class AreaCalculator:",
+                        "    def sum(self):",
+                        "        # area sum logic",
+                        "",
+                        "class VolumeCalculator(AreaCalculator):",
+                        "    def sum(self):",
+                        "        # volume sum logic based incorrectly on area"
+                    ],
+                    "suggestion_code": [
+                        "class AreaCalculator:",
+                        "    def sum(self):",
+                        "        # area sum logic",
+                        "",
+                        "class VolumeCalculator:",
+                        "    def __init__(self, shapes):",
+                        "        self.shapes = shapes",
+                        "",
+                        "    def sum(self):",
+                        "        # explicit volume calculations based on volume method if exists or a specific volume calculation"
+                    ]
+                }
+            ]
+        },
+        {
+            "principle": "Dependency Inversion Principle",
+            "lines": [
+                [
+                    56,
+                    56
+                ]
+            ],
+            "method_names": [
+                "to_json",
+                "to_html"
+            ],
+            "reason": "The SumCalculator depends directly on the implementation of the AreaCalculator and VolumeCalculator, rather than depending on an abstraction.",
+            "suggestion": "Define a common interface or abstract class that both AreaCalculator and VolumeCalculator adhere to, and make SumCalculator depend on that interface.",
+            "changes": [
+                {
+                    "original_code": [
+                        "class SumCalculator:",
+                        "    def __init__(self, areaCalculator: AreaCalculator) -> None:"
+                    ],
+                    "suggestion_code": [
+                        "class SumCalculator:",
+                        "    def __init__(self, calculator: Union[AreaCalculator, VolumeCalculator]) -> None:"
+                    ]
+                }
+            ]
+        }
+    ],
+    "overall_feedback": "3 principle violations found. Please see the details below.",
+    "usage": {
+        "completion_tokens": 929,
+        "prompt_tokens": 2489,
+        "total_tokens": 3418
+    }
+}

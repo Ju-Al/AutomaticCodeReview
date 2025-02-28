@@ -1,0 +1,55 @@
+[
+    [
+        {
+            "example_id": "example_2_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Positive Rate",
+            "score": 0.7,
+            "reason": "FP is 0 as 'Single Responsibility Principle' is in both lists. TN is 1 since 'Open/Closed Principle' is not in Actual Output. False Positive Rate is 0/1 = 0."
+        },
+        {
+            "example_id": "example_2_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "False Negative Rate",
+            "score": 0.5,
+            "reason": "The actual output correctly includes 'Single Responsibility Principle' as a true positive, but misses 'Open/Closed Principle', resulting in one false negative."
+        },
+        {
+            "example_id": "example_2_1",
+            "test_case": "Check principle violations in the document.",
+            "metric": "F1-Score",
+            "score": 0.667,
+            "reason": "TP: 1 (Single Responsibility Principle), FP: 0, FN: 1 (Open/Closed Principle). Precision is 1, Recall is 0.5, resulting in an F1-Score of 0.67."
+        }
+    ],
+    [
+        {
+            "example_id": "example_2_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_2_1",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "Actual Output mentions order status and cart items, while Expected Output focuses on prices and quantities; both touch on responsibility but differ in specifics."
+        },
+        {
+            "example_id": "example_2_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_2_1",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating responsibilities within classes, but Actual Output adds extra detail about PaymentProcessor class and does not align exactly on order quantities vs. order status."
+        },
+        {
+            "example_id": "example_2_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_2_1",
+            "metric": "Correctness",
+            "score": 0.1,
+            "reason": "The actual output 'Order', 'pay' does not align with the expected output 'total_price', 'add_items' in terms of context or thematic relevance."
+        },
+        {
+            "example_id": "example_2_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_2_1",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output includes a PaymentProcessor class and the status update in the pay method, which are irrelevant to the expected output focusing on item addition and total price calculation."
+        }
+    ]
+]

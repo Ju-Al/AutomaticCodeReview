@@ -1,0 +1,78 @@
+[
+    [
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_6_1_1",
+            "metric": "F1-Score",
+            "score": 0.7,
+            "reason": "True Positives are both principles in the actual and expected lists, but there is one False Negative ('Open/Closed Principle') and no False Positives."
+        }
+    ],
+    [
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review reason for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Reason-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "While both outputs mention repetitive calculations, the actual output lacks detail on the specific violations of the DRY principle and does not address the currency formatting issue highlighted in the expected output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review suggestion for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.4,
+            "reason": "The actual output suggests creating a separate method for calculation to eliminate duplicate code, while the expected output elaborates on multiple specific functions and a class for handling different performance types, indicating a lack of detail and clarity in the actual output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review method names for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, indicating complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review code segments for Don't Repeat Yourself in example_6_1",
+            "test_case_category": "Changes-Test-Case-Don't Repeat Yourself",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests a calculation method for credits and amounts, while the expected output provides a more structured class-based approach with specific implementations for each performance type, showing a significant difference in detail and clarity."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "Both outputs identify the violation of the Single Responsibility Principle and mention the responsibilities of the generateStatement method, but the expected output provides additional context about the currency and output statement which is missing in the actual output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating responsibilities for clarity, but Actual Output lacks specific details about individual functions as seen in Expected Output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "Both actual and expected outputs contain identical content in the 'generateStatement' field, indicating complete alignment."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The suggestion_code in the actual output focuses on simplifying the generation of the statement, while the expected output suggests a complete redesign to encapsulate performance types. The lack of thematic alignment regarding performance handling results in a low score."
+        }
+    ]
+]

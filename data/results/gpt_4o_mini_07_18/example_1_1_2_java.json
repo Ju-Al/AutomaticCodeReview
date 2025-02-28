@@ -1,0 +1,46 @@
+[
+    [
+        {
+            "example_id": "example_1_1_2",
+            "test_case": "Check principle violations in the document.",
+            "test_case_category": "F1-Test-Case-example_1_1_2",
+            "metric": "F1-Score",
+            "score": 0.4,
+            "reason": "One true positive identified, but there is one false positive and no false negatives, leading to moderate precision and recall."
+        }
+    ],
+    [
+        {
+            "example_id": "example_1_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output mentions handling multiple responsibilities without explicitly identifying the Single Responsibility Principle violation, while the expected output clearly states the violations and details the responsibilities related to order management and payment."
+        },
+        {
+            "example_id": "example_1_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.5,
+            "reason": "Both outputs suggest separating responsibilities into different classes, but the actual output only addresses payment processing, while the expected output emphasizes splitting into three classes, indicating partial alignment."
+        },
+        {
+            "example_id": "example_1_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output only contains 'pay', while the expected output includes 'addItem', 'totalPrice', and 'pay', showing a lack of detail and relevance."
+        },
+        {
+            "example_id": "example_1_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_1_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.2,
+            "reason": "The actual output suggests modifying the payment method to use a PaymentProcessor, while the expected output includes an entirely different structure related to order management and pricing, lacking alignment in functionality and intent."
+        }
+    ]
+]
