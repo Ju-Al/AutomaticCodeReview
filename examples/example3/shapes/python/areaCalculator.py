@@ -42,17 +42,17 @@ class Circle(Shape):
     def area(self):
         return math.pi * self.radius ** 2
 
-class SumCalculator:
+class OutputFormatter:
     def __init__(self, areaCalculator: AreaCalculator) -> None:
         self.calculator = areaCalculator
 
-    def JSON(self):
+    def to_json(self):
         data = {
             'sum': self.calculator.sum()
         }
         return json.dumps(data)
 
-    def HTML(self):
+    def to_html(self):
         return f"Sum of the areas of provided shapes: {self.calculator.sum()}"
 
 
@@ -60,7 +60,7 @@ shapes = [Circle(2), Square(5), Square(6)]
 
 # Area Calculation
 area_calculator = AreaCalculator(shapes)
-area_outputter = SumCalculator(area_calculator)
+area_outputter = OutputFormatter(area_calculator)
 
 print(area_outputter.to_json())
 print(area_outputter.to_html())
@@ -68,7 +68,7 @@ print(area_outputter.to_html())
 # Volume Calculation (example)
 solid_shapes = [Circle(3), Square(4)]
 volume_calculator = VolumeCalculator(solid_shapes)
-volume_outputter = SumCalculator(volume_calculator)
+volume_outputter = OutputFormatter(volume_calculator)
 
 print(volume_outputter.to_json())
 print(volume_outputter.to_html())

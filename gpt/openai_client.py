@@ -1,11 +1,12 @@
 import json
-from config import API_KEY, API_BASE, DEPLOYMENT_NAME, API_VERSION
+from common_config import API_KEY, API_BASE, DEPLOYMENT_NAME, API_VERSION
 from openai import AzureOpenAI
 from models import CodeReview
 import system_prompt
 
 class AzureOpenAIClient:
     def __init__(self):
+        print("Azure: ", DEPLOYMENT_NAME, API_VERSION)
         self.client = AzureOpenAI(azure_endpoint=API_BASE, api_key=API_KEY, api_version=API_VERSION)
     
     def request_code_review(self, user_prompt: str):
@@ -24,10 +25,10 @@ class AzureOpenAIClient:
             response_format=CodeReview)
         return response
     
-    def save_code_review_response(self, filename: str, completion):
+    def save_code_review_response(self, filename: str, completion, execution_time):
         message = completion.choices[0].message.parsed
         usage = completion.usage.dict(include={"completion_tokens": True, "prompt_tokens": True, "total_tokens": True})
-        combined_response = {**message.dict(), "usage": usage}
+        combined_response = {**message.dict(), "usage": usage, "time": execution_time}
 
         with open(filename, 'w') as file:
             json.dump(combined_response, file, indent=4)

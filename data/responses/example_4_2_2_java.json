@@ -1,40 +1,42 @@
 {
     "principle_violations": [
         {
-            "principle": "Liskov Substitution Principle",
+            "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    11,
-                    14
+                    7,
+                    30
                 ],
                 [
-                    24,
-                    27
+                    1,
+                    44
                 ]
             ],
             "method_names": [
-                "volume"
+                "sum in VolumeCalculator",
+                "volume in Circle"
             ],
-            "reason": "The 'volume' method in Circle and Square throws UnsupportedOperationException. When using these classes as Shape objects, the behavior is unexpected and violates the Liskov principle.",
-            "suggestion": "Provide default behavior for the 'volume' method in the Shape interface, using a decorum behavior pattern to denote whether volume computation is supported.",
+            "reason": "The `VolumeCalculator` class assumes the responsibility of aggregating volume calculations, while handling shapes that do not inherently support such calculations (e.g., `Circle`). The `Circle` class unnecessarily contains a `volume` method, which leads to improper separation of concerns for entities lacking volume.",
+            "suggestion": "Merge volume-related functionality into a more specific hierarchy or modular interface and avoid forcing all shapes to unjustly define `volume`.",
             "changes": [
                 {
                     "original_code": [
-                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }",
-                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }"
+                        "public class VolumeCalculator extends AreaCalculator {\n    public VolumeCalculator(List<Shape> shapes) {\n        super(shapes);\n    }\n\n    @Override\n    public double sum() {\n        double totalVolume = 0;\n        for (Shape shape : shapes) {\n            totalVolume += shape.volume();\n        }\n        return totalVolume;\n    }\n}",
+                        "\npublic class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
                     ],
                     "suggestion_code": [
-                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        return -1; // Indicating unsupported operation\n    }\n\n    public boolean supportsVolume() {\n        return false;\n    }",
-                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n    @Override\n    public double volume() {\n        return -1; // Indicating unsupported operation\n    }\n\n    public boolean supportsVolume() {\n        return false;\n    }"
+                        "public class VolumeCalculator {\n    private List<Shape3D> shapes;\n\n    public VolumeCalculator(List<Shape3D> shapes) {\n        this.shapes = shapes;\n    }\n\n    public double sum() {\n        return shapes.stream().mapToDouble(Shape3D::volume).sum();\n    }\n}",
+                        "\npublic interface Shape3D extends Shape {\n    double volume();\n}\n\npublic class Circle extends Shape2D {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    // Removed improper `volume` definition.\n}"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "Found 1 principle violation. Addressing the suggestions above will ensure principle adherence.",
+    "overall_feedback": "1 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 507,
-        "prompt_tokens": 2805,
-        "total_tokens": 3312
-    }
+        "completion_tokens": 497,
+        "prompt_tokens": 2659,
+        "total_tokens": 3156
+    },
+    "time": 6.536891222000122
 }

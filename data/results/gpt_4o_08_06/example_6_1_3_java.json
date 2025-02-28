@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_3",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "No True Positives as there is no overlap between Actual Output and Expected Output. The Single Responsibility Principle is a False Positive and Don't Repeat Yourself is a False Negative."
+            "score": 0.4,
+            "reason": "The actual output correctly identifies the 'Single Responsibility Principle' from the expected output, but it misses 'Don't Repeat Yourself' and 'Open/Closed Principle' (False Negatives) and has no False Positives."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The Actual Output and Expected Output both identify multiple responsibilities and mention calculating amounts, volume credits, and formatting output. However, the Actual Output does not explicitly mention the Single Responsibility Principle or the generateStatement method, leading to slight misalignment."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "The actual output aligns with the expected output in terms of separating concerns and creating distinct methods for amounts, volume credits, and formatting. However, it misses explicit mention of currency formatting and naming specific functions like calculateAmount and calculateVolumeCredits."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, with both containing the same field content ['generateStatement'], ensuring complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output introduces helper methods to improve readability and modularity, but does not fully transition to an object-oriented approach with encapsulated behavior as seen in the expected output, which uses classes like TragedyPerformance and ComedyPerformance."
+        }
+    ]
 ]

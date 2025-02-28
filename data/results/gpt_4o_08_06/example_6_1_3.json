@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_3",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "No True Positives as there are no common principles between actual and expected lists. One False Positive: 'Single Responsibility Principle'. One False Negative: 'Don't Repeat Yourself'. Precision and Recall both are 0, leading to undefined F1-Score."
+            "score": 0.3,
+            "reason": "The actual output correctly identifies 1 TP ('Single Responsibility Principle'), but it misses 2 FN ('Don't Repeat Yourself', 'Open/Closed Principle') and has no FP. This results in low recall and an F1-score closer to the lower end."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify multiple responsibilities in the 'statement' function, but the actual output lacks specific references to 'volume_credits,' 'currency,' and 'output statement,' reducing alignment with the expected output's detail."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output aligns with the expected output thematically by suggesting separation of concerns, but it lacks explicit mention of creating distinct functions for currency formatting and generating the output statement."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The content of the 'statement' field in both actual and expected output is identical, showing complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_1_3",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output closely aligns with the Expected Output in modularization and functionality, but lacks the use of `format_currency` and class-based abstractions like `PerformanceType` and `StatementGenerator` present in the Expected Output."
+        }
+    ]
 ]

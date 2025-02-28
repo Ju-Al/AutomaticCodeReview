@@ -11,7 +11,7 @@ public class Main {
     shapes.add(new Square(6));
 
     AreaCalculator calculator = new AreaCalculator(shapes);
-    SumCalculator sumCalculator = new SumCalculator(calculator);
+    OutputFormatter sumCalculator = new OutputFormatter(calculator);
     System.out.println(sumCalculator.toHTML());
   }
 }

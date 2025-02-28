@@ -1,9 +1,0 @@
-{
-    "principle_violations": [],
-    "overall_feedback": "0 principle violations found. The code follows good design principles and adheres to the Single Responsibility and other relevant principles.",
-    "usage": {
-        "completion_tokens": 35,
-        "prompt_tokens": 2525,
-        "total_tokens": 2560
-    }
-}

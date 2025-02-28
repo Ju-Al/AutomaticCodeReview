@@ -1,64 +1,39 @@
 {
     "principle_violations": [
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Liskov Substitution Principle",
             "lines": [
                 [
                     51,
                     53
                 ],
                 [
-                    69,
-                    71
+                    60,
+                    62
                 ]
             ],
             "method_names": [
-                "volume",
                 "volume"
             ],
-            "reason": "The `volume` method in classes `Square` and `Circle` handles exceptional cases statically rather than allowing class designs to adapt.",
-            "suggestion": "Define another abstraction for 3D shapes to segregate them from shapes that cannot have volume.",
+            "reason": "The Square and Circle classes violate the Liskov Substitution Principle because they implement an unfeasible method 'volume' by raising a NotImplementedError, which cannot be easily substituted in client code expecting all Shape derivatives to properly implement 'volume.'",
+            "suggestion": "Refactor the Shape class to better differentiate between 2D and 3D shapes, using separate 2D and 3D shape interfaces. Alternatively, introduce an optional capability pattern for volume computation.",
             "changes": [
                 {
                     "original_code": [
-                        "def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")"
+                        "def volume(self):\n    raise NotImplementedError(\"The volume cannot be calculated.\")"
                     ],
                     "suggestion_code": [
-                        "class TwoDimensionalShape(Shape):\n    def volume(self):\n        raise NotImplementedError(\"Volume calculation is not applicable to 2D shapes.\")\nclass Square(TwoDimensionalShape):\n    pass\n\nclass Circle(TwoDimensionalShape):\n    pass"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Single Responsibility Principle",
-            "lines": [
-                [
-                    97,
-                    111
-                ]
-            ],
-            "method_names": [
-                "JSON",
-                "HTML"
-            ],
-            "reason": "The methods in `SumCalculator` handle both calculation aggregation and data format conversion crossing responsibilities.",
-            "suggestion": "Introduce dedicated classes for formatting the output separate from the summing functionality.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class SumCalculator:\n    def JSON(self):\n        data = {\n            'sum': self.calculator.sum()\n        }\n        return json.dumps(data)\n\n    def HTML(self):\n        return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
-                    ],
-                    "suggestion_code": [
-                        "class SumCalculator:\n    pass\n\nclass JSONOutputFormatter:\n    def output(self, calculator):\n        data = {'sum': calculator.sum()}\n        return json.dumps(data)\n\nclass HTMLOutputFormatter:\n    def output(self, calculator):\n        return f\"Sum: {calculator.sum()}\""
+                        "class TwoDimensionalShape(Shape):\n    def area(self):\n        pass\n\nclass ThreeDimensionalShape(Shape):\n    def volume(self):\n        pass"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please review suggested changes to rectify OCP and SRP violations.",
+    "overall_feedback": "1 principle violation found. Please review the proposed suggestions for improvement.",
     "usage": {
-        "completion_tokens": 418,
-        "prompt_tokens": 2587,
-        "total_tokens": 3005
-    }
+        "completion_tokens": 224,
+        "prompt_tokens": 2448,
+        "total_tokens": 2672
+    },
+    "time": 7.9520392417907715
 }

@@ -6,7 +6,6 @@ public class AreaCalculator {
     protected List<Shape> shapes;
 
     public AreaCalculator(List<Shape> shapes) {
-        System.out.println(shapes);
         this.shapes = shapes;
     }
 

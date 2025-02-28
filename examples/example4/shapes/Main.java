@@ -12,11 +12,11 @@ public class Main {
     shapes.add(new Dice(2));
 
     AreaCalculator calculator = new AreaCalculator(shapes);
-    SumCalculator sumCalculator = new SumCalculator(calculator);
+    OutputFormatter sumCalculator = new OutputFormatter(calculator);
     System.out.println(sumCalculator.toHTML());
 
     VolumeCalculator volumeCalculator = new VolumeCalculator(shapes);
-    SumCalculator volumeOutputter = new SumCalculator(volumeCalculator);
+    OutputFormatter volumeOutputter = new OutputFormatter(volumeCalculator);
 
     System.out.println("Volume HTML Output:");
     System.out.println(volumeOutputter.toHTML());

@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_1",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "No True Positives; all principles in actual output are not in expected output, leading to precision and recall of 0."
+            "score": 0.4,
+            "reason": "The actual output correctly identifies 'Single Responsibility Principle' as a TP, but misses 'Don't Repeat Yourself' and 'Open/Closed Principle' as FNs, leading to low recall. No FPs are present, which helps precision."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "Both outputs identify a violation of the Single Responsibility Principle and mention responsibilities like calculating amounts and volume credits. However, the Actual Output lacks details about currency and specific responsibility for the output statement formatting as noted in the Expected Output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The actual output aligns with the expected output in suggesting decomposition of the 'statement' function but lacks detail about specific functions like 'calculate_amount', 'calculate_volume_credits', and 'currency formatting' mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly, with identical content in the field being compared."
+        },
+        {
+            "example_id": "example_6_1_1",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The Actual Output introduces modular functions for calculating amounts and credits, improving clarity, but lacks the class-based design and advanced abstraction seen in the Expected Output. Additionally, the Actual Output does not include the `format_currency` utility or localized formatting used in the Expected Output, reducing thematic alignment."
+        }
+    ]
 ]

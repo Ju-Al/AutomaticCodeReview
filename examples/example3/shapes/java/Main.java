@@ -11,14 +11,14 @@ public class Main {
     shapes.add(new Square(6));
 
     AreaCalculator calculator = new AreaCalculator(shapes);
-    SumCalculator sumCalculator = new SumCalculator(calculator);
+    OutputFormatter sumCalculator = new OutputFormatter(calculator);
     System.out.println(sumCalculator.toHTML());
 
     List<Shape> solidShapes = new ArrayList<>();
     solidShapes.add(new Circle(3));
     VolumeCalculator volumeCalculator = new VolumeCalculator(solidShapes);
 
-    SumCalculator volumeOutputter = new SumCalculator(volumeCalculator);
+    OutputFormatter volumeOutputter = new OutputFormatter(volumeCalculator);
     System.out.println(volumeOutputter.toHTML());
   }
 }

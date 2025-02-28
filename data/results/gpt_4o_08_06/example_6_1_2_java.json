@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_2",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "There are no True Positives as the actual and expected violations do not match. The False Positive is 'Single Responsibility Principle' and the False Negative is 'Don't Repeat Yourself'. Precision and Recall are both zero, leading to an undefined F1-Score."
+            "score": 0.3,
+            "reason": "Only 'Single Responsibility Principle' is correctly identified as a TP, while 'Don't Repeat Yourself' and 'Open/Closed Principle' are FN, and there are no FP. Precision is 1.0, Recall is 0.33, leading to a low F1-Score."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify multiple responsibilities handled by the generateStatement method and mention calculating amounts and volume credits as issues. However, the Actual Output provides more detail on error handling and formatting, which is not present in the Expected Output, leading to slight misalignment."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs align thematically by suggesting refactoring the `generateStatement` method into separate functions or classes to improve manageability and extensibility. However, the actual output lacks specific mention of functions like `calculateAmount` or `calculateVolumeCredits`, which reduces its detail and alignment with the expected output."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly in terms of content and context for the 'generateStatement' field."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output simplifies and modularizes the code into helper functions but does not implement the expected polymorphic structure with classes like TragedyPerformance and ComedyPerformance, leading to a partial alignment with the Expected Output."
+        }
+    ]
 ]

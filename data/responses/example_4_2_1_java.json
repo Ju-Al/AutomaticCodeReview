@@ -4,36 +4,35 @@
             "principle": "Liskov Substitution Principle",
             "lines": [
                 [
-                    18,
-                    23
-                ],
-                [
-                    31,
-                    38
+                    25,
+                    27
                 ]
             ],
             "method_names": [
-                "Circle.volume",
-                "Square.volume"
+                "volume"
             ],
-            "reason": "The `volume` method in `Circle` and `Square` classes is implemented in a way that violates the expectations of the `Shape` interface users who rely on the method to provide meaningful information.",
-            "suggestion": "Avoid implementing methods that are not logically applicable to specific classes. Refactor the `Shape` interface to separate surface area and volume calculation capabilities.",
+            "reason": "The implementation for `volume()` in `Circle` and `Square` throws an exception, which violates substitutability, as consumers of `Shape` expect all shapes to support this method without error.",
+            "suggestion": "Refactor the design to separate `Shape` into multiple interfaces representing planar and solid shapes.",
             "changes": [
                 {
                     "original_code": [
-                        "public double volume() {\n    throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n}"
+                        "public interface Shape {\n    double area();\n    double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
                     ],
                     "suggestion_code": [
-                        "interface Shape {\n    public double area();\n}\n\ninterface VolumeCalculable {\n    public double volume();\n}\n\npublic class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n}\n\npublic class Dice implements Shape, VolumeCalculable {\n    private double length;\n\n    public Dice(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return 6 * Math.pow(length, 2);\n    }\n\n    @Override\n    public double volume() {\n        return Math.pow(length, 3);\n    }\n}"
+                        "public interface Shape {\n    double area();\n}",
+                        "public interface SolidShape extends Shape {\n    double volume();\n}",
+                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * Math.pow(radius, 2);\n    }\n}"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details above.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 344,
-        "prompt_tokens": 2805,
-        "total_tokens": 3149
-    }
+        "completion_tokens": 324,
+        "prompt_tokens": 2659,
+        "total_tokens": 2983
+    },
+    "time": 7.076436996459961
 }

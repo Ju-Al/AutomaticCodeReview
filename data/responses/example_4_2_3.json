@@ -4,62 +4,40 @@
             "principle": "Liskov Substitution Principle",
             "lines": [
                 [
-                    39,
-                    43
+                    52,
+                    54
+                ],
+                [
+                    65,
+                    67
                 ]
             ],
             "method_names": [
                 "volume"
             ],
-            "reason": "The volume method on the Square and Circle classes raise a NotImplementedError. Subclasses of Shape should provide a meaningful implementation for all of its abstract methods.",
-            "suggestion": "Consider rethinking the design to avoid requiring subclasses to implement methods that are not applicable.",
+            "reason": "The 'Square' and 'Circle' classes violate the Liskov Substitution Principle because their 'volume' method raises a 'NotImplementedError', meaning they cannot substitute the 'Shape' interface fully.",
+            "suggestion": "Refactor the 'Shape' interface into two separate abstractions for two-dimensional and three-dimensional shapes to allow proper substitution without violating the principle.",
             "changes": [
                 {
                     "original_code": [
-                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass\n",
+                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")\n",
                         "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
                     ],
                     "suggestion_code": [
-                        "class Square(Shape):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2",
-                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Interface Segregation Principle",
-            "lines": [
-                [
-                    13,
-                    16
-                ],
-                [
-                    20,
-                    22
-                ]
-            ],
-            "method_names": [
-                "area",
-                "volume"
-            ],
-            "reason": "The Shape interface is too broad for shapes like Square and Circle that do not have a meaningful volume calculation.",
-            "suggestion": "Introduce separate interfaces for area-calculable and volume-calculable shapes.",
-            "changes": [
-                {
-                    "original_code": [
-                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass"
-                    ],
-                    "suggestion_code": [
-                        "class AreaCalculable(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass VolumeCalculable(ABC):\n    @abstractmethod\n    def volume(self):\n        pass"
+                        "class Shape2D(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass Shape3D(Shape2D):\n    @abstractmethod\n    def volume(self):\n        pass\n",
+                        "class Square(Shape2D):\n    def __init__(self, length) -> None:\n        self.length = length\n    \n    def area(self):\n        return self.length ** 2",
+                        "class Circle(Shape2D):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "overall_feedback": "1 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 509,
-        "prompt_tokens": 2587,
-        "total_tokens": 3096
-    }
+        "completion_tokens": 461,
+        "prompt_tokens": 2448,
+        "total_tokens": 2909
+    },
+    "time": 6.327307939529419
 }

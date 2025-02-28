@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_4",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "No True Positives; Single Responsibility Principle is an FP and Don't Repeat Yourself is an FN, leading to zero precision and recall."
+            "score": 0.3,
+            "reason": "The actual output includes only one true positive ('Single Responsibility Principle') but misses two expected principles ('Don't Repeat Yourself', 'Open/Closed Principle'), resulting in low recall and F1-Score."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify the same principle violation and mention similar responsibilities like calculation and formatting, but the actual output offers slightly more detail about separating responsibilities into functions or classes, whereas the expected output lacks this specific recommendation."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest separating responsibilities and creating specific methods for amount and credit calculations, as well as statement generation. However, the actual output lacks mention of currency formatting and does not provide explicit function names like 'calculateAmount' or 'calculateVolumeCredits'."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing the same field 'generateStatement' with no discrepancies."
+        },
+        {
+            "example_id": "example_6_1_4",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output and Expected Output both aim to improve code modularity and clarity by breaking down the logic into separate methods or classes. However, the Actual Output uses private helper methods within the same class, while the Expected Output employs a more object-oriented approach with polymorphism. The thematic alignment is strong, but the structural approach differs significantly."
+        }
+    ]
 ]

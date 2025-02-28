@@ -1,71 +1,72 @@
 {
     "principle_violations": [
         {
-            "principle": "Single Responsibility Principle",
+            "principle": "Liskov Substitution Principle",
             "lines": [
                 [
-                    55,
-                    58
+                    48,
+                    50
                 ],
                 [
-                    66,
-                    68
+                    60,
+                    62
                 ]
             ],
             "method_names": [
-                "Circle.volume",
-                "Square.volume"
+                "Square.volume",
+                "Circle.volume"
             ],
-            "reason": "The `Shape` interface enforces implementation details, such as `volume`, which are irrelevant to certain shapes (e.g., 2D shapes).",
-            "suggestion": "Split the `Shape` interface into `AreaShape` and `VolumeShape` to eliminate unnecessary methods for 2D shapes.",
+            "reason": "The `Square` and `Circle` classes implement the abstract `Shape` class but do not correctly fulfill its `volume` method, instead raising a NotImplementedError.",
+            "suggestion": "Consider segregating the `Shape` abstraction into more specific interfaces or abstract base classes so that implementing classes are not forced to override methods they do not support.",
             "changes": [
                 {
                     "original_code": [
-                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass",
-                        "class Circle(Shape):\n    def area(self):\n        return math.pi * self.radius ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                        "class Square(Shape):\n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "class Circle(Shape):\n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
                     ],
                     "suggestion_code": [
-                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass SolidShape(Shape):\n    @abstractmethod\n    def volume(self):\n        pass",
-                        "class Circle(Shape):\n    def area(self):\n        return math.pi * self.radius ** 2"
+                        "class AreaOnlyShape(ABC):\n    @abstractmethod\n    def area(self):\n        pass",
+                        "class Square(AreaOnlyShape):\n    def volume(self):\n        pass"
                     ]
                 }
             ]
         },
         {
-            "principle": "Don't Repeat Yourself",
+            "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    86,
-                    91
+                    14,
+                    16
                 ],
                 [
-                    97,
-                    104
+                    23,
+                    25
                 ]
             ],
             "method_names": [
-                "SumCalculator.JSON",
-                "SumCalculator.HTML"
+                "AreaCalculator.sum",
+                "VolumeCalculator.sum"
             ],
-            "reason": "The methods `JSON` and `HTML` duplicate the logic for computing output based on `self.calculator.sum()`.",
-            "suggestion": "Extract the sum calculation into a shared method and utilize it in both `JSON` and `HTML`.",
+            "reason": "The `sum` methods in AreaCalculator and VolumeCalculator handle both area and volume calculations interchangeably, requiring validation that forces separation.",
+            "suggestion": "Separate these calculators further or use a more tailored approach for each calculation as the `Shape` objects vary in their implementation of area or volume.",
             "changes": [
                 {
                     "original_code": [
-                        "def JSON(self):\n    data = {\n        'sum': self.calculator.sum(),\n    }\n    return json.dumps(data)",
-                        "def HTML(self):\n    return f\"Sum of the areas of provided shapes: {self.calculator.sum()}\""
+                        "def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume"
                     ],
                     "suggestion_code": [
-                        "def _get_sum(self):\n    return self.calculator.sum()\n\ndef JSON(self):\n    return json.dumps({'sum': self._get_sum()})\n\ndef HTML(self):\n    return f\"Sum of the areas of provided shapes: {self._get_sum()}\""
+                        "class SolidShapeVolumeCalculator:\n      def ...",
+                        "        pass"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details above.",
+    "overall_feedback": "2 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 503,
-        "prompt_tokens": 2587,
-        "total_tokens": 3090
-    }
+        "completion_tokens": 391,
+        "prompt_tokens": 2448,
+        "total_tokens": 2839
+    },
+    "time": 9.140743017196655
 }

@@ -1,65 +1,37 @@
 {
     "principle_violations": [
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    8,
-                    12
-                ],
-                [
-                    8,
-                    12
+                    2,
+                    10
                 ]
             ],
             "method_names": [
                 "Circle.volume",
                 "Square.volume"
             ],
-            "reason": "The current implementation of the volume method in Shape-implementing classes throws an UnsupportedOperationException for shapes that don't have a volume, leading to violations when the Shape interface is extended with new shapes.",
-            "suggestion": "Separate the responsibility of volume computation into a new VolumetricShape interface. Only shapes with volumes should implement this new interface.",
+            "reason": "The Circle and Square classes are required to implement a 'volume' method they cannot logically provide a valid implementation for. This forces them to introduce exceptions or misleading behavior.",
+            "suggestion": "Refactor the Shape interface into two separate interfaces: 'AreaCalculable' for shapes where area can be calculated, and 'VolumeCalculable' for shapes where volume can be calculated. Update the relevant classes and logic accordingly.",
             "changes": [
                 {
                     "original_code": [
                         "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
-                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                        "public interface Shape {\n    public double area();\n\n    public double volume();\n}"
                     ],
                     "suggestion_code": [
-                        "public class Circle implements Shape {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
-                        "public class Square implements Shape {\n    private double length;\n\n    public Square(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return length * length;\n    }\n}"
-                    ]
-                }
-            ]
-        },
-        {
-            "principle": "Interface Segregation Principle",
-            "lines": [
-                [
-                    85,
-                    87
-                ]
-            ],
-            "method_names": [
-                "Shape.volume"
-            ],
-            "reason": "The Shape interface enforces all implementers to define a volume method, even for non-volumetric shapes, which breaches the principle.",
-            "suggestion": "Create an additional interface, VolumetricShape, that contains the volume method. Only volumetric shapes should implement this interface.",
-            "changes": [
-                {
-                    "original_code": [
-                        "interface Shape {\n    public double area();\n\n    public double volume();\n}"
-                    ],
-                    "suggestion_code": [
-                        "interface Shape {\n    public double area();\n}\n\ninterface VolumetricShape {\n    public double volume();\n}"
+                        "public interface AreaCalculable {\n    public double area();\n}\n\npublic interface VolumeCalculable {\n    public double volume();\n}\n\npublic class Circle implements AreaCalculable {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "1 principle violations found. Please see the details below.",
     "usage": {
-        "completion_tokens": 573,
-        "prompt_tokens": 2805,
-        "total_tokens": 3378
-    }
+        "completion_tokens": 354,
+        "prompt_tokens": 2659,
+        "total_tokens": 3013
+    },
+    "time": 5.492560148239136
 }

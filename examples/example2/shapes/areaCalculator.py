@@ -22,17 +22,17 @@ class Circle:
     def __init__(self, radius) -> None:
         self.radius = radius
 
-class SumCalculator:
+class OutputFormatter:
     def __init__(self, areaCalculator: AreaCalculator) -> None:
         self.calculator = areaCalculator
 
-    def JSON(self):
+    def to_json(self):
         data = {
             'sum': self.calculator.sum()
         }
         return json.dumps(data)
 
-    def HTML(self):
+    def to_html(self):
         return f"Sum of the areas of provided shapes: {self.calculator.sum()}"
 
 
@@ -44,8 +44,8 @@ shapes = [
 ]
 
 areas = AreaCalculator(shapes)
-output = SumCalculator(areas)
+output = OutputFormatter(areas)
 
 # Ausgabe der Ergebnisse
-print(output.JSON())
-print(output.HTML())
+print(output.to_json())
+print(output.to_html())

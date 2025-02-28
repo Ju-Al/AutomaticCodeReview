@@ -5,9 +5,42 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_2",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "There are no true positives as the actual and expected lists do not overlap. There is one false positive: 'Single Responsibility Principle', and one false negative: 'Don't Repeat Yourself'."
+            "score": 0.4,
+            "reason": "The actual output includes 1 TP ('Single Responsibility Principle') but misses 2 FN ('Don't Repeat Yourself' and 'Open/Closed Principle') and has 0 FP. Precision is 1.0, Recall is 0.33, leading to a low F1-Score."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs identify violations of the Single Responsibility Principle and mention calculating amounts, volume credits, and output formatting. However, the actual output does not explicitly address the currency aspect mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output captures the general principle of separating responsibilities into functions but lacks specificity in naming conventions and does not explicitly mention separate functions for calculating volume credits and currency formatting as in the Expected Output."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs are identical, both containing only the field 'statement', ensuring complete thematic and contextual alignment."
+        },
+        {
+            "example_id": "example_6_1_2",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The Actual Output improves modularity with separate functions for amount and credits calculation, aligning with Expected Output's class-based structure, but lacks the full abstraction and formatting enhancements like 'format_currency' and class-based polymorphism seen in the Expected Output."
+        }
+    ]
 ]

@@ -1,44 +1,40 @@
 {
     "principle_violations": [
         {
-            "principle": "Liskov Substitution Principle",
+            "principle": "Single Responsibility Principle",
             "lines": [
                 [
-                    17,
-                    21
+                    10,
+                    14
                 ],
                 [
-                    9,
-                    13
+                    18,
+                    20
                 ]
             ],
             "method_names": [
-                "volume",
+                "area",
                 "volume"
             ],
-            "reason": "The `Circle` and `Square` classes implement the `Shape` interface, which enforces a `volume` method. However, these classes are expected to throw exceptions if `volume` is called, breaking the inheritance contract.",
-            "suggestion": "Refactor the `Shape` interface by splitting it into two separate interfaces, e.g., `AreaCalculable` and `VolumeCalculable`. Implement these interfaces based on the capabilities of each shape concretely.",
+            "reason": "The Shape interface forces every implementing class to define both area and volume methods, even if the class cannot logically provide an implementation for one of them.",
+            "suggestion": "Separate area-related and volume-related behavior into distinct interfaces, for instance, AreaCalculable and VolumeCalculable, and use them selectively based on the classes' capabilities.",
             "changes": [
                 {
                     "original_code": [
-                        "interface Shape {\n    public double area();\n\n    public double volume();\n}",
-                        "public class Circle implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}",
-                        "public class Square implements Shape {\n    @Override\n    public double volume() {\n        throw new UnsupportedOperationException(\"The volume cannot be calculated\");\n    }\n}"
+                        "interface Shape {\n    public double area();\n\n    public double volume();\n}"
                     ],
                     "suggestion_code": [
-                        "interface AreaCalculable {\n    public double area();\n}",
-                        "interface VolumeCalculable {\n    public double volume();\n}",
-                        "public class Circle implements AreaCalculable {\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}",
-                        "public class Square implements AreaCalculable {\n    public double area() {\n        return length * length;\n    }\n}"
+                        "interface AreaCalculable {\n    public double area();\n}\n\ninterface VolumeCalculable {\n    public double volume();\n}\n\nclass Circle implements AreaCalculable {\n    private double radius;\n\n    public Circle(double radius) {\n        this.radius = radius;\n    }\n\n    @Override\n    public double area() {\n        return Math.PI * radius * radius;\n    }\n}\n\nclass Dice implements AreaCalculable, VolumeCalculable {\n    private double length;\n\n    public Dice(double length) {\n        this.length = length;\n    }\n\n    @Override\n    public double area() {\n        return 6 * Math.pow(length, 2);\n    }\n\n    @Override\n    public double volume() {\n        return Math.pow(length, 3);\n    }\n}"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "1 principle violations found. Please see the suggested refactoring for improved adherence to SOLID principles.",
+    "overall_feedback": "1 principle violation found. Please see the details below.",
     "usage": {
-        "completion_tokens": 404,
-        "prompt_tokens": 2805,
-        "total_tokens": 3209
-    }
+        "completion_tokens": 337,
+        "prompt_tokens": 2659,
+        "total_tokens": 2996
+    },
+    "time": 7.1102681159973145
 }

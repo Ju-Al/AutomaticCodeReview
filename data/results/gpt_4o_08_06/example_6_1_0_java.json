@@ -5,9 +5,74 @@
             "test_case": "Check principle violations in the document.",
             "test_case_category": "F1-Test-Case-example_6_1_0",
             "metric": "F1-Score",
-            "score": 0.0,
-            "reason": "No true positives as there is no overlap between actual and expected outputs. One false positive with 'Single Responsibility Principle' and one false negative with 'Don't Repeat Yourself'."
+            "score": 0.7,
+            "reason": "True Positives are ['Single Responsibility Principle', 'Open/Closed Principle'], False Positive is none, and False Negative is ['Don't Repeat Yourself']. Precision is 1.0 (2/2), Recall is 0.67 (2/3), leading to an F1-Score of 0.8, which indicates good but not perfect alignment."
         }
     ],
-    []
+    [
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review reason for Open/Closed Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.9,
+            "reason": "Both outputs correctly identify the violation of the Open/Closed Principle and focus on the need to modify code for new play types. However, the actual output is slightly less aligned in phrasing as it emphasizes the switch statement specifically, which is not mentioned in the expected output."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review suggestion for Open/Closed Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output aligns contextually with the expected output by suggesting the use of separate classes for play types and a common interface, which matches the open-closed principle. However, it lacks specific mention of an abstract base class and does not explicitly name types like TragedyPerformance or ComedyPerformance as in the expected output."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review method names for Open/Closed Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual and expected outputs match exactly in the field being compared, with identical content and alignment."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review code segments for Open/Closed Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Open/Closed Principle",
+            "metric": "Correctness",
+            "score": 0.3,
+            "reason": "The actual output introduces interfaces and classes for play types but lacks the comprehensive restructuring and detail present in the expected output, such as abstract classes, specific method implementations, and integration with the statement generator."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review reason for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Reason-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.7,
+            "reason": "The actual output identifies multiple responsibilities of the generateStatement method, aligning with the expected output's mention of Single Responsibility Principle violation. However, it lacks explicit mention of 'currency' and does not fully align with the context of the method class."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review suggestion for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Suggestion-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.8,
+            "reason": "Both outputs suggest refactoring by separating responsibilities into functions, specifically mentioning `calculateAmount`, `calculateVolumeCredits`, and formatting. However, the Expected Output also explicitly mentions a function for currency formatting, which is missing in the Actual Output."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review method names for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Method-Name-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 1.0,
+            "reason": "The actual output matches the expected output exactly in terms of content and context, with no discrepancies."
+        },
+        {
+            "example_id": "example_6_1_0",
+            "test_case": "Review code segments for Single Responsibility Principle in example_6_1",
+            "test_case_category": "Changes-Test-Case-Single Responsibility Principle",
+            "metric": "Correctness",
+            "score": 0.6,
+            "reason": "The Actual Output partially aligns with the Expected Output by introducing modular methods like `calculateAmount` and `calculateVolumeCredits`, but lacks the detailed implementation and separation of concerns seen in the Expected Output, such as the use of `PerformanceType` subclasses and `StatementGenerator`."
+        }
+    ]
 ]

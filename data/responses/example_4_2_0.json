@@ -1,32 +1,33 @@
 {
     "principle_violations": [
         {
-            "principle": "Open/Closed Principle",
+            "principle": "Liskov Substitution Principle",
             "lines": [
                 [
-                    13,
-                    26
+                    48,
+                    51
                 ],
                 [
-                    65,
-                    66
+                    60,
+                    63
                 ]
             ],
             "method_names": [
-                "sum",
-                "area"
+                "volume"
             ],
-            "reason": "The sum method in VolumeCalculator assumes all shapes have a volume method. This requires modifying each shape class to include a uniform implementation of 'volume', violating the Open/Closed Principle.",
-            "suggestion": "Consider introducing a mechanism to handle cases where a shape does not define a volume, like skipping such shapes or providing a meaningful default behavior.",
+            "reason": "The `Square` and `Circle` classes implement the `Shape` interface, but their `volume` methods raise an exception instead of providing meaningful behavior. This violates the principle that derived classes should be replaceable by their base class without altering the program's correctness.",
+            "suggestion": "Consider separating the interfaces for 2D and 3D shapes, and adjust the code to use proper type checking to prevent unexpected behavior.",
             "changes": [
                 {
                     "original_code": [
-                        "    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            total_volume += shape.volume()\n        return total_volume",
-                        "    def area(self):\n        return self.length ** 2"
+                        "    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated.\")",
+                        "\n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
                     ],
                     "suggestion_code": [
-                        "    def sum(self):\n        total_volume = 0\n        for shape in self.shapes:\n            if hasattr(shape, 'volume'):\n                total_volume += shape.volume()\n        return total_volume",
-                        "    def area(self):\n        return getattr(self, 'length', 0) ** 2"
+                        "class Shape2D(Shape):\n    @abstractmethod\n    def area(self):\n        pass",
+                        "class Shape3D(Shape2D):\n    @abstractmethod\n    def volume(self):\n        pass",
+                        "class Square(Shape2D):\n    def area(self):\n        return self.length ** 2",
+                        "class Dice(Shape3D):\n    def volume(self):\n        return self.length ** 3"
                     ]
                 }
             ]
@@ -35,38 +36,36 @@
             "principle": "Interface Segregation Principle",
             "lines": [
                 [
-                    5,
-                    7
+                    19,
+                    21
                 ],
                 [
-                    50,
-                    56
+                    27,
+                    32
                 ]
             ],
             "method_names": [
-                "Shape",
-                "volume"
+                "sum"
             ],
-            "reason": "The Shape interface requires all subclasses to implement the volume method, which is not relevant for 2D shapes like Square or Circle.",
-            "suggestion": "Separate Shape into two interfaces: one for 2D shapes and another for 3D shapes that require a volume method.",
+            "reason": "`AreaCalculator` and `VolumeCalculator` both iterate through all shapes without segregating behavior for 2D and 3D shapes. This can lead to incorrect assumptions about shape capabilities.",
+            "suggestion": "Create separate calculators for 2D and 3D shapes, each focusing on areas and volumes, respectively.",
             "changes": [
                 {
                     "original_code": [
-                        "class Shape(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\n    @abstractmethod\n    def volume(self):\n        pass",
-                        "class Circle(Shape):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2\n    \n    def volume(self):\n        raise NotImplementedError(\"The volume cannot be calculated\")"
+                        "    def sum(self):\n        total_area = 0\n        for shape in self.shapes:\n            if isinstance(shape, Shape):\n                total_area += shape.area()\n            else:\n                raise Exception(\"Invalid Shape: Shape does not implement Shape interface\")"
                     ],
                     "suggestion_code": [
-                        "class Shape2D(ABC):\n    @abstractmethod\n    def area(self):\n        pass\n\nclass Shape3D(Shape2D):\n    @abstractmethod\n    def volume(self):\n        pass",
-                        "class Circle(Shape2D):\n    def __init__(self, radius) -> None:\n        self.radius = radius\n\n    def area(self):\n        return math.pi * self.radius ** 2"
+                        "class AreaCalculator2D:\n    def sum(self):\n        total_area = sum(shape.area() for shape in self.shapes if isinstance(shape, Shape2D))\n        return total_area"
                     ]
                 }
             ]
         }
     ],
-    "overall_feedback": "2 principle violations found. Please see the details below.",
+    "overall_feedback": "2 principle violations found. Please see the details above.",
     "usage": {
-        "completion_tokens": 554,
-        "prompt_tokens": 2587,
-        "total_tokens": 3141
-    }
+        "completion_tokens": 498,
+        "prompt_tokens": 2448,
+        "total_tokens": 2946
+    },
+    "time": 9.862414836883545
 }

@@ -18,7 +18,26 @@
                     ]
                 }
             ]
+        },
+        {
+            "principle": "Liskov Substitution Principle",
+            "method_names": [
+                "volume"
+            ],
+            "reason": "In this implementation, every shape you create would have to implement the volume method, even though you cannot calculate a volume from every shape. This leads to the use of exceptions for some shapes to handle this method. This means we are abusing the Liskov Substitution Principle because we are using a subclass in a way that is not compatible with its parent class.",
+            "suggestion": "In order to comply with the Interface Segregation Principle separate interfaces for 2D and 3D shapes. The 2D interface implements the area method, the 3D interface the volume method.",
+            "changes": [
+                {
+                    "original_code": [
+                        "public double volume();"
+                        ],
+                    "suggestion_code": [
+                        "abstract class Shape2D {\r\n    public abstract double area();\r\n}\r\n\r\n",
+                        "abstract class Shape3D {\r\n    public abstract double volume();\r\n}\r\n\r\n"
+                    ]
+                }
+            ]
         }
     ],
-    "overall_feedback": "1 principle violation found. Please see the details below."
+    "overall_feedback": "2 principle violation found. Please see the details below."
 }
